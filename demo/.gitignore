@@ -1,0 +1,39 @@
+# Python virtualenvs
+.venv/
+venv/
+env/
+
+# Bytecode / caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Test / lint caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Build / dist artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Local env (keep .env.example tracked, ignore real .env)
+.env
+.env.local
+.env.*.local
+
+# Editor / OS scratch
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo
+
+# Local data we never want to commit (AGENTS.md §4.2: no PDF persistence)
+*.pdf
+seed/*.pdf

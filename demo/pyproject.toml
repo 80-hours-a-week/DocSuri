@@ -1,0 +1,80 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "semantic-paper-workbench-demo"
+version = "0.1.0"
+description = "Sprint 1 walking-skeleton demo for Semantic Paper Workbench (#01a Search, #01b Ingest, #02 Summarization, #03 Translation)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "Semantic Paper Workbench team" },
+]
+keywords = ["llm", "papers", "search", "summarization", "translation", "fastapi", "claude"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Framework :: FastAPI",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "httpx>=0.27",
+  "pydantic>=2.9",
+  "tenacity>=9",
+  "anthropic>=0.40",
+  "python-multipart",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+  "pytest-asyncio>=0.24",
+  "respx>=0.21",
+  "ruff>=0.7",
+]
+
+[project.scripts]
+# `uvicorn` consumes the FastAPI app object — `app.main:app`.
+# `demo-server` is exposed for parity with `run.sh`'s `uvicorn` invocation.
+demo-server = "app.main:app"
+
+[project.urls]
+Homepage = "https://github.com/anthropics/semantic-paper-workbench"
+Issues = "https://github.com/anthropics/semantic-paper-workbench/issues"
+
+# -------- Tooling --------
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+exclude = ["tests*", "seed*", "scripts*", "web*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+  "integration: requires a live external service (arXiv / GROBID / Anthropic).",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["seed", "scripts", "web", ".venv", "__pycache__"]
+
+[tool.ruff.lint]
+# Minimal set — pyflakes (F), pycodestyle errors (E), isort (I).
+# Sprint 2 will add B, UP, SIM, RUF once the walking skeleton stabilises.
+select = ["E", "F", "I"]
+ignore = [
+  "E501",  # line length handled by formatter
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]

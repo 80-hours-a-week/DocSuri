@@ -1,0 +1,1866 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>논문 검색·요약·번역 프로토타입 아키텍처</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #FAFAF7;
+    --bg-card: #FFFFFF;
+    --bg-soft: #F4F2EC;
+    --ink: #1F1F1C;
+    --ink-soft: #6B6B66;
+    --ink-mute: #9A9A93;
+    --line: #E8E5DD;
+    --line-soft: #F0EDE5;
+    --accent: #CC785C;
+    --accent-soft: #F5E6DE;
+    --accent-deep: #A85A40;
+    --blue: #4A6FA5;
+    --blue-soft: #E4ECF6;
+    --blue-deep: #2F4A75;
+    --green: #5A8A6B;
+    --green-soft: #E2EDE5;
+    --green-deep: #3A6149;
+    --violet: #7B6BA8;
+    --violet-soft: #ECE7F4;
+    --violet-deep: #564988;
+  }
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', 'Noto Sans KR', system-ui, sans-serif;
+    font-feature-settings: "cv11", "ss01";
+    letter-spacing: -0.005em;
+  }
+  .font-mono { font-family: 'JetBrains Mono', monospace; }
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+  }
+  .card-soft {
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--bg-soft);
+    color: var(--ink-soft);
+    border: 1px solid var(--line);
+  }
+  .chip-accent {
+    background: var(--accent-soft);
+    color: var(--accent-deep);
+    border-color: transparent;
+  }
+  .chip-blue   { background: var(--blue-soft);   color: #2F4A75; border-color: transparent; }
+  .chip-green  { background: var(--green-soft);  color: #3A6149; border-color: transparent; }
+  .chip-violet { background: var(--violet-soft); color: #564988; border-color: transparent; }
+  .dot {
+    width: 6px; height: 6px; border-radius: 999px; background: var(--accent);
+    display: inline-block;
+  }
+  .section-title {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+  .h2 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .h3 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .lead {
+    color: var(--ink-soft);
+    font-size: 15px;
+    line-height: 1.65;
+  }
+  .grid-bg {
+    background-image:
+      linear-gradient(var(--line-soft) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  .hero-gradient {
+    background: radial-gradient(1200px 400px at 20% 0%, rgba(204,120,92,0.10), transparent 70%),
+                radial-gradient(900px 300px at 90% 20%, rgba(74,111,165,0.08), transparent 70%);
+  }
+  .mermaid {
+    background: transparent !important;
+    display: flex;
+    justify-content: center;
+  }
+  .mermaid svg { max-width: 100% !important; height: auto !important; }
+  .num-bullet {
+    display: inline-flex;
+    width: 22px; height: 22px;
+    align-items: center; justify-content: center;
+    background: var(--accent); color: white;
+    border-radius: 999px;
+    font-size: 11px; font-weight: 600;
+    flex-shrink: 0;
+  }
+  .kbd {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    background: var(--bg-soft);
+    color: var(--ink);
+    padding: 2px 7px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+  }
+  .arrow {
+    color: var(--ink-mute);
+    font-weight: 300;
+  }
+  .stage-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-mute);
+    letter-spacing: 0.06em;
+  }
+  details > summary { list-style: none; cursor: pointer; }
+  details > summary::-webkit-details-marker { display: none; }
+</style>
+</head>
+<body class="antialiased">
+
+<!-- ============ HERO ============ -->
+<header class="hero-gradient border-b border-[var(--line)]">
+  <div class="max-w-6xl mx-auto px-8 py-12">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-8 h-8 rounded-lg bg-[var(--accent)] flex items-center justify-center">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="9" y1="13" x2="15" y2="13"/>
+          <line x1="9" y1="17" x2="15" y2="17"/>
+        </svg>
+      </div>
+      <span class="text-sm font-medium text-[var(--ink-soft)]">Architecture Brief</span>
+      <span class="text-[var(--ink-mute)]">·</span>
+      <span class="text-sm text-[var(--ink-mute)]">v1.1 prototype</span>
+    </div>
+
+    <h1 class="text-5xl font-bold tracking-tight mb-4 leading-tight">
+      논문 검색·요약·번역<br>
+      <span class="text-[var(--accent)]">프로토타입 아키텍처 v1.1</span>
+    </h1>
+    <p class="lead max-w-3xl mb-8">
+      arXiv, Semantic Scholar, <strong>OpenAlex</strong>를 한 번에 묶은 3-way 페더레이션 검색을 제공합니다.
+      구조화 요약(Sonnet 4.6)과 번역(Haiku 4.5) 파이프라인은 <strong>LangGraph</strong>로 오케스트레이션했고,
+      체크포인터를 두어 중간에 실패해도 노드 단위에서 다시 시작할 수 있게 했습니다.
+    </p>
+
+    <div class="flex flex-wrap gap-2">
+      <span class="chip chip-accent"><span class="dot" style="background:currentColor"></span>arXiv + S2 + OpenAlex</span>
+      <span class="chip chip-blue">Claude Sonnet 4.6 · 요약</span>
+      <span class="chip chip-green">Claude Haiku 4.5 · 번역</span>
+      <span class="chip chip-violet">LangGraph · 오케스트레이션</span>
+      <span class="chip">Qdrant · FastAPI · Celery</span>
+    </div>
+  </div>
+</header>
+
+<!-- ============ AT A GLANCE ============ -->
+<section class="border-b border-[var(--line)]">
+  <div class="max-w-6xl mx-auto px-8 py-10">
+    <div class="section-title mb-6">At a glance</div>
+    <div class="grid grid-cols-4 gap-4">
+      <div class="card p-5">
+        <div class="text-xs text-[var(--ink-mute)] mb-2">기능 수</div>
+        <div class="text-3xl font-bold">3</div>
+        <div class="text-xs text-[var(--ink-soft)] mt-1">검색 · 요약 · 번역</div>
+      </div>
+      <div class="card p-5">
+        <div class="text-xs text-[var(--ink-mute)] mb-2">외부 의존성</div>
+        <div class="text-3xl font-bold">4</div>
+        <div class="text-xs text-[var(--ink-soft)] mt-1">arXiv · S2 · OpenAlex · Claude</div>
+      </div>
+      <div class="card p-5">
+        <div class="text-xs text-[var(--ink-mute)] mb-2">LangGraph 워크플로</div>
+        <div class="text-3xl font-bold">3</div>
+        <div class="text-xs text-[var(--ink-soft)] mt-1">Ingest · Summary · Translate</div>
+      </div>
+      <div class="card p-5">
+        <div class="text-xs text-[var(--ink-mute)] mb-2">구현 단계</div>
+        <div class="text-3xl font-bold">6<span class="text-base text-[var(--ink-soft)] font-normal ml-1">단계</span></div>
+        <div class="text-xs text-[var(--ink-soft)] mt-1">관찰성은 S1부터</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ARCHITECTURE DIAGRAM ============ -->
+<section class="border-b border-[var(--line)]">
+  <div class="max-w-6xl mx-auto px-8 py-14">
+    <div class="flex items-start justify-between mb-8">
+      <div>
+        <div class="section-title mb-2">01 · System Overview</div>
+        <h2 class="h2">전체 아키텍처</h2>
+      </div>
+      <div class="flex gap-2">
+        <span class="chip">동기 API</span>
+        <span class="chip">비동기 Worker</span>
+      </div>
+    </div>
+
+    <div class="card p-8 grid-bg">
+      <div class="mermaid">
+flowchart TB
+  Client["🖥️ Frontend Client"]
+
+  subgraph API["⚙️  API Layer · FastAPI"]
+    direction LR
+    R["Router + Auth"]
+    SS["Search Svc"]
+    IS["Ingestion Svc"]
+    SU["Summary Svc"]
+    TR["Translation Svc"]
+  end
+
+  subgraph Queue["🔧  Async · Celery + Redis"]
+    direction LR
+    QW["Ingest Worker"]
+    LW["LLM Worker"]
+  end
+
+  subgraph Orch["🕸️  Orchestration · LangGraph"]
+    direction LR
+    G1["Ingest Graph"]
+    G2["Summary Graph"]
+    G3["Translate Graph"]
+    CP["Checkpointer"]
+  end
+
+  subgraph Ext["🌐  External"]
+    arXiv["arXiv API"]
+    S2["Semantic Scholar"]
+    OA["OpenAlex<br/>인용 그래프 · 분야 폭"]
+    Claude["Claude API<br/>Sonnet 4.6 · Haiku 4.5"]
+  end
+
+  subgraph Data["💾  Data Layer"]
+    PG[("PostgreSQL")]
+    Obj[("MinIO / S3")]
+    Vec[("Qdrant")]
+    Cch[("Redis")]
+  end
+
+  Client <--> R
+  R --> SS & IS & SU & TR
+
+  SS -.3-way 페더레이션.-> arXiv & S2 & OA
+  SS <--> Cch
+
+  IS --> QW
+  QW --> G1
+  G1 --> arXiv & OA
+  G1 --> Obj
+  G1 --> PG
+  G1 --> Vec
+
+  SU --> LW
+  TR --> LW
+  LW --> G2 & G3
+  G2 & G3 <--> Claude
+  G2 & G3 --> PG
+  G1 & G2 & G3 <--> CP
+  CP <--> PG
+  SU & TR <--> Cch
+
+  style OA fill:#E2EDE5,stroke:#5A8A6B,color:#3A6149
+  style Orch fill:#ECE7F4,stroke:#7B6BA8
+  style CP fill:#F5E6DE,stroke:#CC785C,color:#A85A40
+      </div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-4 mt-6">
+      <div class="card-soft p-5">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="w-2 h-2 rounded-full bg-[var(--accent)]"></div>
+          <div class="text-sm font-semibold">동기 응답</div>
+        </div>
+        <p class="text-xs text-[var(--ink-soft)] leading-relaxed">
+          검색 결과와 이미 캐싱된 요약·번역은 즉시 응답합니다. 외부 API 병렬 호출도 모두 동기 라우터 안에서 처리합니다.
+        </p>
+      </div>
+      <div class="card-soft p-5">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="w-2 h-2 rounded-full bg-[var(--blue)]"></div>
+          <div class="text-sm font-semibold">비동기 큐</div>
+        </div>
+        <p class="text-xs text-[var(--ink-soft)] leading-relaxed">
+          PDF 파싱과 임베딩처럼 수십 초 걸리는 작업, 그리고 LLM 스트리밍 호출은 Celery로 분리했습니다. 라우터는 작업 등록 직후 202를 응답합니다.
+        </p>
+      </div>
+      <div class="card-soft p-5">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="w-2 h-2 rounded-full bg-[var(--green)]"></div>
+          <div class="text-sm font-semibold">캐시 우선</div>
+        </div>
+        <p class="text-xs text-[var(--ink-soft)] leading-relaxed">
+          검색은 15분 TTL로 캐싱하고, 요약과 번역은 영속 캐시로 보관합니다. 같은 논문을 다시 요청하면 LLM 호출 없이 결과만 돌려줍니다.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TECH STACK ============ -->
+<section class="border-b border-[var(--line)]">
+  <div class="max-w-6xl mx-auto px-8 py-14">
+    <div class="section-title mb-2">02 · Tech Stack</div>
+    <h2 class="h2 mb-2">레이어별 기술 선택</h2>
+    <p class="lead mb-8 max-w-2xl">각 선택은 프로토타입 단계의 개발 속도와 이후의 확장 여지를 동시에 충족하도록 결정했습니다.</p>
+
+    <div class="grid grid-cols-12 gap-4">
+      <!-- API -->
+      <div class="card p-6 col-span-4">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-lg bg-[var(--accent-soft)] flex items-center justify-center text-[var(--accent-deep)] font-bold">⚙️</div>
+          <div>
+            <div class="text-xs text-[var(--ink-mute)]">API LAYER</div>
+            <div class="font-semibold">FastAPI</div>
+          </div>
+        </div>
+        <ul class="space-y-2 text-sm">
+          <li class="flex justify-between"><span class="text-[var(--ink-soft)]">Runtime</span><span class="font-mono text-xs">Python 3.12 + Uvicorn</span></li>
+          <li class="flex justify-between"><span class="text-[var(--ink-soft)]">Validation</span><span class="font-mono text-xs">Pydantic v2</span></li>
+          <li class="flex justify-between"><span class="text-[var(--ink-soft)]">Auth</span><span class="font-mono text-xs">FastAPI-Users (JWT)</span></li>
+        </ul>
+      </div>
+
+      <!-- Async -->
+      <div class="card p-6 col-span-4">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-lg bg-[var(--blue-soft)] flex items-center justify-center text-[#2F4A75] font-bold">🔧</div>
+          <div>
+            <div class="text-xs text-[var(--ink-mute)]">ASYNC LAYER</div>
+            <div class="font-semibold">Celery</div>
+          </div>
+        </div>
+        <ul class="space-y-2 text-sm">
+          <li class="flex justify-between"><span class="text-[var(--ink-soft)]">Broker</span><span class="font-mono text-xs">Redis</span></li>
+          <li class="flex justify-between"><span class="text-[var(--ink-soft)]">Retry</span><span class="font-mono text-xs">autoretry + backoff</span></li>
+          <li class="flex justify-between"><span class="text-[var(--ink-soft)]">Workers</span><span class="font-mono text-xs">Ingest · LLM</span></li>
+        </ul>
+      </div>
+
+      <!-- LLM -->
+      <div class="card p-6 col-span-4">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-lg bg-[var(--violet-soft)] flex items-center justify-center text-[#564988] font-bold">🧠</div>
+          <div>
+            <div class="text-xs text-[var(--ink-mute)]">LLM</div>
+            <div class="font-semibold">Anthropic Claude</div>
+          </div>
+        </div>
+        <ul class="space-y-2 text-sm">
+          <li class="flex justify-between"><span class="text-[var(--ink-soft)]">요약</span><span class="font-mono text-xs">Sonnet 4.6</span></li>
+          <li class="flex justify-between"><span class="text-[var(--ink-soft)]">번역</span><span class="font-mono text-xs">Haiku 4.5</span></li>
+          <li class="flex justify-between"><span class="text-[var(--ink-soft)]">최적화</span><span class="font-mono text-xs">Prompt Caching</span></li>
+        </ul>
+      </div>
+
+      <!-- v1.1 Additions: OpenAlex + LangGraph (side by side) -->
+      <div class="card p-6 col-span-6" style="border-color: var(--green); border-width: 1px;">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg flex items-center justify-center font-bold" style="background: var(--green-soft); color: var(--green-deep);">🌐</div>
+            <div>
+              <div class="text-xs" style="color: var(--green-deep);">FEDERATION · NEW</div>
+              <div class="font-semibold">OpenAlex · 3-way 검색 통합</div>
+            </div>
+          </div>
+          <span class="chip chip-green">v1.1</span>
+        </div>
+        <p class="text-sm text-[var(--ink-soft)] leading-relaxed mb-3">
+          arXiv(프리프린트), Semantic Scholar(영향력 점수), 그리고 <strong>OpenAlex(개방형 인용 그래프와 분야 폭)</strong>가 서로 다른 강점으로 보완 관계를 이룹니다.
+          OpenAlex는 비-CS 분야(생물·인문·사회)의 커버리지가 강해서, 사용자가 다룰 수 있는 분야를 크게 넓혀 줍니다.
+          또한 향후 '인용 계보' 기능을 추가할 때에도 1차 데이터 소스로 재사용할 수 있습니다.
+        </p>
+        <div class="space-y-2 mt-3">
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-[var(--ink-soft)]">SDK</span>
+            <span class="font-mono">pyalex</span>
+          </div>
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-[var(--ink-soft)]">Rate limit</span>
+            <span class="font-mono">100k/일 무료 (polite pool<sup>*</sup>)</span>
+          </div>
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-[var(--ink-soft)]">조인 키</span>
+            <span class="font-mono">DOI → arXiv ID → title hash</span>
+          </div>
+          <div class="text-[11px] text-[var(--ink-mute)] leading-relaxed mt-2">
+            <sup>*</sup> polite pool: 이메일을 헤더에 함께 보내면 OpenAlex가 우대 큐로 라우팅해 더 안정적인 응답을 제공합니다.
+          </div>
+        </div>
+      </div>
+
+      <div class="card p-6 col-span-6" style="border-color: var(--violet); border-width: 1px;">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg flex items-center justify-center font-bold" style="background: var(--violet-soft); color: var(--violet-deep);">🕸️</div>
+            <div>
+              <div class="text-xs" style="color: var(--violet-deep);">ORCHESTRATION · NEW</div>
+              <div class="font-semibold">LangGraph + PostgresSaver</div>
+            </div>
+          </div>
+          <span class="chip chip-violet">v1.1</span>
+        </div>
+        <p class="text-sm text-[var(--ink-soft)] leading-relaxed mb-3">
+          다단계 LLM 워크플로를 <strong>상태 그래프</strong>로 선언합니다.
+          각 노드를 실행한 뒤 상태를 Postgres에 체크포인트로 저장하기 때문에, 중간 노드에서 실패하더라도 <strong>해당 노드부터 다시 시작</strong>할 수 있습니다.
+          예를 들어 청크 10개 중 9개가 성공한 시점에서 실패하더라도, 이미 만든 9개의 결과는 그대로 살아남습니다.
+        </p>
+        <div class="space-y-2 mt-3">
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-[var(--ink-soft)]">Nodes</span>
+            <span class="font-mono">extract · llm · validate · persist</span>
+          </div>
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-[var(--ink-soft)]">Edges</span>
+            <span class="font-mono">조건부 분기 + 병렬 fan-out</span>
+          </div>
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-[var(--ink-soft)]">State</span>
+            <span class="font-mono">TypedDict + reducer</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- PDF Parsing -->
+      <div class="card p-6 col-span-6">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-lg bg-[var(--green-soft)] flex items-center justify-center text-[#3A6149] font-bold">📄</div>
+          <div>
+            <div class="text-xs text-[var(--ink-mute)]">PDF 처리</div>
+            <div class="font-semibold">GROBID + PyMuPDF</div>
+          </div>
+        </div>
+        <p class="text-sm text-[var(--ink-soft)] leading-relaxed mb-3">
+          GROBID(Docker)가 학술 논문의 구조를 <strong>TEI-XML</strong>(Text Encoding Initiative, 학술 문헌을 위한 표준 XML 스키마)로 추출해, 섹션·저자·참고문헌을 보존합니다. 추출에 실패하면 PyMuPDF로 평문만 뽑아내는 폴백 경로로 전환합니다.
+        </p>
+        <div class="flex gap-2">
+          <span class="chip">TEI-XML</span>
+          <span class="chip">Docker</span>
+          <span class="chip">~30s warmup</span>
+        </div>
+      </div>
+
+      <!-- Embeddings -->
+      <div class="card p-6 col-span-6">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-lg bg-[var(--accent-soft)] flex items-center justify-center text-[var(--accent-deep)] font-bold">🔍</div>
+          <div>
+            <div class="text-xs text-[var(--ink-mute)]">시맨틱 검색</div>
+            <div class="font-semibold">voyage-3 + Qdrant</div>
+          </div>
+        </div>
+        <p class="text-sm text-[var(--ink-soft)] leading-relaxed mb-3">
+          1024차원의 다국어 임베딩을 사용하므로, 영문 본문을 한글 쿼리로도 검색할 수 있습니다. 메타데이터 필터(저자·연도)와 벡터 검색을 한 번에 묶어서 질의할 수 있습니다.
+        </p>
+        <div class="flex gap-2">
+          <span class="chip">1024-dim</span>
+          <span class="chip">Korean ↔ English</span>
+          <span class="chip">Self-hosted</span>
+        </div>
+      </div>
+
+      <!-- Data Stores -->
+      <div class="card p-6 col-span-12">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-[var(--bg-soft)] flex items-center justify-center font-bold">💾</div>
+            <div>
+              <div class="text-xs text-[var(--ink-mute)]">DATA STORES</div>
+              <div class="font-semibold">4-tier 저장 전략</div>
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-4 gap-4">
+          <div class="border-l-2 border-[var(--accent)] pl-4">
+            <div class="font-mono text-xs text-[var(--ink-mute)] mb-1">PostgreSQL 16</div>
+            <div class="font-semibold text-sm mb-1">관계형 메타데이터</div>
+            <div class="text-xs text-[var(--ink-soft)]">papers, summaries, translations, glossaries · JSONB 구조화 요약</div>
+          </div>
+          <div class="border-l-2 border-[var(--blue)] pl-4">
+            <div class="font-mono text-xs text-[var(--ink-mute)] mb-1">Qdrant</div>
+            <div class="font-semibold text-sm mb-1">벡터 인덱스</div>
+            <div class="text-xs text-[var(--ink-soft)]">섹션 청크 임베딩 · 메타 필터링 동시</div>
+          </div>
+          <div class="border-l-2 border-[var(--green)] pl-4">
+            <div class="font-mono text-xs text-[var(--ink-mute)] mb-1">MinIO (S3)</div>
+            <div class="font-semibold text-sm mb-1">PDF 원본</div>
+            <div class="text-xs text-[var(--ink-soft)]">로컬·클라우드 동일 인터페이스</div>
+          </div>
+          <div class="border-l-2 border-[var(--violet)] pl-4">
+            <div class="font-mono text-xs text-[var(--ink-mute)] mb-1">Redis</div>
+            <div class="font-semibold text-sm mb-1">캐시 + 큐</div>
+            <div class="text-xs text-[var(--ink-soft)]">검색 15분 TTL · Celery broker</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Observability -->
+      <div class="card-soft p-5 col-span-12">
+        <div class="flex items-center gap-3">
+          <div class="text-xl">📊</div>
+          <div class="flex-1">
+            <div class="text-sm font-semibold">관찰성 — Langfuse + OpenTelemetry + Prometheus</div>
+            <div class="text-xs text-[var(--ink-soft)] mt-0.5">LLM trace, 토큰·비용, API 메트릭을 한곳에서 봅니다. <strong class="text-[var(--accent-deep)]">S1부터 깔아 둡니다</strong> — 마지막 단계에 붙이면 청구서가 폭발한 뒤에야 원인을 찾는 패턴이 흔하기 때문입니다.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FEATURE FLOWS ============ -->
+<section class="border-b border-[var(--line)]">
+  <div class="max-w-6xl mx-auto px-8 py-14">
+    <div class="section-title mb-2">03 · Feature Flows</div>
+    <h2 class="h2 mb-8">기능별 데이터 흐름</h2>
+
+    <!-- Feature A: Search -->
+    <div class="card p-8 mb-6">
+      <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-3">
+          <span class="stage-num">A</span>
+          <h3 class="h3">논문 검색 & 수집</h3>
+        </div>
+        <div class="flex gap-2">
+          <span class="chip chip-accent">3-way 페더레이션</span>
+          <span class="chip chip-green">+ OpenAlex</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-12 gap-6">
+        <div class="col-span-7">
+          <div class="mermaid">
+sequenceDiagram
+  participant U as 사용자
+  participant API as SearchSvc
+  participant arX as arXiv
+  participant S2 as Semantic Scholar
+  participant OA as OpenAlex
+  participant Q as Celery Queue
+  participant G as Ingest Graph
+  participant DB as Postgres
+  participant V as Qdrant
+
+  U->>API: "diffusion model" 검색
+  par 3-way 페더레이션
+    API->>arX: 검색 (프리프린트)
+    API->>S2: 검색 (영향력)
+    API->>OA: 검색 (분야 폭)
+  end
+  arX-->>API: meta
+  S2-->>API: meta + citations
+  OA-->>API: meta + concepts
+  API->>API: dedupe + 통합 랭킹
+  API-->>U: 결과
+  U->>API: 논문 N개 "수집"
+  API->>Q: ingest_paper(id)
+  Q->>G: graph.invoke()
+  G->>G: download → GROBID → chunk → embed
+  G->>V: 청크 임베딩
+  G->>DB: status=ready + checkpoint
+          </div>
+        </div>
+        <div class="col-span-5 space-y-4">
+          <div>
+            <div class="text-xs font-semibold text-[var(--ink-mute)] mb-2 tracking-wider">FEDERATION (3-way)</div>
+            <div class="space-y-1.5">
+              <div class="flex items-start gap-2 text-xs">
+                <span class="font-mono text-[var(--accent-deep)] font-semibold w-16 flex-shrink-0">arXiv</span>
+                <span class="text-[var(--ink-soft)]">CS/물리/수학 프리프린트 · PDF 직링크</span>
+              </div>
+              <div class="flex items-start gap-2 text-xs">
+                <span class="font-mono text-[var(--blue-deep)] font-semibold w-16 flex-shrink-0">S2</span>
+                <span class="text-[var(--ink-soft)]">인용 그래프 · 영향력 점수</span>
+              </div>
+              <div class="flex items-start gap-2 text-xs">
+                <span class="font-mono text-[var(--green-deep)] font-semibold w-16 flex-shrink-0">OpenAlex</span>
+                <span class="text-[var(--ink-soft)]">분야 폭(전체 학문) · concepts 분류</span>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="text-xs font-semibold text-[var(--ink-mute)] mb-2 tracking-wider">DEDUPE</div>
+            <p class="text-xs text-[var(--ink-soft)] leading-relaxed">
+              같은 논문이 세 소스에 모두 등장할 수 있으므로 폴백 체인으로 식별합니다 — 먼저 DOI로 묶고, 없으면 arXiv ID, 그것도 없으면 정규화한 제목의 해시로 매칭합니다.
+            </p>
+          </div>
+          <div>
+            <div class="text-xs font-semibold text-[var(--ink-mute)] mb-2 tracking-wider">RANKING</div>
+            <div class="font-mono text-xs bg-[var(--bg-soft)] p-3 rounded-lg border border-[var(--line)]">
+              relevance<br>
+              × log(citations + 1)<br>
+              × recency_decay<br>
+              × concept_match  <span class="text-[var(--green-deep)]">← OpenAlex</span>
+            </div>
+          </div>
+          <div>
+            <div class="text-xs font-semibold text-[var(--ink-mute)] mb-2 tracking-wider">STATE MACHINE</div>
+            <div class="flex items-center gap-1 flex-wrap text-xs">
+              <span class="kbd">pending</span><span class="arrow">→</span>
+              <span class="kbd">downloading</span><span class="arrow">→</span>
+              <span class="kbd">parsing</span><span class="arrow">→</span>
+              <span class="kbd">embedding</span><span class="arrow">→</span>
+              <span class="kbd" style="background:var(--green-soft);color:#3A6149;border-color:transparent">ready</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature B: Summary -->
+    <div class="card p-8 mb-6">
+      <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-3">
+          <span class="stage-num">B</span>
+          <h3 class="h3">5-섹션 구조화 요약</h3>
+        </div>
+        <div class="flex gap-2">
+          <span class="chip chip-violet">LangGraph</span>
+          <span class="chip chip-blue">Claude Sonnet 4.6</span>
+          <span class="chip">SSE 스트리밍</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-12 gap-6">
+        <div class="col-span-5">
+          <div class="text-xs font-semibold text-[var(--ink-mute)] mb-3 tracking-wider">FIXED SCHEMA</div>
+          <div class="space-y-2">
+            <div class="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-soft)] border border-[var(--line)]">
+              <span class="num-bullet">1</span>
+              <div>
+                <div class="font-semibold text-sm">문제 (Problem)</div>
+                <div class="text-xs text-[var(--ink-soft)]">해결하려는 문제</div>
+              </div>
+            </div>
+            <div class="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-soft)] border border-[var(--line)]">
+              <span class="num-bullet">2</span>
+              <div>
+                <div class="font-semibold text-sm">방법 (Method)</div>
+                <div class="text-xs text-[var(--ink-soft)]">핵심 접근법과 기술적 기여</div>
+              </div>
+            </div>
+            <div class="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-soft)] border border-[var(--line)]">
+              <span class="num-bullet">3</span>
+              <div>
+                <div class="font-semibold text-sm">결과 (Results)</div>
+                <div class="text-xs text-[var(--ink-soft)]">정량적 결과 + 비교 대상</div>
+              </div>
+            </div>
+            <div class="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-soft)] border border-[var(--line)]">
+              <span class="num-bullet">4</span>
+              <div>
+                <div class="font-semibold text-sm">한계 (Limitations)</div>
+                <div class="text-xs text-[var(--ink-soft)]">저자 또는 명백한 한계</div>
+              </div>
+            </div>
+            <div class="flex items-start gap-3 p-3 rounded-lg bg-[var(--bg-soft)] border border-[var(--line)]">
+              <span class="num-bullet">5</span>
+              <div>
+                <div class="font-semibold text-sm">기여 (Contribution)</div>
+                <div class="text-xs text-[var(--ink-soft)]">분야 관점에서의 기여 위치</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-span-7">
+          <div class="text-xs font-semibold text-[var(--ink-mute)] mb-3 tracking-wider">PIPELINE</div>
+          <div class="space-y-3">
+            <div class="flex gap-3">
+              <div class="flex-shrink-0 w-7 text-right font-mono text-xs text-[var(--ink-mute)] pt-0.5">01</div>
+              <div class="flex-1 text-sm">
+                캐시 키 <span class="font-mono text-xs bg-[var(--bg-soft)] px-1.5 py-0.5 rounded">(paper_id, "structured_v1", lang)</span> 로 캐시를 먼저 조회합니다.
+              </div>
+            </div>
+            <div class="flex gap-3">
+              <div class="flex-shrink-0 w-7 text-right font-mono text-xs text-[var(--ink-mute)] pt-0.5">02</div>
+              <div class="flex-1 text-sm">
+                캐시 미스이면 <strong>Abstract, Intro, Method 첫 단락, Conclusion</strong>을 모아 약 4K 토큰 분량의 컨텍스트를 만듭니다.
+              </div>
+            </div>
+            <div class="flex gap-3">
+              <div class="flex-shrink-0 w-7 text-right font-mono text-xs text-[var(--ink-mute)] pt-0.5">03</div>
+              <div class="flex-1 text-sm">
+                <span class="chip chip-violet" style="font-size:10px;padding:1px 6px;">LangGraph</span>
+                <code class="font-mono text-xs">llm_summarize</code> 노드가 <strong>JSON Schema</strong>(Anthropic structured output)로 모델 응답을 5개 필드 형태로 강제합니다.
+              </div>
+            </div>
+            <div class="flex gap-3">
+              <div class="flex-shrink-0 w-7 text-right font-mono text-xs text-[var(--ink-mute)] pt-0.5">04</div>
+              <div class="flex-1 text-sm">
+                <code class="font-mono text-xs">validate</code> 노드가 Pydantic으로 응답을 검증합니다. 실패하면 조건부 엣지를 따라 <code class="font-mono text-xs">llm_summarize</code> 노드로 돌아가 최대 2회까지 재시도하고, 통과하면 <code class="font-mono text-xs">persist</code> 노드로 진행합니다.
+              </div>
+            </div>
+            <div class="flex gap-3">
+              <div class="flex-shrink-0 w-7 text-right font-mono text-xs text-[var(--ink-mute)] pt-0.5">05</div>
+              <div class="flex-1 text-sm">
+                <strong>SSE(Server-Sent Events) 스트리밍</strong>으로 섹션을 차례대로 노출합니다. 첫 토큰까지 약 2초, 5개 섹션 완료까지 약 15초가 걸립니다.
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-6 p-4 rounded-lg bg-[var(--accent-soft)] border border-[var(--accent-soft)]">
+            <div class="text-xs font-semibold text-[var(--accent-deep)] mb-1">💡 구조 고정의 이점</div>
+            <div class="text-xs text-[var(--accent-deep)] opacity-90 leading-relaxed">
+              5개 필드가 항상 같은 스키마이기 때문에, 서로 다른 논문 간에 '방법 vs 방법'을 사이드-바이-사이드로 비교할 수 있습니다. JSON 모드를 사용하므로 파싱 실패 위험도 사실상 사라집니다.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature C: Translation -->
+    <div class="card p-8">
+      <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-3">
+          <span class="stage-num">C</span>
+          <h3 class="h3">LLM 단독 번역 + 글로서리</h3>
+        </div>
+        <div class="flex gap-2">
+          <span class="chip chip-violet">LangGraph</span>
+          <span class="chip chip-green">Claude Haiku 4.5</span>
+          <span class="chip">Prompt Caching</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-12 gap-6">
+        <div class="col-span-7">
+          <div class="mermaid">
+stateDiagram-v2
+  direction TB
+  [*] --> load_glossary
+  load_glossary --> chunk_section : 사용자별 사전 주입
+  chunk_section --> translate_chunks : fan-out N개
+  state translate_chunks {
+    direction LR
+    [*] --> c1 : Haiku
+    [*] --> c2 : Haiku
+    [*] --> c3 : Haiku
+  }
+  translate_chunks --> merge : 청크 병합
+  merge --> verify_consistency
+  verify_consistency --> retry_inconsistent : 용어 불일치
+  retry_inconsistent --> merge : 재번역
+  verify_consistency --> persist : OK
+  persist --> [*]
+
+  note right of translate_chunks
+    각 청크 성공 시
+    체크포인터에
+    상태 저장
+  end note
+          </div>
+        </div>
+        <div class="col-span-5 space-y-4">
+          <div>
+            <div class="text-xs font-semibold text-[var(--ink-mute)] mb-2 tracking-wider">CACHE KEY</div>
+            <div class="font-mono text-xs bg-[var(--bg-soft)] p-3 rounded-lg border border-[var(--line)] leading-relaxed">
+              (paper_id, section_id,<br>
+              &nbsp;target_lang, glossary_version)
+            </div>
+          </div>
+          <div>
+            <div class="text-xs font-semibold text-[var(--ink-mute)] mb-2 tracking-wider">GLOSSARY</div>
+            <p class="text-sm text-[var(--ink-soft)] leading-relaxed">
+              사용자별로 <span class="font-mono text-xs bg-[var(--bg-soft)] px-1 rounded">{영문:한글}</span> 매핑을 관리합니다. 번역 프롬프트에 이 사전을 함께 주입해, 한 사람의 문서 전반에서 용어 표기가 흔들리지 않도록 강제합니다.
+            </p>
+            <div class="mt-2 font-mono text-xs bg-[var(--bg-soft)] p-2 rounded border border-[var(--line)]">
+              "attention": "어텐션"<br>
+              "embedding": "임베딩"
+            </div>
+          </div>
+          <div class="p-3 rounded-lg bg-[var(--green-soft)]">
+            <div class="text-xs font-semibold text-[#3A6149] mb-1">💰 비용 최적화</div>
+            <div class="text-xs text-[#3A6149] opacity-90 leading-relaxed">
+              Prompt Caching으로 시스템 프롬프트와 글로서리 부분을 미리 캐싱해 두기 때문에, 동일 글로서리로 반복 호출하면 <strong>입력 토큰을 약 90% 절감</strong>합니다. A4 한 쪽 분량 번역은 약 3초가 걸립니다.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LANGGRAPH WORKFLOWS (NEW) ============ -->
+<section class="border-b border-[var(--line)]" style="background: linear-gradient(180deg, var(--bg) 0%, rgba(123,107,168,0.04) 100%);">
+  <div class="max-w-6xl mx-auto px-8 py-14">
+    <div class="flex items-center gap-3 mb-2">
+      <div class="section-title">04 · Orchestration Layer</div>
+      <span class="chip chip-violet" style="font-size:10px;">v1.1 추가</span>
+    </div>
+    <h2 class="h2 mb-2">LangGraph 워크플로 설계</h2>
+    <p class="lead mb-8 max-w-3xl">
+      각 워크플로는 <strong>상태 그래프</strong>로 선언합니다. 노드별로 체크포인트를 저장하기 때문에 중간에 실패해도 그 노드부터 재개할 수 있습니다 — Celery 재시도가 task를 처음부터 다시 도는 것과는 결정적으로 다릅니다.
+    </p>
+
+    <!-- State Schema -->
+    <div class="card p-8 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="h3">공유 패턴 · State Schema</h3>
+        <span class="chip">TypedDict + reducer</span>
+      </div>
+      <div class="grid grid-cols-12 gap-6">
+        <div class="col-span-7">
+          <div class="font-mono text-xs bg-[var(--bg-soft)] p-4 rounded-lg border border-[var(--line)] leading-relaxed">
+            <span style="color: var(--violet-deep);"><b>class</b></span> SummaryState(TypedDict):<br>
+            &nbsp;&nbsp;paper_id: str<br>
+            &nbsp;&nbsp;lang: Literal["ko", "en"]<br>
+            &nbsp;&nbsp;sections_text: str<br>
+            &nbsp;&nbsp;raw_response: str | None<br>
+            &nbsp;&nbsp;validated: SummarySchema | None<br>
+            &nbsp;&nbsp;retry_count: <span style="color: var(--accent-deep);">Annotated[int, operator.add]</span><br>
+            &nbsp;&nbsp;errors: <span style="color: var(--accent-deep);">Annotated[list[str], operator.add]</span><br>
+            &nbsp;&nbsp;tokens_in: int<br>
+            &nbsp;&nbsp;tokens_out: int
+          </div>
+          <div class="text-xs text-[var(--ink-soft)] mt-3 leading-relaxed">
+            <span class="font-mono text-[var(--accent-deep)]">Annotated[..., operator.add]</span>는 LangGraph의 reducer 어노테이션입니다.
+            여러 노드가 같은 필드를 갱신할 때 마지막 값으로 덮어쓰지 않고 누적하도록 만듭니다. 재시도 횟수나 에러 로그처럼 발생 이력을 모두 보존해야 하는 필드에 사용합니다.
+          </div>
+        </div>
+        <div class="col-span-5">
+          <div class="text-xs font-semibold text-[var(--ink-mute)] mb-3 tracking-wider">CHECKPOINTER</div>
+          <div class="card-soft p-4 mb-3">
+            <div class="font-mono text-xs mb-2">PostgresSaver</div>
+            <div class="text-xs text-[var(--ink-soft)] leading-relaxed">
+              상태 스냅샷을 Postgres의 <code class="font-mono text-xs bg-white px-1 rounded">checkpoints</code> 테이블에 저장합니다. <code class="font-mono text-xs bg-white px-1 rounded">thread_id</code> 단위로 그룹화하므로, 같은 요약 요청에서 발생하는 스냅샷들은 같은 thread에 묶입니다.
+            </div>
+          </div>
+          <div class="card-soft p-4">
+            <div class="font-mono text-xs mb-2">Resume 시나리오</div>
+            <div class="text-xs text-[var(--ink-soft)] leading-relaxed">
+              번역 청크 10개 중 5개를 처리한 시점에 Claude rate limit에 걸렸다고 가정합시다. 다음 워커가 픽업해 <code class="font-mono text-xs bg-white px-1 rounded">graph.invoke(state, thread_id=...)</code>를 호출하면 6번째부터 자동으로 재개합니다. 이미 끝낸 1~5번 결과는 그대로 보존되어 있어 다시 호출할 필요가 없습니다.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3 Workflows side by side -->
+    <div class="grid grid-cols-3 gap-4">
+      <!-- Ingest Graph -->
+      <div class="card p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <div class="text-xs font-mono text-[var(--ink-mute)]">GRAPH 1</div>
+            <div class="font-semibold mt-1">Ingest</div>
+          </div>
+          <span class="chip">선형</span>
+        </div>
+        <div class="mermaid">
+stateDiagram-v2
+  direction TB
+  [*] --> download
+  download --> grobid_parse
+  grobid_parse --> chunk
+  chunk --> embed
+  embed --> store_qdrant
+  store_qdrant --> mark_ready
+  mark_ready --> [*]
+        </div>
+        <div class="text-xs text-[var(--ink-soft)] mt-3 leading-relaxed">
+          단순한 선형 그래프이지만 임베딩 단계의 비용이 큽니다. 청크 1000개 중 800개를 임베딩한 시점에서 실패하더라도, 이미 끝낸 800개의 결과는 그대로 유지됩니다.
+        </div>
+      </div>
+
+      <!-- Summary Graph -->
+      <div class="card p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <div class="text-xs font-mono text-[var(--ink-mute)]">GRAPH 2</div>
+            <div class="font-semibold mt-1">Summary</div>
+          </div>
+          <span class="chip chip-blue">조건부 재시도</span>
+        </div>
+        <div class="mermaid">
+stateDiagram-v2
+  direction TB
+  [*] --> retrieve_sections
+  retrieve_sections --> llm_summarize
+  llm_summarize --> validate
+  validate --> persist : 통과
+  validate --> llm_summarize : 실패<br/>(< 2회)
+  validate --> [*] : 실패<br/>(2회 이상)
+  persist --> [*]
+        </div>
+        <div class="text-xs text-[var(--ink-soft)] mt-3 leading-relaxed">
+          JSON Schema 검증에 실패하면 그 에러 메시지를 다음 호출의 프롬프트에 주입해 모델이 무엇을 고쳐야 하는지 알게 합니다. 재시도가 2회를 넘으면 사용자에게 실패를 보고합니다.
+        </div>
+      </div>
+
+      <!-- Translate Graph -->
+      <div class="card p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <div class="text-xs font-mono text-[var(--ink-mute)]">GRAPH 3</div>
+            <div class="font-semibold mt-1">Translate</div>
+          </div>
+          <span class="chip chip-green">병렬 fan-out</span>
+        </div>
+        <div class="mermaid">
+stateDiagram-v2
+  direction TB
+  [*] --> load_glossary
+  load_glossary --> chunk
+  chunk --> parallel_translate
+  parallel_translate --> merge
+  merge --> verify
+  verify --> persist : OK
+  verify --> retry : 용어 불일치
+  retry --> merge
+  persist --> [*]
+        </div>
+        <div class="text-xs text-[var(--ink-soft)] mt-3 leading-relaxed">
+          <code class="font-mono text-xs">Send</code> API(LangGraph의 동적 fan-out 도우미)로 청크별 노드를 동시에 실행합니다. 용어 일관성 검증에 실패한 청크만 다시 번역하므로, 전체를 재처리할 필요가 없습니다.
+        </div>
+      </div>
+    </div>
+
+    <!-- Why LangGraph -->
+    <div class="grid grid-cols-3 gap-4 mt-6">
+      <div class="card-soft p-5">
+        <div class="text-xs font-mono mb-2" style="color: var(--violet-deep);">WHY · 1</div>
+        <div class="font-semibold text-sm mb-2">노드 단위 재개</div>
+        <div class="text-xs text-[var(--ink-soft)] leading-relaxed">
+          Celery는 재시도 시 task 전체를 처음부터 다시 돌립니다. 반면 LangGraph는 실패한 노드부터 재개하므로, 이미 끝낸 비싼 LLM 호출 결과를 버리지 않습니다.
+        </div>
+      </div>
+      <div class="card-soft p-5">
+        <div class="text-xs font-mono mb-2" style="color: var(--violet-deep);">WHY · 2</div>
+        <div class="font-semibold text-sm mb-2">조건부 라우팅</div>
+        <div class="text-xs text-[var(--ink-soft)] leading-relaxed">
+          '검증 실패 시 재시도', '용어 충돌 시 재번역' 같은 동적 분기를 그래프 엣지로 선언적으로 표현할 수 있습니다. 코드 안의 if-else 체인보다 흐름이 한눈에 들어오고, 분기 조건을 바꾸기도 쉽습니다.
+        </div>
+      </div>
+      <div class="card-soft p-5">
+        <div class="text-xs font-mono mb-2" style="color: var(--violet-deep);">WHY · 3</div>
+        <div class="font-semibold text-sm mb-2">관찰성과 합</div>
+        <div class="text-xs text-[var(--ink-soft)] leading-relaxed">
+          LangSmith나 Langfuse가 각 노드를 자동으로 OpenTelemetry span으로 추적합니다. 어느 노드가 느리고 어디서 실패하는지를 코드 변경 없이 바로 확인할 수 있습니다.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ STACK MANIFEST ============ -->
+<section class="border-b border-[var(--line)]">
+  <div class="max-w-6xl mx-auto px-8 py-14">
+    <div class="section-title mb-2">05 · Stack Manifest</div>
+    <h2 class="h2 mb-2">기술 스택 명세 (설치·버전 단위)</h2>
+    <p class="lead mb-8 max-w-3xl">
+      02 Tech Stack이 "왜 이걸 골랐나"라면, 이 표는 "<strong>첫날 무엇을 설치하나</strong>"입니다.
+      각 행은 단일 패키지·서비스·버전이고, Lead 컬럼은 다음 섹션 4인 팀과 연결됩니다.
+    </p>
+
+    <!-- L1: Data & External -->
+    <div class="card overflow-hidden mb-4">
+      <div class="px-5 py-3 flex items-center justify-between" style="background: var(--green-soft); border-bottom: 1px solid var(--line);">
+        <div class="flex items-center gap-3">
+          <div class="font-mono text-xs" style="color: var(--green-deep);">L1</div>
+          <div class="font-semibold text-sm">External Data & Ingest Pipeline</div>
+        </div>
+        <span class="chip chip-green">Lead · F1 검색·수집</span>
+      </div>
+      <table class="w-full text-sm">
+        <thead class="bg-[var(--bg-soft)] border-b border-[var(--line)]">
+          <tr>
+            <th class="text-left px-4 py-2.5 text-xs font-semibold text-[var(--ink-mute)] tracking-wider w-1/4">Component</th>
+            <th class="text-left px-4 py-2.5 text-xs font-semibold text-[var(--ink-mute)] tracking-wider w-1/4">Package / Version</th>
+            <th class="text-left px-4 py-2.5 text-xs font-semibold text-[var(--ink-mute)] tracking-wider">Role</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[var(--line-soft)]">
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">arXiv API</td>
+            <td class="px-4 py-2.5 font-mono text-xs">arxiv 2.1.x</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">CS/물리 프리프린트 검색 + PDF 직링크</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">Semantic Scholar</td>
+            <td class="px-4 py-2.5 font-mono text-xs">semanticscholar 0.8.x</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">인용 그래프 + 영향력 점수</td>
+          </tr>
+          <tr style="background: rgba(90,138,107,0.04);">
+            <td class="px-4 py-2.5 font-semibold">OpenAlex <span class="chip chip-green" style="font-size:9px;padding:0 5px;">v1.1</span></td>
+            <td class="px-4 py-2.5 font-mono text-xs">pyalex 0.18.x</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">개방형 인용 그래프 + 분야 폭 + concepts 분류</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">PDF 파싱</td>
+            <td class="px-4 py-2.5 font-mono text-xs">GROBID 0.8.1 (Docker)</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">학술 PDF → TEI-XML 섹션 구조화</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">PDF 폴백</td>
+            <td class="px-4 py-2.5 font-mono text-xs">pymupdf 1.24.x</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">GROBID 실패 시 평문 추출</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">HTTP 클라이언트</td>
+            <td class="px-4 py-2.5 font-mono text-xs">httpx 0.27.x + tenacity 9.x</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">비동기 호출 + 지수 백오프 재시도</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">청킹</td>
+            <td class="px-4 py-2.5 font-mono text-xs">자체 (anchor-aware)</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">GROBID가 추출한 섹션·문단 경계를 끊지 않고, 약 1000 토큰 단위로 자릅니다 — 한 청크가 두 섹션에 걸치지 않게 하기 위함입니다.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- L2: LLM Orchestration -->
+    <div class="card overflow-hidden mb-4">
+      <div class="px-5 py-3 flex items-center justify-between" style="background: var(--violet-soft); border-bottom: 1px solid var(--line);">
+        <div class="flex items-center gap-3">
+          <div class="font-mono text-xs" style="color: var(--violet-deep);">L2</div>
+          <div class="font-semibold text-sm">LLM Orchestration & Models</div>
+        </div>
+        <span class="chip chip-violet">Lead · F2 요약 + F3 번역 (각 그래프 소유)</span>
+      </div>
+      <table class="w-full text-sm">
+        <thead class="bg-[var(--bg-soft)] border-b border-[var(--line)]">
+          <tr>
+            <th class="text-left px-4 py-2.5 text-xs font-semibold text-[var(--ink-mute)] tracking-wider w-1/4">Component</th>
+            <th class="text-left px-4 py-2.5 text-xs font-semibold text-[var(--ink-mute)] tracking-wider w-1/4">Package / Version</th>
+            <th class="text-left px-4 py-2.5 text-xs font-semibold text-[var(--ink-mute)] tracking-wider">Role</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[var(--line-soft)]">
+          <tr style="background: rgba(123,107,168,0.04);">
+            <td class="px-4 py-2.5 font-semibold">LangGraph <span class="chip chip-violet" style="font-size:9px;padding:0 5px;">v1.1</span></td>
+            <td class="px-4 py-2.5 font-mono text-xs">langgraph 0.2.x</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">상태 그래프 정의 + 노드 실행 + 조건부 라우팅</td>
+          </tr>
+          <tr style="background: rgba(123,107,168,0.04);">
+            <td class="px-4 py-2.5 font-semibold">Checkpointer <span class="chip chip-violet" style="font-size:9px;padding:0 5px;">v1.1</span></td>
+            <td class="px-4 py-2.5 font-mono text-xs">langgraph-checkpoint-postgres 2.x</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">노드별 상태 스냅샷 → Postgres 영속화</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">Claude SDK</td>
+            <td class="px-4 py-2.5 font-mono text-xs">anthropic 0.40.x</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">prompt caching · structured output · streaming</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">요약 모델</td>
+            <td class="px-4 py-2.5 font-mono text-xs">claude-sonnet-4-6</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">5-섹션 구조화 요약 (200K 컨텍스트)</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">번역 모델</td>
+            <td class="px-4 py-2.5 font-mono text-xs">claude-haiku-4-5-20251001</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">청크 단위 번역 (저비용·빠른 응답)</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">임베딩</td>
+            <td class="px-4 py-2.5 font-mono text-xs">voyageai 0.2.x · voyage-3</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">다국어 1024d (한·영 혼합 검색)</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">검증</td>
+            <td class="px-4 py-2.5 font-mono text-xs">pydantic 2.9.x</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">LLM JSON 응답 스키마 검증</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- L3: Platform -->
+    <div class="card overflow-hidden mb-4">
+      <div class="px-5 py-3 flex items-center justify-between" style="background: var(--blue-soft); border-bottom: 1px solid var(--line);">
+        <div class="flex items-center gap-3">
+          <div class="font-mono text-xs" style="color: var(--blue-deep);">L3</div>
+          <div class="font-semibold text-sm">Platform · API · Async · Storage</div>
+        </div>
+        <span class="chip chip-blue">Lead · F4 플랫폼·셸</span>
+      </div>
+      <table class="w-full text-sm">
+        <thead class="bg-[var(--bg-soft)] border-b border-[var(--line)]">
+          <tr>
+            <th class="text-left px-4 py-2.5 text-xs font-semibold text-[var(--ink-mute)] tracking-wider w-1/4">Component</th>
+            <th class="text-left px-4 py-2.5 text-xs font-semibold text-[var(--ink-mute)] tracking-wider w-1/4">Package / Version</th>
+            <th class="text-left px-4 py-2.5 text-xs font-semibold text-[var(--ink-mute)] tracking-wider">Role</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[var(--line-soft)]">
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">Runtime</td>
+            <td class="px-4 py-2.5 font-mono text-xs">Python 3.12 + uv 0.4.x</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">가상환경 + 패키지 관리 (poetry보다 빠름)</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">Web framework</td>
+            <td class="px-4 py-2.5 font-mono text-xs">fastapi 0.115.x + uvicorn 0.32.x</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">REST API · SSE 스트리밍</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">Auth</td>
+            <td class="px-4 py-2.5 font-mono text-xs">fastapi-users 13.x</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">JWT 발급·검증</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">Task queue</td>
+            <td class="px-4 py-2.5 font-mono text-xs">celery 5.4.x</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">LangGraph 워크플로 트리거 · 잡 라이프사이클</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">DB ORM</td>
+            <td class="px-4 py-2.5 font-mono text-xs">sqlalchemy 2.0.x + alembic 1.13.x</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">관계형 모델 + 마이그레이션</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">관계형 DB</td>
+            <td class="px-4 py-2.5 font-mono text-xs">PostgreSQL 16</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">메타데이터 + JSONB 요약 + LangGraph checkpoints</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">벡터 DB</td>
+            <td class="px-4 py-2.5 font-mono text-xs">qdrant 1.12 (Docker) + qdrant-client 1.12.x</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">섹션 청크 임베딩 + 메타 필터</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">캐시 / 브로커</td>
+            <td class="px-4 py-2.5 font-mono text-xs">Redis 7.4 + redis-py 5.x</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">검색 캐시 + Celery broker</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">객체 저장소</td>
+            <td class="px-4 py-2.5 font-mono text-xs">MinIO RELEASE.2024 + boto3 1.35.x</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">PDF 원본 보관 (S3 호환)</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">관찰성</td>
+            <td class="px-4 py-2.5 font-mono text-xs">langfuse 2.x + opentelemetry-api 1.27</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">LLM trace + 노드별 span + 토큰·비용 추적</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">컨테이너</td>
+            <td class="px-4 py-2.5 font-mono text-xs">Docker Compose (local) / k8s (prod)</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">GROBID·Postgres·Qdrant·MinIO·Redis 묶음 기동</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- L4: Frontend -->
+    <div class="card overflow-hidden">
+      <div class="px-5 py-3 flex items-center justify-between" style="background: var(--accent-soft); border-bottom: 1px solid var(--line);">
+        <div class="flex items-center gap-3">
+          <div class="font-mono text-xs" style="color: var(--accent-deep);">L4</div>
+          <div class="font-semibold text-sm">Frontend · UI · UX</div>
+        </div>
+        <span class="chip chip-accent">Lead · F1·F2·F3 (각 기능 UI) + F4 셸</span>
+      </div>
+      <table class="w-full text-sm">
+        <thead class="bg-[var(--bg-soft)] border-b border-[var(--line)]">
+          <tr>
+            <th class="text-left px-4 py-2.5 text-xs font-semibold text-[var(--ink-mute)] tracking-wider w-1/4">Component</th>
+            <th class="text-left px-4 py-2.5 text-xs font-semibold text-[var(--ink-mute)] tracking-wider w-1/4">Package / Version</th>
+            <th class="text-left px-4 py-2.5 text-xs font-semibold text-[var(--ink-mute)] tracking-wider">Role</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[var(--line-soft)]">
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">Framework</td>
+            <td class="px-4 py-2.5 font-mono text-xs">Next.js 15 (App Router) + React 19</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">서버 컴포넌트 + 스트리밍 SSE 소비</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">스타일</td>
+            <td class="px-4 py-2.5 font-mono text-xs">Tailwind 3.4 + shadcn/ui</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">유틸 클래스 + 검증된 컴포넌트 (이 페이지와 동일 톤)</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">PDF 뷰어</td>
+            <td class="px-4 py-2.5 font-mono text-xs">react-pdf 9.x (pdf.js 4.x)</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">원문 뷰 + 페이지·문장 anchor 하이라이트</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">상태 / 데이터</td>
+            <td class="px-4 py-2.5 font-mono text-xs">@tanstack/react-query 5.x + zustand 5.x</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">서버 상태 캐시 + 클라이언트 상태 (글로서리·UI 모드)</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">스트리밍</td>
+            <td class="px-4 py-2.5 font-mono text-xs">EventSource (browser native) + custom hook</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">SSE로 LLM 출력 점진 노출</td>
+          </tr>
+          <tr>
+            <td class="px-4 py-2.5 font-semibold">테스트</td>
+            <td class="px-4 py-2.5 font-mono text-xs">Vitest + Playwright</td>
+            <td class="px-4 py-2.5 text-[var(--ink-soft)] text-xs">단위 + E2E (검색→요약→번역 전체 흐름)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card-soft p-5 mt-6 flex items-start gap-3">
+      <div class="text-xl">📦</div>
+      <div>
+        <div class="font-semibold text-sm mb-1">총 외부 의존성 요약</div>
+        <div class="text-xs text-[var(--ink-soft)] leading-relaxed">
+          <strong>Python</strong>: 17개 PyPI 패키지 + 1개 Docker 이미지(GROBID) ·
+          <strong>Node</strong>: 6개 npm 패키지 ·
+          <strong>인프라</strong>: Postgres + Qdrant + MinIO + Redis ·
+          <strong>외부 API</strong>: arXiv + Semantic Scholar + OpenAlex + Anthropic + Voyage AI.
+          docker-compose 한 파일로 로컬 일괄 기동.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DATA MODEL ============ -->
+<section class="border-b border-[var(--line)]">
+  <div class="max-w-6xl mx-auto px-8 py-14">
+    <div class="section-title mb-2">06 · Data Model</div>
+    <h2 class="h2 mb-8">핵심 테이블</h2>
+
+    <div class="grid grid-cols-2 gap-4">
+      <div class="card p-5">
+        <div class="flex items-center justify-between mb-3">
+          <div class="font-mono text-sm font-semibold">papers</div>
+          <span class="chip">core</span>
+        </div>
+        <div class="font-mono text-xs text-[var(--ink-soft)] space-y-1 leading-relaxed">
+          <div>id, arxiv_id, s2_paper_id, doi</div>
+          <div>title, authors_jsonb, year</div>
+          <div>abstract, pdf_object_key</div>
+          <div><span class="text-[var(--accent-deep)]">citation_count, influential_count</span></div>
+          <div><span class="text-[var(--accent-deep)]">status</span> · created_at</div>
+        </div>
+      </div>
+
+      <div class="card p-5">
+        <div class="flex items-center justify-between mb-3">
+          <div class="font-mono text-sm font-semibold">sections</div>
+          <span class="chip">parsed</span>
+        </div>
+        <div class="font-mono text-xs text-[var(--ink-soft)] space-y-1 leading-relaxed">
+          <div>id, paper_id, kind</div>
+          <div><span class="text-[var(--ink-mute)]">↳ abstract | intro | method | exp | conclusion</span></div>
+          <div>order_idx, text</div>
+        </div>
+      </div>
+
+      <div class="card p-5">
+        <div class="flex items-center justify-between mb-3">
+          <div class="font-mono text-sm font-semibold">summaries</div>
+          <span class="chip chip-blue">LLM</span>
+        </div>
+        <div class="font-mono text-xs text-[var(--ink-soft)] space-y-1 leading-relaxed">
+          <div>id, paper_id, schema_version</div>
+          <div>lang, <span class="text-[var(--accent-deep)]">content_jsonb</span></div>
+          <div><span class="text-[var(--ink-mute)]">↳ {problem, method, results, limitations, contribution}</span></div>
+          <div>model, tokens_in, tokens_out</div>
+        </div>
+      </div>
+
+      <div class="card p-5">
+        <div class="flex items-center justify-between mb-3">
+          <div class="font-mono text-sm font-semibold">translations</div>
+          <span class="chip chip-green">LLM</span>
+        </div>
+        <div class="font-mono text-xs text-[var(--ink-soft)] space-y-1 leading-relaxed">
+          <div>id, paper_id, section_id</div>
+          <div>target_lang, content</div>
+          <div><span class="text-[var(--accent-deep)]">glossary_id, glossary_version</span></div>
+          <div>model, created_at</div>
+        </div>
+      </div>
+
+      <div class="card p-5">
+        <div class="flex items-center justify-between mb-3">
+          <div class="font-mono text-sm font-semibold">glossaries</div>
+          <span class="chip">user</span>
+        </div>
+        <div class="font-mono text-xs text-[var(--ink-soft)] space-y-1 leading-relaxed">
+          <div>id, user_id, name</div>
+          <div><span class="text-[var(--accent-deep)]">terms_jsonb</span></div>
+          <div><span class="text-[var(--ink-mute)]">↳ {"attention":"어텐션", ...}</span></div>
+          <div>version</div>
+        </div>
+      </div>
+
+      <div class="card p-5">
+        <div class="flex items-center justify-between mb-3">
+          <div class="font-mono text-sm font-semibold">user_library</div>
+          <span class="chip">user</span>
+        </div>
+        <div class="font-mono text-xs text-[var(--ink-soft)] space-y-1 leading-relaxed">
+          <div>user_id, paper_id</div>
+          <div>added_at, tags[]</div>
+        </div>
+      </div>
+
+      <div class="card p-5" style="border-color: var(--violet);">
+        <div class="flex items-center justify-between mb-3">
+          <div class="font-mono text-sm font-semibold">checkpoints</div>
+          <span class="chip chip-violet">LangGraph</span>
+        </div>
+        <div class="font-mono text-xs text-[var(--ink-soft)] space-y-1 leading-relaxed">
+          <div>thread_id, checkpoint_id</div>
+          <div>parent_checkpoint_id</div>
+          <div><span style="color: var(--accent-deep);">state_jsonb</span> · 노드별 스냅샷</div>
+          <div>metadata, created_at</div>
+        </div>
+        <div class="text-xs text-[var(--ink-soft)] mt-2 leading-relaxed">
+          PostgresSaver가 자동 관리. 사용자 코드 접근 불필요.
+        </div>
+      </div>
+    </div>
+
+    <div class="card-soft p-4 mt-4 text-xs text-[var(--ink-soft)] flex items-start gap-3">
+      <div class="text-base">💾</div>
+      <div>
+        실제 임베딩 벡터는 Qdrant에 저장하고,
+        <span class="font-mono">embeddings_meta(paper_id, section_id, chunk_idx, qdrant_point_id)</span> 테이블로
+        Postgres의 관계 정보와 연결합니다.
+        LangGraph의 <span class="font-mono">checkpoints</span> 테이블도 동일한 Postgres 인스턴스 안에 두어, 본 데이터와 체크포인트가 같은 트랜잭션으로 묶이도록 했습니다.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ NFR ============ -->
+<section class="border-b border-[var(--line)]">
+  <div class="max-w-6xl mx-auto px-8 py-14">
+    <div class="section-title mb-2">07 · Non-Functional Requirements</div>
+    <h2 class="h2 mb-8">비기능 요구사항</h2>
+
+    <div class="card overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-[var(--bg-soft)] border-b border-[var(--line)]">
+          <tr>
+            <th class="text-left px-5 py-3 text-xs font-semibold text-[var(--ink-mute)] tracking-wider w-1/4">CATEGORY</th>
+            <th class="text-left px-5 py-3 text-xs font-semibold text-[var(--ink-mute)] tracking-wider">처리 방식</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[var(--line)]">
+          <tr>
+            <td class="px-5 py-4 font-semibold">지연 (요약)</td>
+            <td class="px-5 py-4 text-[var(--ink-soft)]">SSE 스트리밍으로 첫 토큰까지 <strong class="text-[var(--ink)]">약 2초</strong>, 5개 섹션 완료까지 <strong class="text-[var(--ink)]">약 15초</strong>를 목표로 합니다.</td>
+          </tr>
+          <tr>
+            <td class="px-5 py-4 font-semibold">지연 (번역)</td>
+            <td class="px-5 py-4 text-[var(--ink-soft)]">청크를 병렬로 호출하여 A4 한 쪽 분량을 <strong class="text-[var(--ink)]">약 3초</strong>에 처리합니다.</td>
+          </tr>
+          <tr>
+            <td class="px-5 py-4 font-semibold">비용</td>
+            <td class="px-5 py-4 text-[var(--ink-soft)]">Prompt Caching, Haiku 번역, 요약 캐시 영속화를 결합해, 동일 논문을 다시 요청할 때 LLM 호출 비용을 <strong class="text-[var(--ink)]">0원</strong>으로 만듭니다.</td>
+          </tr>
+          <tr>
+            <td class="px-5 py-4 font-semibold">재시도</td>
+            <td class="px-5 py-4 text-[var(--ink-soft)]">Celery의 <span class="font-mono text-xs">autoretry_for</span>와 지수 백오프(exponential backoff)를 함께 사용합니다.</td>
+          </tr>
+          <tr>
+            <td class="px-5 py-4 font-semibold">레이트 리밋</td>
+            <td class="px-5 py-4 text-[var(--ink-soft)]">arXiv는 요청당 3초 간격, Semantic Scholar는 5분당 100건 — Redis 토큰 버킷으로 강제합니다.</td>
+          </tr>
+          <tr>
+            <td class="px-5 py-4 font-semibold">저작권</td>
+            <td class="px-5 py-4 text-[var(--ink-soft)]">arXiv는 오픈 액세스라 본문 저장이 가능하지만, Semantic Scholar는 본문 저장이 <strong class="text-[var(--ink)]">금지</strong>되어 있어 메타데이터만 저장합니다.</td>
+          </tr>
+          <tr>
+            <td class="px-5 py-4 font-semibold">관찰성</td>
+            <td class="px-5 py-4 text-[var(--ink-soft)]">LLM trace는 Langfuse, API 메트릭은 Prometheus가 담당합니다.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TEAM ROLES (NEW) ============ -->
+<section class="border-b border-[var(--line)]" style="background: linear-gradient(180deg, rgba(204,120,92,0.04) 0%, var(--bg) 100%);">
+  <div class="max-w-6xl mx-auto px-8 py-14">
+    <div class="section-title mb-2">08 · Team of 4</div>
+    <h2 class="h2 mb-2">4인 팀 역할 분담</h2>
+    <p class="lead mb-8 max-w-3xl">
+      역할을 수직 스택 레이어가 아니라 <strong>사용자 가치 단위인 기능(검색·요약·번역)</strong>으로 자릅니다.
+      한 사람이 데이터 수집부터 UI까지 자기 기능을 끝까지 책임지므로, 데모와 사고 추적이 명확해집니다.
+      다만 인프라·디자인 시스템처럼 모두가 공유하는 기반은 한 명(F4)에게 모아 중복을 막고, 기능 팀끼리는 mock 인터페이스로 출발해 서로의 완성을 기다리지 않습니다.
+    </p>
+
+    <!-- 4 roles 2x2 -->
+    <div class="grid grid-cols-2 gap-4 mb-6">
+      <!-- F1: 검색·수집 풀스택 -->
+      <div class="card p-6" style="border-color: var(--green); border-width: 1px;">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg" style="background: var(--green-soft); color: var(--green-deep);">F1</div>
+            <div>
+              <div class="text-xs font-mono" style="color: var(--green-deep);">FEATURE · 검색·수집</div>
+              <div class="font-semibold text-lg">Search &amp; Ingest Engineer</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <div>
+            <div class="text-xs font-semibold text-[var(--ink-mute)] tracking-wider mb-1.5">소유 책임</div>
+            <ul class="text-sm space-y-1 text-[var(--ink-soft)]">
+              <li class="flex gap-2"><span class="text-[var(--green-deep)]">▸</span> 3-way 페더레이션 검색 + dedupe + 통합 랭킹</li>
+              <li class="flex gap-2"><span class="text-[var(--green-deep)]">▸</span> GROBID 인제스트 그래프 + 청킹·임베딩·Qdrant 적재</li>
+              <li class="flex gap-2"><span class="text-[var(--green-deep)]">▸</span> 검색·라이브러리·PDF 뷰어 UI 전부</li>
+              <li class="flex gap-2"><span class="text-[var(--green-deep)]">▸</span> 외부 API rate limit·재시도·backoff 정책</li>
+            </ul>
+          </div>
+
+          <div>
+            <div class="text-xs font-semibold text-[var(--ink-mute)] tracking-wider mb-1.5">소유 모듈</div>
+            <div class="font-mono text-xs space-y-0.5 text-[var(--ink-soft)]">
+              <div>app/services/search/ · app/services/ingest/</div>
+              <div>app/graphs/ingest_graph.py</div>
+              <div>web/app/(search), web/app/(library)</div>
+              <div>web/components/PaperViewer/</div>
+            </div>
+          </div>
+
+          <div>
+            <div class="text-xs font-semibold text-[var(--ink-mute)] tracking-wider mb-1.5">핵심 의존</div>
+            <div class="flex flex-wrap gap-1.5">
+              <span class="chip" style="font-size:11px;">arxiv</span>
+              <span class="chip" style="font-size:11px;">semanticscholar</span>
+              <span class="chip chip-green" style="font-size:11px;">pyalex</span>
+              <span class="chip" style="font-size:11px;">GROBID</span>
+              <span class="chip" style="font-size:11px;">qdrant-client</span>
+              <span class="chip" style="font-size:11px;">voyageai</span>
+              <span class="chip" style="font-size:11px;">react-pdf</span>
+            </div>
+          </div>
+
+          <div class="pt-2 border-t border-[var(--line-soft)]">
+            <div class="text-xs font-semibold text-[var(--ink-mute)] tracking-wider mb-1">S1 산출</div>
+            <div class="text-xs text-[var(--ink-soft)]">arXiv 검색 + 검색 페이지(mock JSON 소비) — 다른 두 소스는 S2부터</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- F2: 요약 풀스택 -->
+      <div class="card p-6" style="border-color: var(--violet); border-width: 1px;">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg" style="background: var(--violet-soft); color: var(--violet-deep);">F2</div>
+            <div>
+              <div class="text-xs font-mono" style="color: var(--violet-deep);">FEATURE · 요약</div>
+              <div class="font-semibold text-lg">Summary Engineer</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <div>
+            <div class="text-xs font-semibold text-[var(--ink-mute)] tracking-wider mb-1.5">소유 책임</div>
+            <ul class="text-sm space-y-1 text-[var(--ink-soft)]">
+              <li class="flex gap-2"><span class="text-[var(--violet-deep)]">▸</span> Summary Graph + Sonnet 프롬프트 + Prompt Caching</li>
+              <li class="flex gap-2"><span class="text-[var(--violet-deep)]">▸</span> 5-섹션 JSON Schema + 조건부 재시도 + Pydantic 검증</li>
+              <li class="flex gap-2"><span class="text-[var(--violet-deep)]">▸</span> SSE 스트리밍 → 섹션별 점진 노출 UI</li>
+              <li class="flex gap-2"><span class="text-[var(--violet-deep)]">▸</span> 요약 비용·토큰 추적</li>
+            </ul>
+          </div>
+
+          <div>
+            <div class="text-xs font-semibold text-[var(--ink-mute)] tracking-wider mb-1.5">소유 모듈</div>
+            <div class="font-mono text-xs space-y-0.5 text-[var(--ink-soft)]">
+              <div>app/graphs/summary_graph.py</div>
+              <div>app/prompts/summary/</div>
+              <div>app/schemas/summary.py</div>
+              <div>web/app/(summary), web/components/SummaryStream/</div>
+            </div>
+          </div>
+
+          <div>
+            <div class="text-xs font-semibold text-[var(--ink-mute)] tracking-wider mb-1.5">핵심 의존</div>
+            <div class="flex flex-wrap gap-1.5">
+              <span class="chip chip-violet" style="font-size:11px;">langgraph</span>
+              <span class="chip" style="font-size:11px;">anthropic (Sonnet 4.6)</span>
+              <span class="chip" style="font-size:11px;">pydantic</span>
+              <span class="chip" style="font-size:11px;">langfuse</span>
+              <span class="chip" style="font-size:11px;">EventSource</span>
+            </div>
+          </div>
+
+          <div class="pt-2 border-t border-[var(--line-soft)]">
+            <div class="text-xs font-semibold text-[var(--ink-mute)] tracking-wider mb-1">S1 산출</div>
+            <div class="text-xs text-[var(--ink-soft)]">하드코드 텍스트 → 5-필드 요약 노드 + 요약 뷰 골격</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- F3: 번역 풀스택 -->
+      <div class="card p-6" style="border-color: var(--accent); border-width: 1px;">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg" style="background: var(--accent-soft); color: var(--accent-deep);">F3</div>
+            <div>
+              <div class="text-xs font-mono" style="color: var(--accent-deep);">FEATURE · 번역</div>
+              <div class="font-semibold text-lg">Translation Engineer</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <div>
+            <div class="text-xs font-semibold text-[var(--ink-mute)] tracking-wider mb-1.5">소유 책임</div>
+            <ul class="text-sm space-y-1 text-[var(--ink-soft)]">
+              <li class="flex gap-2"><span class="text-[var(--accent-deep)]">▸</span> Translate Graph + Haiku 프롬프트 + 병렬 fan-out</li>
+              <li class="flex gap-2"><span class="text-[var(--accent-deep)]">▸</span> Glossary 데이터 모델 + 용어 일관성 검증 + 재번역 분기</li>
+              <li class="flex gap-2"><span class="text-[var(--accent-deep)]">▸</span> 사이드-바이-사이드 번역 뷰 + 글로서리 편집기</li>
+              <li class="flex gap-2"><span class="text-[var(--accent-deep)]">▸</span> 번역 비용·토큰 추적</li>
+            </ul>
+          </div>
+
+          <div>
+            <div class="text-xs font-semibold text-[var(--ink-mute)] tracking-wider mb-1.5">소유 모듈</div>
+            <div class="font-mono text-xs space-y-0.5 text-[var(--ink-soft)]">
+              <div>app/graphs/translate_graph.py</div>
+              <div>app/prompts/translate/</div>
+              <div>app/services/glossary/</div>
+              <div>web/app/(translate), web/components/Translation/, web/components/GlossaryEditor/</div>
+            </div>
+          </div>
+
+          <div>
+            <div class="text-xs font-semibold text-[var(--ink-mute)] tracking-wider mb-1.5">핵심 의존</div>
+            <div class="flex flex-wrap gap-1.5">
+              <span class="chip chip-accent" style="font-size:11px;">langgraph</span>
+              <span class="chip" style="font-size:11px;">anthropic (Haiku 4.5)</span>
+              <span class="chip" style="font-size:11px;">pydantic</span>
+              <span class="chip" style="font-size:11px;">langfuse</span>
+            </div>
+          </div>
+
+          <div class="pt-2 border-t border-[var(--line-soft)]">
+            <div class="text-xs font-semibold text-[var(--ink-mute)] tracking-wider mb-1">S1 산출</div>
+            <div class="text-xs text-[var(--ink-soft)]">단일 청크 mock 번역 + 글로서리 데이터 모델 초안</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- F4: 공유 플랫폼·셸 -->
+      <div class="card p-6" style="border-color: var(--blue); border-width: 1px;">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg" style="background: var(--blue-soft); color: var(--blue-deep);">F4</div>
+            <div>
+              <div class="text-xs font-mono" style="color: var(--blue-deep);">FOUNDATION · 공유 플랫폼·셸</div>
+              <div class="font-semibold text-lg">Platform &amp; Shell Engineer</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <div>
+            <div class="text-xs font-semibold text-[var(--ink-mute)] tracking-wider mb-1.5">소유 책임</div>
+            <ul class="text-sm space-y-1 text-[var(--ink-soft)]">
+              <li class="flex gap-2"><span class="text-[var(--blue-deep)]">▸</span> FastAPI 라우터 셸 + JWT 인증 + OpenAPI 계약</li>
+              <li class="flex gap-2"><span class="text-[var(--blue-deep)]">▸</span> Postgres · Redis · Qdrant · MinIO · Celery 인프라</li>
+              <li class="flex gap-2"><span class="text-[var(--blue-deep)]">▸</span> LangGraph PostgresSaver 셋업 + 공유 state 패턴</li>
+              <li class="flex gap-2"><span class="text-[var(--blue-deep)]">▸</span> Next.js 셸 + 디자인 시스템 + Langfuse·OTel 관찰성 (S1부터)</li>
+            </ul>
+          </div>
+
+          <div>
+            <div class="text-xs font-semibold text-[var(--ink-mute)] tracking-wider mb-1.5">소유 모듈</div>
+            <div class="font-mono text-xs space-y-0.5 text-[var(--ink-soft)]">
+              <div>app/api/, app/auth/, app/db/, alembic/</div>
+              <div>app/tasks/ (Celery), app/checkpoints/</div>
+              <div>web/app/layout.tsx, web/components/ui/ (shadcn)</div>
+              <div>infra/docker-compose.yml</div>
+            </div>
+          </div>
+
+          <div>
+            <div class="text-xs font-semibold text-[var(--ink-mute)] tracking-wider mb-1.5">핵심 의존</div>
+            <div class="flex flex-wrap gap-1.5">
+              <span class="chip chip-blue" style="font-size:11px;">fastapi</span>
+              <span class="chip" style="font-size:11px;">celery</span>
+              <span class="chip" style="font-size:11px;">sqlalchemy</span>
+              <span class="chip" style="font-size:11px;">alembic</span>
+              <span class="chip" style="font-size:11px;">Docker</span>
+              <span class="chip" style="font-size:11px;">Next.js 15</span>
+              <span class="chip" style="font-size:11px;">Tailwind + shadcn</span>
+            </div>
+          </div>
+
+          <div class="pt-2 border-t border-[var(--line-soft)]">
+            <div class="text-xs font-semibold text-[var(--ink-mute)] tracking-wider mb-1">S1 산출</div>
+            <div class="text-xs text-[var(--ink-soft)]">docker-compose up + 모든 서비스 헬스체크 + Next.js 셸 + Langfuse 연동</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Handoff Matrix -->
+    <div class="card p-6 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="h3">핸드오프 매트릭스</h3>
+        <span class="chip">두 역할이 만나는 지점에서만 계약 합의</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-[var(--line)]">
+              <th class="text-left px-3 py-2 text-xs font-semibold text-[var(--ink-mute)] tracking-wider">From → To</th>
+              <th class="text-left px-3 py-2 text-xs font-semibold text-[var(--ink-mute)] tracking-wider">계약 (인터페이스)</th>
+              <th class="text-left px-3 py-2 text-xs font-semibold text-[var(--ink-mute)] tracking-wider">예시</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-[var(--line-soft)]">
+            <tr>
+              <td class="px-3 py-3">
+                <span class="font-mono text-xs px-2 py-0.5 rounded" style="background:var(--green-soft);color:var(--green-deep);">F1</span>
+                <span class="arrow mx-1">→</span>
+                <span class="font-mono text-xs px-2 py-0.5 rounded" style="background:var(--violet-soft);color:var(--violet-deep);">F2</span>
+                <span class="arrow mx-1">·</span>
+                <span class="font-mono text-xs px-2 py-0.5 rounded" style="background:var(--accent-soft);color:var(--accent-deep);">F3</span>
+              </td>
+              <td class="px-3 py-3 text-[var(--ink-soft)]">인제스트 완료 신호 + 섹션 데이터 (Pydantic)</td>
+              <td class="px-3 py-3 font-mono text-xs text-[var(--ink-soft)]">paper.status='ready' · Section[kind, text, page, char_offset]</td>
+            </tr>
+            <tr>
+              <td class="px-3 py-3">
+                <span class="font-mono text-xs px-2 py-0.5 rounded" style="background:var(--violet-soft);color:var(--violet-deep);">F2</span>
+                <span class="arrow mx-1">↔</span>
+                <span class="font-mono text-xs px-2 py-0.5 rounded" style="background:var(--blue-soft);color:var(--blue-deep);">F4</span>
+              </td>
+              <td class="px-3 py-3 text-[var(--ink-soft)]">Summary Graph + checkpointer 주입 패턴</td>
+              <td class="px-3 py-3 font-mono text-xs text-[var(--ink-soft)]">summary_graph.compile(checkpointer=postgres_saver)</td>
+            </tr>
+            <tr>
+              <td class="px-3 py-3">
+                <span class="font-mono text-xs px-2 py-0.5 rounded" style="background:var(--accent-soft);color:var(--accent-deep);">F3</span>
+                <span class="arrow mx-1">↔</span>
+                <span class="font-mono text-xs px-2 py-0.5 rounded" style="background:var(--blue-soft);color:var(--blue-deep);">F4</span>
+              </td>
+              <td class="px-3 py-3 text-[var(--ink-soft)]">Translate Graph + checkpointer 주입 패턴</td>
+              <td class="px-3 py-3 font-mono text-xs text-[var(--ink-soft)]">translate_graph.compile(checkpointer=postgres_saver)</td>
+            </tr>
+            <tr>
+              <td class="px-3 py-3">
+                <span class="font-mono text-xs px-2 py-0.5 rounded" style="background:var(--blue-soft);color:var(--blue-deep);">F4</span>
+                <span class="arrow mx-1">→</span>
+                <span class="font-mono text-xs px-2 py-0.5 rounded">All</span>
+              </td>
+              <td class="px-3 py-3 text-[var(--ink-soft)]">FastAPI 라우터 셸 · OpenAPI · DB 마이그레이션 · 디자인 토큰</td>
+              <td class="px-3 py-3 font-mono text-xs text-[var(--ink-soft)]">@router.post · SSE 어댑터 · Tailwind tokens</td>
+            </tr>
+            <tr>
+              <td class="px-3 py-3">
+                <span class="font-mono text-xs px-2 py-0.5 rounded" style="background:var(--violet-soft);color:var(--violet-deep);">F2</span>
+                <span class="arrow mx-1">↔</span>
+                <span class="font-mono text-xs px-2 py-0.5 rounded" style="background:var(--accent-soft);color:var(--accent-deep);">F3</span>
+              </td>
+              <td class="px-3 py-3 text-[var(--ink-soft)]">캐시 키 규약 + 글로서리 의미 공유</td>
+              <td class="px-3 py-3 font-mono text-xs text-[var(--ink-soft)]">(paper_id, section_id, lang, glossary_version)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Collaboration Principles -->
+    <div class="grid grid-cols-3 gap-4">
+      <div class="card-soft p-5">
+        <div class="text-xs font-mono mb-2" style="color: var(--accent-deep);">RULE · 1</div>
+        <div class="font-semibold text-sm mb-2">Mock-first 통합</div>
+        <div class="text-xs text-[var(--ink-soft)] leading-relaxed">
+          첫 단계에는 모두가 인접 기능에 <strong>mock 응답</strong>을 먼저 제공합니다. 예를 들어 F2·F3는 F1의 실제 PDF가 없어도 하드코드 텍스트로 그래프를 검증할 수 있고, F1은 F4의 라우터가 없어도 자체 mock 라우트로 검색 UI를 띄울 수 있습니다.
+        </div>
+      </div>
+      <div class="card-soft p-5">
+        <div class="text-xs font-mono mb-2" style="color: var(--accent-deep);">RULE · 2</div>
+        <div class="font-semibold text-sm mb-2">계약은 PR로</div>
+        <div class="text-xs text-[var(--ink-soft)] leading-relaxed">
+          핸드오프 매트릭스의 인터페이스(Section 모델, checkpointer 규약, 캐시 키, 디자인 토큰)는 변경할 때 반드시 <strong>PR 리뷰</strong>를 거칩니다. 기능 내부 구현은 자유롭게 바꾸어도 되지만, 다른 기능과의 계약 변경에는 양쪽의 합의가 필요합니다.
+        </div>
+      </div>
+      <div class="card-soft p-5">
+        <div class="text-xs font-mono mb-2" style="color: var(--accent-deep);">RULE · 3</div>
+        <div class="font-semibold text-sm mb-2">관찰성은 F4가 깔되<br>지표는 각 기능이</div>
+        <div class="text-xs text-[var(--ink-soft)] leading-relaxed">
+          Langfuse와 OTel 인프라는 F4가 깔아 둡니다. 그 위에서 각 기능 팀이 <strong>자기 지표를 직접 계측</strong>합니다 — F1은 외부 API 지연·실패, F2와 F3는 각자의 LLM 토큰·비용과 자기 UI의 클라이언트 지연을 담당합니다.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ROADMAP ============ -->
+<section class="border-b border-[var(--line)]">
+  <div class="max-w-6xl mx-auto px-8 py-14">
+    <div class="section-title mb-2">09 · Roadmap</div>
+    <h2 class="h2 mb-8">구현 단계 · 4인 병렬 진행</h2>
+
+    <div class="card p-2">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-[var(--line)]">
+            <th class="text-left px-3 py-2 text-xs font-semibold text-[var(--ink-mute)] tracking-wider w-20">단계</th>
+            <th class="text-left px-3 py-2 text-xs font-semibold tracking-wider" style="color: var(--green-deep);">F1 · 검색·수집</th>
+            <th class="text-left px-3 py-2 text-xs font-semibold tracking-wider" style="color: var(--violet-deep);">F2 · 요약</th>
+            <th class="text-left px-3 py-2 text-xs font-semibold tracking-wider" style="color: var(--accent-deep);">F3 · 번역</th>
+            <th class="text-left px-3 py-2 text-xs font-semibold tracking-wider" style="color: var(--blue-deep);">F4 · 플랫폼·셸</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[var(--line-soft)]">
+          <tr>
+            <td class="px-3 py-3 font-mono text-xs font-semibold">S1</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">arXiv 검색 + 검색 페이지 (mock JSON)</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">Mock 요약 노드 (하드코드 입력)</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">Mock 번역 노드 + 글로서리 모델 초안</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]"><span class="font-semibold" style="color:var(--blue-deep);">docker-compose</span> + Langfuse + Next.js 셸</td>
+          </tr>
+          <tr>
+            <td class="px-3 py-3 font-mono text-xs font-semibold">S2</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">S2 + OpenAlex 페더레이션 + 라이브러리 페이지</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">실제 PDF → 5-섹션 요약 + 요약 뷰 골격</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">Haiku 단일 청크 번역 + 번역 뷰 골격</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">FastAPI 라우터 + JWT + DB 마이그레이션</td>
+          </tr>
+          <tr>
+            <td class="px-3 py-3 font-mono text-xs font-semibold">S3</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">GROBID 인제스트 그래프 + PDF 뷰어 anchor</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">조건부 재시도 + Pydantic 검증</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">청크 fan-out + 글로서리 프롬프트 주입</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">Celery + Qdrant 적재 경로</td>
+          </tr>
+          <tr>
+            <td class="px-3 py-3 font-mono text-xs font-semibold">S4</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">청킹·임베딩·dedupe</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">SSE 스트리밍 + 섹션별 점진 노출</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">병렬 fan-out + 사이드-바이-사이드 뷰</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">Postgres 체크포인터 검증</td>
+          </tr>
+          <tr>
+            <td class="px-3 py-3 font-mono text-xs font-semibold">S5</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">랭킹 튜닝 + rate limit</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">Prompt Caching (시스템 프롬프트)</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">용어 일관성 검증 + 글로서리 편집기</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">비용 메트릭 수집 인프라</td>
+          </tr>
+          <tr>
+            <td class="px-3 py-3 font-mono text-xs font-semibold">S6</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">검색 캐시 + 검색 UI 폴리시</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">요약 비용 측정 + 요약 UI 폴리시</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">번역 비용 측정 + 번역 UI 폴리시</td>
+            <td class="px-3 py-3 text-xs text-[var(--ink-soft)]">비용 대시보드 API + 진행 가시화 통합</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid grid-cols-3 gap-3 mt-4">
+      <div class="card-soft p-3 text-xs text-[var(--ink-soft)] flex items-center gap-2">
+        <div class="w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></div>
+        <span><strong style="color:var(--accent-deep);">S1 동시 시작</strong>: 4명이 mock 인터페이스로 출발하므로, 누구도 다른 사람의 완성을 기다리지 않습니다.</span>
+      </div>
+      <div class="card-soft p-3 text-xs text-[var(--ink-soft)] flex items-center gap-2">
+        <div class="w-1.5 h-1.5 rounded-full bg-[var(--violet)]"></div>
+        <span><strong style="color:var(--violet-deep);">S2 1차 통합</strong>: mock을 걷어 내고 실제 컴포넌트를 연결합니다.</span>
+      </div>
+      <div class="card-soft p-3 text-xs text-[var(--ink-soft)] flex items-center gap-2">
+        <div class="w-1.5 h-1.5 rounded-full bg-[var(--green)]"></div>
+        <span><strong style="color:var(--green-deep);">S6 폴리시</strong>: 비용·성능·UX를 정리합니다. 이 단계에서는 새 기능을 추가하지 않습니다.</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer class="border-b border-[var(--line)]">
+  <div class="max-w-6xl mx-auto px-8 py-10 flex items-center justify-between">
+    <div>
+      <div class="text-sm font-semibold mb-1">논문 검색·요약·번역 프로토타입</div>
+      <div class="text-xs text-[var(--ink-mute)]">Architecture v1.1 · arXiv + Semantic Scholar + OpenAlex + Claude</div>
+    </div>
+    <div class="text-xs text-[var(--ink-mute)] font-mono">2026-06-05</div>
+  </div>
+</footer>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      fontFamily: 'Inter, "Noto Sans KR", system-ui, sans-serif',
+      fontSize: '13px',
+      primaryColor: '#FFFFFF',
+      primaryTextColor: '#1F1F1C',
+      primaryBorderColor: '#CC785C',
+      lineColor: '#9A9A93',
+      secondaryColor: '#F5E6DE',
+      tertiaryColor: '#F4F2EC',
+      mainBkg: '#FFFFFF',
+      nodeBorder: '#E8E5DD',
+      clusterBkg: '#F4F2EC',
+      clusterBorder: '#E8E5DD',
+      titleColor: '#1F1F1C',
+      edgeLabelBackground: '#FAFAF7',
+      actorBkg: '#FFFFFF',
+      actorBorder: '#CC785C',
+      actorTextColor: '#1F1F1C',
+      actorLineColor: '#9A9A93',
+      signalColor: '#1F1F1C',
+      signalTextColor: '#1F1F1C',
+      labelBoxBkgColor: '#F5E6DE',
+      labelBoxBorderColor: '#CC785C',
+      noteBkgColor: '#F4F2EC',
+      noteBorderColor: '#E8E5DD',
+      noteTextColor: '#1F1F1C'
+    },
+    flowchart: {
+      curve: 'basis',
+      padding: 20,
+      nodeSpacing: 40,
+      rankSpacing: 50
+    },
+    sequence: {
+      actorMargin: 50,
+      width: 140,
+      height: 50,
+      boxMargin: 10,
+      noteMargin: 10,
+      messageMargin: 35
+    }
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>11개 기능 우선순위 · Feature Prioritization</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #FAFAF7;
+    --bg-card: #FFFFFF;
+    --bg-soft: #F4F2EC;
+    --ink: #1F1F1C;
+    --ink-soft: #6B6B66;
+    --ink-mute: #9A9A93;
+    --line: #E8E5DD;
+    --line-soft: #F0EDE5;
+    --accent: #CC785C;
+    --accent-soft: #F5E6DE;
+    --accent-deep: #A85A40;
+    --blue: #4A6FA5;
+    --blue-soft: #E4ECF6;
+    --blue-deep: #2F4A75;
+    --green: #5A8A6B;
+    --green-soft: #E2EDE5;
+    --green-deep: #3A6149;
+    --violet: #7B6BA8;
+    --violet-soft: #ECE7F4;
+    --violet-deep: #564988;
+    --gray-soft: #F4F2EC;
+    --red-soft: #F4DEDB;
+    --red-deep: #9B4A3E;
+  }
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', 'Noto Sans KR', system-ui, sans-serif;
+    font-feature-settings: "cv11", "ss01";
+    letter-spacing: -0.005em;
+  }
+  .font-mono { font-family: 'JetBrains Mono', monospace; }
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+  }
+  .card-soft {
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--bg-soft);
+    color: var(--ink-soft);
+    border: 1px solid var(--line);
+  }
+  .chip-accent { background: var(--accent-soft); color: var(--accent-deep); border-color: transparent; }
+  .chip-blue   { background: var(--blue-soft);   color: var(--blue-deep); border-color: transparent; }
+  .chip-green  { background: var(--green-soft);  color: var(--green-deep); border-color: transparent; }
+  .chip-violet { background: var(--violet-soft); color: var(--violet-deep); border-color: transparent; }
+  .chip-red    { background: var(--red-soft);    color: var(--red-deep); border-color: transparent; }
+
+  .section-title {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+  .h2 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .h3 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .lead {
+    color: var(--ink-soft);
+    font-size: 15px;
+    line-height: 1.65;
+  }
+  .grid-bg {
+    background-image:
+      linear-gradient(var(--line-soft) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  .hero-gradient {
+    background: radial-gradient(1200px 400px at 20% 0%, rgba(204,120,92,0.10), transparent 70%),
+                radial-gradient(900px 300px at 90% 20%, rgba(74,111,165,0.08), transparent 70%);
+  }
+  .mermaid { background: transparent !important; display: flex; justify-content: center; }
+  .mermaid svg { max-width: 100% !important; height: auto !important; }
+
+  /* Score bar */
+  .scorebar {
+    display: inline-flex;
+    gap: 2px;
+    align-items: center;
+  }
+  .scorebar-dot {
+    width: 16px; height: 5px; border-radius: 2px;
+    background: var(--line);
+  }
+  .scorebar-dot.on { background: var(--accent); }
+
+  /* Tier badge */
+  .tier-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    letter-spacing: 0.04em;
+  }
+  .tier-P0    { background: var(--accent);      color: white; }
+  .tier-P1    { background: var(--accent-soft); color: var(--accent-deep); }
+  .tier-P1\.5 { background: var(--blue-soft);   color: var(--blue-deep); }
+  .tier-P2    { background: var(--green-soft);  color: var(--green-deep); }
+  .tier-P2\.5 { background: var(--green-soft);  color: var(--green-deep); opacity: 0.85; }
+  .tier-P3    { background: var(--violet-soft); color: var(--violet-deep); }
+  .tier-P4    { background: var(--violet-soft); color: var(--violet-deep); opacity: 0.85; }
+  .tier-P5    { background: var(--gray-soft);   color: var(--ink-soft); }
+
+  .rank-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--ink-mute);
+    width: 24px;
+    display: inline-block;
+    text-align: right;
+  }
+  .rank-num-top { color: var(--accent); }
+
+  .feat-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-mute);
+    padding: 2px 6px;
+    background: var(--bg-soft);
+    border-radius: 4px;
+  }
+
+  /* Quadrant matrix */
+  .quadrant {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px;
+    min-height: 200px;
+    background: var(--bg-card);
+    position: relative;
+  }
+  .quadrant.q-quick    { background: linear-gradient(135deg, rgba(204,120,92,0.06), rgba(204,120,92,0.02)); }
+  .quadrant.q-strategic{ background: linear-gradient(135deg, rgba(123,107,168,0.06), rgba(123,107,168,0.02)); }
+  .quadrant.q-fill     { background: linear-gradient(135deg, rgba(74,111,165,0.05), rgba(74,111,165,0.01)); }
+  .quadrant.q-defer    { background: var(--bg-soft); opacity: 0.7; }
+
+  .quadrant-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-bottom: 10px;
+  }
+  .quadrant-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 14px;
+    color: var(--ink);
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    margin: 3px;
+  }
+
+  /* Timeline */
+  .timeline {
+    position: relative;
+    padding: 20px 0;
+  }
+  .timeline-row {
+    display: grid;
+    grid-template-columns: 56px 80px 1fr;
+    gap: 12px;
+    align-items: center;
+    padding: 6px 0;
+  }
+  .timeline-bar {
+    height: 26px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: white;
+    position: relative;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+  }
+
+  details > summary { list-style: none; cursor: pointer; }
+  details > summary::-webkit-details-marker { display: none; }
+</style>
+</head>
+<body class="antialiased">
+
+<!-- ============ HERO ============ -->
+<header class="hero-gradient border-b border-[var(--line)]">
+  <div class="max-w-6xl mx-auto px-8 py-12">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-8 h-8 rounded-lg bg-[var(--accent)] flex items-center justify-center">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+      </div>
+      <span class="text-sm font-medium text-[var(--ink-soft)]">Feature Prioritization</span>
+      <span class="text-[var(--ink-mute)]">·</span>
+      <span class="text-sm text-[var(--ink-mute)]">11 features · 6 tiers</span>
+    </div>
+
+    <h1 class="text-5xl font-bold tracking-tight mb-4 leading-tight">
+      11개 기능 <span class="text-[var(--accent)]">우선순위 평가</span>
+    </h1>
+    <p class="lead max-w-3xl mb-8">
+      가치·차별화·비용·리스크·노력 5축 점수와 명시적 의존성 그래프를 결합해
+      P0~P5 6단계 빌드 순서를 도출. 단일 RICE 점수가 놓치는 의존성을 그래프로 강제.
+    </p>
+
+    <div class="flex flex-wrap gap-2">
+      <span class="chip chip-accent">P0 · Foundation</span>
+      <span class="chip">P1 · Core Consumption</span>
+      <span class="chip chip-blue">P1.5 · Quick Wins</span>
+      <span class="chip chip-green">P2 · Engagement</span>
+      <span class="chip chip-violet">P3-4 · Discovery</span>
+      <span class="chip">P5 · Deep Analysis</span>
+    </div>
+  </div>
+</header>
+
+<!-- ============ AT A GLANCE ============ -->
+<section class="border-b border-[var(--line)]">
+  <div class="max-w-6xl mx-auto px-8 py-10">
+    <div class="section-title mb-6">At a glance</div>
+    <div class="grid grid-cols-4 gap-4">
+      <div class="card p-5">
+        <div class="text-xs text-[var(--ink-mute)] mb-2">평가된 기능</div>
+        <div class="text-3xl font-bold">11</div>
+        <div class="text-xs text-[var(--ink-soft)] mt-1">spec 본문 분석 기반</div>
+      </div>
+      <div class="card p-5">
+        <div class="text-xs text-[var(--ink-mute)] mb-2">평가 축</div>
+        <div class="text-3xl font-bold">5</div>
+        <div class="text-xs text-[var(--ink-soft)] mt-1">V · D · C · R · E</div>
+      </div>
+      <div class="card p-5">
+        <div class="text-xs text-[var(--ink-mute)] mb-2">우선순위 단계</div>
+        <div class="text-3xl font-bold">6</div>
+        <div class="text-xs text-[var(--ink-soft)] mt-1">P0 → P5</div>
+      </div>
+      <div class="card p-5">
+        <div class="text-xs text-[var(--ink-mute)] mb-2">권장 로드맵</div>
+        <div class="text-3xl font-bold">26<span class="text-base text-[var(--ink-soft)] font-normal ml-1">주</span></div>
+        <div class="text-xs text-[var(--ink-soft)] mt-1">P0부터 P5 마무리까지</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FRAMEWORK ============ -->
+<section class="border-b border-[var(--line)]">
+  <div class="max-w-6xl mx-auto px-8 py-14">
+    <div class="section-title mb-2">01 · Framework</div>
+    <h2 class="h2 mb-2">평가 프레임워크</h2>
+    <p class="lead mb-8 max-w-2xl">
+      다섯 축을 1-5점으로 평가, 가중합으로 35점 만점. 의존성은 별도 그래프로 강제.
+    </p>
+
+    <div class="grid grid-cols-5 gap-3">
+      <div class="card p-5">
+        <div class="text-2xl font-bold text-[var(--accent)] mb-1">V</div>
+        <div class="font-semibold text-sm mb-1">Value</div>
+        <div class="text-xs text-[var(--ink-soft)] leading-relaxed">사용자가 얼마나 자주·크게 가치를 얻는가</div>
+        <div class="mt-3 inline-block text-xs font-mono bg-[var(--accent-soft)] text-[var(--accent-deep)] px-2 py-0.5 rounded">×2.0</div>
+      </div>
+      <div class="card p-5">
+        <div class="text-2xl font-bold text-[var(--accent)] mb-1">D</div>
+        <div class="font-semibold text-sm mb-1">Differentiation</div>
+        <div class="text-xs text-[var(--ink-soft)] leading-relaxed">시장 일반 도구 대비 차별성</div>
+        <div class="mt-3 inline-block text-xs font-mono bg-[var(--accent-soft)] text-[var(--accent-deep)] px-2 py-0.5 rounded">×1.5</div>
+      </div>
+      <div class="card p-5">
+        <div class="text-2xl font-bold text-[var(--blue)] mb-1">C</div>
+        <div class="font-semibold text-sm mb-1">Cost-eff.</div>
+        <div class="text-xs text-[var(--ink-soft)] leading-relaxed">단위 비용 + 캐시·재사용 (낮을수록 5점)</div>
+        <div class="mt-3 inline-block text-xs font-mono bg-[var(--bg-soft)] text-[var(--ink-soft)] px-2 py-0.5 rounded">×1.0</div>
+      </div>
+      <div class="card p-5">
+        <div class="text-2xl font-bold text-[var(--blue)] mb-1">R</div>
+        <div class="font-semibold text-sm mb-1">Risk (역)</div>
+        <div class="text-xs text-[var(--ink-soft)] leading-relaxed">환각·법무·정책 위험 (낮을수록 5점)</div>
+        <div class="mt-3 inline-block text-xs font-mono bg-[var(--bg-soft)] text-[var(--ink-soft)] px-2 py-0.5 rounded">×1.0</div>
+      </div>
+      <div class="card p-5">
+        <div class="text-2xl font-bold text-[var(--blue)] mb-1">E</div>
+        <div class="font-semibold text-sm mb-1">Effort (역)</div>
+        <div class="text-xs text-[var(--ink-soft)] leading-relaxed">신규 인프라·외부 의존성 (적을수록 5점)</div>
+        <div class="mt-3 inline-block text-xs font-mono bg-[var(--bg-soft)] text-[var(--ink-soft)] px-2 py-0.5 rounded">×1.0</div>
+      </div>
+    </div>
+
+    <div class="card-soft p-5 mt-6 flex items-start gap-3">
+      <div class="text-2xl">🧮</div>
+      <div>
+        <div class="font-semibold text-sm mb-1">총점 공식</div>
+        <div class="font-mono text-sm text-[var(--ink-soft)]">Total = V × 2 + D × 1.5 + C + R + E &nbsp;&nbsp;<span class="text-[var(--ink-mute)]">(만점 35)</span></div>
+        <div class="text-xs text-[var(--ink-soft)] mt-2 leading-relaxed">
+          Value·Differentiation에 가중치를 부여 — 비용·리스크·노력은 의사결정의 보조 요인이지 결정 요인이 아니라는 판단.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ RANKING TABLE ============ -->
+<section class="border-b border-[var(--line)]">
+  <div class="max-w-6xl mx-auto px-8 py-14">
+    <div class="section-title mb-2">02 · Scoring</div>
+    <h2 class="h2 mb-8">기능별 점수 랭킹</h2>
+
+    <div class="card overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-[var(--bg-soft)] border-b border-[var(--line)]">
+          <tr>
+            <th class="text-left px-4 py-3 text-xs font-semibold text-[var(--ink-mute)] tracking-wider w-8">#</th>
+            <th class="text-left px-3 py-3 text-xs font-semibold text-[var(--ink-mute)] tracking-wider">기능</th>
+            <th class="text-center px-3 py-3 text-xs font-semibold text-[var(--ink-mute)] tracking-wider">V</th>
+            <th class="text-center px-3 py-3 text-xs font-semibold text-[var(--ink-mute)] tracking-wider">D</th>
+            <th class="text-center px-3 py-3 text-xs font-semibold text-[var(--ink-mute)] tracking-wider">C</th>
+            <th class="text-center px-3 py-3 text-xs font-semibold text-[var(--ink-mute)] tracking-wider">R</th>
+            <th class="text-center px-3 py-3 text-xs font-semibold text-[var(--ink-mute)] tracking-wider">E</th>
+            <th class="text-right px-4 py-3 text-xs font-semibold text-[var(--ink-mute)] tracking-wider">Score</th>
+            <th class="text-center px-4 py-3 text-xs font-semibold text-[var(--ink-mute)] tracking-wider">Tier</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[var(--line)]">
+          <!-- 01 -->
+          <tr>
+            <td class="px-4 py-3"><span class="rank-num rank-num-top">1</span></td>
+            <td class="px-3 py-3">
+              <div class="flex items-center gap-2">
+                <span class="feat-id">01</span>
+                <span class="font-semibold">논문 검색 & 수집</span>
+              </div>
+            </td>
+            <td class="text-center px-3 py-3 font-mono text-xs">5</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">5</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">3</td>
+            <td class="text-right px-4 py-3 font-bold">31.0</td>
+            <td class="text-center px-4 py-3"><span class="tier-badge tier-P0">P0</span></td>
+          </tr>
+          <!-- 02 -->
+          <tr>
+            <td class="px-4 py-3"><span class="rank-num rank-num-top">2</span></td>
+            <td class="px-3 py-3">
+              <div class="flex items-center gap-2">
+                <span class="feat-id">02</span>
+                <span class="font-semibold">논문 요약</span>
+              </div>
+            </td>
+            <td class="text-center px-3 py-3 font-mono text-xs">5</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-right px-4 py-3 font-bold">30.0</td>
+            <td class="text-center px-4 py-3"><span class="tier-badge tier-P1">P1</span></td>
+          </tr>
+          <!-- 11 -->
+          <tr>
+            <td class="px-4 py-3"><span class="rank-num rank-num-top">3</span></td>
+            <td class="px-3 py-3">
+              <div class="flex items-center gap-2">
+                <span class="feat-id">11</span>
+                <span class="font-semibold">읽기 우선순위 분류</span>
+              </div>
+            </td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">5</td>
+            <td class="text-center px-3 py-3 font-mono text-xs text-[var(--accent)] font-bold">5</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-right px-4 py-3 font-bold">28.5</td>
+            <td class="text-center px-4 py-3"><span class="tier-badge tier-P1.5">P1.5</span></td>
+          </tr>
+          <!-- 09 -->
+          <tr>
+            <td class="px-4 py-3"><span class="rank-num">4</span></td>
+            <td class="px-3 py-3">
+              <div class="flex items-center gap-2">
+                <span class="feat-id">09</span>
+                <span class="font-semibold">재현 가능성 평가</span>
+              </div>
+            </td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">5</td>
+            <td class="text-center px-3 py-3 font-mono text-xs text-[var(--accent)] font-bold">5</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-right px-4 py-3 font-bold">28.5</td>
+            <td class="text-center px-4 py-3"><span class="tier-badge tier-P1.5">P1.5</span></td>
+          </tr>
+          <!-- 03 -->
+          <tr>
+            <td class="px-4 py-3"><span class="rank-num">5</span></td>
+            <td class="px-3 py-3">
+              <div class="flex items-center gap-2">
+                <span class="feat-id">03</span>
+                <span class="font-semibold">논문 번역</span>
+              </div>
+            </td>
+            <td class="text-center px-3 py-3 font-mono text-xs">5</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">3</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">3</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-right px-4 py-3 font-bold">26.5</td>
+            <td class="text-center px-4 py-3"><span class="tier-badge tier-P2">P2</span></td>
+          </tr>
+          <!-- 08 -->
+          <tr>
+            <td class="px-4 py-3"><span class="rank-num">6</span></td>
+            <td class="px-3 py-3">
+              <div class="flex items-center gap-2">
+                <span class="feat-id">08</span>
+                <span class="font-semibold">인용 계보 트리</span>
+              </div>
+            </td>
+            <td class="text-center px-3 py-3 font-mono text-xs">3</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">5</td>
+            <td class="text-center px-3 py-3 font-mono text-xs text-[var(--accent)] font-bold">5</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">3</td>
+            <td class="text-right px-4 py-3 font-bold">25.5</td>
+            <td class="text-center px-4 py-3"><span class="tier-badge tier-P2.5">P2.5</span></td>
+          </tr>
+          <!-- 05 -->
+          <tr>
+            <td class="px-4 py-3"><span class="rank-num">7</span></td>
+            <td class="px-3 py-3">
+              <div class="flex items-center gap-2">
+                <span class="feat-id">05</span>
+                <span class="font-semibold">유사 논문 탐색</span>
+              </div>
+            </td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">3</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">3</td>
+            <td class="text-right px-4 py-3 font-bold">24.5</td>
+            <td class="text-center px-4 py-3"><span class="tier-badge tier-P3">P3</span></td>
+          </tr>
+          <!-- 04 -->
+          <tr>
+            <td class="px-4 py-3"><span class="rank-num">8</span></td>
+            <td class="px-3 py-3">
+              <div class="flex items-center gap-2">
+                <span class="feat-id">04</span>
+                <span class="font-semibold">자동 모니터링 & 알림</span>
+              </div>
+            </td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">3</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">3</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">3</td>
+            <td class="text-right px-4 py-3 font-bold">23.5</td>
+            <td class="text-center px-4 py-3"><span class="tier-badge tier-P2">P2</span></td>
+          </tr>
+          <!-- 07 -->
+          <tr>
+            <td class="px-4 py-3"><span class="rank-num">9</span></td>
+            <td class="px-3 py-3">
+              <div class="flex items-center gap-2">
+                <span class="feat-id">07</span>
+                <span class="font-semibold">프로젝트 트렌드 & 통합</span>
+              </div>
+            </td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-center px-3 py-3 font-mono text-xs text-[var(--accent)] font-bold">5</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">2</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">2</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">2</td>
+            <td class="text-right px-4 py-3 font-bold">23.5</td>
+            <td class="text-center px-4 py-3"><span class="tier-badge tier-P4">P4</span></td>
+          </tr>
+          <!-- 06 -->
+          <tr>
+            <td class="px-4 py-3"><span class="rank-num">10</span></td>
+            <td class="px-3 py-3">
+              <div class="flex items-center gap-2">
+                <span class="feat-id">06</span>
+                <span class="font-semibold">연구 공백 & 아이디어</span>
+              </div>
+            </td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">4</td>
+            <td class="text-center px-3 py-3 font-mono text-xs text-[var(--red-deep)] font-bold">1</td>
+            <td class="text-center px-3 py-3 font-mono text-xs text-[var(--red-deep)] font-bold">1</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">2</td>
+            <td class="text-right px-4 py-3 font-bold">20.0</td>
+            <td class="text-center px-4 py-3"><span class="tier-badge tier-P5">P5</span></td>
+          </tr>
+          <!-- 10 -->
+          <tr>
+            <td class="px-4 py-3"><span class="rank-num">11</span></td>
+            <td class="px-3 py-3">
+              <div class="flex items-center gap-2">
+                <span class="feat-id">10</span>
+                <span class="font-semibold">Research Reading Assistant</span>
+              </div>
+            </td>
+            <td class="text-center px-3 py-3 font-mono text-xs">3</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">3</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">3</td>
+            <td class="text-center px-3 py-3 font-mono text-xs">3</td>
+            <td class="text-center px-3 py-3 font-mono text-xs text-[var(--red-deep)] font-bold">1</td>
+            <td class="text-right px-4 py-3 font-bold">18.5</td>
+            <td class="text-center px-4 py-3"><span class="tier-badge tier-P5">P5</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="text-xs text-[var(--ink-mute)] mt-4 flex items-center gap-4 flex-wrap">
+      <span>점수 가이드 ·</span>
+      <span class="font-mono">5: 매우 강함</span>
+      <span class="font-mono">4: 강함</span>
+      <span class="font-mono">3: 중간</span>
+      <span class="font-mono">2: 약함</span>
+      <span class="font-mono text-[var(--red-deep)]">1: 위험/높은 비용</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DEPENDENCY GRAPH ============ -->
+<section class="border-b border-[var(--line)]">
+  <div class="max-w-6xl mx-auto px-8 py-14">
+    <div class="section-title mb-2">03 · Dependencies</div>
+    <h2 class="h2 mb-2">의존성 그래프</h2>
+    <p class="lead mb-8 max-w-2xl">
+      점수만 보면 #06이 매력적이지만, 명시된 의존성을 따라가면 #01 → 임베딩 인프라 → #05까지가 선행. 빌드 순서는 점수보다 그래프가 강제.
+    </p>
+
+    <div class="card p-8 grid-bg">
+      <div class="mermaid">
+flowchart TB
+  classDef p0 fill:#CC785C,stroke:#A85A40,color:#fff,stroke-width:2px
+  classDef p1 fill:#F5E6DE,stroke:#CC785C,color:#1F1F1C
+  classDef p15 fill:#E4ECF6,stroke:#4A6FA5,color:#1F1F1C
+  classDef p2 fill:#E2EDE5,stroke:#5A8A6B,color:#1F1F1C
+  classDef p3 fill:#ECE7F4,stroke:#7B6BA8,color:#1F1F1C
+  classDef p5 fill:#F4F2EC,stroke:#9A9A93,color:#6B6B66
+
+  F01["<b>01</b> 검색·수집<br/><i>Foundation</i>"]:::p0
+
+  F02["<b>02</b> 요약"]:::p1
+  F03["<b>03</b> 번역"]:::p1
+
+  F09["<b>09</b> 재현성 평가"]:::p15
+  F11["<b>11</b> 읽기 우선순위"]:::p15
+
+  F04["<b>04</b> 자동 알림"]:::p2
+  F08["<b>08</b> 인용 계보"]:::p2
+
+  F05["<b>05</b> 유사 논문"]:::p3
+  F07["<b>07</b> 프로젝트 통합"]:::p3
+
+  F06["<b>06</b> 연구 공백"]:::p5
+  F10["<b>10</b> Reading Asst."]:::p5
+
+  F01 --> F02 & F03
+  F01 --> F08 & F09
+  F01 --> F11
+  F01 --> F04
+  F01 --> F05
+  F02 -.재사용.-> F04
+  F05 --> F06
+  F05 --> F11
+  F06 --> F07
+  F02 -.인프라.-> F10
+  F05 -.인프라.-> F10
+  F06 -.인프라.-> F10
+      </div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-4 mt-6">
+      <div class="card-soft p-5">
+        <div class="font-semibold text-sm mb-2">실선 화살표</div>
+        <div class="text-xs text-[var(--ink-soft)] leading-relaxed">
+          기능적 의존 — 전제 기능 없이는 동작 불가능.
+        </div>
+      </div>
+      <div class="card-soft p-5">
+        <div class="font-semibold text-sm mb-2">점선 화살표</div>
+        <div class="text-xs text-[var(--ink-soft)] leading-relaxed">
+          인프라 재사용 — 새로 만들지 않아도 되는 컴포넌트(캐시·임베딩·anchor).
+        </div>
+      </div>
+      <div class="card-soft p-5">
+        <div class="font-semibold text-sm mb-2">노드 색상</div>
+        <div class="text-xs text-[var(--ink-soft)] leading-relaxed">
+          진한 오렌지 = P0 토대 / 밝을수록 후순위.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ QUADRANT MATRIX ============ -->
+<section class="border-b border-[var(--line)]">
+  <div class="max-w-6xl mx-auto px-8 py-14">
+    <div class="section-title mb-2">04 · Value × Effort Matrix</div>
+    <h2 class="h2 mb-2">4-사분면 매트릭스</h2>
+    <p class="lead mb-8 max-w-2xl">
+      가치·차별화(Y축) × 노력·리스크(X축). #01은 모든 사분면의 전제이므로 별도 표시.
+    </p>
+
+    <!-- Axes -->
+    <div class="relative">
+      <!-- Y axis label -->
+      <div class="absolute -left-2 top-1/2 -translate-y-1/2 -rotate-90 text-xs text-[var(--ink-mute)] font-mono whitespace-nowrap">
+        ◄ 가치·차별화 ►
+      </div>
+
+      <div class="grid grid-cols-2 gap-4 ml-6">
+        <!-- Quick Wins -->
+        <div class="quadrant q-quick">
+          <div class="quadrant-label">★ Quick Wins</div>
+          <div class="quadrant-title">높은 가치 · 낮은 리스크</div>
+          <div class="flex flex-wrap">
+            <span class="pill"><span class="feat-id">02</span> 요약</span>
+            <span class="pill"><span class="feat-id">11</span> 읽기 우선순위</span>
+            <span class="pill"><span class="feat-id">09</span> 재현성 평가</span>
+            <span class="pill"><span class="feat-id">08</span> 인용 계보</span>
+          </div>
+          <div class="text-xs text-[var(--ink-soft)] mt-3 leading-relaxed">
+            먼저 시장에 풀고 사용자 신뢰를 쌓는 묶음. 단가가 한 자릿수 센트.
+          </div>
+        </div>
+
+        <!-- Strategic Bets -->
+        <div class="quadrant q-strategic">
+          <div class="quadrant-label">★ Strategic Bets</div>
+          <div class="quadrant-title">높은 가치 · 높은 리스크</div>
+          <div class="flex flex-wrap">
+            <span class="pill"><span class="feat-id">07</span> 프로젝트 통합</span>
+            <span class="pill"><span class="feat-id">06</span> 연구 공백</span>
+            <span class="pill"><span class="feat-id">10</span> Reading Asst.</span>
+          </div>
+          <div class="text-xs text-[var(--ink-soft)] mt-3 leading-relaxed">
+            차별화 잠재력 크지만 환각·IP·정책 리스크 큼. 가드레일 검증 후 진입.
+          </div>
+        </div>
+
+        <!-- Fill-ins -->
+        <div class="quadrant q-fill">
+          <div class="quadrant-label">◯ Fill-ins</div>
+          <div class="quadrant-title">중간 가치 · 낮은 리스크</div>
+          <div class="flex flex-wrap">
+            <span class="pill"><span class="feat-id">03</span> 번역</span>
+            <span class="pill"><span class="feat-id">05</span> 유사 논문</span>
+            <span class="pill"><span class="feat-id">04</span> 알림</span>
+          </div>
+          <div class="text-xs text-[var(--ink-soft)] mt-3 leading-relaxed">
+            안정적 가치. 인프라 재사용으로 한계 비용 낮음. Quick Wins와 병렬 가능.
+          </div>
+        </div>
+
+        <!-- Defer -->
+        <div class="quadrant q-defer">
+          <div class="quadrant-label">✕ Defer</div>
+          <div class="quadrant-title">낮은 가치 · 높은 리스크</div>
+          <div class="flex flex-wrap items-center justify-center h-full text-[var(--ink-mute)] text-sm italic">
+            해당 기능 없음
+          </div>
+          <div class="text-xs text-[var(--ink-soft)] mt-3 leading-relaxed">
+            모든 11개가 spec에 명확한 가치를 정의 — 폐기 후보는 없음.
+          </div>
+        </div>
+      </div>
+
+      <!-- X axis label -->
+      <div class="text-center text-xs text-[var(--ink-mute)] font-mono mt-3">
+        ◄ 노력·리스크 ►
+      </div>
+    </div>
+
+    <div class="card-soft p-5 mt-6 flex items-start gap-3">
+      <div class="text-xl">💡</div>
+      <div>
+        <div class="font-semibold text-sm mb-1">매트릭스를 보는 법</div>
+        <div class="text-xs text-[var(--ink-soft)] leading-relaxed">
+          단일 점수 랭킹은 "가장 좋은 것"만 보여주지만, 매트릭스는 "<strong>병렬로 무엇을 같이 빌드해도 되는지</strong>"를 보여줍니다.
+          Quick Wins와 Fill-ins는 같은 분기에 묶어 빌드 가능 — 인프라가 중복되므로 빌드 비용이 합산보다 적습니다.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ROADMAP ============ -->
+<section class="border-b border-[var(--line)]">
+  <div class="max-w-6xl mx-auto px-8 py-14">
+    <div class="section-title mb-2">05 · Roadmap</div>
+    <h2 class="h2 mb-2">26주 빌드 타임라인</h2>
+    <p class="lead mb-8 max-w-2xl">
+      가로축은 주차. 색상은 우선순위 단계. 점수와 의존성을 모두 만족하는 순서.
+    </p>
+
+    <div class="card p-6">
+      <div class="timeline">
+        <!-- Header weeks -->
+        <div class="grid grid-cols-[56px_80px_1fr] gap-3 mb-3 text-xs text-[var(--ink-mute)] font-mono">
+          <div></div>
+          <div></div>
+          <div class="grid grid-cols-26 gap-0">
+            <span class="text-left col-span-3">W1</span>
+            <span class="text-left col-span-3">W4</span>
+            <span class="text-left col-span-3">W7</span>
+            <span class="text-left col-span-3">W10</span>
+            <span class="text-left col-span-3">W13</span>
+            <span class="text-left col-span-3">W16</span>
+            <span class="text-left col-span-3">W19</span>
+            <span class="text-left col-span-3">W22</span>
+            <span class="text-left col-span-2">W25</span>
+          </div>
+        </div>
+
+        <!-- F01 -->
+        <div class="timeline-row">
+          <span class="feat-id">01</span>
+          <span class="tier-badge tier-P0">P0</span>
+          <div class="grid grid-cols-26 gap-0">
+            <div class="timeline-bar col-span-3" style="background: var(--accent); grid-column: 1 / span 3;">검색·수집 (Foundation)</div>
+          </div>
+        </div>
+
+        <!-- F02 -->
+        <div class="timeline-row">
+          <span class="feat-id">02</span>
+          <span class="tier-badge tier-P1">P1</span>
+          <div class="grid grid-cols-26 gap-0">
+            <div class="timeline-bar col-span-3" style="background: var(--accent-deep); grid-column: 4 / span 3;">요약</div>
+          </div>
+        </div>
+
+        <!-- F11 -->
+        <div class="timeline-row">
+          <span class="feat-id">11</span>
+          <span class="tier-badge tier-P1.5">P1.5</span>
+          <div class="grid grid-cols-26 gap-0">
+            <div class="timeline-bar col-span-2" style="background: var(--blue); grid-column: 6 / span 3;">읽기 우선순위</div>
+          </div>
+        </div>
+
+        <!-- F09 -->
+        <div class="timeline-row">
+          <span class="feat-id">09</span>
+          <span class="tier-badge tier-P1.5">P1.5</span>
+          <div class="grid grid-cols-26 gap-0">
+            <div class="timeline-bar col-span-2" style="background: var(--blue); grid-column: 6 / span 3;">재현성</div>
+          </div>
+        </div>
+
+        <!-- F03 -->
+        <div class="timeline-row">
+          <span class="feat-id">03</span>
+          <span class="tier-badge tier-P2">P2</span>
+          <div class="grid grid-cols-26 gap-0">
+            <div class="timeline-bar col-span-3" style="background: var(--green); grid-column: 9 / span 3;">번역</div>
+          </div>
+        </div>
+
+        <!-- F04 -->
+        <div class="timeline-row">
+          <span class="feat-id">04</span>
+          <span class="tier-badge tier-P2">P2</span>
+          <div class="grid grid-cols-26 gap-0">
+            <div class="timeline-bar col-span-4" style="background: var(--green); grid-column: 9 / span 4;">알림 (병렬)</div>
+          </div>
+        </div>
+
+        <!-- F08 -->
+        <div class="timeline-row">
+          <span class="feat-id">08</span>
+          <span class="tier-badge tier-P2.5">P2.5</span>
+          <div class="grid grid-cols-26 gap-0">
+            <div class="timeline-bar col-span-3" style="background: var(--green-deep); grid-column: 12 / span 3;">인용 계보</div>
+          </div>
+        </div>
+
+        <!-- F05 -->
+        <div class="timeline-row">
+          <span class="feat-id">05</span>
+          <span class="tier-badge tier-P3">P3</span>
+          <div class="grid grid-cols-26 gap-0">
+            <div class="timeline-bar col-span-4" style="background: var(--violet); grid-column: 14 / span 4;">유사 논문</div>
+          </div>
+        </div>
+
+        <!-- F07 -->
+        <div class="timeline-row">
+          <span class="feat-id">07</span>
+          <span class="tier-badge tier-P4">P4</span>
+          <div class="grid grid-cols-26 gap-0">
+            <div class="timeline-bar col-span-5" style="background: var(--violet-deep); grid-column: 18 / span 5;">프로젝트 통합</div>
+          </div>
+        </div>
+
+        <!-- F06 -->
+        <div class="timeline-row">
+          <span class="feat-id">06</span>
+          <span class="tier-badge tier-P5">P5</span>
+          <div class="grid grid-cols-26 gap-0">
+            <div class="timeline-bar col-span-5" style="background: var(--ink-soft); grid-column: 22 / span 5;">연구 공백</div>
+          </div>
+        </div>
+
+        <!-- F10 -->
+        <div class="timeline-row">
+          <span class="feat-id">10</span>
+          <span class="tier-badge tier-P5">P5</span>
+          <div class="grid grid-cols-26 gap-0">
+            <div class="timeline-bar col-span-3" style="background: var(--ink-mute); grid-column: 24 / span 3;">Reading Asst.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <style>
+      .grid-cols-26 { grid-template-columns: repeat(26, minmax(0, 1fr)); }
+    </style>
+  </div>
+</section>
+
+<!-- ============ TIER STORIES ============ -->
+<section class="border-b border-[var(--line)]">
+  <div class="max-w-6xl mx-auto px-8 py-14">
+    <div class="section-title mb-2">06 · Tier Stories</div>
+    <h2 class="h2 mb-8">단계별 메시지</h2>
+
+    <div class="grid grid-cols-2 gap-4">
+      <div class="card p-6">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="tier-badge tier-P0">P0</span>
+          <div class="font-semibold">Foundation</div>
+        </div>
+        <p class="text-sm text-[var(--ink-soft)] mb-3 italic">"쓸 수 있는 그릇을 만든다."</p>
+        <div class="flex flex-wrap gap-2">
+          <span class="pill"><span class="feat-id">01</span> 검색·수집</span>
+        </div>
+      </div>
+
+      <div class="card p-6">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="tier-badge tier-P1">P1</span>
+          <div class="font-semibold">Core Consumption</div>
+        </div>
+        <p class="text-sm text-[var(--ink-soft)] mb-3 italic">"들어온 논문을 즉시 소비 가능한 형태로."</p>
+        <div class="flex flex-wrap gap-2">
+          <span class="pill"><span class="feat-id">02</span> 요약</span>
+        </div>
+      </div>
+
+      <div class="card p-6">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="tier-badge tier-P1.5">P1.5</span>
+          <div class="font-semibold">Quick Wins</div>
+        </div>
+        <p class="text-sm text-[var(--ink-soft)] mb-3 italic">"어떤 논문부터 볼지, 얼마나 믿을지 — 저비용·고차별 결정 보조."</p>
+        <div class="flex flex-wrap gap-2">
+          <span class="pill"><span class="feat-id">11</span> 읽기 우선순위</span>
+          <span class="pill"><span class="feat-id">09</span> 재현성</span>
+        </div>
+      </div>
+
+      <div class="card p-6">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="tier-badge tier-P2">P2</span>
+          <div class="font-semibold">Engagement & Retention</div>
+        </div>
+        <p class="text-sm text-[var(--ink-soft)] mb-3 italic">"재방문 이유 — 번역·알림으로 끌어오고, 계보로 머무르게 한다."</p>
+        <div class="flex flex-wrap gap-2">
+          <span class="pill"><span class="feat-id">03</span> 번역</span>
+          <span class="pill"><span class="feat-id">04</span> 알림</span>
+          <span class="pill"><span class="feat-id">08</span> 인용 계보</span>
+        </div>
+      </div>
+
+      <div class="card p-6">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="tier-badge tier-P3">P3-4</span>
+          <div class="font-semibold">Discovery</div>
+        </div>
+        <p class="text-sm text-[var(--ink-soft)] mb-3 italic">"탐색·자기 프로젝트 컨텍스트로 범위 확장."</p>
+        <div class="flex flex-wrap gap-2">
+          <span class="pill"><span class="feat-id">05</span> 유사 논문</span>
+          <span class="pill"><span class="feat-id">07</span> 프로젝트 통합</span>
+        </div>
+      </div>
+
+      <div class="card p-6">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="tier-badge tier-P5">P5</span>
+          <div class="font-semibold">Deep Analysis</div>
+        </div>
+        <p class="text-sm text-[var(--ink-soft)] mb-3 italic">"환각·정책 위험이 큰 분석 — 가드레일 충분히 검증 후."</p>
+        <div class="flex flex-wrap gap-2">
+          <span class="pill"><span class="feat-id">06</span> 연구 공백</span>
+          <span class="pill"><span class="feat-id">10</span> Reading Asst.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ KEY DECISIONS ============ -->
+<section class="border-b border-[var(--line)]">
+  <div class="max-w-6xl mx-auto px-8 py-14">
+    <div class="section-title mb-2">07 · Notable Decisions</div>
+    <h2 class="h2 mb-8">주목할 만한 결정 3가지</h2>
+
+    <div class="space-y-4">
+      <details class="card p-6" open>
+        <summary class="flex items-start gap-4 mb-3">
+          <div class="w-8 h-8 rounded-lg bg-[var(--accent-soft)] flex items-center justify-center font-bold text-[var(--accent-deep)] flex-shrink-0">1</div>
+          <div class="flex-1">
+            <div class="font-semibold mb-1">왜 #11·#09를 #03보다 앞에 두는가</div>
+            <div class="text-xs text-[var(--ink-mute)]">단순 가치 점수상 #03(번역)이 더 높지만 — 빌드 순서는 다름</div>
+          </div>
+          <svg class="w-5 h-5 text-[var(--ink-mute)]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="text-sm text-[var(--ink-soft)] leading-relaxed pl-12 border-l-2 border-[var(--accent-soft)] ml-4">
+          두 기능 모두 단가가 한 자릿수 센트($0.06·$0.09)에 차별화 5점. spec 본문이 명시한
+          <strong class="text-[var(--ink)]">"최저 단가 + 최고 lock-in"</strong>(#11) 과
+          <strong class="text-[var(--ink)]">"rubric 투명성 + 저자 prereview"</strong>(#09) 가치를
+          빠르게 풀어 사용자 신뢰를 만드는 게 비싼 후속 기능보다 ROI가 큼.
+          번역은 가치는 높지만 인프라가 #02와 강하게 겹치므로 묶어서 같은 분기에 처리하는 게 효율적.
+        </div>
+      </details>
+
+      <details class="card p-6">
+        <summary class="flex items-start gap-4 mb-3">
+          <div class="w-8 h-8 rounded-lg bg-[var(--red-soft)] flex items-center justify-center font-bold text-[var(--red-deep)] flex-shrink-0">2</div>
+          <div class="flex-1">
+            <div class="font-semibold mb-1">왜 #06이 V=4 D=4인데도 10위인가</div>
+            <div class="text-xs text-[var(--ink-mute)]">"공백" 자체가 검증 불가능한 negative claim</div>
+          </div>
+          <svg class="w-5 h-5 text-[var(--ink-mute)]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="text-sm text-[var(--ink-soft)] leading-relaxed pl-12 border-l-2 border-[var(--red-soft)] ml-4">
+          단위 $12 (다른 기능의 100~200배) + "negative claim 검증 본질적 불가능" 위험이 spec에 명시.
+          spec 본문이 직접 <strong class="text-[var(--ink)]">"환각 위험 최상위"</strong>, "출판사 IP 분쟁",
+          "사용자 입력 격리 필수"를 언급할 정도라면, 다른 기능으로 anchor·verifier·세션 격리 패턴이
+          충분히 검증된 뒤에 들어가야 안전.
+        </div>
+      </details>
+
+      <details class="card p-6">
+        <summary class="flex items-start gap-4 mb-3">
+          <div class="w-8 h-8 rounded-lg bg-[var(--violet-soft)] flex items-center justify-center font-bold text-[var(--violet-deep)] flex-shrink-0">3</div>
+          <div class="flex-1">
+            <div class="font-semibold mb-1">왜 #10이 마지막인가 — 정책이 아닌 의존성 때문</div>
+            <div class="text-xs text-[var(--ink-mute)]">AGENTS.md 폐기로 정책 충돌은 해소됨</div>
+          </div>
+          <svg class="w-5 h-5 text-[var(--ink-mute)]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="text-sm text-[var(--ink-soft)] leading-relaxed pl-12 border-l-2 border-[var(--violet-soft)] ml-4">
+          spec 본문에 <strong class="text-[var(--ink)]">"Literature Map = 06+05 재사용"</strong>,
+          <strong class="text-[var(--ink)]">"Citation Candidate = 임베딩 ANN"</strong>,
+          <strong class="text-[var(--ink)]">"Peer Review = rubric (09 패턴 공유)"</strong> 가 명시.
+          이는 #10이 자체 기능이라기보다 <strong class="text-[var(--ink)]">다른 기능의 합성 UI</strong>라는 뜻 —
+          구성 요소가 모두 안정된 뒤에야 합치는 게 자연스러움.
+        </div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer class="border-b border-[var(--line)]">
+  <div class="max-w-6xl mx-auto px-8 py-10 flex items-center justify-between">
+    <div>
+      <div class="text-sm font-semibold mb-1">Feature Prioritization · Semantic Paper Workbench</div>
+      <div class="text-xs text-[var(--ink-mute)]">11 features · 5-axis scoring · dependency-aware sequencing</div>
+    </div>
+    <div class="text-xs text-[var(--ink-mute)] font-mono">2026-06-05</div>
+  </div>
+</footer>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      fontFamily: 'Inter, "Noto Sans KR", system-ui, sans-serif',
+      fontSize: '13px',
+      primaryColor: '#FFFFFF',
+      primaryTextColor: '#1F1F1C',
+      primaryBorderColor: '#CC785C',
+      lineColor: '#9A9A93',
+      secondaryColor: '#F5E6DE',
+      tertiaryColor: '#F4F2EC',
+      mainBkg: '#FFFFFF',
+      nodeBorder: '#E8E5DD',
+      clusterBkg: '#F4F2EC',
+      clusterBorder: '#E8E5DD',
+      titleColor: '#1F1F1C',
+      edgeLabelBackground: '#FAFAF7',
+      noteBkgColor: '#F4F2EC',
+      noteBorderColor: '#E8E5DD',
+      noteTextColor: '#1F1F1C'
+    },
+    flowchart: {
+      curve: 'basis',
+      padding: 20,
+      nodeSpacing: 40,
+      rankSpacing: 60
+    }
+  });
+</script>
+
+</body>
+</html>

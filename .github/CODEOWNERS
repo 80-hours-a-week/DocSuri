@@ -1,0 +1,161 @@
+# CODEOWNERS — mirrors AGENTS.md §7 Team Ownership matrix.
+#
+# Syntax: <pattern> <owner1> [<owner2> ...]
+# Later matches override earlier ones. Patterns relative to repo root.
+# All owners listed are GitHub team placeholders (@team-*) the org can
+# rename via Settings → Teams to map to real groups/individuals.
+#
+# Rules of thumb:
+# - A PR touching only a single owner area: that owner self-merges after CI.
+# - A PR touching multiple areas: every touched owner must approve.
+# - A PR touching an Owner port (infra/llm, crosscutting/glossary,
+#   crosscutting/anchor, crosscutting/verifier): every downstream consumer
+#   from AGENTS.md §7.3 must approve.
+# - PRs to AGENTS.md / feature-specs / Sprint-Backlog-*.md require
+#   @team-architect approval and a §-numbered rationale.
+
+# =============================================================================
+# Default fallback — anything not matched below.
+# =============================================================================
+*                                       @team-platform @team-architect
+
+# =============================================================================
+# Domain — feature owners (AGENTS.md §7.2)
+# =============================================================================
+
+# #01a Paper Search
+demo/app/domain/papers/search.py        @team-search
+demo/app/domain/papers/normalizer.py    @team-search
+
+# #01b Paper Ingest — shared models also owned by search (read-only for ingest).
+demo/app/domain/papers/ingest.py        @team-ingest
+demo/app/domain/papers/models.py        @team-search @team-ingest
+demo/app/infra/grobid/                  @team-ingest
+demo/app/infra/pdf/                     @team-ingest
+
+# #02 Summarization
+demo/app/domain/summarization/          @team-summary
+
+# #03 Translation
+demo/app/domain/translation/            @team-translation
+
+# #04 Monitoring & Notification
+demo/app/domain/monitoring/             @team-monitoring
+demo/app/workflows/monitoring_cron/     @team-monitoring
+demo/app/infra/notification/            @team-monitoring
+
+# #05 Similar Paper Exploration
+demo/app/domain/exploration/            @team-exploration
+
+# #06 Research Gap + #07 Project Trend share domain/analysis/ — split by file.
+demo/app/domain/analysis/               @team-analysis
+demo/app/workflows/gap_analysis/        @team-analysis
+demo/app/workflows/project_analysis/    @team-analysis
+demo/app/infra/code_embed/              @team-analysis
+
+# #08 Citation Genealogy
+demo/app/domain/citation/               @team-citation
+demo/app/infra/citation_graph/          @team-citation
+demo/app/infra/graphdb/                 @team-citation
+
+# #09 Reproducibility
+demo/app/domain/reproducibility/        @team-repro
+demo/app/workflows/repro_evaluation/    @team-repro
+demo/app/infra/github/                  @team-repro
+
+# #10 Reading Assistant
+demo/app/domain/reading/                @team-reading
+
+# #11 Reading Priority Classifier
+demo/app/domain/reading_priority/       @team-priority
+demo/app/crosscutting/bandit/           @team-priority
+
+# =============================================================================
+# Owner Ports — cross-cutting (AGENTS.md §7.3)
+#
+# Port owners CANNOT unilaterally change interfaces. Every consumer listed
+# in AGENTS.md §7.3 must approve. The CODEOWNERS rule below only auto-
+# requests review from the port owner; reviewers add consumer owners
+# manually for interface-changing PRs.
+# =============================================================================
+
+demo/app/infra/llm/                     @team-llm-port
+demo/app/crosscutting/glossary/         @team-glossary-port
+demo/app/crosscutting/anchor/           @team-anchor-port
+demo/app/crosscutting/verifier/         @team-verifier-port
+demo/app/crosscutting/events/           @team-platform
+demo/app/crosscutting/ratelimit/        @team-platform
+demo/app/crosscutting/audit/            @team-platform
+demo/app/crosscutting/safety/           @team-platform
+demo/app/infra/embedding/               @team-search
+demo/app/infra/temporal/                @team-platform
+
+# =============================================================================
+# Platform — composition root, API surface, persistence
+# =============================================================================
+
+demo/app/main.py                        @team-platform
+demo/app/container.py                   @team-platform
+demo/app/api/                           @team-platform
+
+# API route files are platform-owned for routing, but content changes by
+# domain owners are routine — they request platform review only if the
+# routing layer itself changes.
+demo/app/api/routes_search.py           @team-platform @team-search
+demo/app/api/routes_ingest.py           @team-platform @team-ingest
+demo/app/api/routes_summary.py          @team-platform @team-summary
+demo/app/api/routes_translation.py      @team-platform @team-translation
+
+demo/app/infra/storage/                 @team-platform
+demo/app/infra/http/                    @team-platform
+
+# =============================================================================
+# Frontend
+# =============================================================================
+
+demo/web/                               @team-frontend
+
+# =============================================================================
+# Build, infra config, ops
+# =============================================================================
+
+demo/pyproject.toml                     @team-platform
+demo/run.sh                             @team-platform
+demo/scripts/                           @team-platform
+demo/seed/                              @team-platform
+demo/tests/                             @team-platform
+demo/.env.example                       @team-platform
+demo/.gitignore                         @team-platform
+demo/Dockerfile*                        @team-platform
+demo/docker-compose*                    @team-platform
+
+# =============================================================================
+# Architecture & specs — require @team-architect approval
+# =============================================================================
+
+AGENTS.md                               @team-architect @team-platform
+feature-specs/                          @team-architect
+architecture.html                       @team-architect
+priorities.html                         @team-architect
+Sprint-Capacity-Plan.md                 @team-architect
+
+# Sprint backlogs — feature owner + architect cross-review.
+Sprint-Backlog-Search.md                @team-search @team-architect
+Sprint-Backlog-Ingest.md                @team-ingest @team-architect
+Sprint-Backlog-Summarization.md         @team-summary @team-architect
+Sprint-Backlog-Translation.md           @team-translation @team-architect
+Sprint-Backlog-Monitoring.md            @team-monitoring @team-architect
+Sprint-Backlog-Exploration.md           @team-exploration @team-architect
+Sprint-Backlog-Research-Gap.md          @team-analysis @team-architect
+Sprint-Backlog-Project-Trend.md         @team-analysis @team-architect
+Sprint-Backlog-Citation-Genealogy.md    @team-citation @team-architect
+Sprint-Backlog-Reproducibility.md       @team-repro @team-architect
+Sprint-Backlog-Reading-Assistant.md     @team-reading @team-architect
+Sprint-Backlog-Priority-Classifier.md   @team-priority @team-architect
+Sprint-Backlog-Verification-Tools.md    @team-verifier-port @team-architect
+
+# Demo README (docs trail behind code; keep with platform).
+demo/README.md                          @team-platform
+
+# CODEOWNERS itself — architect-owned to prevent drift from §7.
+.github/CODEOWNERS                      @team-architect

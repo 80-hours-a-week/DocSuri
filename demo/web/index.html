@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Semantic Paper Workbench · Sprint 1 Demo</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="/static/styles.css?v=5">
+</head>
+
+<body class="antialiased min-h-screen">
+
+<!-- ============ HEADER ============ -->
+<header class="hero-gradient border-b border-[var(--line)]">
+  <div class="max-w-7xl mx-auto px-8 py-8">
+    <div class="flex items-center justify-between gap-6 flex-wrap">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-[var(--accent)] flex items-center justify-center shrink-0">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="9" y1="13" x2="15" y2="13"/>
+            <line x1="9" y1="17" x2="15" y2="17"/>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-xl font-bold tracking-tight">Semantic Paper Workbench</h1>
+            <span class="text-[var(--ink-mute)] text-sm">·</span>
+            <span class="text-sm font-medium text-[var(--ink-soft)]">Sprint 1 Demo</span>
+          </div>
+          <p class="text-sm text-[var(--ink-soft)] mt-0.5">
+            방대한 논문 흐름에서 자기 연구에 필요한 신호만 빠르게 골라낸다 — <span class="text-[var(--ink-mute)]">[§1.1]</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="chip chip-accent"><span class="dot" style="background:currentColor"></span>arXiv</span>
+        <span class="chip chip-blue">Claude</span>
+        <span class="chip chip-green">Korean</span>
+        <span class="chip" id="health-badge" title="백엔드 LLM 모드">
+          <span class="dot" style="background: var(--ink-mute)"></span>
+          <span class="font-mono text-[11px]" id="health-mode">…</span>
+        </span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-8 py-8 space-y-6">
+
+  <!-- ============ PANE 1 — Search ============ -->
+  <section id="pane-search" class="card p-6">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <div class="section-title">01 · Search</div>
+        <h2 class="h3 mt-1">자연어 검색</h2>
+      </div>
+      <span class="text-xs text-[var(--ink-mute)]"><span class="kbd">POST</span> /api/search</span>
+    </div>
+
+    <form id="search-form" class="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <input
+        id="search-input"
+        type="text"
+        placeholder="자연어로 논문 검색…"
+        class="search-input"
+        autocomplete="off"
+      />
+      <label class="chip-toggle" id="expand-toggle" data-on="true">
+        <span class="dot" id="expand-dot"></span>
+        쿼리 확장 ON
+      </label>
+      <button type="submit" class="btn-accent">
+        검색
+      </button>
+    </form>
+
+    <div class="mt-5">
+      <div id="search-meta" class="text-xs text-[var(--ink-mute)] mb-3 hidden"></div>
+      <ul id="search-results" class="space-y-3"></ul>
+      <div id="search-empty" class="text-sm text-[var(--ink-mute)] py-12 text-center">
+        검색어를 입력하면 결과가 여기에 나타난다.
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PANE 2 — Ingest progress ============ -->
+  <section id="pane-ingest" class="card p-6 hidden">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <div class="section-title">02 · Ingest</div>
+        <h2 class="h3 mt-1">인입 파이프라인</h2>
+      </div>
+      <span class="text-xs text-[var(--ink-mute)]"><span class="kbd">SSE</span> /api/ingest/&lt;id&gt;/events</span>
+    </div>
+
+    <ol id="ingest-stages" class="grid grid-cols-4 gap-3">
+      <li class="stage" data-stage="fetch">
+        <span class="stage-num">01</span>
+        <span class="stage-label">Fetch</span>
+        <span class="stage-spinner"></span>
+      </li>
+      <li class="stage" data-stage="parse">
+        <span class="stage-num">02</span>
+        <span class="stage-label">Parse</span>
+        <span class="stage-spinner"></span>
+      </li>
+      <li class="stage" data-stage="chunk">
+        <span class="stage-num">03</span>
+        <span class="stage-label">Chunk</span>
+        <span class="stage-spinner"></span>
+      </li>
+      <li class="stage" data-stage="done">
+        <span class="stage-num">04</span>
+        <span class="stage-label">Done</span>
+        <span class="stage-spinner"></span>
+      </li>
+    </ol>
+
+    <div id="ingest-notice" class="mt-4 hidden text-xs px-3 py-2 rounded-lg bg-[var(--bg-soft)] border border-[var(--line)] text-[var(--ink-soft)]">
+    </div>
+  </section>
+
+  <!-- ============ PANE 3 — Summary ============ -->
+  <section id="pane-summary" class="card p-6 hidden">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+      <div>
+        <div class="section-title">03 · Summarization</div>
+        <h2 class="h3 mt-1">요약 — sentence 단위 verify</h2>
+      </div>
+      <span class="text-xs text-[var(--ink-mute)]"><span class="kbd">POST</span> /api/summary · 종결형 <span class="kbd">-한다</span></span>
+    </div>
+
+    <!-- Preset controls -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+      <div>
+        <div class="preset-label">길이</div>
+        <div class="preset-row" id="length-presets">
+          <button type="button" class="preset-btn" data-value="tldr">TL;DR</button>
+          <button type="button" class="preset-btn is-active" data-value="paragraph">한 문단</button>
+          <button type="button" class="preset-btn" data-value="page">한 페이지</button>
+        </div>
+      </div>
+      <div>
+        <div class="preset-label">관점 (angle)</div>
+        <div class="preset-row" id="angle-presets">
+          <button type="button" class="preset-btn is-active" data-value="contribution">기여</button>
+          <button type="button" class="preset-btn" data-value="method">방법</button>
+          <button type="button" class="preset-btn" data-value="result">결과</button>
+          <button type="button" class="preset-btn" data-value="critical">비판적 검토</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3 mb-5 flex-wrap">
+      <button type="button" id="run-summary" class="btn-accent">요약하기</button>
+      <span id="summary-meta" class="text-xs text-[var(--ink-mute)]"></span>
+    </div>
+
+    <!-- Output area: 2-col, summary | rail -->
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-5">
+
+      <article id="summary-output" class="lg:col-span-3 card-soft p-5 min-h-[260px]">
+        <div class="text-sm text-[var(--ink-mute)]">요약하기 버튼을 누르면 sentence 단위로 결과가 표시된다.</div>
+      </article>
+
+      <aside class="lg:col-span-2 card p-5 min-h-[260px]">
+        <div class="flex items-center justify-between mb-3">
+          <div class="section-title">Structured paper</div>
+          <span class="text-[10px] text-[var(--ink-mute)] font-mono">[§n.m] anchor rail</span>
+        </div>
+        <div id="rail-content" class="rail">
+          <div class="text-sm text-[var(--ink-mute)]">PDF 요약 후 섹션 anchor 목록이 표시된다.</div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============ PANE 4 — Translation ============ -->
+  <section id="pane-translation" class="card p-6 hidden">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+      <div>
+        <div class="section-title">04 · Translation</div>
+        <h2 class="h3 mt-1">번역 — 선택 영역 한정</h2>
+      </div>
+      <span class="text-xs text-[var(--ink-mute)]"><span class="kbd">POST</span> /api/translate · glossing <span class="font-mono">한국어(English)</span></span>
+    </div>
+
+    <div id="translation-empty" class="text-sm text-[var(--ink-mute)] py-8 text-center">
+      오른쪽 rail의 영어 문장을 드래그로 선택한 뒤 <span class="kbd">한국어로 번역</span> 버튼을 누른다.
+    </div>
+
+    <div id="translation-results" class="space-y-4 hidden">
+      <!-- side-by-side cards injected -->
+    </div>
+
+    <details id="glossary-panel" class="mt-6 card-soft p-4 hidden">
+      <summary class="flex items-center justify-between cursor-pointer">
+        <span class="section-title">세션 glossary</span>
+        <span id="glossary-count" class="text-xs text-[var(--ink-mute)]">0 terms</span>
+      </summary>
+      <ul id="glossary-list" class="mt-3 flex flex-wrap gap-2"></ul>
+    </details>
+  </section>
+
+</main>
+
+<footer class="border-t border-[var(--line)] mt-12">
+  <div class="max-w-7xl mx-auto px-8 py-5 text-xs text-[var(--ink-mute)] flex justify-between flex-wrap gap-3">
+    <span>Sprint 1 walking-skeleton · <span class="font-mono">FastAPI + StaticFiles</span></span>
+    <span>AGENTS.md §6.1 anchor · §6.2 glossing · §6.3 종결형</span>
+  </div>
+</footer>
+
+<!-- Selection tooltip for translation trigger -->
+<div id="translate-tooltip" class="translate-tooltip hidden">
+  <button type="button" id="translate-trigger">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M5 8l6 6"/>
+      <path d="M4 14l6-6 2-3"/>
+      <path d="M2 5h12"/>
+      <path d="M7 2h1"/>
+      <path d="M22 22l-5-10-5 10"/>
+      <path d="M14 18h6"/>
+    </svg>
+    한국어로 번역
+  </button>
+</div>
+
+<script src="/static/app.js?v=6"></script>
+</body>
+</html>
