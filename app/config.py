@@ -18,10 +18,17 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 1800
     llm_temperature: float = 0.2
 
+    embedding_provider: Literal["openai", "none"] = "none"
+    openai_api_key: str | None = None
+    embedding_model: str = "text-embedding-3-small"
+    retrieval_top_k: int = 8
+    retrieval_query_max_chars: int = 6000
+
     paper_table: str = "papers"
     paper_chunk_table: str = "paper_chunks"
     paper_id_column: str = "id"
     paper_chunk_paper_id_column: str = "paper_id"
+    paper_chunk_embedding_column: str = "embedding"
 
     text_columns: tuple[str, ...] = (
         "structured_markdown",
@@ -39,6 +46,10 @@ class Settings(BaseSettings):
     @property
     def use_anthropic(self) -> bool:
         return self.llm_provider == "anthropic" and bool(self.anthropic_api_key)
+
+    @property
+    def use_embeddings(self) -> bool:
+        return self.embedding_provider == "openai" and bool(self.openai_api_key)
 
 
 @lru_cache

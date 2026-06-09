@@ -4,6 +4,7 @@ import re
 
 from app.models import (
     GlossaryTerm,
+    PaperChunk,
     PaperDocument,
     SummarySentence,
     TranslationUnit,
@@ -37,9 +38,22 @@ def resolve_source_span(paper: PaperDocument, selected_text: str | None, char_st
     return paper.text[char_start:char_end].strip()
 
 
-def source_anchor_for_span(paper: PaperDocument, source_text: str, fallback: str = "§0.0") -> str:
-    for chunk in paper.chunks:
+def source_anchor_for_span(
+    paper: PaperDocument,
+    source_text: str,
+    fallback: str = "§0.0",
+    context_chunks: list[PaperChunk] | None = None,
+) -> str:
+    normalized_source = _normalize_for_match(source_text)
+    for chunk in [*(context_chunks or []), *paper.chunks]:
+        normalized_chunk = _normalize_for_match(chunk.text)
         if source_text in chunk.text or chunk.text in source_text:
+            return chunk.anchor
+        if normalized_source and (
+            normalized_source in normalized_chunk
+            or normalized_chunk in normalized_source
+            or _token_overlap_score(normalized_source, normalized_chunk) >= 3
+        ):
             return chunk.anchor
     index = paper.text.find(source_text)
     if index >= 0:
@@ -69,7 +83,12 @@ def restore_math(text: str, replacements: dict[str, str]) -> str:
     return text
 
 
-def split_translation_units(source_text: str, translated_text: str, paper: PaperDocument) -> list[TranslationUnit]:
+def split_translation_units(
+    source_text: str,
+    translated_text: str,
+    paper: PaperDocument,
+    context_chunks: list[PaperChunk] | None = None,
+) -> list[TranslationUnit]:
     source_sentences = split_sentences(source_text) or [source_text]
     translated_sentences = split_sentences(translated_text) or [translated_text]
     if len(translated_sentences) != len(source_sentences):
@@ -79,7 +98,7 @@ def split_translation_units(source_text: str, translated_text: str, paper: Paper
     units: list[TranslationUnit] = []
     for idx, source in enumerate(source_sentences):
         translated = translated_sentences[idx] if idx < len(translated_sentences) else translated_text
-        anchor = source_anchor_for_span(paper, source)
+        anchor = source_anchor_for_span(paper, source, context_chunks=context_chunks)
         verification = verify_sentence(f"{source} [{anchor}]", paper)
         units.append(
             TranslationUnit(
@@ -97,3 +116,13 @@ def merge_glossary(existing: list[GlossaryTerm], new_terms: list[GlossaryTerm]) 
     for term in new_terms:
         merged[term.source] = term
     return sorted(merged.values(), key=lambda term: term.source)
+
+
+def _normalize_for_match(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
+def _token_overlap_score(left: str, right: str) -> int:
+    left_terms = set(re.findall(r"[a-z][a-z0-9-]{3,}", left))
+    right_terms = set(re.findall(r"[a-z][a-z0-9-]{3,}", right))
+    return len(left_terms & right_terms)

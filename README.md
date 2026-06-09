@@ -48,6 +48,31 @@ JSON 파일은 다음 형식을 사용할 수 있습니다.
 
 기존 DB 스키마가 다르면 `.env`에서 테이블명과 id 컬럼명을 바꿀 수 있습니다. 텍스트/청크 컬럼은 앱이 흔한 이름을 자동 탐색합니다.
 
+## RAG 검색 / 임베딩
+
+요약과 번역은 요청마다 다음 순서로 관련 문맥을 가져옵니다.
+
+```text
+요청 텍스트 생성
+→ 임베딩 생성
+→ PGVector에서 paper_chunks top-k 검색
+→ anchor + chunk_text를 LLM에 전달
+→ 요약/번역 생성
+→ anchor 검증
+```
+
+PGVector의 `paper_chunks.embedding`과 같은 모델로 쿼리를 임베딩해야 검색 품질이 유지됩니다. 예를 들어 기존 청크를 `text-embedding-3-small`로 만들었다면 `.env`도 같은 모델로 설정합니다.
+
+```env
+EMBEDDING_PROVIDER=openai
+OPENAI_API_KEY=...
+EMBEDDING_MODEL=text-embedding-3-small
+RETRIEVAL_TOP_K=8
+PAPER_CHUNK_EMBEDDING_COLUMN=embedding
+```
+
+`EMBEDDING_PROVIDER=none`이거나 API 키가 없으면 vector search 대신 청크 텍스트 키워드 랭킹으로 fallback합니다. 로컬 폴더 저장소도 이 fallback 경로를 사용합니다.
+
 ## API
 
 - `GET /api/papers`: 논문 목록

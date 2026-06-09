@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from anthropic import AsyncAnthropic
 
 from app.config import Settings
-from app.models import AnglePreset, GlossaryTerm, LengthPreset, PaperDocument
+from app.models import AnglePreset, GlossaryTerm, LengthPreset, PaperChunk, PaperDocument
 from app.services.anchors import split_sentences
 
 
@@ -19,11 +19,18 @@ class LLMClient(ABC):
         length_preset: LengthPreset,
         angle_preset: AnglePreset,
         glossary: list[GlossaryTerm],
+        context_chunks: list[PaperChunk],
     ) -> list[str]:
         raise NotImplementedError
 
     @abstractmethod
-    async def translate(self, paper: PaperDocument, source_text: str, glossary: list[GlossaryTerm]) -> str:
+    async def translate(
+        self,
+        paper: PaperDocument,
+        source_text: str,
+        glossary: list[GlossaryTerm],
+        context_chunks: list[PaperChunk],
+    ) -> str:
         raise NotImplementedError
 
 
@@ -40,6 +47,7 @@ class AnthropicLLMClient(LLMClient):
         length_preset: LengthPreset,
         angle_preset: AnglePreset,
         glossary: list[GlossaryTerm],
+        context_chunks: list[PaperChunk],
     ) -> list[str]:
         length_rules = {
             LengthPreset.tldr: "1 sentence, TL;DR style.",
@@ -53,6 +61,7 @@ class AnthropicLLMClient(LLMClient):
             AnglePreset.critical: "Focus on limitations, assumptions, reproducibility risks, and critical review.",
         }
         glossary_text = "\n".join(f"- {term.source}: {term.target}" for term in glossary) or "(empty)"
+        context_text = _format_context_chunks(context_chunks)
         response = await self.client.messages.create(
             model=self.settings.anthropic_model,
             max_tokens=self.settings.llm_max_tokens,
@@ -63,12 +72,19 @@ class AnthropicLLMClient(LLMClient):
                     "text": (
                         "You summarize academic papers in Korean. Every output sentence must include at least "
                         "one citation anchor copied from the paper, such as [§1.1] or [p.3 ¶2]. "
+                        "Prioritize the retrieved context chunks as evidence. Do not cite anchors that are not "
+                        "present in the retrieved context or paper text. "
                         "Return strict JSON: {\"sentences\": [\"...\"]}. Do not include prose outside JSON."
                     ),
                 },
                 {
                     "type": "text",
-                    "text": f"Paper title: {paper.title}\n\nPaper text:\n{paper.text}",
+                    "text": f"Paper title: {paper.title}\n\nPaper text:\n{paper.text[:120000]}",
+                    "cache_control": {"type": "ephemeral"},
+                },
+                {
+                    "type": "text",
+                    "text": f"Retrieved context chunks:\n{context_text}",
                     "cache_control": {"type": "ephemeral"},
                 },
             ],
@@ -85,8 +101,15 @@ class AnthropicLLMClient(LLMClient):
         )
         return _parse_json_sentences(_message_text(response))
 
-    async def translate(self, paper: PaperDocument, source_text: str, glossary: list[GlossaryTerm]) -> str:
+    async def translate(
+        self,
+        paper: PaperDocument,
+        source_text: str,
+        glossary: list[GlossaryTerm],
+        context_chunks: list[PaperChunk],
+    ) -> str:
         glossary_text = "\n".join(f"- {term.source}: {term.target}" for term in glossary) or "(empty)"
+        context_text = _format_context_chunks(context_chunks)
         response = await self.client.messages.create(
             model=self.settings.anthropic_model,
             max_tokens=self.settings.llm_max_tokens,
@@ -96,13 +119,20 @@ class AnthropicLLMClient(LLMClient):
                     "type": "text",
                     "text": (
                         "Translate selected academic-paper spans into Korean. Use formal '-한다' academic style. "
-                        "Preserve LaTeX, citation markers, numbers, and proper nouns. Return strict JSON: "
+                        "Preserve LaTeX, citation markers, numbers, and proper nouns. Use retrieved context chunks "
+                        "only to disambiguate terminology and surrounding concepts; translate the source span, not "
+                        "the context itself. Return strict JSON: "
                         "{\"translation\": \"...\"}. Do not include prose outside JSON."
                     ),
                 },
                 {
                     "type": "text",
-                    "text": f"Paper title: {paper.title}\n\nPaper text:\n{paper.text}",
+                    "text": f"Paper title: {paper.title}\n\nPaper text:\n{paper.text[:120000]}",
+                    "cache_control": {"type": "ephemeral"},
+                },
+                {
+                    "type": "text",
+                    "text": f"Retrieved context chunks:\n{context_text}",
                     "cache_control": {"type": "ephemeral"},
                 },
             ],
@@ -123,9 +153,10 @@ class MockLLMClient(LLMClient):
         length_preset: LengthPreset,
         angle_preset: AnglePreset,
         glossary: list[GlossaryTerm],
+        context_chunks: list[PaperChunk],
     ) -> list[str]:
         count = {LengthPreset.tldr: 1, LengthPreset.paragraph: 3, LengthPreset.page: 8}[length_preset]
-        chunks = paper.chunks or []
+        chunks = context_chunks or paper.chunks or []
         if angle_preset == AnglePreset.critical:
             chunks = chunks[-2:] + chunks[:2]
         elif angle_preset == AnglePreset.method:
@@ -141,7 +172,13 @@ class MockLLMClient(LLMClient):
             sentences.append(f"{korean} [{chunk.anchor}]")
         return sentences
 
-    async def translate(self, paper: PaperDocument, source_text: str, glossary: list[GlossaryTerm]) -> str:
+    async def translate(
+        self,
+        paper: PaperDocument,
+        source_text: str,
+        glossary: list[GlossaryTerm],
+        context_chunks: list[PaperChunk],
+    ) -> str:
         text = source_text
         for term in sorted(glossary, key=lambda item: len(item.source), reverse=True):
             replacement = f"{term.target}({term.source})" if term.first_seen else term.target
@@ -158,6 +195,20 @@ def build_llm_client(settings: Settings) -> LLMClient:
 def _message_text(response: object) -> str:
     chunks = getattr(response, "content", [])
     return "".join(getattr(chunk, "text", "") for chunk in chunks)
+
+
+def _format_context_chunks(chunks: list[PaperChunk]) -> str:
+    if not chunks:
+        return "(empty)"
+    parts = []
+    for chunk in chunks:
+        label = chunk.anchor
+        if chunk.section:
+            label = f"{label} section={chunk.section}"
+        if chunk.page is not None:
+            label = f"{label} page={chunk.page}"
+        parts.append(f"[{label}]\n{chunk.text}")
+    return "\n\n".join(parts)
 
 
 def _parse_json_sentences(text: str) -> list[str]:

@@ -24,6 +24,7 @@ from app.repositories import (
     PaperRepository,
     PostgresPaperRepository,
 )
+from app.services.embedding import build_embedding_client
 from app.services.glossary import GlossaryStore
 from app.services.llm import build_llm_client
 from app.services.processing import (
@@ -51,6 +52,7 @@ async def lifespan(app: FastAPI):
             repository = PostgresPaperRepository(pool, settings)
         app.state.settings = settings
         app.state.repository = repository
+        app.state.embedding = build_embedding_client(settings)
         app.state.llm = build_llm_client(settings)
         app.state.glossary = GlossaryStore()
         yield
@@ -76,6 +78,40 @@ def glossary(request: Request) -> GlossaryStore:
     return request.app.state.glossary
 
 
+async def retrieve_context(request: Request, paper_id: str, query_text: str):
+    settings = request.app.state.settings
+    query_embedding = None
+    try:
+        query_embedding = await request.app.state.embedding.embed_query(query_text)
+    except Exception:
+        logger.exception("Embedding query failed; falling back to keyword chunk retrieval.")
+    return await repository(request).retrieve_relevant_chunks(
+        paper_id=paper_id,
+        query_text=query_text,
+        query_embedding=query_embedding,
+        top_k=settings.retrieval_top_k,
+    )
+
+
+def summary_retrieval_query(paper_title: str, length_preset: str, angle_preset: str) -> str:
+    angle_terms = {
+        "contribution": "core contribution novelty motivation problem statement proposed approach",
+        "method": "method architecture pipeline implementation training model algorithm",
+        "results": "experiments results evaluation benchmark comparison ablation findings",
+        "critical": "limitations assumptions risks failure cases reproducibility discussion future work",
+    }
+    return f"{paper_title}\nsummary length={length_preset}\nfocus={angle_preset}\n{angle_terms.get(angle_preset, '')}"
+
+
+def translation_retrieval_query(paper, source_text: str) -> str:
+    index = paper.text.find(source_text)
+    if index < 0:
+        return source_text
+    start = max(0, index - 1200)
+    end = min(len(paper.text), index + len(source_text) + 1200)
+    return paper.text[start:end]
+
+
 @app.get("/")
 async def index() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
@@ -86,7 +122,13 @@ async def health(request: Request) -> dict[str, str]:
     settings = request.app.state.settings
     repo_type = type(request.app.state.repository).__name__
     provider = "anthropic" if settings.use_anthropic else "mock"
-    return {"status": "ok", "repository": repo_type, "llm_provider": provider}
+    embedding_provider = settings.embedding_provider if settings.use_embeddings else "none"
+    return {
+        "status": "ok",
+        "repository": repo_type,
+        "llm_provider": provider,
+        "embedding_provider": embedding_provider,
+    }
 
 
 @app.get("/api/papers")
@@ -141,12 +183,18 @@ async def get_full_paper(paper_id: str, request: Request):
 async def summarize(payload: SummaryRequest, request: Request) -> SummaryResponse:
     try:
         paper = await repository(request).get_paper(payload.paper_id)
+        context_chunks = await retrieve_context(
+            request,
+            paper_id=paper.id,
+            query_text=summary_retrieval_query(paper.title, payload.length_preset, payload.angle_preset),
+        )
         session_glossary = glossary(request).lookup(payload.session_id, paper.text)
         raw_sentences = await request.app.state.llm.summarize(
             paper=paper,
             length_preset=payload.length_preset,
             angle_preset=payload.angle_preset,
             glossary=session_glossary,
+            context_chunks=context_chunks,
         )
         summary_sentences = build_summary_sentences(raw_sentences, paper)
         all_terms = merge_glossary(glossary(request).list_terms(payload.session_id), session_glossary)
@@ -172,12 +220,22 @@ async def translate(payload: TranslateRequest, request: Request) -> TranslateRes
     try:
         paper = await repository(request).get_paper(payload.paper_id)
         source_text = resolve_source_span(paper, payload.selected_text, payload.char_start, payload.char_end)
+        context_chunks = await retrieve_context(
+            request,
+            paper_id=paper.id,
+            query_text=translation_retrieval_query(paper, source_text),
+        )
         masked_text, math_replacements = mask_math(source_text)
         found_terms = glossary(request).lookup(payload.session_id, source_text)
         session_terms = merge_glossary(glossary(request).list_terms(payload.session_id), found_terms)
-        translated = await request.app.state.llm.translate(paper=paper, source_text=masked_text, glossary=session_terms)
+        translated = await request.app.state.llm.translate(
+            paper=paper,
+            source_text=masked_text,
+            glossary=session_terms,
+            context_chunks=context_chunks,
+        )
         translated = restore_math(translated, math_replacements)
-        units = split_translation_units(source_text, translated, paper)
+        units = split_translation_units(source_text, translated, paper, context_chunks=context_chunks)
         return TranslateResponse(
             paper_id=paper.id,
             title=paper.title,
