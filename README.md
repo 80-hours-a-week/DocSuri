@@ -14,6 +14,29 @@ uvicorn app.main:app --reload --port 8000
 
 브라우저에서 `http://127.0.0.1:8000`을 열면 됩니다. `DATABASE_URL` 또는 `ANTHROPIC_API_KEY`가 비어 있으면 내장 데모 논문과 mock LLM으로 동작합니다.
 
+## 로컬 폴더 저장소
+
+PostgreSQL이 연결되어 있지 않으면 앱은 `LOCAL_PAPER_DIR` 폴더를 먼저 읽습니다. 기본값은 `local_papers`입니다. 여기에 `.json`, `.md`, `.txt`, `.pdf` 파일을 넣으면 `/api/papers` 목록에 표시됩니다. 폴더가 비어 있으면 기존 내장 데모 논문을 사용합니다.
+
+Markdown/TXT/PDF 파일은 파일명 stem을 `paper_id`로 쓰고, 첫 번째 `# 제목` 또는 첫 줄을 제목으로 사용합니다. 본문에 `[§1.1]` 같은 anchor가 있으면 chunk anchor로 사용하고, 없으면 문단 순서대로 `§1.1`, `§2.1` 형식의 임시 anchor를 만듭니다.
+
+JSON 파일은 다음 형식을 사용할 수 있습니다.
+
+```json
+{
+  "id": "paper-1",
+  "title": "Paper title",
+  "abstract": "Short abstract",
+  "text": "[§1.1] Full paper text...",
+  "chunks": [
+    {
+      "anchor": "§1.1",
+      "text": "Chunk text"
+    }
+  ]
+}
+```
+
 ## PostgreSQL / PGVector
 
 기본 스키마는 [schema.sql](schema.sql)을 참고하세요.

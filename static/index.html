@@ -8,60 +8,92 @@
   </head>
   <body>
     <main class="shell">
-      <section class="toolbar">
-        <div>
-          <h1>DocSuri</h1>
-          <p>논문 요약 & span 번역 데모</p>
+      <section class="topbar">
+        <div class="brand-lockup">
+          <span class="brand-mark" aria-hidden="true">
+            <span></span>
+          </span>
+          <div>
+            <h1>DocSuri</h1>
+            <p>Research reading desk</p>
+          </div>
         </div>
-        <label>
-          Paper
+        <label class="paper-picker">
+          <span>논문 선택</span>
           <select id="paperSelect"></select>
         </label>
       </section>
 
-      <section class="grid">
-        <article class="panel paper-panel">
-          <header>
-            <h2 id="paperTitle">Paper</h2>
-            <span id="status">Loading</span>
+      <section class="workspace">
+        <article class="reader-panel">
+          <header class="reader-header">
+            <div class="reader-title">
+              <span class="eyebrow">Source Paper</span>
+              <h2 id="paperTitle">Paper</h2>
+            </div>
+            <div class="reader-meta">
+              <span id="status">Loading</span>
+            </div>
           </header>
-          <pre id="paperText" class="paper-text"></pre>
+          <div class="reader-body">
+            <pre id="paperText" class="paper-text"></pre>
+          </div>
         </article>
 
-        <aside class="panel controls">
-          <section>
-            <h2>요약</h2>
-            <label>
-              길이
-              <select id="lengthPreset">
-                <option value="tldr">1줄 TL;DR</option>
-                <option value="paragraph" selected>한 문단</option>
-                <option value="page">한 페이지</option>
-              </select>
-            </label>
-            <label>
-              관점
-              <select id="anglePreset">
-                <option value="contribution">기여 중심</option>
-                <option value="method">방법 중심</option>
-                <option value="results">결과·실험 중심</option>
-                <option value="critical">비판적 검토</option>
-              </select>
-            </label>
-            <button id="summaryBtn">요약 생성</button>
-            <div id="summaryOutput" class="output"></div>
+        <aside class="action-panel">
+          <section class="tool-card summary-card">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">Summary</span>
+                <h2>요약</h2>
+              </div>
+            </div>
+            <div class="control-grid">
+              <label>
+                <span>길이</span>
+                <select id="lengthPreset">
+                  <option value="tldr">1줄 TL;DR</option>
+                  <option value="paragraph" selected>한 문단</option>
+                  <option value="page">한 페이지</option>
+                </select>
+              </label>
+              <label>
+                <span>관점</span>
+                <select id="anglePreset">
+                  <option value="contribution">기여 중심</option>
+                  <option value="method">방법 중심</option>
+                  <option value="results">결과·실험 중심</option>
+                  <option value="critical">비판적 검토</option>
+                </select>
+              </label>
+            </div>
+            <button id="summaryBtn" class="primary-button" type="button">요약 생성</button>
+            <div id="summaryOutput" class="output empty">대기 중</div>
           </section>
 
-          <section>
-            <h2>번역</h2>
-            <textarea id="selectedText" rows="7" placeholder="왼쪽 본문에서 텍스트를 선택하면 여기에 들어옵니다."></textarea>
-            <button id="translateBtn">선택 span 번역</button>
-            <div id="translationOutput" class="output"></div>
+          <section class="tool-card translation-card">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">Translation</span>
+                <h2>번역</h2>
+              </div>
+            </div>
+            <textarea id="selectedText" rows="7" placeholder="번역할 원문 span"></textarea>
+            <div class="button-row">
+              <button id="translateBtn" class="primary-button" type="button">선택 span 번역</button>
+              <button id="fullTranslateBtn" class="secondary-button" type="button">전체 번역 보기</button>
+            </div>
+            <div id="translationOutput" class="output empty">대기 중</div>
           </section>
 
-          <section>
-            <h2>Glossary</h2>
-            <div id="glossaryOutput" class="glossary"></div>
+          <section class="tool-card glossary-card">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">Terms</span>
+                <h2>Glossary</h2>
+              </div>
+            </div>
+            <div id="glossaryOutput" class="glossary empty">아직 없음</div>
           </section>
         </aside>
       </section>

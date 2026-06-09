@@ -9,6 +9,7 @@ class Settings(BaseSettings):
 
     app_name: str = "DocSuri"
     database_url: str | None = None
+    local_paper_dir: str = "local_papers"
 
     llm_provider: Literal["anthropic", "mock"] = "anthropic"
     anthropic_api_key: str | None = None

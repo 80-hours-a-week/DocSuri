@@ -17,7 +17,13 @@ from app.models import (
     TranslateRequest,
     TranslateResponse,
 )
-from app.repositories import DemoPaperRepository, PaperRepository, PostgresPaperRepository
+from app.repositories import (
+    DemoPaperRepository,
+    FallbackPaperRepository,
+    LocalPaperRepository,
+    PaperRepository,
+    PostgresPaperRepository,
+)
 from app.services.glossary import GlossaryStore
 from app.services.llm import build_llm_client
 from app.services.processing import (
@@ -39,7 +45,8 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     async with create_pool(settings) as pool:
         if pool is None:
-            repository: PaperRepository = DemoPaperRepository()
+            local_repository = LocalPaperRepository(_local_paper_dir(settings.local_paper_dir))
+            repository: PaperRepository = FallbackPaperRepository(local_repository, DemoPaperRepository())
         else:
             repository = PostgresPaperRepository(pool, settings)
         app.state.settings = settings
@@ -51,6 +58,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="DocSuri Summary & Translation API", version="0.1.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+def _local_paper_dir(value: str) -> Path:
+    path = Path(value)
+    if not path.is_absolute():
+        path = BASE_DIR / path
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def repository(request: Request) -> PaperRepository:
@@ -100,6 +115,25 @@ async def get_paper(paper_id: str, request: Request):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("Failed to fetch paper")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/api/papers/{paper_id}/full")
+async def get_full_paper(paper_id: str, request: Request):
+    try:
+        paper = await repository(request).get_paper(paper_id)
+        return {
+            "id": paper.id,
+            "title": paper.title,
+            "abstract": paper.abstract,
+            "text": paper.text,
+            "text_length": len(paper.text),
+            "chunks": paper.chunks,
+        }
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Failed to fetch full paper")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
