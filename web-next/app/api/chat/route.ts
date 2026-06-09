@@ -1,5 +1,5 @@
 import { anthropic } from "@ai-sdk/anthropic";
-import { streamText } from "ai";
+import { streamText, type CoreMessage } from "ai";
 
 // Vercel AI SDK chat endpoint. Phase 0 talks to Anthropic directly; when the
 // EKS sprint switches to Bedrock the import becomes
@@ -7,7 +7,7 @@ import { streamText } from "ai";
 export const runtime = "edge";
 
 export async function POST(req: Request) {
-  const { messages } = (await req.json()) as { messages: { role: string; content: string }[] };
+  const { messages } = (await req.json()) as { messages: CoreMessage[] };
 
   const result = await streamText({
     model: anthropic(process.env.LLM_MODEL ?? "claude-haiku-4-5"),
