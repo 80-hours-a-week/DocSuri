@@ -66,7 +66,7 @@ class SemanticScholarClient:
         if self._owns_client:
             await self._client.aclose()
 
-    @RateLimitedRetry(max_attempts=3)
+    @RateLimitedRetry(max_attempts=1)
     async def _get(self, params: dict[str, Any]) -> dict[str, Any]:
         """Fetch JSON from S2 Graph API.
 

@@ -126,4 +126,8 @@ def crossref_cb() -> CircuitBreaker:
 
 
 def mode_label() -> str:
-    return "live (Claude)" if os.getenv("ANTHROPIC_API_KEY") else "mock"
+    if os.getenv("AWS_BEDROCK_REGION"):
+        return "live (Bedrock)"
+    if os.getenv("ANTHROPIC_API_KEY"):
+        return "live (Claude)"
+    return "mock"

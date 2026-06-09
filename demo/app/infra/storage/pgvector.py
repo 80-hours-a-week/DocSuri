@@ -75,23 +75,45 @@ class PgVectorClient:
         self._min_pool = min_pool_size
         self._max_pool = max_pool_size
         self._pool = None  # lazy
+        self._unavailable = False
+        self._connect_lock: asyncio.Lock | None = None
+
+    def _get_lock(self) -> asyncio.Lock:
+        if self._connect_lock is None:
+            self._connect_lock = asyncio.Lock()
+        return self._connect_lock
 
     async def _ensure_pool(self) -> object:
         if self._pool is not None:
             return self._pool
-        try:
-            import asyncpg  # type: ignore[import-not-found]
-        except ImportError as exc:
-            raise RuntimeError(
-                "asyncpg not installed; add `asyncpg` to project dependencies."
-            ) from exc
-        if not self._dsn:
-            raise RuntimeError("DATABASE_URL is not set; cannot create pgvector pool.")
-        self._pool = await asyncpg.create_pool(
-            self._dsn,
-            min_size=self._min_pool,
-            max_size=self._max_pool,
-        )
+        if self._unavailable:
+            raise RuntimeError("pgvector: previously failed to connect, skipping")
+        async with self._get_lock():
+            if self._pool is not None:
+                return self._pool
+            if self._unavailable:
+                raise RuntimeError("pgvector: previously failed to connect, skipping")
+            try:
+                import asyncpg  # type: ignore[import-not-found]
+            except ImportError as exc:
+                self._unavailable = True
+                raise RuntimeError(
+                    "asyncpg not installed; add `asyncpg` to project dependencies."
+                ) from exc
+            if not self._dsn:
+                self._unavailable = True
+                raise RuntimeError("DATABASE_URL is not set; cannot create pgvector pool.")
+            try:
+                self._pool = await asyncpg.create_pool(
+                    self._dsn,
+                    min_size=self._min_pool,
+                    max_size=self._max_pool,
+                    timeout=5.0,
+                )
+            except Exception as exc:
+                self._unavailable = True
+                logger.warning("pgvector: failed to connect (%s); disabling", exc)
+                raise RuntimeError(f"pgvector: connection failed: {exc}") from exc
         return self._pool
 
     async def search(

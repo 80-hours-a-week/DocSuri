@@ -24,8 +24,8 @@ from app.infra.llm.protocol import LLMRequest, LLMResponse
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_HAIKU = "anthropic.claude-3-5-haiku-20241022-v1:0"
-_DEFAULT_SONNET = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+_DEFAULT_HAIKU = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+_DEFAULT_SONNET = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
 
 def _pick_model(purpose: str) -> str:

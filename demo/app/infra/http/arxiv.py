@@ -57,7 +57,7 @@ class ArxivClient:
     """
 
     ENDPOINT = "https://export.arxiv.org/api/query"
-    TIMEOUT = 15.0
+    TIMEOUT = 3.0
 
     def __init__(
         self,
@@ -65,7 +65,7 @@ class ArxivClient:
         *,
         bucket: TokenBucket = _ARXIV_BUCKET,
     ) -> None:
-        self._client = client or httpx.AsyncClient(timeout=self.TIMEOUT)
+        self._client = client or httpx.AsyncClient(timeout=self.TIMEOUT, follow_redirects=True)
         self._owns_client = client is None
         self._bucket = bucket
 
@@ -73,7 +73,7 @@ class ArxivClient:
         if self._owns_client:
             await self._client.aclose()
 
-    @RateLimitedRetry(max_attempts=3)
+    @RateLimitedRetry(max_attempts=1)
     async def _get(self, params: dict[str, Any]) -> str:
         """Fetch Atom XML from arXiv.
 
