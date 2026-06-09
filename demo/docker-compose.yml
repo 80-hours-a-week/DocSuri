@@ -1,19 +1,19 @@
 name: docsuri-demo
 
-# Phase 0 walking-skeleton compose — AGENTS.md §5 architecture mapped to local
-# containers. RDS/ElastiCache/SNS/SQS are kept Local-only here (LocalStack +
-# pgvector + redis); production swap-in happens in the EKS sprint.
+# Phase 0 walking-skeleton compose — AGENTS.md §5 아키텍처를 로컬 컨테이너로 매핑.
+# RDS/ElastiCache/SNS/SQS는 여기서는 로컬 전용(LocalStack + pgvector + redis)으로
+# 둔다. 프로덕션 전환은 EKS 스프린트에서 처리한다.
 #
-# Services:
-#   postgres   — RDS stand-in. pgvector image bakes the extension in.
-#   redis      — ElastiCache stand-in. Celery broker + SlowAPI store + §4.1 cache.
-#   localstack — SNS/SQS local emulation for §5.3 messaging.
-#   api        — FastAPI app (this repo's `app.main:app`).
-#   worker     — Celery worker (default queue).
-#   beat       — Celery beat (#04 monitoring cron triggers).
+# 서비스:
+#   postgres   — RDS 대체. pgvector 이미지에 확장이 미리 포함됨.
+#   redis      — ElastiCache 대체. Celery 브로커 + SlowAPI 저장소 + §4.1 캐시.
+#   localstack — §5.3 메시징용 SNS/SQS 로컬 에뮬레이션.
+#   api        — FastAPI 앱 (본 저장소의 `app.main:app`).
+#   worker     — Celery 워커 (기본 큐).
+#   beat       — Celery beat (#04 모니터링 cron 트리거).
 #
-# Bring up:   docker compose up --build
-# Reset state: docker compose down -v
+# 기동:        docker compose up --build
+# 상태 초기화: docker compose down -v
 
 services:
   postgres:
@@ -70,6 +70,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
+      RATE_LIMIT_STORAGE_URI: redis://redis:6379/3
       AWS_ENDPOINT_URL: http://localstack:4566
       AWS_REGION: us-east-1
       AWS_ACCESS_KEY_ID: test
