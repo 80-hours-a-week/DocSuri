@@ -26,9 +26,32 @@ dependencies = [
   "uvicorn[standard]>=0.32",
   "httpx>=0.27",
   "pydantic>=2.9",
+  "pydantic-settings>=2.6",
   "tenacity>=9",
   "anthropic>=0.40",
   "python-multipart",
+  # Phase 0 stack — AGENTS.md §5.3 (SNS+SQS+Celery), §4.1 (Redis cache), §4.5 (SlowAPI inbound).
+  "celery[redis]>=5.4",
+  "redis>=5.2",
+  "slowapi>=0.1.9",
+  "boto3>=1.35",                              # SNS / SQS / Secrets Manager
+  "psycopg[binary]>=3.2",
+  "pgvector>=0.3",
+  "sqlalchemy>=2.0",
+  "alembic>=1.13",
+  "openai>=1.54",                             # text-embedding-3-small
+  "langgraph>=0.2",
+  # Observability — OTel SDK + FastAPI/Celery instrumentation. Trace backend
+  # (Tempo) is deferred; until then OTLP exporter targets console / local
+  # collector per §4.6 ops conv.
+  "opentelemetry-sdk>=1.27",
+  "opentelemetry-api>=1.27",
+  "opentelemetry-instrumentation-fastapi>=0.48b0",
+  "opentelemetry-instrumentation-httpx>=0.48b0",
+  "opentelemetry-instrumentation-celery>=0.48b0",
+  "opentelemetry-instrumentation-redis>=0.48b0",
+  "opentelemetry-exporter-otlp-proto-http>=1.27",
+  "python-json-logger>=2.0",
 ]
 
 [project.optional-dependencies]
@@ -37,6 +60,9 @@ dev = [
   "pytest-asyncio>=0.24",
   "respx>=0.21",
   "ruff>=0.7",
+  "pip-audit>=2.7",
+  "testcontainers>=4.8",                      # §4.6 verification tools
+  "moto[sns,sqs]>=5.0",                       # SNS/SQS unit tests without AWS
 ]
 
 [project.scripts]
