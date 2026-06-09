@@ -1,6 +1,6 @@
 from functools import lru_cache
-from typing import Literal
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,21 +8,19 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_name: str = "DocSuri"
-    database_url: str | None = None
-    local_paper_dir: str = "local_papers"
+    database_url: str
 
-    llm_provider: Literal["anthropic", "mock"] = "anthropic"
-    anthropic_api_key: str | None = None
-    anthropic_model: str = "claude-sonnet-4-5-20250929"
-    anthropic_verifier_model: str = "claude-haiku-4-5-20251001"
+    aws_region: str = "ap-northeast-2"
+    aws_profile: str | None = None
+
+    anthropic_model: str = "anthropic.claude-opus-4-6-v1"
+    anthropic_verifier_model: str = "anthropic.claude-haiku-4-5-20251001-v1:0"
     llm_max_tokens: int = 1800
     llm_temperature: float = 0.2
 
-    embedding_provider: Literal["openai", "none"] = "none"
-    openai_api_key: str | None = None
-    embedding_model: str = "text-embedding-3-small"
+    embedding_model: str = "twelvelabs.marengo-embed-3-0-v1:0"
     retrieval_top_k: int = 8
-    retrieval_query_max_chars: int = 6000
+    retrieval_query_max_chars: int = 2000
 
     paper_table: str = "papers"
     paper_chunk_table: str = "paper_chunks"
@@ -43,13 +41,21 @@ class Settings(BaseSettings):
     chunk_anchor_columns: tuple[str, ...] = ("anchor", "section_anchor", "locator")
     chunk_order_columns: tuple[str, ...] = ("chunk_index", "position", "idx", "id")
 
-    @property
-    def use_anthropic(self) -> bool:
-        return self.llm_provider == "anthropic" and bool(self.anthropic_api_key)
-
-    @property
-    def use_embeddings(self) -> bool:
-        return self.embedding_provider == "openai" and bool(self.openai_api_key)
+    @model_validator(mode="after")
+    def require_runtime_credentials(self) -> "Settings":
+        missing = [
+            name
+            for name, value in {
+                "DATABASE_URL": self.database_url,
+                "ANTHROPIC_MODEL": self.anthropic_model,
+                "ANTHROPIC_VERIFIER_MODEL": self.anthropic_verifier_model,
+                "EMBEDDING_MODEL": self.embedding_model,
+            }.items()
+            if not value or not value.strip()
+        ]
+        if missing:
+            raise ValueError(f"Missing required runtime settings: {', '.join(missing)}")
+        return self
 
 
 @lru_cache

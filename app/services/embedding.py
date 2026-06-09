@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+import json
 from abc import ABC, abstractmethod
 
 from app.config import Settings
+from app.services.bedrock import build_bedrock_runtime_client
 
 
 class EmbeddingClient(ABC):
@@ -11,33 +14,43 @@ class EmbeddingClient(ABC):
         raise NotImplementedError
 
 
-class DisabledEmbeddingClient(EmbeddingClient):
-    async def embed_query(self, text: str) -> list[float] | None:
-        return None
-
-
-class OpenAIEmbeddingClient(EmbeddingClient):
+class BedrockMarengoEmbeddingClient(EmbeddingClient):
     def __init__(self, settings: Settings):
-        try:
-            from openai import AsyncOpenAI
-        except ImportError as exc:
-            raise RuntimeError("openai package is required when EMBEDDING_PROVIDER=openai") from exc
-
-        if not settings.openai_api_key:
-            raise ValueError("OPENAI_API_KEY is required when EMBEDDING_PROVIDER=openai")
         self.settings = settings
-        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
+        self.client = build_bedrock_runtime_client(settings)
 
     async def embed_query(self, text: str) -> list[float] | None:
         normalized = " ".join(text.split())
         if not normalized:
             return None
         trimmed = normalized[: self.settings.retrieval_query_max_chars]
-        response = await self.client.embeddings.create(model=self.settings.embedding_model, input=trimmed)
-        return response.data[0].embedding
+        payload = {
+            "inputType": "text",
+            "text": {
+                "inputText": trimmed,
+            },
+        }
+        response = await asyncio.to_thread(
+            self.client.invoke_model,
+            modelId=self.settings.embedding_model,
+            body=json.dumps(payload),
+            contentType="application/json",
+            accept="application/json",
+        )
+        body = json.loads(response["body"].read())
+        return _extract_embedding(body)
 
 
 def build_embedding_client(settings: Settings) -> EmbeddingClient:
-    if settings.use_embeddings:
-        return OpenAIEmbeddingClient(settings)
-    return DisabledEmbeddingClient()
+    return BedrockMarengoEmbeddingClient(settings)
+
+
+def _extract_embedding(payload: dict) -> list[float]:
+    data = payload.get("data")
+    if isinstance(data, dict) and isinstance(data.get("embedding"), list):
+        return data["embedding"]
+    if isinstance(data, list) and data and isinstance(data[0], dict) and isinstance(data[0].get("embedding"), list):
+        return data[0]["embedding"]
+    if isinstance(payload.get("embedding"), list):
+        return payload["embedding"]
+    raise ValueError("Bedrock embedding response did not include an embedding vector.")

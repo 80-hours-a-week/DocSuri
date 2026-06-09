@@ -17,13 +17,7 @@ from app.models import (
     TranslateRequest,
     TranslateResponse,
 )
-from app.repositories import (
-    DemoPaperRepository,
-    FallbackPaperRepository,
-    LocalPaperRepository,
-    PaperRepository,
-    PostgresPaperRepository,
-)
+from app.repositories import PostgresPaperRepository
 from app.services.embedding import build_embedding_client
 from app.services.glossary import GlossaryStore
 from app.services.llm import build_llm_client
@@ -45,13 +39,8 @@ STATIC_DIR = BASE_DIR / "static"
 async def lifespan(app: FastAPI):
     settings = get_settings()
     async with create_pool(settings) as pool:
-        if pool is None:
-            local_repository = LocalPaperRepository(_local_paper_dir(settings.local_paper_dir))
-            repository: PaperRepository = FallbackPaperRepository(local_repository, DemoPaperRepository())
-        else:
-            repository = PostgresPaperRepository(pool, settings)
         app.state.settings = settings
-        app.state.repository = repository
+        app.state.repository = PostgresPaperRepository(pool, settings)
         app.state.embedding = build_embedding_client(settings)
         app.state.llm = build_llm_client(settings)
         app.state.glossary = GlossaryStore()
@@ -62,15 +51,7 @@ app = FastAPI(title="DocSuri Summary & Translation API", version="0.1.0", lifesp
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
-def _local_paper_dir(value: str) -> Path:
-    path = Path(value)
-    if not path.is_absolute():
-        path = BASE_DIR / path
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def repository(request: Request) -> PaperRepository:
+def repository(request: Request) -> PostgresPaperRepository:
     return request.app.state.repository
 
 
@@ -80,14 +61,9 @@ def glossary(request: Request) -> GlossaryStore:
 
 async def retrieve_context(request: Request, paper_id: str, query_text: str):
     settings = request.app.state.settings
-    query_embedding = None
-    try:
-        query_embedding = await request.app.state.embedding.embed_query(query_text)
-    except Exception:
-        logger.exception("Embedding query failed; falling back to keyword chunk retrieval.")
+    query_embedding = await request.app.state.embedding.embed_query(query_text)
     return await repository(request).retrieve_relevant_chunks(
         paper_id=paper_id,
-        query_text=query_text,
         query_embedding=query_embedding,
         top_k=settings.retrieval_top_k,
     )
@@ -121,13 +97,13 @@ async def index() -> FileResponse:
 async def health(request: Request) -> dict[str, str]:
     settings = request.app.state.settings
     repo_type = type(request.app.state.repository).__name__
-    provider = "anthropic" if settings.use_anthropic else "mock"
-    embedding_provider = settings.embedding_provider if settings.use_embeddings else "none"
     return {
         "status": "ok",
         "repository": repo_type,
-        "llm_provider": provider,
-        "embedding_provider": embedding_provider,
+        "llm_provider": "aws-bedrock",
+        "llm_model": settings.anthropic_model,
+        "embedding_provider": "aws-bedrock",
+        "embedding_model": settings.embedding_model,
     }
 
 

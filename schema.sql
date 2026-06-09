@@ -18,7 +18,7 @@ create table if not exists paper_chunks (
     page int,
     paragraph int,
     chunk_text text not null,
-    embedding vector(1536),
+    embedding vector(512),
     metadata jsonb not null default '{}'::jsonb
 );
 

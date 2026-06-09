@@ -41,7 +41,7 @@ def resolve_source_span(paper: PaperDocument, selected_text: str | None, char_st
 def source_anchor_for_span(
     paper: PaperDocument,
     source_text: str,
-    fallback: str = "§0.0",
+    default_anchor: str = "§0.0",
     context_chunks: list[PaperChunk] | None = None,
 ) -> str:
     normalized_source = _normalize_for_match(source_text)
@@ -63,7 +63,7 @@ def source_anchor_for_span(
             return anchors[-1]
     for anchor in anchors_in_text(source_text):
         return anchor
-    return fallback
+    return default_anchor
 
 
 def mask_math(text: str) -> tuple[str, dict[str, str]]:

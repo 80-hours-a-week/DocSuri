@@ -61,7 +61,7 @@ class SummarySentence(BaseModel):
 
 class SummaryRequest(BaseModel):
     paper_id: str
-    session_id: str = "demo"
+    session_id: str = "default"
     length_preset: LengthPreset = LengthPreset.paragraph
     angle_preset: AnglePreset = AnglePreset.contribution
 
@@ -77,7 +77,7 @@ class SummaryResponse(BaseModel):
 
 class TranslateRequest(BaseModel):
     paper_id: str
-    session_id: str = "demo"
+    session_id: str = "default"
     section_id: str | None = None
     char_start: int | None = None
     char_end: int | None = None

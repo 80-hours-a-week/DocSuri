@@ -1,1 +1,1 @@
-"""DocSuri summary and translation demo API."""
+"""DocSuri summary and translation API."""
