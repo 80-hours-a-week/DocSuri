@@ -75,7 +75,9 @@ class TokenBucket:
 
 
 def _is_retryable(exc: BaseException) -> bool:
-    """Retry on transport errors and HTTP 429 / 5xx."""
+    """Retry on transient network errors and HTTP 429 / 5xx. Timeouts are not retried."""
+    if isinstance(exc, httpx.TimeoutException):
+        return False
     if isinstance(exc, httpx.TransportError):
         return True
     if isinstance(exc, httpx.HTTPStatusError):

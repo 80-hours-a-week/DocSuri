@@ -13,12 +13,16 @@ Returns a `NormalizedQuery` whose `for_arxiv()` string is what
 
 from __future__ import annotations
 
+import dataclasses
+import hashlib
+import html
+import json
 import logging
 import re
 import string
 from dataclasses import dataclass, field
 
-from app.container import llm as get_llm
+from app.container import cache as get_cache, llm as get_llm
 from app.infra.llm.protocol import CachedBlock, LLMRequest
 
 logger = logging.getLogger(__name__)
@@ -43,6 +47,9 @@ _FIELD_KEYWORDS: dict[str, str] = {
 }
 
 _PUNCT_TABLE = str.maketrans({c: " " for c in string.punctuation if c not in "._-"})
+
+# Allowed: ASCII alphanumeric, Korean syllables (가-힣), whitespace.
+_SANITIZE_RE = re.compile(r"[^a-zA-Z0-9가-힣\s]")
 
 
 @dataclass
@@ -71,6 +78,47 @@ class NormalizedQuery:
         cat_clause = " OR ".join(f"cat:{c}" for c in self.fields)
         return f"({term_clause}) AND ({cat_clause})"
 
+    def for_semantic_scholar(self) -> str:
+        """S2 Graph API plain-text `query` param."""
+        return self.canonical
+
+    def for_openalex(self) -> str:
+        """OpenAlex /works?search= plain-text param."""
+        return self.canonical
+
+    def for_pubmed(self) -> str:
+        """PubMed eSearch `term` param. Synonyms joined with OR for broader recall."""
+        terms = [self.canonical, *self.synonyms]
+        joined = " OR ".join(t for t in terms if t)
+        return joined or self.canonical
+
+    def for_crossref(self) -> str:
+        """CrossRef /works?query= plain-text param."""
+        return self.canonical
+
+    def to_json(self) -> str:
+        return json.dumps(dataclasses.asdict(self))
+
+    @classmethod
+    def from_json(cls, text: str) -> "NormalizedQuery":
+        return cls(**json.loads(text))
+
+
+def _expand_cache_key(clean: str) -> str:
+    return f"expand:{hashlib.sha256(clean.encode()).hexdigest()}"
+
+
+def _sanitize(query: str) -> str:
+    """Sanitize user input before LLM/external source delivery.
+
+    Order: truncate to 512 chars → HTML-escape → filter to allowed chars
+    (ASCII alphanumeric, Korean 가-힣, spaces) → normalise whitespace.
+    """
+    truncated = query[:512]
+    escaped = html.escape(truncated)
+    clean = _SANITIZE_RE.sub(" ", escaped)
+    return re.sub(r"\s+", " ", clean).strip()
+
 
 def _strip_punct(s: str) -> str:
     return re.sub(r"\s+", " ", s.translate(_PUNCT_TABLE)).strip()
@@ -92,12 +140,20 @@ async def normalize(query: str, *, expand: bool = False) -> NormalizedQuery:
     prompt; if it fails or returns an unparseable shape, we fall back to
     the rule-based result rather than raising.
     """
-    canonical = _strip_punct(query.lower())
+    clean = _sanitize(query)
+    canonical = _strip_punct(clean.lower())
     fields = _detect_fields(canonical)
-    nq = NormalizedQuery(raw=query, canonical=canonical, fields=fields)
+    nq = NormalizedQuery(raw=clean, canonical=canonical, fields=fields)
 
     if not expand:
         return nq
+
+    # Redis cache check — avoid redundant LLM calls for identical queries (TTL 6h).
+    cache_key = _expand_cache_key(clean)
+    cached = await get_cache().get(cache_key)
+    if cached:
+        logger.debug("normalizer.expand cache_hit key=%s", cache_key)
+        return NormalizedQuery.from_json(cached)
 
     try:
         resp = await get_llm().complete(
@@ -112,7 +168,7 @@ async def normalize(query: str, *, expand: bool = False) -> NormalizedQuery:
                         ),
                     )
                 ],
-                user_message=f"Query: {query}\nReturn synonyms:",
+                user_message=f"<query>{clean}</query>",
                 max_tokens=120,
                 temperature=0.1,
                 purpose="normalize",
@@ -120,6 +176,7 @@ async def normalize(query: str, *, expand: bool = False) -> NormalizedQuery:
         )
         nq.synonyms = _parse_synonyms(resp.text, exclude=canonical)
         nq.expanded = True
+        await get_cache().set(cache_key, nq.to_json(), ex=21600)  # TTL 6h
     except Exception:  # noqa: BLE001 — normalizer is best-effort
         logger.warning("normalizer LLM expansion failed, falling back", exc_info=True)
     return nq

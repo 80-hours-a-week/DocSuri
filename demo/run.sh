@@ -29,7 +29,9 @@ HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8000}"
 
 # --- Determine LLM mode (matches container.mode_label) ---------------------
-if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+if [[ -n "${AWS_BEDROCK_REGION:-}" ]]; then
+  MODE="live (Bedrock)"
+elif [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
   MODE="live (Claude)"
 else
   MODE="mock"

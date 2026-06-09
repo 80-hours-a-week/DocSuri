@@ -13,11 +13,11 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.domain.papers.models import PaperSummary
-from app.domain.papers.search import get_router
+from app.domain.papers.search import AllAdaptersFailedError, MultiDBRouter, get_router
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class SearchRequest(BaseModel):
 
 class SearchResponse(BaseModel):
     results: list[PaperSummary]
-    normalized: str  # the arXiv-syntax query actually fired
+    normalized: str  # sanitized, lowercased, depunctuated canonical query
     expanded: bool
     count: int
 
@@ -43,20 +43,35 @@ class SearchHealth(BaseModel):
 
 
 @router.post("/search", response_model=SearchResponse)
-async def post_search(req: SearchRequest) -> SearchResponse:
-    rows, nq = await get_router().search(
-        req.query, limit=req.limit, expand=req.expand
-    )
+async def post_search(
+    req: SearchRequest,
+    background_tasks: BackgroundTasks,
+    search_router: MultiDBRouter = Depends(get_router),
+) -> SearchResponse:
+    try:
+        rows, nq = await search_router.search(
+            req.query,
+            limit=req.limit,
+            expand=req.expand,
+            background_tasks=background_tasks,
+        )
+    except AllAdaptersFailedError:
+        raise HTTPException(
+            status_code=503,
+            detail="All search sources are currently unavailable. Please try again later.",
+        )
     return SearchResponse(
         results=rows,
-        normalized=nq.for_arxiv(),
+        normalized=nq.canonical,
         expanded=nq.expanded,
         count=len(rows),
     )
 
 
 @router.get("/search/health", response_model=SearchHealth)
-async def health() -> SearchHealth:
-    adapters = await get_router().healthcheck()
+async def health(
+    search_router: MultiDBRouter = Depends(get_router),
+) -> SearchHealth:
+    adapters = await search_router.healthcheck()
     status = "ok" if all(adapters.values()) else "degraded"
     return SearchHealth(status=status, adapters=adapters)

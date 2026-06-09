@@ -34,7 +34,7 @@ class Anchor(BaseModel):
 class PaperSummary(BaseModel):
     """Search result row — abstract-only view from #01a."""
 
-    id: str  # arxiv id or doi
+    id: str  # primary identifier (arxiv_id, doi, or source-native id)
     source: Literal["arxiv", "s2", "openalex", "crossref", "pubmed"] = "arxiv"
     title: str
     authors: list[str] = Field(default_factory=list)
@@ -43,6 +43,8 @@ class PaperSummary(BaseModel):
     venue: str | None = None
     pdf_url: str | None = None
     arxiv_url: str | None = None
+    doi: str | None = None       # bare DOI e.g. "10.1145/1234567"
+    arxiv_id: str | None = None  # arXiv short ID e.g. "2401.12345"
 
 
 class Chunk(BaseModel):
