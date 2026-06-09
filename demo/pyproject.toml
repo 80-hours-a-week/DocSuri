@@ -30,6 +30,7 @@ dependencies = [
   "tenacity>=9",
   "anthropic>=0.40",
   "python-multipart",
+  "pymupdf>=1.24",                            # provides `fitz` for app/infra/pdf/pymupdf_parser.py
   # Phase 0 stack — AGENTS.md §5.3 (SNS+SQS+Celery), §4.1 (Redis cache), §4.5 (SlowAPI inbound).
   "celery[redis]>=5.4",
   "redis>=5.2",
