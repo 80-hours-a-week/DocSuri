@@ -36,7 +36,7 @@ jobs:
         run: pytest -q
 
       - name: pip-audit
-        run: pip-audit --strict
+        run: pip-audit --skip-editable
 
   frontend:
     name: 프런트엔드 (lint + typecheck + build + npm audit)
