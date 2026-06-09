@@ -19,10 +19,9 @@ from xml.etree import ElementTree as ET
 import httpx
 
 from app.crosscutting.ratelimit.backoff import RateLimitedRetry, TokenBucket
+from app.crosscutting.verifier.port import verify_url
 
 logger = logging.getLogger(__name__)
-
-ARXIV_ENDPOINT = "https://export.arxiv.org/api/query"
 
 # Atom + arXiv namespaces (see arXiv API manual).
 _NS = {
@@ -57,13 +56,16 @@ class ArxivClient:
     transport. Caller owns the client's lifetime (e.g. FastAPI lifespan).
     """
 
+    ENDPOINT = "https://export.arxiv.org/api/query"
+    TIMEOUT = 15.0
+
     def __init__(
         self,
         client: httpx.AsyncClient | None = None,
         *,
         bucket: TokenBucket = _ARXIV_BUCKET,
     ) -> None:
-        self._client = client or httpx.AsyncClient(timeout=15.0)
+        self._client = client or httpx.AsyncClient(timeout=self.TIMEOUT)
         self._owns_client = client is None
         self._bucket = bucket
 
@@ -73,16 +75,24 @@ class ArxivClient:
 
     @RateLimitedRetry(max_attempts=3)
     async def _get(self, params: dict[str, Any]) -> str:
+        """Fetch Atom XML from arXiv.
+
+        Time: O(N) XML parse where N=max_results.
+        Rate limit: 3 req/s via _ARXIV_BUCKET; retried up to 3 times on transient errors.
+        Edge: SSRF check raises SSRFViolation before any network call.
+        """
+        verify_url(self.ENDPOINT)
         await self._bucket.acquire()
-        resp = await self._client.get(ARXIV_ENDPOINT, params=params)
+        resp = await self._client.get(self.ENDPOINT, params=params)
         resp.raise_for_status()
         return resp.text
 
     async def search(self, query: str, *, limit: int = 10) -> list[ArxivEntry]:
         """Run a `search_query` against arXiv and return parsed entries.
 
-        `query` is passed through to the arXiv `search_query` parameter as-is —
-        callers can include arXiv-specific syntax like `cat:cs.CL AND ti:foo`.
+        Time: O(N) where N=max_results (XML parse).
+        Rate limit: 3 req/s ceiling; 100 results max per request.
+        Edge: empty feed → returns []. `query` passed as-is; callers may use arXiv syntax.
         """
         params = {
             "search_query": query,
