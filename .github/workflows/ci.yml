@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (ruff + pytest + pip-audit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: demo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: demo/pyproject.toml
+
+      - name: Install (editable + dev extras)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Tests
+        run: pytest -q
+
+      - name: pip-audit
+        run: pip-audit --strict
+
+  frontend:
+    name: Frontend (lint + typecheck + build + npm audit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web-next
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install
+        run: npm install
+
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        env:
+          NEXTAUTH_SECRET: ci-placeholder
+        run: npm run build
+
+      - name: npm audit (prod only)
+        run: npm audit --omit=dev --audit-level=high
+
+  ruleset:
+    name: AGENTS.md ruleset sanity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject Temporal references (AGENTS.md §5.3)
+        # AGENTS.md §5.3 picks SNS+SQS+Celery as the single channel. If a PR
+        # reintroduces a Temporal dependency without amending §5.3 first,
+        # fail loudly so the rule and the code stay in sync.
+        run: |
+          if grep -RIn --exclude-dir=node_modules --exclude="*.md" -e "temporalio" -e "from temporal" demo web-next; then
+            echo "::error::Temporal import found — §5.3 prohibits this. Amend AGENTS.md or revert."
+            exit 1
+          fi
