@@ -37,9 +37,10 @@ jobs:
 
       - name: pip-audit
         # --skip-editable: the project itself is installed via `pip install -e`
-        # and isn't published to PyPI, so pip-audit can't query it. We still
-        # audit every resolved transitive dep.
-        run: pip-audit --strict --skip-editable
+        # and isn't published to PyPI. --strict was contradictory with this
+        # because the "marked as editable" warning becomes an error under
+        # --strict, so we drop --strict. Vuln detection still fails the job.
+        run: pip-audit --skip-editable
 
   frontend:
     name: Frontend (lint + typecheck + build + npm audit)
