@@ -1,0 +1,126 @@
+name: docsuri-demo
+
+# Phase 0 walking-skeleton compose — AGENTS.md §5 architecture mapped to local
+# containers. RDS/ElastiCache/SNS/SQS are kept Local-only here (LocalStack +
+# pgvector + redis); production swap-in happens in the EKS sprint.
+#
+# Services:
+#   postgres   — RDS stand-in. pgvector image bakes the extension in.
+#   redis      — ElastiCache stand-in. Celery broker + SlowAPI store + §4.1 cache.
+#   localstack — SNS/SQS local emulation for §5.3 messaging.
+#   api        — FastAPI app (this repo's `app.main:app`).
+#   worker     — Celery worker (default queue).
+#   beat       — Celery beat (#04 monitoring cron triggers).
+#
+# Bring up:   docker compose up --build
+# Reset state: docker compose down -v
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: docsuri
+      POSTGRES_PASSWORD: docsuri
+      POSTGRES_DB: docsuri
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docsuri -d docsuri"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  localstack:
+    image: localstack/localstack:3
+    environment:
+      SERVICES: sns,sqs,secretsmanager
+      DEBUG: "0"
+    ports:
+      - "4566:4566"
+    volumes:
+      - localstackdata:/var/lib/localstack
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:4566/_localstack/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://docsuri:docsuri@postgres:5432/docsuri
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["celery", "-A", "app.infra.celery.app", "worker", "-l", "INFO"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://docsuri:docsuri@postgres:5432/docsuri
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["celery", "-A", "app.infra.celery.app", "beat", "-l", "INFO"]
+    env_file: .env
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:
+  localstackdata:
