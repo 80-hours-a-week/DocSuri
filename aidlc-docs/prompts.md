@@ -194,6 +194,48 @@
 > upload to upstream according to the git flow. Make a PR to origin/develop.
 
 **조치**: `aidlc-docs/plans/git_flow_pr3_plan.md` 작성 → 승인 대기. PR #10 패턴(현재 브랜치 재사용)을 그대로 적용하여 4단계 실행 계획 + 부록 A 결정 4건.
+**완료**: 커밋 `d1b45d7` (11 파일, +1275/-29) → push 성공 → [PR #11](https://github.com/80-hours-a-week/DocSuri/pull/11) 생성. 동일 패턴(현재 브랜치 재사용)으로 4단계 모두 닫힘.
+
+---
+
+<a id="prompt-21"></a>
+## Prompt 21 — 2026-06-10
+
+> 승인 → 8단계(handoff 인계 갱신) 진행 + Inception 단계 종료 과정을 진행해줘. 머지는 내가 직접 할게.
+
+**결정 확정**: `units_plan.md` §7 리뷰 게이트 통과 → §8 후속 단계 연결 진행. PR #11 머지는 사용자 권한으로 분리 — 본 작업은 *문서 동결* 한정.
+**조치**: §7.1·7.2 닫기 → §8.1 (`handoff.md` §2 위험·§4 결정에 *닫는 unit* 컬럼 추가) → §8.2 (다음 설계 단계 입력 정렬, Inception 단계 종료 마커) → 완료.
+
+---
+
+<a id="prompt-22"></a>
+## Prompt 22 — 2026-06-10
+
+> now let's move back to the develop branch. the Construction stage will begin in another agent.
+
+**현 상태**: PR #11 머지 완료 → develop이 d1b45d7 내용을 포함. Working tree에 §8 Inception 종료 작업 4 파일(`git_flow_pr3_plan.md`, `units_plan.md`, `prompts.md`, `handoff.md`)이 d1b45d7 위에 modifications로 남아 있음.
+**조치**: `git fetch origin` → `git checkout develop` → `git pull --ff-only origin develop`. uncommitted 4 파일은 동일 base 동일 modifications라 충돌 없이 develop 워킹 트리로 이동. 다음 agent가 Construction 진입 시 이 4 파일을 *Inception 마지막 PR*로 마무리하거나 첫 Construction PR에 흡수할 수 있음.
+**실제 실행**: 처음 `git checkout develop`이 4 파일 modifications와 base 차이로 거부됨 → `stash push` → `checkout develop` → `pull --ff-only` → `stash pop`(충돌 0)으로 안전하게 이동.
+
+---
+
+<a id="prompt-23"></a>
+## Prompt 23 — 2026-06-10
+
+> A
+
+**결정 확정**: 옵션 A 채택 — 작은 *Inception 종료 PR*을 생성해 develop의 `handoff.md`에 *Inception 단계 종료* 마커를 박는다. 다음 agent의 출발선 깨끗화.
+**조치**: `aidlc-docs/plans/git_flow_pr4_plan.md` 작성 → 승인 대기. 새 브랜치 `feature/aidlc-inception-closure` 분기 권장 (이전 `feature/aidlc-inception-user-stories`는 PR #9·#10·#11 모두 머지되어 임무 완료).
+
+---
+
+<a id="prompt-24"></a>
+## Prompt 24 — 2026-06-10
+
+> 권장안 전부 채택 → 5.1부터 즉시 실행
+
+**결정 확정**: `git_flow_pr4_plan.md` 부록 A 4건 모두 권장안 채택 — 새 브랜치 `feature/aidlc-inception-closure` · 제외 6종 그대로 · 커밋 메시지 §3 초안 · PR 본문 §4 초안.
+**조치**: §5의 5.1~5.5 순차 실행.
 
 ---
 
