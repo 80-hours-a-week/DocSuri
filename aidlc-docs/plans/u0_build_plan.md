@@ -32,29 +32,29 @@
 
 ### Part A — 골격
 
-- [ ] **A1. 프로젝트 골격** — `backend/` + `pyproject.toml`(Python 3.12, fastapi·boto3·httpx·pydantic·pytest) + `.env.example`([NFR-SEC-03](../requirements/nfr.md#nfr-sec-03) — 키 평문 금지) + README(U0 §6 시연 방법).
-- [ ] **A2. 포트 인터페이스 + DTO** — `docsuri/u0/ports.py`: [component-model §2](../design-artifacts/component-model.md) 시그니처 그대로 7개 포트(Protocol) + `PaperHit`·`Completion`·`KoTranslation` 등 DTO(pydantic). **시그니처 임의 변경 0건** — 변경 필요 시 중단하고 사용자 확인(U0 §8 변경 정책).
-- [ ] **A3. 설정 로딩** — `docsuri/u0/config.py`: 환경 변수(리전 ap-northeast-1, 모델 ID, 테이블명, 어댑터 모드 mock/aws), 시작 시 검증.
+- [x] **A1. 프로젝트 골격** — `backend/` + pyproject(uv) + `.env.example` + README + 루트 README 신규 작성 완료.
+- [x] **A2. 포트 인터페이스 + DTO** — `docsuri/u0/ports.py`: 포트 7종(Protocol) + DTO 8종(pydantic). **시그니처 임의 변경 0건** 확인.
+- [x] **A3. 설정 로딩** — `docsuri/u0/config.py`: 도쿄 리전·모델 ID·S3 Vectors 버킷/인덱스·테이블·상한, mock/aws 모드 검증.
 
 ### Part B — 어댑터
 
-- [ ] **B1. Mock 어댑터 7종** — `docsuri/u0/adapters/mock/`: 결정적 임베딩(해시 기반 vector) · 코퍼스 fixture 검색(필터 지원) · canned 한국어 LLM 응답(페르소나별 톤 분기) · **시간 주입식** in-memory TTL 캐시(25h 경과 시뮬 가능) · JSONL Telemetry · Glossary fixture · Citation fixture.
-- [ ] **B2. AWS 어댑터** — `docsuri/u0/adapters/aws/`: Bedrock InvokeModel(Cohere v3 임베딩) · Bedrock Converse(`global.` Haiku 4.5) · KB Retrieve(메타데이터 필터) · DynamoDB TTL 캐시 · DynamoDB Glossary · CloudWatch EMF Telemetry — ADR §12 매핑 1:1. 자격 증명 없으면 통합 테스트 자동 skip.
-- [ ] **B3. CostGuard + HttpClientPolicy** — 월 누적·상한 검사(거부 정책은 실행 중 사용자 확인 1회) · httpx 지수 백오프 1·2·4초 최대 3회([NFR-NET-02](../requirements/nfr.md#nfr-net-02)).
-- [ ] **B4. CitationApi** — Semantic Scholar oneHop + 캐시(24h) + 폴백(스테일 허용 → 빈 상태) — [R4](../story-artifacts/handoff.md#r-4) 대응.
+- [x] **B1. Mock 어댑터 7종** — `adapters/mock.py`: 결정적 임베딩·코퍼스 검색(연도·분야 필터)·한국어 canned LLM(페르소나 톤 분기)·시간 주입식 TTL 캐시·ListTelemetry·Glossary fixture·Citation fixture·익명 세션(URL 직렬화 왕복).
+- [x] **B2. AWS 어댑터** — `adapters/aws.py`: Bedrock InvokeModel(Cohere v3)·Converse(`global.` Haiku 4.5)·**S3 Vectors query_vectors 직접 조회**(KB Retrieve는 텍스트 전용이라 search(vec,…) 시그니처와 부정합 — ADR-D2 결과 3의 문서화된 직접 API 경로 채택, 적재는 KB 관리)·DynamoDB TTL 캐시·Glossary·비용 누적·CloudWatch EMF. 실호출 검증은 환경 구축 라운드(ADR §14).
+- [x] **B3. CostGuard + HttpClientPolicy** — **하드 거부 확정(사용자, 2026-06-11)**: 상한 도달 시 한국어 안내와 함께 예외. 백오프 1·2·4s + 4회차 한국어 알림.
+- [x] **B4. CitationApi** — Semantic Scholar 1-hop + 24h 캐시 + 실패 시 빈 결과 폴백(R4).
 
 ### Part C — 정적 자산
 
-- [ ] **C-A1. 시드 코퍼스** — 수집 스크립트(`scripts/build_corpus.py`) + `data/corpus_seed.json` (100편, 제목·저자·연도·인용수·분야 태그·초록).
-- [ ] **C-A2. Glossary 시드** — `data/glossary_seed.json` (50개 초안, 팀 검토 표시).
+- [x] **C-A1. 시드 코퍼스** — `scripts/build_corpus.py` 실행: **arXiv 실수집 100편 저장**. Semantic Scholar 배치는 거부(레이트 리밋) → 인용수는 결정적 placeholder, 파일에 `citations_source` 표기 (재실행으로 보강 가능).
+- [x] **C-A2. Glossary 시드** — `data/glossary_seed.json` 50개 초안 작성, "팀 검토 필요" 표시.
 
 ### Part D — 검증 (U0 §6과 1:1)
 
-- [ ] **D1. pytest 스위트** — ① embed→vector ② search(v, k=5)→PaperHit 5건 ③ complete(persona='pro', budget=2000)→한국어 200~400자 ④ 캐시 set→25h 후 miss(시간 주입) ⑤ Telemetry 출력에 latency·tokens·cache_hit 키 ⑥ CostGuard 상한 거부.
-- [ ] **D2. 시연 스크립트** — `scripts/u0_demo.py`: U0 §6 체크리스트를 순서대로 실행·출력 (mock 모드, 자격 증명 불필요).
-- [ ] **D3. 비용 시뮬 보고** — [ADR §13](../design-artifacts/architecture_decision_record.md)이 이미 충족(월 ~$45) — U0 §6 마지막 항목은 참조로 닫음.
-- [ ] **D4. U0 §6 체크리스트 갱신** — unit-u0-foundation.md의 빌드 가능 정의 체크박스를 갱신할지 사용자 확인 (동결 문서 — handoff §6 절차 대상 여부 포함).
-- [ ] **D5. 사용자 최종 리뷰** — 코드·테스트 결과 제출, 피드백 반영, 커밋(C6 전략대로).
+- [x] **D1. pytest 스위트** — **14/14 통과** (빌드 가능 6항목 + 필터·페르소나 톤·URL 왕복·용어집·인용·CostGuard·백오프).
+- [x] **D2. 시연 스크립트** — `scripts/u0_demo.py` 실행: **6/6 통과** (mock 모드, 자격 증명 불필요).
+- [x] **D3. 비용 시뮬 보고** — ADR §13 참조로 닫음 (월 ~$45 ≤ $50) + 데모 출력에 누적치 표시.
+- [ ] **D4. U0 §6 체크리스트 갱신** — unit-u0-foundation.md(동결)의 빌드 가능 정의 체크박스 갱신 여부 — **사용자 확인 대기**.
+- [ ] **D5. 사용자 최종 리뷰** — 코드·테스트 결과 제출 완료(커밋·stacked PR), **피드백 대기**.
 
 ---
 

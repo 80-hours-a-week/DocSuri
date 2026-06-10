@@ -1,0 +1,1778 @@
+{
+ "source": "arXiv API (cs.LG|cs.CL|cs.CV|cs.AI, submittedDate desc)",
+ "citations_source": "placeholder(deterministic-hash)",
+ "count": 100,
+ "papers": [
+  {
+   "id": "2606.11190",
+   "title": "When to Align, When to Predict: A Phase Diagram for Multimodal Learning",
+   "authors": [
+    "Ilay Kamai",
+    "Hugues Van Assel",
+    "Aviv Regev",
+    "Hagai B. Perets",
+    "Randall Balestriero"
+   ],
+   "year": 2026,
+   "citations": 288,
+   "field_tags": [
+    "cs.LG"
+   ],
+   "abstract_len": 1767
+  },
+  {
+   "id": "2606.11189",
+   "title": "A Unifying Lens on Supervised Fine-Tuning Through Target Distribution Design",
+   "authors": [
+    "Tong Xie",
+    "Yuanhao Ban",
+    "Yunqi Hong",
+    "Sohyun An",
+    "Yihang Chen",
+    "Cho-Jui Hsieh"
+   ],
+   "year": 2026,
+   "citations": 252,
+   "field_tags": [
+    "cs.AI",
+    "cs.CL",
+    "cs.LG"
+   ],
+   "abstract_len": 1258
+  },
+  {
+   "id": "2606.11188",
+   "title": "ARM: An AutoRegressive Large Multimodal Model with Unified Discrete Representations",
+   "authors": [
+    "Junke Wang",
+    "Xiao Wang",
+    "Jiacheng Pan",
+    "Xuefeng Hu",
+    "Feng Li",
+    "Jingxiang Sun",
+    "Chaorui Deng",
+    "Zilong Chen"
+   ],
+   "year": 2026,
+   "citations": 147,
+   "field_tags": [
+    "cs.CV"
+   ],
+   "abstract_len": 1446
+  },
+  {
+   "id": "2606.11187",
+   "title": "Next Forcing: Causal World Modeling with Multi-Chunk Prediction",
+   "authors": [
+    "Gangwei Xu",
+    "Qihang Zhang",
+    "Jiaming Zhou",
+    "Xing Zhu",
+    "Yujun Shen",
+    "Xin Yang",
+    "Yinghao Xu"
+   ],
+   "year": 2026,
+   "citations": 321,
+   "field_tags": [
+    "cs.CV"
+   ],
+   "abstract_len": 1914
+  },
+  {
+   "id": "2606.11186",
+   "title": "AnyMod-LLVE: Low-Light Video Enhancement with Modality-Agnostic Inference",
+   "authors": [
+    "Hangfeng Liang",
+    "Yutao Hu",
+    "Yanhan Hu",
+    "Xiaohan Wu",
+    "Wenqi Shao",
+    "Ying Fu"
+   ],
+   "year": 2026,
+   "citations": 415,
+   "field_tags": [
+    "cs.CV"
+   ],
+   "abstract_len": 1310
+  },
+  {
+   "id": "2606.11182",
+   "title": "EEVEE: Towards Test-time Prompt Learning in the Real World for Self-Improving Agents",
+   "authors": [
+    "Weixian Xu",
+    "Shilong Liu",
+    "Mengdi Wang"
+   ],
+   "year": 2026,
+   "citations": 173,
+   "field_tags": [
+    "cs.AI",
+    "cs.LG"
+   ],
+   "abstract_len": 1143
+  },
+  {
+   "id": "2606.11180",
+   "title": "Lip Forcing: Few-Step Autoregressive Diffusion for Real-time Lip Synchronization",
+   "authors": [
+    "Paul Hyunbin Cho",
+    "Jinhyuk Jang",
+    "SeokYoung Lee",
+    "Joungbin Lee",
+    "Siyoon Jin",
+    "Heeseong Shin",
+    "Jung Yi",
+    "Yunjin Park"
+   ],
+   "year": 2026,
+   "citations": 259,
+   "field_tags": [
+    "cs.CV"
+   ],
+   "abstract_len": 1407
+  },
+  {
+   "id": "2606.11176",
+   "title": "Data Journalist Agent: Transforming Data into Verifiable Multimodal Stories",
+   "authors": [
+    "Kevin Qinghong Lin",
+    "Batu EI",
+    "Yuhong Shi",
+    "Pan Lu",
+    "Philip Torr",
+    "James Zou"
+   ],
+   "year": 2026,
+   "citations": 137,
+   "field_tags": [
+    "cs.CL",
+    "cs.CV",
+    "cs.CY",
+    "cs.HC"
+   ],
+   "abstract_len": 1863
+  },
+  {
+   "id": "2606.11173",
+   "title": "The Role of Feedback Alignment in Self-Distillation",
+   "authors": [
+    "Semih Kara",
+    "Oğuzhan Ersoy"
+   ],
+   "year": 2026,
+   "citations": 139,
+   "field_tags": [
+    "cs.AI",
+    "cs.LG"
+   ],
+   "abstract_len": 1443
+  },
+  {
+   "id": "2606.11172",
+   "title": "Predicting Future Behaviors in Reasoning Models Enables Better Steering",
+   "authors": [
+    "Evgenii Kortukov",
+    "Piotr Komorowski",
+    "Florian Klein",
+    "Paula Engl",
+    "Gabriele Sarti",
+    "Seong Joon Oh",
+    "Sebastian Lapuschkin",
+    "Wojciech Samek"
+   ],
+   "year": 2026,
+   "citations": 323,
+   "field_tags": [
+    "cs.LG"
+   ],
+   "abstract_len": 1214
+  },
+  {
+   "id": "2606.11171",
+   "title": "Algorithmic and Minimax Complexities in Kernel Bandits",
+   "authors": [
+    "Yunbei Xu"
+   ],
+   "year": 2026,
+   "citations": 180,
+   "field_tags": [
+    "cond-mat.stat-mech",
+    "cs.IT",
+    "cs.LG",
+    "math.OC",
+    "math.ST"
+   ],
+   "abstract_len": 1128
+  },
+  {
+   "id": "2606.11169",
+   "title": "Piper: A Programmable Distributed Training System",
+   "authors": [
+    "Megan Frisella",
+    "Shubham Tiwari",
+    "Andy Ruan",
+    "Yi Pan",
+    "Parker Gustafson",
+    "Mat Jacob",
+    "Gilbert Bernstein",
+    "Stephanie Wang"
+   ],
+   "year": 2026,
+   "citations": 352,
+   "field_tags": [
+    "cs.AI",
+    "cs.DC"
+   ],
+   "abstract_len": 1524
+  },
+  {
+   "id": "2606.11167",
+   "title": "Multi-Faceted Interactivity Alignment in Full-Duplex Speech Models",
+   "authors": [
+    "Atsumoto Ohashi",
+    "Neil Zeghidour",
+    "Alexandre Défossez",
+    "Eugene Kharitonov"
+   ],
+   "year": 2026,
+   "citations": 476,
+   "field_tags": [
+    "cs.CL",
+    "eess.AS"
+   ],
+   "abstract_len": 1276
+  },
+  {
+   "id": "2606.11166",
+   "title": "Flaws in the LLM Automation Narrative",
+   "authors": [
+    "George Perrett",
+    "Javae Elliott",
+    "Jennifer Hill",
+    "Marc Scott"
+   ],
+   "year": 2026,
+   "citations": 34,
+   "field_tags": [
+    "cs.AI",
+    "stat.OT"
+   ],
+   "abstract_len": 1204
+  },
+  {
+   "id": "2606.11164",
+   "title": "ReasonAlloc: Hierarchical Decoding-Time KV Cache Budget Allocation for Reasoning Models",
+   "authors": [
+    "Wenhao Liu",
+    "Hao Shi",
+    "Yunhe Li",
+    "Weizhi Fei",
+    "Xiangyuan Wang",
+    "Mengzhe Ruan",
+    "Hanxu Hou",
+    "Peisong Wang"
+   ],
+   "year": 2026,
+   "citations": 1,
+   "field_tags": [
+    "cs.AI"
+   ],
+   "abstract_len": 1476
+  },
+  {
+   "id": "2606.11162",
+   "title": "COGENT: Continuous Graph Emulators with Neural Ordinary Differential Equations for Long-Term Physical Forecasting",
+   "authors": [
+    "Zesheng Liu",
+    "Maryam Rahnemoonfar"
+   ],
+   "year": 2026,
+   "citations": 251,
+   "field_tags": [
+    "cs.LG"
+   ],
+   "abstract_len": 1836
+  },
+  {
+   "id": "2606.11156",
+   "title": "Itô maps for any-step SDEs",
+   "authors": [
+    "Zhengkai Pan",
+    "Peter Potaptchik",
+    "Wenxi Yao",
+    "Michael S. Albergo",
+    "Jakiw Pidstrigach"
+   ],
+   "year": 2026,
+   "citations": 407,
+   "field_tags": [
+    "cs.LG",
+    "stat.ML"
+   ],
+   "abstract_len": 874
+  },
+  {
+   "id": "2606.11155",
+   "title": "Mean Flow Distillation: Robust and Stable Distillation for Flow Matching Models",
+   "authors": [
+    "An Zhao",
+    "Shengyuan Zhang",
+    "Zhongjian Sun",
+    "Yixiang Zhou",
+    "Zejian Li",
+    "Ling Yang",
+    "Tianrun Chen",
+    "Lingyun Sun"
+   ],
+   "year": 2026,
+   "citations": 308,
+   "field_tags": [
+    "cs.CV"
+   ],
+   "abstract_len": 1262
+  },
+  {
+   "id": "2606.11152",
+   "title": "P3D-Bench: Benchmarking MLLMs for Parametric 3D Generation and Structural Reasoning",
+   "authors": [
+    "Yikang Yang",
+    "Zhanpeng Hu",
+    "Youtian Lin",
+    "Mengqi Zhou",
+    "Jingxi Xu",
+    "Feihu Zhang",
+    "Jiaheng Liu",
+    "Yao Yao"
+   ],
+   "year": 2026,
+   "citations": 81,
+   "field_tags": [
+    "cs.CV"
+   ],
+   "abstract_len": 1801
+  },
+  {
+   "id": "2606.11150",
+   "title": "ABC-Bench: An Agentic Bio-Capabilities Benchmark for Biosecurity",
+   "authors": [
+    "Andrew Bo Liu",
+    "Samira Nedungadi",
+    "Bryce Cai",
+    "Alex Kleinman",
+    "Harmon Bhasin",
+    "Seth Donoughe"
+   ],
+   "year": 2026,
+   "citations": 229,
+   "field_tags": [
+    "cs.AI",
+    "cs.CY"
+   ],
+   "abstract_len": 1324
+  },
+  {
+   "id": "2606.11149",
+   "title": "Efficiently Learning Drifting Halfspaces with Massart Noise",
+   "authors": [
+    "Mingchen Ma",
+    "Guyang Cao",
+    "Jelena Diakonikolas",
+    "Ilias Diakonikolas"
+   ],
+   "year": 2026,
+   "citations": 463,
+   "field_tags": [
+    "cs.LG"
+   ],
+   "abstract_len": 1207
+  },
+  {
+   "id": "2606.11148",
+   "title": "MOFA-VTON: More Fashion Possibilities with Fine-Grained Adaptations in Virtual Try-On",
+   "authors": [
+    "Xiaoyu Han",
+    "Chenyang Wang",
+    "Jing Wang",
+    "Shunyuan Zheng",
+    "Quanling Meng",
+    "Shengping Zhang"
+   ],
+   "year": 2026,
+   "citations": 328,
+   "field_tags": [
+    "cs.CV"
+   ],
+   "abstract_len": 1660
+  },
+  {
+   "id": "2606.11144",
+   "title": "OncoTraj: a public benchmark for longitudinal resistance prediction in EGFR-mutant non-small-cell lung cancer on osimertinib",
+   "authors": [
+    "Abhijoy Sarkar",
+    "Aarchi Singh Thakur"
+   ],
+   "year": 2026,
+   "citations": 88,
+   "field_tags": [
+    "cs.LG",
+    "q-bio.GN",
+    "q-bio.QM",
+    "stat.AP"
+   ],
+   "abstract_len": 1735
+  },
+  {
+   "id": "2606.11140",
+   "title": "Data assimilation for subsurface flow using latent diffusion model parameterization: performance of ensemble-Kalman and Monte Carlo techniques",
+   "authors": [
+    "Guido Di Federico",
+    "Wenchao Teng",
+    "Louis J. Durlofsky"
+   ],
+   "year": 2026,
+   "citations": 461,
+   "field_tags": [
+    "cs.AI",
+    "cs.LG",
+    "physics.geo-ph",
+    "stat.AP",
+    "stat.ML"
+   ],
+   "abstract_len": 1870
+  },
+  {
+   "id": "2606.11138",
+   "title": "First-Order Trajectory Matching: Fast Ensemble Predictions of Chaotic, Turbulent, Stochastic Systems",
+   "authors": [
+    "Shreya Jha",
+    "Timo Schorlepp",
+    "Nicholas Geissler",
+    "Jules Berman",
+    "Benjamin Peherstorfer"
+   ],
+   "year": 2026,
+   "citations": 237,
+   "field_tags": [
+    "cs.LG",
+    "math.NA"
+   ],
+   "abstract_len": 958
+  },
+  {
+   "id": "2606.11131",
+   "title": "UniPET: a universal network for high-quality PET image denoising across varied dose reduction factors",
+   "authors": [
+    "Zhiwen Yang",
+    "Yang Zhou",
+    "Haowei Chen",
+    "Hui Zhang",
+    "Dan Zhao",
+    "Bingzheng Wei",
+    "Yan Xu"
+   ],
+   "year": 2026,
+   "citations": 403,
+   "field_tags": [
+    "cs.CV"
+   ],
+   "abstract_len": 1882
+  },
+  {
+   "id": "2606.11130",
+   "title": "Robust Regression of General ReLUs with Queries",
+   "authors": [
+    "Ilias Diakonikolas",
+    "Daniel M. Kane",
+    "Mingchen Ma"
+   ],
+   "year": 2026,
+   "citations": 31,
+   "field_tags": [
+    "cs.LG"
+   ],
+   "abstract_len": 1163
+  },
+  {
+   "id": "2606.11129",
+   "title": "WorldOlympiad: Can Your World Model Survive a Triathlon?",
+   "authors": [
+    "Yuke Zhao",
+    "Wangbo Zhao",
+    "Weijie Wang",
+    "Zeyu Zhang",
+    "Dakai An",
+    "Akide Liu",
+    "Yinghao Yu",
+    "Jiasheng Tang"
+   ],
+   "year": 2026,
+   "citations": 169,
+   "field_tags": [
+    "cs.CV"
+   ],
+   "abstract_len": 1670
+  },
+  {
+   "id": "2606.11127",
+   "title": "Provenance-Grounded Gating and Adaptive Recovery in Synthetic Post-Training Data Curation",
+   "authors": [
+    "Soham Bhattacharjee",
+    "Karun Sharma",
+    "Vinay Kumar Sankarapu",
+    "Pratinav Seth"
+   ],
+   "year": 2026,
+   "citations": 226,
+   "field_tags": [
+    "cs.AI",
+    "cs.CL"
+   ],
+   "abstract_len": 1066
+  },
+  {
+   "id": "2606.11125",
+   "title": "DMT: Demographic Conditioning, Morphology-Enhanced Transformer for Cuffless Blood Pressure Estimation from PPG Signals",
+   "authors": [
+    "Yidan Shen",
+    "Neville Mathew",
+    "Maham Rahimi",
+    "Deependra Dhakal",
+    "George Zouridakis",
+    "Xin Fu",
+    "Renjie Hu"
+   ],
+   "year": 2026,
+   "citations": 133,
+   "field_tags": [
+    "cs.LG",
+    "eess.SP"
+   ],
+   "abstract_len": 1489
+  },
+  {
+   "id": "2606.11123",
+   "title": "Overcoming Rank Collapse in Feedback Alignment",
+   "authors": [
+    "Gauthier Boeshertz",
+    "Razvan Pascanu",
+    "Claudia Clopath"
+   ],
+   "year": 2026,
+   "citations": 186,
+   "field_tags": [
+    "cs.LG"
+   ],
+   "abstract_len": 1555
+  },
+  {
+   "id": "2606.11120",
+   "title": "Monte Carlo Pass Search: Using Trajectory Generation for 3D Counterfactual Pass Evaluation in Football",
+   "authors": [
+    "Andrew Kang",
+    "Priya Narasimhan"
+   ],
+   "year": 2026,
+   "citations": 200,
+   "field_tags": [
+    "cs.AI",
+    "cs.CV"
+   ],
+   "abstract_len": 1333
+  },
+  {
+   "id": "2606.11119",
+   "title": "TRACE: A Unified Rollout Budget Allocation Framework for Efficient Agentic Reinforcement Learning",
+   "authors": [
+    "Heming Zou",
+    "Qi Wang",
+    "Yun Qu",
+    "Yuhang Jiang",
+    "Lizhou Cai",
+    "Yixiu Mao",
+    "Ru Peng",
+    "Xin Xu"
+   ],
+   "year": 2026,
+   "citations": 484,
+   "field_tags": [
+    "cs.AI",
+    "cs.CL",
+    "cs.LG"
+   ],
+   "abstract_len": 1761
+  },
+  {
+   "id": "2606.11118",
+   "title": "Data-Driven Dynamic Assortment in Online Platforms: Learning about Two Sides",
+   "authors": [
+    "Rahul Roy",
+    "Nur Sunar",
+    "Jayashankar M. Swaminathan"
+   ],
+   "year": 2026,
+   "citations": 183,
+   "field_tags": [
+    "cs.LG",
+    "math.OC",
+    "math.PR",
+    "stat.AP",
+    "stat.ML"
+   ],
+   "abstract_len": 1281
+  },
+  {
+   "id": "2606.11117",
+   "title": "Towards Autonomous Accelerator Design: FPGA Accelerator Generation with SECDA",
+   "authors": [
+    "Vinamra Sharma",
+    "Xingjian Fu",
+    "Jude Haris",
+    "José Cano"
+   ],
+   "year": 2026,
+   "citations": 395,
+   "field_tags": [
+    "cs.AI",
+    "cs.AR",
+    "cs.PF"
+   ],
+   "abstract_len": 1677
+  },
+  {
+   "id": "2606.11116",
+   "title": "Designed by Journalists, but Is It for Readers? Rethinking AI Disclosures and Transparency in News",
+   "authors": [
+    "Pooja Prajod"
+   ],
+   "year": 2026,
+   "citations": 182,
+   "field_tags": [
+    "cs.AI",
+    "cs.CY",
+    "cs.HC"
+   ],
+   "abstract_len": 1252
+  },
+  {
+   "id": "2606.11107",
+   "title": "Multimodal Brain Tumour Classification Using Feature Fusion",
+   "authors": [
+    "Wajih ul Islam",
+    "Muhammad Yaqoob",
+    "Javed Ali Khan",
+    "Volker Steuber"
+   ],
+   "year": 2026,
+   "citations": 249,
+   "field_tags": [
+    "cs.CV",
+    "cs.LG",
+    "eess.IV"
+   ],
+   "abstract_len": 931
+  },
+  {
+   "id": "2606.11106",
+   "title": "FADA: Accessible fetal ultrasound interpretation and annotation with a selectively distilled unified vision-language model",
+   "authors": [
+    "Mahmood Alzubaidi",
+    "Uzair Shah",
+    "Raden Muaz",
+    "Ines Abbes",
+    "Nader Mohammed",
+    "Abdullatif Magram",
+    "Khalid Alyafei",
+    "Mowafa Househ"
+   ],
+   "year": 2026,
+   "citations": 255,
+   "field_tags": [
+    "cs.AI",
+    "cs.CV"
+   ],
+   "abstract_len": 1917
+  },
+  {
+   "id": "2606.11105",
+   "title": "PhantomBench: Benchmarking the Non-existential Threat of Language Models",
+   "authors": [
+    "Haeji Jung",
+    "Hila Gonen"
+   ],
+   "year": 2026,
+   "citations": 432,
+   "field_tags": [
+    "cs.AI",
+    "cs.CL"
+   ],
+   "abstract_len": 1251
+  },
+  {
+   "id": "2606.11104",
+   "title": "Limitations of Learning Tanh Neural Networks with Finite Precision",
+   "authors": [
+    "Philipp Grohs",
+    "Matěj Trödler"
+   ],
+   "year": 2026,
+   "citations": 270,
+   "field_tags": [
+    "cs.LG",
+    "stat.ML"
+   ],
+   "abstract_len": 850
+  },
+  {
+   "id": "2606.11098",
+   "title": "Do Transformers Actually Help Intrusion Detection? A Temporal Sequence Evaluation on CIC-IDS2017",
+   "authors": [
+    "Zach Moczkodan",
+    "Hany Ragab"
+   ],
+   "year": 2026,
+   "citations": 139,
+   "field_tags": [
+    "cs.CR",
+    "cs.LG"
+   ],
+   "abstract_len": 1841
+  },
+  {
+   "id": "2606.11096",
+   "title": "IDEAL: In-DEpth ALignment Makes A Discrete Representation AutoEncoder",
+   "authors": [
+    "Yitong Chen",
+    "Zijie Diao",
+    "Junke Wang",
+    "Lingyu Kong",
+    "Yixuan Ren",
+    "Bo He",
+    "Yu-Gang Jiang",
+    "Zuxuan Wu"
+   ],
+   "year": 2026,
+   "citations": 166,
+   "field_tags": [
+    "cs.CV"
+   ],
+   "abstract_len": 1340
+  },
+  {
+   "id": "2606.11092",
+   "title": "RoboNaldo: Accurate, Stable and Powerful Humanoid Soccer Shooting via Motion-Guided Curriculum Reinforcement Learning",
+   "authors": [
+    "Yichao Zhong",
+    "Yidan Lu",
+    "Yuhang Lu",
+    "Tianyang Tang",
+    "Haoguang Mai",
+    "Yixuan Pan",
+    "Tianyu Li",
+    "Li Chen"
+   ],
+   "year": 2026,
+   "citations": 153,
+   "field_tags": [
+    "cs.AI",
+    "cs.RO"
+   ],
+   "abstract_len": 1602
+  },
+  {
+   "id": "2606.11087",
+   "title": "Test-Time Gradient Guidance of Flow Policies in Reinforcement Learning",
+   "authors": [
+    "Zhiyuan Zhou",
+    "Andy Peng",
+    "Charles Xu",
+    "Qiyang Li",
+    "Tobias Springenberg",
+    "Kevin Frans",
+    "Sergey Levine"
+   ],
+   "year": 2026,
+   "citations": 153,
+   "field_tags": [
+    "cs.AI",
+    "cs.LG"
+   ],
+   "abstract_len": 1595
+  },
+  {
+   "id": "2606.11082",
+   "title": "The Shibboleth Effect: Auditing the Cross-Lingual Distributional Skew of Large Language Models",
+   "authors": [
+    "Hakan Mehmetcik"
+   ],
+   "year": 2026,
+   "citations": 9,
+   "field_tags": [
+    "cs.CL",
+    "cs.CY"
+   ],
+   "abstract_len": 1641
+  },
+  {
+   "id": "2606.11081",
+   "title": "Unifying Local Communications and Local Updates for LLM Pretraining",
+   "authors": [
+    "Pietro Cagnasso",
+    "Eugene Belilovsky",
+    "Edouard Oyallon"
+   ],
+   "year": 2026,
+   "citations": 175,
+   "field_tags": [
+    "cs.AI",
+    "cs.LG"
+   ],
+   "abstract_len": 1275
+  },
+  {
+   "id": "2606.11079",
+   "title": "VISTA: A Versatile Interactive User Simulation Toolkit for Agent Evaluation",
+   "authors": [
+    "Yunan Lu",
+    "Ryan Shea",
+    "Yusen Zhang",
+    "Zhou Yu"
+   ],
+   "year": 2026,
+   "citations": 27,
+   "field_tags": [
+    "cs.CL"
+   ],
+   "abstract_len": 1449
+  },
+  {
+   "id": "2606.11078",
+   "title": "A History-Aware Visually Grounded Critic for Computer Use Agents",
+   "authors": [
+    "Jaewoo Lee",
+    "Zaid Khan",
+    "Archiki Prasad",
+    "Justin Chih-Yao Chen",
+    "Supriyo Chakraborty",
+    "Kartik Balasubramaniam",
+    "Sambit Sahu",
+    "Elias Stengel-Eskin"
+   ],
+   "year": 2026,
+   "citations": 226,
+   "field_tags": [
+    "cs.AI",
+    "cs.CL",
+    "cs.CV"
+   ],
+   "abstract_len": 1535
+  },
+  {
+   "id": "2606.11075",
+   "title": "Exploring the Design Space of Reward Backpropagation for Flow Matching",
+   "authors": [
+    "Ruoyu Wang",
+    "Boye Niu",
+    "Xiangxin Zhou",
+    "Yushi Huang",
+    "Tongliang Liu",
+    "Chi Zhang"
+   ],
+   "year": 2026,
+   "citations": 356,
+   "field_tags": [
+    "cs.LG"
+   ],
+   "abstract_len": 1659
+  },
+  {
+   "id": "2606.11074",
+   "title": "Modeling Complex Behaviors: Multi-Personality Composition and Dynamic Switching in Vision-Language Models",
+   "authors": [
+    "Peiqi Jia",
+    "Haonan Jia",
+    "Ziqi Miao",
+    "Linkang Du",
+    "Yuntao Wang",
+    "Zhou Su"
+   ],
+   "year": 2026,
+   "citations": 424,
+   "field_tags": [
+    "cs.AI",
+    "cs.CL"
+   ],
+   "abstract_len": 1121
+  },
+  {
+   "id": "2606.11070",
+   "title": "T1-Bench: Benchmarking Multi-Scenario Agents in Real-World Domains",
+   "authors": [
+    "Genta Indra Winata",
+    "Amartya Chakraborty",
+    "Yuzhen Lin",
+    "Swasthi P Rao",
+    "Shikhhar Siingh",
+    "Houhan Lu",
+    "Nadia Bathaee",
+    "Sriharsha Hatwar"
+   ],
+   "year": 2026,
+   "citations": 479,
+   "field_tags": [
+    "cs.AI",
+    "cs.CL"
+   ],
+   "abstract_len": 1479
+  },
+  {
+   "id": "2606.11066",
+   "title": "GRAFT: Gain-Recalibrated Adapters for Transformer-Based Neural Population Activity Modeling",
+   "authors": [
+    "Xiangsheng Ge",
+    "Yang Xie"
+   ],
+   "year": 2026,
+   "citations": 332,
+   "field_tags": [
+    "cs.LG",
+    "q-bio.NC"
+   ],
+   "abstract_len": 1339
+  },
+  {
+   "id": "2606.11063",
+   "title": "CIAware-Bench: Benchmarking Control Intervention Awareness Across Frontier LLMs",
+   "authors": [
+    "Joachim Schaeffer",
+    "Thomas Jiralerspong",
+    "Alexander Panfilov",
+    "Guillaume Lajoie",
+    "Jonas Geiping",
+    "Yoshua Bengio",
+    "Roland S. Zimmermann"
+   ],
+   "year": 2026,
+   "citations": 10,
+   "field_tags": [
+    "cs.AI",
+    "cs.LG"
+   ],
+   "abstract_len": 1415
+  },
+  {
+   "id": "2606.11057",
+   "title": "Flexible Kernels for Protein Property Prediction",
+   "authors": [
+    "Martin Jankowiak",
+    "Yerdos Ordabayev",
+    "Rudraksh Tuwani",
+    "Henry N. Ward",
+    "Hunter Nisonoff",
+    "James M. McFarland",
+    "Gevorg Grigoryan"
+   ],
+   "year": 2026,
+   "citations": 172,
+   "field_tags": [
+    "cs.LG",
+    "q-bio.BM",
+    "stat.ML"
+   ],
+   "abstract_len": 900
+  },
+  {
+   "id": "2606.11052",
+   "title": "Attention Amnesia in Hybrid LLMs: When CoT Fine-Tuning Breaks Long-Range Recall, and How to Fix It",
+   "authors": [
+    "Xinyu Zhou",
+    "Boyu Zhu",
+    "Yi Xu",
+    "Zhiwei Li",
+    "Yingfa Chen",
+    "Huiming Wang",
+    "Zhijiang Guo"
+   ],
+   "year": 2026,
+   "citations": 267,
+   "field_tags": [
+    "cs.CL"
+   ],
+   "abstract_len": 1254
+  },
+  {
+   "id": "2606.11046",
+   "title": "Does Reasoning Preserve Alignment? On the Trustworthiness of Large Reasoning Models",
+   "authors": [
+    "Prajakta Kini",
+    "Avinash Reddy",
+    "Souradip Chakraborty",
+    "Satya Sai Srinath Namburi GNVV",
+    "Furong Huang",
+    "Amrit Singh Bedi",
+    "Alvaro Velasquez"
+   ],
+   "year": 2026,
+   "citations": 192,
+   "field_tags": [
+    "cs.CL"
+   ],
+   "abstract_len": 1345
+  },
+  {
+   "id": "2606.11045",
+   "title": "What Fits (Into Few Tokens) Doesn't Overfit: Compression and Generalization in ML Research Agents",
+   "authors": [
+    "Martin Andres Bertran",
+    "Aaron Roth",
+    "Zhiwei Steven Wu"
+   ],
+   "year": 2026,
+   "citations": 31,
+   "field_tags": [
+    "cs.AI",
+    "cs.LG"
+   ],
+   "abstract_len": 1441
+  },
+  {
+   "id": "2606.11044",
+   "title": "Generalized Conformal Predictive Systems Under Distributional Shifts",
+   "authors": [
+    "Jef Jonkers",
+    "Johanna Ziegel"
+   ],
+   "year": 2026,
+   "citations": 80,
+   "field_tags": [
+    "cs.LG",
+    "stat.ML"
+   ],
+   "abstract_len": 877
+  },
+  {
+   "id": "2606.11042",
+   "title": "Workflow-GYM: Towards Long-Horizon Evaluation of Computer-use Agentic tasks in Real-World Professional Fields",
+   "authors": [
+    "Liya Zhu",
+    "Jingzhe Ding",
+    "Jian Zhang",
+    "Jianbo Xue",
+    "Shihao Liang",
+    "Ge Zhang",
+    "Xiang Gao",
+    "Qingshui Gu"
+   ],
+   "year": 2026,
+   "citations": 436,
+   "field_tags": [
+    "cs.AI"
+   ],
+   "abstract_len": 1464
+  },
+  {
+   "id": "2606.11033",
+   "title": "AuRA: Internalizing Audio Understanding into LLMs as LoRA",
+   "authors": [
+    "Bo Cheng",
+    "Lei Shi",
+    "Zhanyu Ma",
+    "Yuan Wu",
+    "Jun Xu",
+    "Jiuchong Gao",
+    "Jinghua Hao",
+    "Renqing He"
+   ],
+   "year": 2026,
+   "citations": 474,
+   "field_tags": [
+    "cs.AI",
+    "cs.CL",
+    "cs.LG"
+   ],
+   "abstract_len": 1403
+  },
+  {
+   "id": "2606.11032",
+   "title": "U-TTT: Towards Generalizable PET Image Denoising via Test-Time Training",
+   "authors": [
+    "Zhiwen Yang",
+    "Jiayin Li",
+    "Hao Lu",
+    "Hui Zhang",
+    "Zihua Wang",
+    "Bingzheng Wei",
+    "Yan Xu"
+   ],
+   "year": 2026,
+   "citations": 240,
+   "field_tags": [
+    "cs.CV"
+   ],
+   "abstract_len": 1415
+  },
+  {
+   "id": "2606.11025",
+   "title": "Flow-DPPO: Divergence Proximal Policy Optimization for Flow Matching Models",
+   "authors": [
+    "Bowen Ping",
+    "Xiangxin Zhou",
+    "Penghui Qi",
+    "Minnan Luo",
+    "Liefeng Bo",
+    "Tianyu Pang"
+   ],
+   "year": 2026,
+   "citations": 5,
+   "field_tags": [
+    "cs.LG"
+   ],
+   "abstract_len": 1444
+  },
+  {
+   "id": "2606.11023",
+   "title": "Generative Archetype-Grounded Item Representations for Sequential Recommendation",
+   "authors": [
+    "Yifan Li",
+    "Jiahong Liu",
+    "Xinni Zhang",
+    "Hao Chen",
+    "Yankai Chen",
+    "Wenhao Yu",
+    "Jianting Chen",
+    "Irwin King"
+   ],
+   "year": 2026,
+   "citations": 10,
+   "field_tags": [
+    "cs.CL",
+    "cs.IR",
+    "cs.LG"
+   ],
+   "abstract_len": 1722
+  },
+  {
+   "id": "2606.11019",
+   "title": "Diffusion Forcing Planner: History-Annealed Planning with Time-Dependent Guidance for Autonomous Driving",
+   "authors": [
+    "Zehan Zhang",
+    "Neng Zhang",
+    "Yaoyi Li",
+    "Jia Cai",
+    "Zhiling Wang"
+   ],
+   "year": 2026,
+   "citations": 434,
+   "field_tags": [
+    "cs.AI",
+    "cs.RO"
+   ],
+   "abstract_len": 1164
+  },
+  {
+   "id": "2606.11018",
+   "title": "Measuring Human Value Expression in Social Media Texts: Calibrated LLM Annotation and Encoder Transfer",
+   "authors": [
+    "Maria Milkova",
+    "Maksim Rudnev"
+   ],
+   "year": 2026,
+   "citations": 74,
+   "field_tags": [
+    "cs.CL"
+   ],
+   "abstract_len": 1296
+  },
+  {
+   "id": "2606.11017",
+   "title": "Data-Driven Runway and Taxiway Exits Prediction of Landing Aircraft: A Case Study at Hartsfield-Jackson Atlanta International Airport",
+   "authors": [
+    "Alex Porcayo",
+    "Yutian Pang",
+    "Maria Thomas",
+    "John-Paul Clarke"
+   ],
+   "year": 2026,
+   "citations": 108,
+   "field_tags": [
+    "cs.LG",
+    "eess.AS"
+   ],
+   "abstract_len": 1638
+  },
+  {
+   "id": "2606.11016",
+   "title": "Superficial Beliefs in LLM Decision-Making",
+   "authors": [
+    "Gabriel Freedman",
+    "Francesca Toni"
+   ],
+   "year": 2026,
+   "citations": 200,
+   "field_tags": [
+    "cs.AI"
+   ],
+   "abstract_len": 1372
+  },
+  {
+   "id": "2606.11015",
+   "title": "Structure from Reasoning, Numbers from Search: On-Premise Open LLMs as Structural Priors for Coupled MIMO Controller Tuning",
+   "authors": [
+    "Jiaxuan Chen",
+    "Haonan Li",
+    "Yang Shu"
+   ],
+   "year": 2026,
+   "citations": 496,
+   "field_tags": [
+    "cs.AI"
+   ],
+   "abstract_len": 1914
+  },
+  {
+   "id": "2606.11012",
+   "title": "An Uncertainty Estimation Framework for Dose Accumulation in Adaptive Radiotherapy: Application to CBCT-Guided Radiotherapy for Cervical Cancer",
+   "authors": [
+    "Cedric Hemon",
+    "Delphine Lebret",
+    "Jean-Claude Nunes",
+    "Valentin Boussot",
+    "Karine Peignaux",
+    "Nathalie Mesgouez-Nebout",
+    "Chantal Hanzen",
+    "Antoine Simon"
+   ],
+   "year": 2026,
+   "citations": 369,
+   "field_tags": [
+    "cs.CV"
+   ],
+   "abstract_len": 1856
+  },
+  {
+   "id": "2606.11009",
+   "title": "Who Brought Easter Eggs to Eid? Auditing Cultural Translation of Math Word Problems Across Diverse Languages and Regions",
+   "authors": [
+    "Parisa Suchdev",
+    "Juniper Lovato"
+   ],
+   "year": 2026,
+   "citations": 248,
+   "field_tags": [
+    "cs.CL",
+    "cs.CY"
+   ],
+   "abstract_len": 1836
+  },
+  {
+   "id": "2606.11007",
+   "title": "Understanding and mitigating the risks of OpenClaw for non-technical users: A practical guide with Skill",
+   "authors": [
+    "Junchang Zheng",
+    "Junfeng Tan",
+    "Jialiang Lin"
+   ],
+   "year": 2026,
+   "citations": 335,
+   "field_tags": [
+    "cs.AI",
+    "cs.CR",
+    "cs.SE"
+   ],
+   "abstract_len": 1667
+  },
+  {
+   "id": "2606.11001",
+   "title": "IPSM-Bench: A New Intermediate Phase Segmentation Benchmark in Microstructure Images of Zinc-Based Absorbable Biomaterials",
+   "authors": [
+    "Jinglin Xu",
+    "Shangyan Zhao",
+    "Jiabo Wang",
+    "Xinghong Mu",
+    "Yulong Lei",
+    "Jiacheng Zhang",
+    "Hongbo Sun",
+    "Yageng Li"
+   ],
+   "year": 2026,
+   "citations": 64,
+   "field_tags": [
+    "cs.CV"
+   ],
+   "abstract_len": 1378
+  },
+  {
+   "id": "2606.10989",
+   "title": "Null-Space Constrained Low-Rank Adaptation for Response-Specified Large Language Model Unlearning",
+   "authors": [
+    "Bocheng Ju",
+    "Jianhua Wang",
+    "Chengliang Liu",
+    "Xiaolin Chang"
+   ],
+   "year": 2026,
+   "citations": 152,
+   "field_tags": [
+    "cs.AI"
+   ],
+   "abstract_len": 1820
+  },
+  {
+   "id": "2606.10988",
+   "title": "AnimaSpark: A Feed-Forward Method for Animating Arbitrary 3D Objects",
+   "authors": [
+    "Yiming Zhao",
+    "Haoyu Sun",
+    "Aoyu Wang"
+   ],
+   "year": 2026,
+   "citations": 427,
+   "field_tags": [
+    "cs.CV",
+    "cs.GR"
+   ],
+   "abstract_len": 1511
+  },
+  {
+   "id": "2606.10979",
+   "title": "Bellman-Taylor Score Decoding for Markov Decision Processes with State-Dependent Feasible Action Sets",
+   "authors": [
+    "Yi Chen",
+    "Rushuai Yang",
+    "Qiang Chen",
+    " Dongyan",
+    " Huo"
+   ],
+   "year": 2026,
+   "citations": 141,
+   "field_tags": [
+    "cs.AI"
+   ],
+   "abstract_len": 1184
+  },
+  {
+   "id": "2606.10975",
+   "title": "Learning Doubly Sparse Explicitly Conditioned Transforms",
+   "authors": [
+    "Tudor Pistol"
+   ],
+   "year": 2026,
+   "citations": 131,
+   "field_tags": [
+    "cs.LG",
+    "eess.SP",
+    "math.OC"
+   ],
+   "abstract_len": 1833
+  },
+  {
+   "id": "2606.10972",
+   "title": "Optimizing 2D Input Representations and Sub-phase Fusion Strategies for Differential Diagnosis of Asthma and COPD Using CNN- and GRU-Based Networks",
+   "authors": [
+    "Ipek Sen",
+    "Ozgur Ozdemir",
+    "Elena Battini Sonmez"
+   ],
+   "year": 2026,
+   "citations": 136,
+   "field_tags": [
+    "cs.AI",
+    "eess.AS"
+   ],
+   "abstract_len": 1917
+  },
+  {
+   "id": "2606.10968",
+   "title": "Beyond Uniform Token-Level Trust Region in LLM Reinforcement Learning",
+   "authors": [
+    "Renjie Mao",
+    "Xiangxin Zhou",
+    "Lvfang Tao",
+    "Yixin Ding",
+    "Yu Shi",
+    "Yongguang Lin",
+    "Yuheng Wu",
+    "Honglin Zhu"
+   ],
+   "year": 2026,
+   "citations": 264,
+   "field_tags": [
+    "cs.AI",
+    "cs.LG"
+   ],
+   "abstract_len": 1449
+  },
+  {
+   "id": "2606.10967",
+   "title": "Quo Vadis, Visual In-Context Learning? A Unified Benchmark Across Domains and Tasks",
+   "authors": [
+    "Pradnya Halady",
+    "Jiale Wei",
+    "Zdravko Marinov",
+    "Alexander Jaus",
+    "Simon Reiß"
+   ],
+   "year": 2026,
+   "citations": 97,
+   "field_tags": [
+    "cs.CV"
+   ],
+   "abstract_len": 1136
+  },
+  {
+   "id": "2606.10959",
+   "title": "Population-Aware Physics-Informed Neural Particle Flow for Bayesian Update",
+   "authors": [
+    "Batu Candan",
+    "Simone Servadio"
+   ],
+   "year": 2026,
+   "citations": 241,
+   "field_tags": [
+    "cs.LG"
+   ],
+   "abstract_len": 1538
+  },
+  {
+   "id": "2606.10956",
+   "title": "Mind the Gap: Can Frontier LLMs Pass a Standardized Office Proficiency Exam?",
+   "authors": [
+    "Tengchao Lv",
+    "Dongdong Zhang",
+    "Jiayu Ding",
+    "Yilin Jia",
+    "Yuzhong Zhao",
+    "Yupan Huang",
+    "Wenshan Wu",
+    "Xiangyang Zhou"
+   ],
+   "year": 2026,
+   "citations": 462,
+   "field_tags": [
+    "cs.AI",
+    "cs.CL"
+   ],
+   "abstract_len": 1350
+  },
+  {
+   "id": "2606.10953",
+   "title": "Architect-Ant: Editable Automatic Furnishing of Architectural Floor Plans",
+   "authors": [
+    "Fedor Rodionov",
+    "Aleksandar Cvejic",
+    "Michael Birsak",
+    "John Femiani",
+    "Peter Wonka"
+   ],
+   "year": 2026,
+   "citations": 317,
+   "field_tags": [
+    "cs.AI",
+    "cs.CV"
+   ],
+   "abstract_len": 1613
+  },
+  {
+   "id": "2606.10949",
+   "title": "Recalling Too Well: Sycophancy Evaluation and Mitigation in Memory-Augmented Models",
+   "authors": [
+    "Shelly Bensal",
+    "Axel Magnuson",
+    "Aparna Balagopalan",
+    "Daniel M. Bikel"
+   ],
+   "year": 2026,
+   "citations": 460,
+   "field_tags": [
+    "cs.AI"
+   ],
+   "abstract_len": 1029
+  },
+  {
+   "id": "2606.10944",
+   "title": "Express Language Modeling",
+   "authors": [
+    "Albert Gong",
+    "Annabelle Michael Carrell",
+    "Raaz Dwivedi",
+    "Lester Mackey"
+   ],
+   "year": 2026,
+   "citations": 37,
+   "field_tags": [
+    "cs.DS",
+    "cs.LG",
+    "math.ST",
+    "stat.ME",
+    "stat.ML"
+   ],
+   "abstract_len": 782
+  },
+  {
+   "id": "2606.10942",
+   "title": "Generative Explainability for Next-Generation Networks: LLM-Augmented XAI with Mutual Feature Interactions",
+   "authors": [
+    "Kiarash Rezaei",
+    "Omran Ayoub",
+    "Sebastian Troia",
+    "Francesco Lelli",
+    "Paolo Monti",
+    "Carlos Natalino"
+   ],
+   "year": 2026,
+   "citations": 465,
+   "field_tags": [
+    "cs.AI",
+    "cs.LG",
+    "cs.NI"
+   ],
+   "abstract_len": 1262
+  },
+  {
+   "id": "2606.10940",
+   "title": "Democratising Camera Trap AI: An Open-Source Model for Detecting UK Mammals",
+   "authors": [
+    "Paul Fergus",
+    "Philip Stephens",
+    "Russell A. Hill",
+    "Lee Oliver",
+    "Katie Appleby",
+    "Sarah Beatham",
+    "Naomi Davies Walsh",
+    "Stuart Nixon"
+   ],
+   "year": 2026,
+   "citations": 464,
+   "field_tags": [
+    "cs.AI",
+    "cs.CV",
+    "cs.LG"
+   ],
+   "abstract_len": 1612
+  },
+  {
+   "id": "2606.10939",
+   "title": "PENet+: A Lightweight Residual Transformer Framework for Efficient Image Steganalysis",
+   "authors": [
+    "Jincheol AN",
+    "Dongsu Kim",
+    "Haneol Jang",
+    "YoungJoon Yoo"
+   ],
+   "year": 2026,
+   "citations": 177,
+   "field_tags": [
+    "cs.CV"
+   ],
+   "abstract_len": 1879
+  },
+  {
+   "id": "2606.10938",
+   "title": "A Systematic Approach for Selecting Trajectories for Data Augmentation",
+   "authors": [
+    "Adam Nordling"
+   ],
+   "year": 2026,
+   "citations": 126,
+   "field_tags": [
+    "cs.LG"
+   ],
+   "abstract_len": 1847
+  },
+  {
+   "id": "2606.10937",
+   "title": "Provenance Tracking in AI Compilers through the Lens of Coalgebra",
+   "authors": [
+    "Zilu Tian",
+    "Liying Liu"
+   ],
+   "year": 2026,
+   "citations": 267,
+   "field_tags": [
+    "cs.AI",
+    "cs.DB"
+   ],
+   "abstract_len": 1006
+  },
+  {
+   "id": "2606.10935",
+   "title": "CLP: Collocation-Length Prediction for Zero-Loss Adaptive Multi-Token Inference",
+   "authors": [
+    "Xuezhen Xie",
+    "Zhiqiang Zhou"
+   ],
+   "year": 2026,
+   "citations": 387,
+   "field_tags": [
+    "cs.AI",
+    "cs.LG"
+   ],
+   "abstract_len": 1689
+  },
+  {
+   "id": "2606.10934",
+   "title": "WorldKernel: A World Model is the Coupling Kernel of Admissible Possible Worlds",
+   "authors": [
+    "Fabio Rovai"
+   ],
+   "year": 2026,
+   "citations": 324,
+   "field_tags": [
+    "cs.AI"
+   ],
+   "abstract_len": 1745
+  },
+  {
+   "id": "2606.10933",
+   "title": "Frontier Coding Agents Use Metaprogramming to Adapt to Unfamiliar Programming Languages",
+   "authors": [
+    "Aman Sharma",
+    "Sushrut Thorat",
+    "Paras Chopra"
+   ],
+   "year": 2026,
+   "citations": 306,
+   "field_tags": [
+    "cs.AI"
+   ],
+   "abstract_len": 1779
+  },
+  {
+   "id": "2606.10931",
+   "title": "It Takes One to Bias Them All: Breaking Bad with One-Shot GRPO",
+   "authors": [
+    "Naihao Deng",
+    "Yilun Zhu",
+    "Naichen Shi",
+    "Clayton Scott",
+    "Rada Mihalcea"
+   ],
+   "year": 2026,
+   "citations": 497,
+   "field_tags": [
+    "cs.CL"
+   ],
+   "abstract_len": 742
+  },
+  {
+   "id": "2606.10929",
+   "title": "Recoverable but Not Stationary:Local Linear Structures in Weights and Activations",
+   "authors": [
+    "Irina Piontkovskaia",
+    "Sergey Nikolenko"
+   ],
+   "year": 2026,
+   "citations": 400,
+   "field_tags": [
+    "cs.AI",
+    "cs.LG"
+   ],
+   "abstract_len": 1301
+  },
+  {
+   "id": "2606.10928",
+   "title": "A Constrained Natural-Language Interface for Variational Multi-Physics Finite Element Simulations in FEniCS",
+   "authors": [
+    "Nilay Upadhyay",
+    "Wesley F. Reinhart"
+   ],
+   "year": 2026,
+   "citations": 353,
+   "field_tags": [
+    "cs.AI",
+    "cs.CE",
+    "cs.LG",
+    "physics.comp-ph"
+   ],
+   "abstract_len": 1908
+  },
+  {
+   "id": "2606.10921",
+   "title": "Trace Only What You Need: Structure-Aware On-Demand Hypergraph Memory for Long-Document Question Answering",
+   "authors": [
+    "Xiangjun Zai",
+    "Xingyu Tan",
+    "Chen Chen",
+    "Xiaoyang Wang",
+    "Wenjie Zhang"
+   ],
+   "year": 2026,
+   "citations": 299,
+   "field_tags": [
+    "cs.CL"
+   ],
+   "abstract_len": 1355
+  },
+  {
+   "id": "2606.10918",
+   "title": "Task Robustness via Re-Labelling Vision-Action Robot Data",
+   "authors": [
+    "Artur Kuramshin",
+    "Özgür Aslan",
+    "Cyrus Neary",
+    "Glen Berseth"
+   ],
+   "year": 2026,
+   "citations": 479,
+   "field_tags": [
+    "cs.LG",
+    "cs.RO"
+   ],
+   "abstract_len": 1442
+  },
+  {
+   "id": "2606.10917",
+   "title": "Role-Agent: Bootstrapping LLM Agents via Dual-Role Evolution",
+   "authors": [
+    "Xucong Wang",
+    "Ziyu Ma",
+    "Shidong Yang",
+    "Tongwen Huang",
+    "Pengkun Wang",
+    "Yong Wang",
+    "Xiangxiang Chu"
+   ],
+   "year": 2026,
+   "citations": 1,
+   "field_tags": [
+    "cs.AI"
+   ],
+   "abstract_len": 1100
+  },
+  {
+   "id": "2606.10916",
+   "title": "Range Penalization: Theoretical Insights with Applications in Federated Learning",
+   "authors": [
+    "Yiyuan She",
+    "Zhaojun Hu",
+    "Yifan Sun"
+   ],
+   "year": 2026,
+   "citations": 165,
+   "field_tags": [
+    "cs.LG",
+    "math.ST",
+    "stat.ME",
+    "stat.ML"
+   ],
+   "abstract_len": 910
+  },
+  {
+   "id": "2606.10913",
+   "title": "Conservation Laws from Data Symmetry in Neural Networks",
+   "authors": [
+    "Jakob Galley",
+    "Vahid Shahverdi",
+    "Axel Flinth"
+   ],
+   "year": 2026,
+   "citations": 210,
+   "field_tags": [
+    "cs.LG",
+    "stat.ML"
+   ],
+   "abstract_len": 760
+  }
+ ]
+}
