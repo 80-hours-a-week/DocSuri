@@ -142,10 +142,10 @@ aidlc-docs/
 
 ## 5. 실행 단계
 
-- [ ] **5.1** §2의 11개 파일을 **명시적 경로**로 `git add` → 단일 커밋 작성. (현재 브랜치 그대로 사용)
-- [ ] **5.2** `origin feature/aidlc-inception-user-stories`로 push (이미 추적 설정됨)
-- [ ] **5.3** `gh pr create` (base: develop, head: 동일 feature 브랜치, 본문 §4 초안 사용)
-- [ ] **5.4** 본 계획서 §1·§5에 결과 메모 추가 (커밋 SHA, PR URL) + `prompts.md` Prompt 19에 완료 줄
+- [x] **5.1** §2의 11개 파일을 **명시적 경로**로 `git add` → 단일 커밋 작성. ✅ → 커밋 `d1b45d7` · 11 파일 · +1275 / -29 줄
+- [x] **5.2** `origin feature/aidlc-inception-user-stories`로 push (이미 추적 설정됨) ✅ → `0ba0a22..d1b45d7`
+- [x] **5.3** `gh pr create` (base: develop, head: 동일 feature 브랜치, 본문 §4 초안 사용) ✅ → [PR #11](https://github.com/80-hours-a-week/DocSuri/pull/11)
+- [x] **5.4** 본 계획서 §1·§5에 결과 메모 추가 (커밋 SHA, PR URL) + `prompts.md` Prompt 19에 완료 줄 ✅
 
 ---
 
