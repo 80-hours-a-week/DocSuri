@@ -121,11 +121,11 @@ aidlc-docs/
 
 ## 5. 실행 단계
 
-- [ ] **5.1** `feature/aidlc-inception-user-stories` 생성 + 체크아웃 (분기 기준 develop)
-- [ ] **5.2** `aidlc-docs/` 트리 전체를 단일 커밋으로 stage + commit
-- [ ] **5.3** `origin`에 push (`-u`로 추적 설정)
-- [ ] **5.4** `gh pr create`로 PR 생성 (base: develop, head: feature/aidlc-inception-user-stories)
-- [ ] **5.5** PR URL을 사용자에게 보고 + `prompts.md` 갱신
+- [x] **5.1** `feature/aidlc-inception-user-stories` 생성 + 체크아웃 (분기 기준 develop) ✅
+- [x] **5.2** `aidlc-docs/` 트리 전체를 단일 커밋으로 stage + commit ✅ → 커밋 `7575fc3` · 11 파일 · +1458 줄
+- [x] **5.3** `origin`에 push (`-u`로 추적 설정) ✅
+- [x] **5.4** `gh pr create`로 PR 생성 (base: develop, head: feature/aidlc-inception-user-stories) ✅ → [PR #9](https://github.com/80-hours-a-week/DocSuri/pull/9)
+- [x] **5.5** PR URL을 사용자에게 보고 + `prompts.md` 갱신 ✅
 
 ---
 

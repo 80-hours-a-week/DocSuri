@@ -139,10 +139,11 @@
 ## 7. 사용자 리뷰 게이트
 
 - [x] **7.1** 위 산출물 일체를 사용자에게 리뷰 요청한다.  
-  - 사용자 피드백: Prompt 4 (E7 비포함 사유 점검) + Prompt 5 (원안 유지 결정).
+  - 사용자 피드백: [Prompt 10](../prompts.md#prompt-10) (모바일 검토 요청) → [Prompt 11](../prompts.md#prompt-11) (즉시 반영, 권장값 채택) → [Prompt 12](../prompts.md#prompt-12) (옵션 1 통과).
 - [x] **7.2** 피드백 반영 후 스토리 파일을 동결(freeze)한다.  
-  - 동결: `personas.md`, `user_stories.md`, `story_index.md`, `coverage_matrix.md`, `epics.md`(E7 사유 정정 후), `nfr.md`.
-  - 정밀화 항목(SP 8 분해, Could 처분 등)은 **다음 단계 입력**으로 `handoff.md`에 이월.
+  - 반영: `mobile_review_plan.md` A1~A8 + 후속 2건 일괄 적용.
+  - 동결 대상: `personas.md`, `user_stories.md`, `story_index.md`, `coverage_matrix.md`, `epics.md`, `nfr.md`.
+  - 정밀화 항목(SP 8 분해, Mobile ⚠️ 5건, Could 처분, NFR-COST 재검증 등)은 **다음 단계 입력**으로 `handoff.md` §2 위험·§4 결정에 이월.
 
 ---
 

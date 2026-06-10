@@ -77,6 +77,8 @@
 **결정 확정**: `id_linking_plan.md` 부록 A 권장안 전부 채택 — 명시 HTML 앵커(2.A) · 소문자+하이픈(3.A) · 셀/문단당 첫 등장만 링크(4.A).
 **조치**: 7개 파일에 **64개 정의 앵커** 삽입 + 6개 파일의 참조를 링크로 변환. `personas`(2) + `prompts`(7) + `epics`(7) + `nfr`(22) + `user_stories`(14) + `handoff`(12) = 64. 깨진 링크 없음(작성 시점 정합). 자동 grep 점검은 bash 제한으로 불가, 수기 검증으로 갈음.
 
+> **사후 주의**: 본 청구는 *작성 시점* 정합이며, 후속 Prompt 10·11·12(모바일 검토 반영)로 NFR 키가 22→32로 늘고 `handoff.md` 구조가 재작성되어 일부 청구가 stale. Prompt 13(F1) 결정에 따라 *받아들임*.
+
 ---
 
 <a id="prompt-8"></a>
@@ -94,4 +96,88 @@
 > 권장안 전부 채택
 
 **결정 확정**: `git_flow_pr_plan.md` 부록 A 권장안 4개 전부 채택.
-**조치**: `feature/aidlc-inception-user-stories` 브랜치 생성 → `aidlc-docs/` 단일 커밋 → `origin` push → develop 대상 PR 생성.
+**조치**: `feature/aidlc-inception-user-stories` 브랜치 생성 → `aidlc-docs/` 단일 커밋 → `origin` push → develop 대상 PR 생성. 결과: commit `7575fc3` + [PR #9](https://github.com/80-hours-a-week/DocSuri/pull/9).
+
+> **사후 주의**: PR #9는 본 시점까지의 산출물만 포함. 후속 Prompt 10·11·12(모바일 검토 반영)로 발생한 변경(`mobile_review_plan.md` 신설, `nfr.md` 10개 키 추가, 스토리 5건 AC 수정, `handoff.md` 재작성)은 PR #9에 미포함. Prompt 13(F1) 결정에 따라 *받아들임* — 후속 PR이 필요하면 별도 계획서로 처리한다.
+
+---
+
+<a id="prompt-10"></a>
+## Prompt 10 — 2026-06-10
+
+> 모바일 환경을 고려해서 산출물을 검토해줘.
+
+**조치**: 7단계 리뷰의 부속 검토. `personas.md`, `epics.md`, `nfr.md`, `user_stories.md`, `coverage_matrix.md` 5개 산출물을 모바일 디바이스 사용 시나리오 관점에서 점검 → 변경 후보 목록 도출(A1~A8) → 변경 계획 수립 여부 사용자 결정 요청.
+
+---
+
+<a id="prompt-11"></a>
+## Prompt 11 — 2026-06-10
+
+> 즉시 반영해줘.
+
+**결정 확정**: 옵션 1(즉시 반영 계획서 작성 + 일괄 반영) 채택. 5개 결정 모두 권장값 채택.
+- 반응형 브레이크포인트: **360 / 768 / 1280**
+- 모바일 4G P95 검색 응답: **< 5초**
+- 모바일 결과 카드 우선 메타: **제목 · 연도 · 유사도**
+- US-TRACE-01 모바일 거동: **간소화 리스트 + 노드 검색**
+- 오프라인 거동: **읽기 전용 캐시 24h**
+
+**조치**: `aidlc-docs/plans/mobile_review_plan.md` 작성 → A1~A8 일괄 반영 → 사용자 승인 게이트(7단계) 재정렬.
+**완료**: A1~A8 + 후속 2건 모두 반영. INVEST 표에 Mobile 축(M) 추가. NFR 매핑 표·NFR 인용 분포 갱신. 7단계 검토 요청을 사용자에게 제출.
+
+---
+
+<a id="prompt-12"></a>
+## Prompt 12 — 2026-06-10
+
+> 옵션 1로 진행해줘
+
+**결정 확정**: 모바일 반영 결과 7단계 통과 → 스토리·NFR·페르소나 동결 → 8단계(인계 노트) 진행. Mobile ⚠️ 5건은 *디자인 단계*의 open risk로 이월.
+**조치**: `aidlc-docs/story-artifacts/handoff.md` 작성 → `user_stories_plan.md` 7·8단계 + `mobile_review_plan.md` 마지막 항목 클로즈 → Inception › User Stories 단계 동결.
+
+> **사후 주의**: 본 단계의 `handoff.md` 작성은 별도 흐름(Prompt 5·6·7)의 `handoff.md`(결정 ID `d-*` 6건 + 정밀화 ID `o-*` 5건 + `sec-change-log` 1건 포함)를 **전면 재작성으로 덮어씀**. Prompt 13(F1) 결정에 따라 *받아들임* — 현재 디스크의 R1~R7/D1~D10 구조가 정본.
+
+---
+
+<a id="prompt-13"></a>
+## Prompt 13 — 2026-06-10
+
+> F1로 진행해줘.
+
+**결정 확정**: 본 세션 후반의 모바일 검토 흐름(원래 본 세션에서 Prompt 4·5·6으로 기록)을 **Prompt 10·11·12로 재할당**. `prompts.md` 헤더 번호 충돌 해소가 본 결정의 유일한 대상. 다른 충돌(handoff.md 덮어쓰기, NFR 키 카운트 stale, PR #9와 그 이후 변경 사이 격차)은 *현재 디스크가 정본이라는 전제로 받아들임*.
+**조치**:
+1. `prompts.md` 시간순 재정렬 + 모바일 흐름 헤더 10·11·12로 변경, `prompt-10/11/12/13` 앵커 신설.
+2. Prompt 7·9·12에 *사후 주의* 한 단락 추가하여 stale·격차를 명시적으로 기록.
+3. 외부 참조 정정 — `handoff.md`, `user_stories_plan.md`, `mobile_review_plan.md`의 "Prompt 4·5·6"(모바일 흐름) 표기를 "Prompt 10·11·12"로 갱신.
+4. 사용자에게 정합성 감사 결과 보고.
+
+---
+
+<a id="prompt-14"></a>
+## Prompt 14 — 2026-06-10
+
+> upload to upstream according to the git flow. Make another PR to develop.
+
+**현 상태**: PR #9는 머지 완료(2026-06-10 03:02 UTC). 그 이후 본 세션이 추가한 변경 10건(`aidlc-docs/` 내 modified 9 + untracked 1)이 origin과 동기화되지 않음.
+**조치**: `aidlc-docs/plans/git_flow_pr2_plan.md` 작성 → 승인 대기. 승인 후 develop 최신화 → 새 `feature/*` 브랜치 → 단일 커밋 → push → 두 번째 PR 생성.
+
+---
+
+<a id="prompt-15"></a>
+## Prompt 15 — 2026-06-10
+
+> 아냐. 지금 브랜치를 그대로 써도 돼.
+
+**결정 확정**: `git_flow_pr2_plan.md` 부록 A의 **1.A를 옵션 D(현재 브랜치 재사용)로 수정**. 근거: PR #9가 *merge commit* 방식으로 머지되어 `7575fc3`가 develop에 그대로 살아 있음 → 동일 SHA 중복·squash 회피 문제 없음. 새 브랜치·develop pull·rebase 모두 불필요.
+**조치**: 계획서 §1 브랜치 전략 + §5 실행 단계 갱신(6단계 → 4단계). 부록 A 1.A 닫음. 나머지 2.A·3.A·4.A는 사용자 추가 확인 대기.
+
+---
+
+<a id="prompt-16"></a>
+## Prompt 16 — 2026-06-10
+
+> 권장안 채택
+
+**결정 확정**: `git_flow_pr2_plan.md` 부록 A의 잔여 결정 2.A·3.A·4.A 모두 권장안 채택. 즉 제외 6종 그대로, 커밋 메시지 §3 초안 그대로, PR 본문 §4 초안 그대로.
+**조치**: §5의 5.1~5.4 순차 실행. 커밋 범위에 본 계획서(`git_flow_pr2_plan.md`) 자체 포함하여 총 11 파일.
