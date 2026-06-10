@@ -161,6 +161,49 @@
 
 **현 상태**: PR #9는 머지 완료(2026-06-10 03:02 UTC). 그 이후 본 세션이 추가한 변경 10건(`aidlc-docs/` 내 modified 9 + untracked 1)이 origin과 동기화되지 않음.
 **조치**: `aidlc-docs/plans/git_flow_pr2_plan.md` 작성 → 승인 대기. 승인 후 develop 최신화 → 새 `feature/*` 브랜치 → 단일 커밋 → push → 두 번째 PR 생성.
+**완료**: 커밋 `0ba0a22` (11 파일, +518/-125) → push 성공 → [PR #10](https://github.com/80-hours-a-week/DocSuri/pull/10) 생성. 현재 브랜치 재사용으로 5단계 → 4단계로 축소되었고, base develop이 GitHub에서 자동 비교됨.
+
+---
+
+<a id="prompt-17"></a>
+## Prompt 17 — 2026-06-10
+
+> ## Units
+> ------
+> Your Role: You are an experienced software architect. Before you start the task as mentioned below, please do the planning and write your steps in the units_plan.md file with checkboxes against each step in the plan. If any step needs my clarification, please add it to the step to interact with me and get my confirmation. Do not make critical decisions on your own. Once you produce the plan, ask for my review and approval. After my approval, you can go ahead to execute the same plan one step at a time. Once you finish each step, mark the checkboxes as done in the plan.
+>
+> Your Task: Refer to the user stories user_stories.md file. Group the user stories into multiple units that can be built independently. Each unit contains highly cohesive user stories that can be built by a single team. The units are loosely coupled with each other. For each unit, write their respective user stories and acceptance criteria in individual md files in the design/ folder.
+
+**조치**: `aidlc-docs/plans/units_plan.md` 작성 → 승인 대기. 부록 A에 단독 결정 불가 항목 모음.
+
+---
+
+<a id="prompt-18"></a>
+## Prompt 18 — 2026-06-10
+
+> 권장안 전부 채택. 키나 ID가 무슨 내용인지 확인할 수 있게 기존 문서처럼 링크를 거는 것도 잊지 말고!
+
+**결정 확정**: `units_plan.md` 부록 A의 6개 결정 모두 권장안 채택 — `aidlc-docs/design-artifacts/units/` 폴더 · Epic 기준 그룹화 · Foundation unit 신설 · 각 unit md의 NFRs 섹션 인용 · Unit Spec 8섹션 · `unit-<id>-<name>.md` 명명. 추가 요구: id_linking 컨벤션(Prompt 6·7)을 unit 문서에도 동일 적용 — NFR-*, US-*, P1/P2, E1~E4, R*, D*, A* 모두 정의 위치로 링크.
+**조치**: 사전 단계로 `handoff.md`의 R1~R7·D1~D10·A1~A8에 정의 앵커 삽입 → units 폴더 생성 → 6개 unit 문서 작성 → 정합성 검증 → 7단계(리뷰 게이트)에서 정지.
+
+---
+
+<a id="prompt-19"></a>
+## Prompt 19 — 2026-06-10
+
+> upload to upstream according to the git flow. Make a PR to origin/develop.
+
+**조치**: `aidlc-docs/plans/git_flow_pr3_plan.md` 작성 → 승인 대기. PR #10 패턴(현재 브랜치 재사용)을 그대로 적용하여 4단계 실행 계획 + 부록 A 결정 4건.
+
+---
+
+<a id="prompt-20"></a>
+## Prompt 20 — 2026-06-10
+
+> 권장안 전부 채택
+
+**결정 확정**: `git_flow_pr3_plan.md` 부록 A 4건 모두 권장안 채택 — 현재 브랜치 재사용 · 제외 6종 그대로 · 커밋 메시지 §3 초안 · PR 본문 §4 초안.
+**조치**: §5의 5.1~5.4 순차 실행.
 
 ---
 
