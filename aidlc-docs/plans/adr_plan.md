@@ -27,33 +27,35 @@
 - [x] **R3. 참조 아키텍처 2안 구성** — 보고서 §10: (a) 서버리스 일괄(Amplify+Lambda+KB/S3 Vectors+DynamoDB) vs (b) 상시 컨테이너(App Runner+Chroma/SQLite). §13 포트 매핑.
 - [x] **R4. 비용 시뮬레이션** — 보고서 §12: (a)+Haiku 4.5 ≈ **월 $45 ≤ $50** / Nova Lite ≈ $5 / 혼합(Haiku+DIFF만 Sonnet) ≈ $46 / (b)는 +$3~13.
 - [x] **R5. 조사 보고서 작성** — [`design-artifacts/tech-stack-aws-candidates.md`](../design-artifacts/tech-stack-aws-candidates.md) (한국어·Mermaid·앵커 링크·출처 §15).
-- [ ] **R6. 사용자 검토 → 결정 라운드 재개** — 보고서 기반으로 C-D1~C-D10 게이트 재실행.
+- [x] **R6. 사용자 검토 → 결정 라운드 재개** — 2026-06-10 재개·완료: D9·D2 선행 확정 → "나머지 원안 그대로" → D3 리전 분기만 추가 확인(도쿄+Cohere).
 
 ## 사용자 결정 게이트 (10건 — 조사 보고서 검토 후 확정, 현재 전부 보류)
 
-- [ ] **C-D1. 백엔드 언어/프레임워크** — ⏸ 보류 (2026-06-10)
-- [ ] **C-D2. 임베딩 인덱스** — ⏸ 보류 (2026-06-10)
-- [ ] **C-D3. 임베딩 모델** — ⏸ 보류 (2026-06-10)
-- [ ] **C-D4. LLM 모델** — ⏸ 보류 (2026-06-10) (NFR-COST-01 직결)
-- [ ] **C-D5. 프론트엔드 프레임워크** — (조사 후)
-- [ ] **C-D6. 컴포넌트 라이브러리** — (조사 후)
-- [ ] **C-D7. 그래프 시각화** — (조사 후)
-- [ ] **C-D8. 오프라인 캐시 메커니즘** — (조사 후)
-- [ ] **C-D9. 호스팅 환경** — (조사 후)
-- [ ] **C-D10. 관찰가능성 스택** — (조사 후)
+> ✅ **10/10 확정** (2026-06-10, 사용자·팀): "나머지 기술 스택도 원안 그대로" — 조사 보고서 1순위 후보 일괄 채택. 유일한 분기였던 D3·리전은 별도 확인을 거쳐 **도쿄 + Cohere** 확정.
+
+- [x] **C-D1. 백엔드** — Python 3.12 + FastAPI (Lambda Web Adapter) → [ADR-D1](../design-artifacts/architecture_decision_record.md#adr-d1)
+- [x] **C-D2. 임베딩 인덱스** — Bedrock KB + S3 Vectors → [ADR-D2](../design-artifacts/architecture_decision_record.md#adr-d2). ⚠️ D3 연쇄 제약(서울 KB 임베딩 = Titan V2만)은 D3에서 도쿄 이동으로 해소.
+- [x] **C-D3. 임베딩 모델** — Cohere Embed Multilingual v3 + **전 스택 도쿄(ap-northeast-1) 통일** → [ADR-D3](../design-artifacts/architecture_decision_record.md#adr-d3)
+- [x] **C-D4. LLM 모델** — Claude Haiku 4.5 (`global.` CRIS), 시뮬 ~$42 ≤ $50 → [ADR-D4](../design-artifacts/architecture_decision_record.md#adr-d4)
+- [x] **C-D5. 프론트엔드** — Next.js App Router + Amplify Hosting → [ADR-D5](../design-artifacts/architecture_decision_record.md#adr-d5)
+- [x] **C-D6. 컴포넌트 라이브러리** — shadcn/ui + Tailwind CSS → [ADR-D6](../design-artifacts/architecture_decision_record.md#adr-d6)
+- [x] **C-D7. 그래프 시각화** — React Flow → [ADR-D7](../design-artifacts/architecture_decision_record.md#adr-d7)
+- [x] **C-D8. 오프라인 캐시** — Service Worker(Serwist) + IndexedDB — R6 위험 닫힘 → [ADR-D8](../design-artifacts/architecture_decision_record.md#adr-d8)
+- [x] **C-D9. 호스팅 환경** — 풀 서버리스 (Amplify + Lambda + DynamoDB + Bedrock, **도쿄 기준** — D3 연쇄로 갱신) → [ADR-D9](../design-artifacts/architecture_decision_record.md#adr-d9)
+- [x] **C-D10. 관찰가능성** — CloudWatch(EMF) + Bedrock 호출 로깅 + X-Ray → [ADR-D10](../design-artifacts/architecture_decision_record.md#adr-d10)
 - [x] **C-G1. 산출물 커밋·PR 처리** — 사용자 확정 (2026-06-10): 열려 있는 **PR #12 브랜치에 커밋** (머지는 보류 유지). D1~D10 결정은 **팀 협의로 진행** 예정 — 본 보고서가 협의 자료.
 
 ## 실행 단계 (결정 확정 후)
 
-- [ ] **A1. ADR 문서 작성** — 결정 요약 표 + ADR-01~10 (컨텍스트/결정/근거/대안 비교/결과) + 스택 다이어그램(Mermaid)
-- [ ] **A2. 비용 시뮬레이션 확정판** — R4 결과를 선택안 기준으로 갱신 (U0 §6 "빌드 가능 정의"의 시뮬레이션 보고 항목 선이행)
-- [ ] **A3. 포트↔구현체 매핑** — component-model §2~§6의 각 포트·컴포넌트가 받는 구현 기술 명시
+- [x] **A1. ADR 문서 작성** — [`architecture_decision_record.md`](../design-artifacts/architecture_decision_record.md): ADR-D1~D10 **10건 전부 기록** (컨텍스트/결정/근거/대안 기각/결과/NFR 추적) + 현황판 §1.
+- [x] **A2. 비용 시뮬레이션 확정판** — ADR §13: 확정 스택 기준 월 ~$45 ≤ $50 (U0 §6 시뮬레이션 보고 항목 충족).
+- [x] **A3. 포트↔구현체 매핑** — ADR §12: U0 포트 11행 전부 확정 구현 명시.
 
 ## 검증·마감
 
-- [ ] **V1. 결정 누락 검사** — handoff §4의 D1~D10 전부 기록되었는지 확인
-- [ ] **V2. NFR 추적성** — 각 ADR이 인용한 NFR 키 표 (근거 없는 결정 0건)
-- [ ] **V3. 사용자 최종 리뷰** — ADR 문서 제출·피드백 반영
+- [x] **V1. 결정 누락 검사** — handoff §4 D1~D10 = ADR-D1~D10, 누락 0 (ADR §1 현황판 10/10 ✅).
+- [x] **V2. NFR 추적성** — 각 ADR 절에 "NFR 추적" 행 포함, 근거 없는 결정 0건. 위험 정리: R3 1차 닫힘(D4)·R6 닫힘(D8).
+- [x] **V3. 사용자 최종 리뷰** — 2026-06-10 사용자 확정 지시("원안 그대로") + D3 분기 확인 응답으로 종결. **본 계획의 전 단계 완료.**
 
 ---
 

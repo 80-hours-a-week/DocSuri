@@ -1,5 +1,6 @@
 # DocSuri MVP — 컴포넌트 모델
 
+> **상태**: ✅ **확정** (2026-06-10 사용자 승인 — [`component_model_plan.md`](../plans/component_model_plan.md) C-V4 종료). 이후 변경은 [`handoff.md §6`](../story-artifacts/handoff.md) 4단계를 따른다. 결정 현황은 [`architecture_decision_record.md`](architecture_decision_record.md) 참조.
 > **Phase**: AIDLC Construction — Domain(Component) Model
 > **근거 산출물**: [`design-artifacts/units/`](units/) (U0~U4, 14 스토리 / 70 SP) — *AI-DLC 산출물만 입력으로 사용. `aidlc-docs/` 밖의 코드·문서는 근거로 삼지 않는다.*
 > **작업 계획**: [`component_model_plan.md`](../plans/component_model_plan.md)

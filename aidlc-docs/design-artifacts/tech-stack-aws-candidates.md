@@ -3,7 +3,7 @@
 > **Phase**: AIDLC Construction — Architecture Decision Records *사전 조사*
 > **지시** (사용자, 2026-06-10): D1~D10 결정은 보류하고, 후보를 **AWS 중심**으로 조사한다.
 > **요구 근거**: [`handoff.md §4`](../story-artifacts/handoff.md) (D1~D10) · [`nfr.md`](../requirements/nfr.md) · [`component-model.md`](component-model.md) (포트 경계)
-> **상태**: 🔍 **조사 보고서 — 어떤 결정도 확정하지 않음.** 각 절의 "권장"은 조사자 의견이며, 확정은 [`adr_plan.md`](../plans/adr_plan.md)의 C-D1~C-D10 게이트에서 한다.
+> **상태**: 🔍 조사 보고서 (스냅샷). **2026-06-10 이후 D1~D10 전 항목 확정됨** — 최종 결정·리전(도쿄)은 [`architecture_decision_record.md`](architecture_decision_record.md)가 단일 진실. 본 문서의 "권장"·"서울 기준" 표기는 조사 시점 기록으로 보존.
 > **가격·가용성 기준일**: 2026-06-10 웹 확인 (출처 §15). AWS 가격·리전은 수시 변동 — ADR 확정 시 재검증 필요.
 
 ---
