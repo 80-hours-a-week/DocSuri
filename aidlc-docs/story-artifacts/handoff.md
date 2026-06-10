@@ -1,104 +1,107 @@
-# DocSuri MVP — Inception ▶ Architecture/Design 인계 노트
+# DocSuri MVP — Inception › User Stories 인계 노트 (Handoff)
 
-- **단계**: AI-DLC › Inception › User Stories 종료, Architecture/Design 시작
+- **단계 전환**: AI-DLC › Inception › User Stories **→** Construction › Architecture/Design
 - **동결 일자**: 2026-06-10
-- **승인 근거**: [`aidlc-docs/prompts.md`](../prompts.md) § [Prompt 1](../prompts.md#prompt-1)·[2](../prompts.md#prompt-2)·[3](../prompts.md#prompt-3)·[4](../prompts.md#prompt-4)·[5](../prompts.md#prompt-5)
+- **승인**: [Prompt 12](../prompts.md#prompt-12) (옵션 1)
+- **상태**: 페르소나 · Epic · NFR · 사용자 스토리 · 커버리지 매트릭스 5종 동결. 모바일 검토 반영 완료.
+
+본 파일은 다음 단계(아키텍처/설계)가 *Inception 산출물*만으로 작업을 시작할 수 있도록 인계용 요약 + 위험 + 가정 + 결정 필요 사항을 한곳에 모은다.
 
 ---
 
-## 1. 동결 산출물 (Frozen Artifacts)
+## 1. 동결된 산출물
 
-| 경로 | 역할 |
-|---|---|
-| [`personas.md`](personas.md) | [P1](personas.md#p1) 박지훈 / [P2](personas.md#p2) 김민서 페르소나 카드 |
-| [`user_stories.md`](user_stories.md) | 14 스토리 마스터 (Connextra + Gherkin AC) |
-| [`story_index.md`](story_index.md) | 우선순위·SP 색인 |
-| [`coverage_matrix.md`](coverage_matrix.md) | 페르소나×Epic·INVEST·NFR 인용 검증 |
-| [`requirements/epics.md`](../requirements/epics.md) | 4개 MVP Epic + 비포함 Epic 사유 |
-| [`requirements/nfr.md`](../requirements/nfr.md) | NFR-PERF/UX/LANG/DATA/SEC/COST/A11Y/OBS |
-
-> 위 6개 파일은 Architecture/Design 단계에서 **참조 전용**으로 다룬다. 변경이 필요할 경우 새 결정 로그를 [`prompts.md`](../prompts.md)에 추가하고 본 인계 노트의 [§8 변경 로그](#sec-change-log)를 갱신한다.
-
----
-
-## 2. 핵심 결정 요약
-
-| 결정 ID | 내용 | 출처 |
+| 분류 | 파일 | 동결 내용 |
 |---|---|---|
-| <a id="d-persona"></a>D-PERSONA | MVP 페르소나는 [P1](personas.md#p1) 박지훈(전문) + [P2](personas.md#p2) 김민서(학부 입문) — 양극단 분기 검증 | [Prompt 3](../prompts.md#prompt-3) (옵션 C) |
-| <a id="d-epic"></a>D-EPIC | MVP Epic = [E1](../requirements/epics.md#e1) Discover · [E2](../requirements/epics.md#e2) Comprehend · [E3](../requirements/epics.md#e3) Differentiate · [E4](../requirements/epics.md#e4) Trace(1-hop) | [`plans/user_stories_plan.md`](../plans/user_stories_plan.md) 결정 3.A |
-| <a id="d-nonmvp"></a>D-NONMVP | 비포함 Epic = [E5](../requirements/epics.md#e5) Trust · [E6](../requirements/epics.md#e6) Stay-Current · [E7](../requirements/epics.md#e7) Personalize(영속) | [`epics.md`](../requirements/epics.md), [Prompt 5](../prompts.md#prompt-5) |
-| <a id="d-session-pers"></a>D-SESSION-PERS | 세션 한정 개인화는 모드 토글·주제 컨텍스트·필터 URL 직렬화로 흡수 | [`epics.md`](../requirements/epics.md) "세션 한정 개인화는 어디에?" |
-| <a id="d-format"></a>D-FORMAT | Connextra + Gherkin AC + MoSCoW + 피보나치 SP + NFR 별도 파일 | [`plans/user_stories_plan.md`](../plans/user_stories_plan.md) 결정 2.A–2.E |
-| <a id="d-id"></a>D-ID | `US-<EPIC>-<NN>` + `Source-Prompt:` 메타 | [`plans/user_stories_plan.md`](../plans/user_stories_plan.md) 결정 2.F |
+| 페르소나 | [`personas.md`](personas.md) | P1 박지훈 · P2 김민서 (디바이스 비중·모바일 시나리오 포함) |
+| Epic | [`../requirements/epics.md`](../requirements/epics.md) | E1·E2·E3 + E4 일부 · MVP 디바이스 정책 명시 |
+| NFR | [`../requirements/nfr.md`](../requirements/nfr.md) | PERF·UX·LANG·DATA·SEC·COST·A11Y·**MOBILE**·**NET**·OBS 10개 카테고리 / **NFR 키 33개** |
+| 사용자 스토리 | [`user_stories.md`](user_stories.md) | 14 스토리 / 70 SP / MoSCoW 분류 |
+| 색인 | [`story_index.md`](story_index.md) | ID·제목·우선순위 한 페이지 색인 |
+| 커버리지 | [`coverage_matrix.md`](coverage_matrix.md) | 페르소나×Epic, 디바이스×페르소나, 디바이스×Epic, INVEST+M축, NFR 인용 분포 |
+| 결정 로그 | [`../plans/user_stories_plan.md`](../plans/user_stories_plan.md), [`../plans/mobile_review_plan.md`](../plans/mobile_review_plan.md) | 부록 A 결정 10건 + 모바일 결정 5건 |
+| 출처 로그 | [`../prompts.md`](../prompts.md) | Prompt 1~13 (스토리 출처는 모두 [Prompt 2](../prompts.md#prompt-2)) |
 
----
+### MoSCoW 분포 (동결)
 
-## 3. MVP 범위 수치
-
-- 총 스토리: **14** (70 SP)
-- MVP(Must+Should): **11 / 57 SP**
-- Must만: **6 / 29 SP**
-- 비MVP(Could): 3 / 13 SP
-
----
-
-## 4. 다음 단계가 답해야 할 정밀화 항목
-
-본 단계에서 *의도적으로 미뤘던* 결정들. Architecture/Design 진입 직후에 처리해야 한다.
-
-| ID | 항목 | 권장 처리 시점 |
+| 분류 | 수 | SP |
 |---|---|---|
-| <a id="o-1"></a>O-1 | SP 8 스토리 3건 분해 여부 — [`US-DIFF-01`](user_stories.md#us-diff-01), [`US-DIFF-02`](user_stories.md#us-diff-02), [`US-TRACE-01`](user_stories.md#us-trace-01) | Architecture 첫 주, 컴포넌트 분리 후 |
-| <a id="o-2"></a>O-2 | Could 3건 본 사이클 처분 — [`US-COMP-05`](user_stories.md#us-comp-05), [`US-DIFF-03`](user_stories.md#us-diff-03), [`US-TRACE-02`](user_stories.md#us-trace-02) | MVP 범위 동결 직전 (잔여 capacity 확인 후) |
-| <a id="o-3"></a>O-3 | "세션 스코프 상태 모델"의 구체 매체 — React Context vs URL 쿼리 vs localStorage(읽기 전용) | UI 컴포넌트 설계 시 |
-| <a id="o-4"></a>O-4 | LLM 비용 모니터링 메커니즘 — [NFR-OBS-02](../requirements/nfr.md#nfr-obs-02) 구현 위치 | 백엔드 아키텍처 결정 시 |
-| <a id="o-5"></a>O-5 | 한국어 가독성([NFR-UX-01](../requirements/nfr.md#nfr-ux-01)) 자동 측정 가능성 — 도구 부재 시 휴리스틱 정의 | [E2](../requirements/epics.md#e2) 컴포넌트 설계 시 |
+| Must | 6 | 29 |
+| Should | 5 | 28 |
+| Could | 3 | 13 |
+| **합계** | **14** | **70** |
+| **MVP(Must+Should)** | **11** | **57** |
 
 ---
 
-## 5. 가정 (Assumptions)
+## 2. Open Risks (다음 단계가 닫아야 할 위험)
 
-| 가정 | 검증 방법 |
-|---|---|
-| arXiv 메타데이터 + Semantic Scholar API의 무료/저비용 티어로 MVP 트래픽 처리 가능 | Architecture 단계의 *데이터 파이프라인 PoC*에서 rate limit 측정 |
-| 데모 LLM 월 USD 50 한도로 Must 스토리 시연이 가능 | [NFR-COST-01](../requirements/nfr.md#nfr-cost-01) + 캐시([NFR-DATA-03](../requirements/nfr.md#nfr-data-03))로 시뮬레이션 |
-| 비로그인 익명 세션만으로 사용자 가치 절반 이상 전달 가능 | 페르소나 인터뷰 또는 데모 후 피드백 |
-| 한국어/영어 자연어 입력은 동일 임베딩 모델에서 충분한 의미 보존 | [E1](../requirements/epics.md#e1) 컴포넌트 설계 시 다국어 임베딩 모델 평가 |
+위험은 **확률 × 영향**으로 등급을 매기고, 닫는 책임이 아키텍처/설계 단계에 있다.
+
+| ID | 위험 | 확률 | 영향 | 닫는 방법 |
+|---|---|---|---|---|
+| R1 | **Mobile UX 미확정 5건** — DISC-02 모바일 필터 UI, DISC-03 확장 키워드 칩, COMP-01 모바일 요약 레이아웃, DIFF-01/02 모바일 입력 폼 (현재 *읽기 전용 결과 확인*만 가정) | 高 | 中 | 디자인 단계에서 모바일 와이어프레임 작성 + AC 보강 |
+| R2 | **SP 8 스토리 3건** — US-DIFF-01, DIFF-02, TRACE-01. INVEST의 *Small*에 ⚠️ 표시됨 | 中 | 中 | 아키텍처 단계에서 컴포넌트 분해 후 스토리 분할 가능성 재평가 |
+| R3 | **LLM 비용 변동성** — NFR-COST-01 월 USD 50 상한이 요약·차별성 분석·모바일 추가 호출까지 흡수 가능한지 미검증 | 中 | 高 | 프롬프트 길이 시뮬레이션 + 모델 선택 결정 시 정산 |
+| R4 | **인용 그래프 API 의존** — Semantic Scholar API 변동·할당량·지연이 NFR-PERF-03/NFR-MOBILE-03 목표를 깨뜨릴 수 있음 | 中 | 中 | 아키텍처 단계에서 *캐시 + 폴백 전략* 결정 |
+| R5 | **학술 용어 사전 수기 50개** — NFR-LANG-03이 일관 번역을 요구하나 50개로는 분야별 변형 부족 가능 | 中 | 低 | MVP 코퍼스 범위 좁히기 또는 사전 자동 시드 도구 도입 |
+| R6 | **오프라인 24h 캐시** — NFR-NET-04. PWA·Service Worker·LocalStorage 중 어느 메커니즘인지 미정 | 中 | 中 | 프론트엔드 프레임워크 선택과 함께 결정 |
+| R7 | **재현 가능성·알림·개인화 Won't 항목** — 사용자가 데모 후 즉시 요구할 가능성 | 中 | 低 | 후속 사이클 백로그로 *명시적* 등록 |
 
 ---
 
-## 6. 위험 (Risks)
+## 3. Assumptions (다음 단계가 그대로 신뢰해도 되는 전제)
 
-| 위험 | 영향 | 완화 방향 |
+본 사이클이 가정한 사항. 가정이 깨지면 스토리 재작성이 필요하다.
+
+- **A1.** arXiv 메타데이터 + Semantic Scholar 인용 그래프가 **공개 API**로 데모 트래픽 범위에서 조회 가능하다.
+- **A2.** MVP는 **비로그인 익명 세션**으로 충분하다 (NFR-SEC-01).
+- **A3.** 박지훈의 모바일 사용 시나리오는 *트리아지/큐레이션* 한정이며, **차별성 분석·노트 작성은 데스크톱**에서 수행한다.
+- **A4.** 김민서는 *학부 1~2학년 수준 한국어*(능력시험 4급) 가독성으로 충분히 이해 가능한 학습자이다.
+- **A5.** MVP의 코퍼스는 **AI/ML 분야**로 한정한다 (전 분야 일반화는 후속 사이클).
+- **A6.** 학술 용어 사전은 **수기 50개로 시드**하고, 부족분은 *NFR-LANG-03 위반*이 아닌 *알려진 한계*로 표기한다.
+- **A7.** 검색 결과의 *난이도 추정 점수*는 휴리스틱(분야 태그 + 인용수 + 길이 + 어휘 빈도)으로 산출하며 정식 분류 모델이 아니다.
+- **A8.** US-COMP-04 모바일 분기에서 **바텀시트 패턴**을 가정 (확정 디자인은 아님).
+
+---
+
+## 4. 다음 단계가 내려야 할 결정 (Open Decisions)
+
+아키텍처/설계 단계가 진입 직후 결정해야 한다. 각 항목에 *권장 후보*만 적고 최종 선택은 다음 단계의 권한.
+
+| ID | 결정 항목 | 후보 |
 |---|---|---|
-| [US-DIFF-01](user_stories.md#us-diff-01)·[02](user_stories.md#us-diff-02)의 LLM 토큰 사용량 폭증 | [NFR-COST-01](../requirements/nfr.md#nfr-cost-01) 초과 | 청크 압축 + 결과 캐시 우선 적용 ([NFR-COST-02](../requirements/nfr.md#nfr-cost-02) / [NFR-DATA-03](../requirements/nfr.md#nfr-data-03)) |
-| Semantic Scholar 그래프 API rate limit | [E4](../requirements/epics.md#e4) 무력화 | 백오프 + 캐시 + 무료 티어 한도 시뮬레이션 |
-| 학부 모드 가독성([NFR-UX-01](../requirements/nfr.md#nfr-ux-01)) 자동 검증 불가 | 품질 일관성 저하 | 휴리스틱(평균 문장 길이·약어 풀이 비율) + 샘플 수동 검토 |
-| 인용 그래프 컴포넌트([US-TRACE-01](user_stories.md#us-trace-01)) SP 8 | 단일 이터레이션 초과 위험 | [O-1](#o-1)로 분해 가능성 평가 |
-| 영속 개인화 부재로 인한 데모 UX 단절 | 재방문 사용자 이탈 | URL 직렬화([US-DISC-02](user_stories.md#us-disc-02))로 부분 완화, 그 이상은 후속 사이클 |
+| D1 | **백엔드 언어/프레임워크** | 기존 데모(`demo/app`)는 Python/FastAPI 추정. 동일 유지 vs Node.js/Bun 신규 |
+| D2 | **임베딩 인덱스** | FAISS (자체 호스팅) / pgvector / Chroma / Pinecone — 비용·운영 부담 vs 성능 |
+| D3 | **임베딩 모델** | OpenAI text-embedding-3-small / Voyage / 한국어 특화(BGE-M3) |
+| D4 | **LLM 모델** | Claude Sonnet/Haiku / GPT-4o-mini / Bedrock 경유 — NFR-COST-01과 직결 |
+| D5 | **프론트엔드 프레임워크** | 기존 `web/` Next.js 추정. 그대로 유지 vs SvelteKit/Astro 등 |
+| D6 | **컴포넌트 라이브러리·디자인 시스템** | shadcn/ui · Mantine · Chakra · 자체 — 모바일 친화 점수 비교 |
+| D7 | **그래프 시각화 라이브러리** (TRACE-01 데스크톱) | react-flow / Sigma.js / Cytoscape — 모바일 분기는 그래프 불필요 |
+| D8 | **오프라인 캐시 메커니즘** (NFR-NET-04) | Service Worker(PWA) / IndexedDB 직접 / localStorage |
+| D9 | **호스팅 환경** | Vercel + 서버리스 / 자체 VPS / AWS Bedrock 묶음 |
+| D10 | **관찰가능성 스택** (NFR-OBS) | Sentry / OpenTelemetry / 자체 로그 |
+
+> 본 표는 결정을 강제하지 않는다. 다음 단계 첫 산출물(예: `aidlc-docs/design-artifacts/architecture_decision_record.md`)에서 각 항목을 *기록·승인*하면 된다.
 
 ---
 
-## 7. Architecture/Design 단계의 첫 번째 결정 후보
+## 5. 다음 단계 권장 입력 순서
 
-[Prompt 1](../prompts.md#prompt-1)의 지시("모든 프론트엔드·백엔드 컴포넌트마다 프로젝트 폴더")를 반영하면, 다음 단계는 **시스템 컴포넌트 분리 결정**으로 시작하는 것이 자연스럽다.
-
-- 후보 컴포넌트
-  - **(A) Search & Discovery API** — 검색·임베딩·정렬·필터 ([E1](../requirements/epics.md#e1) + 공통)
-  - **(B) Comprehension Service** — 요약·번역·풀어쓰기 ([E2](../requirements/epics.md#e2))
-  - **(C) Differentiation Service** — novelty·gap 분석 ([E3](../requirements/epics.md#e3), A·B 결과 소비)
-  - **(D) Citation Graph Service** — 1-hop 인용 그래프 ([E4](../requirements/epics.md#e4))
-  - **(E) Ingestion / Indexing Pipeline** — 코퍼스 수집·임베딩 갱신
-  - **(F) Web Frontend** — 검색UI·뷰어·그래프·모드 토글
-- 후보 폴더 구조: `app/<component>/` 또는 `services/<component>/` — 다음 계획서에서 결정.
+1. **본 인계 노트 + `epics.md` + `nfr.md`**를 1차 읽기. (페르소나는 결정이 필요할 때만 펼쳐 본다)
+2. **D1~D4**(언어·인덱스·임베딩·LLM)를 먼저 결정 — 나머지 결정의 입력이다.
+3. **R1·R6**부터 닫기 — 모바일 UX와 오프라인 캐시는 프론트엔드 결정에 묶여 있다.
+4. 본격 설계는 **컴포넌트 분해 → 데이터 플로우 → API 계약** 순으로 진행. 각 단계 완료 시 본 인계 노트의 *위험* 항목을 닫는다.
 
 ---
 
-<a id="sec-change-log"></a>
-## 8. 변경 로그 (이후 갱신)
+## 6. 동결 후 변경 정책
 
-| 일자 | 변경 | 출처 |
-|---|---|---|
-| 2026-06-10 | 초기 동결 | [Prompt 5](../prompts.md#prompt-5) |
-| 2026-06-10 | ID·키 교차 참조 링크 일괄 적용 | [Prompt 7](../prompts.md#prompt-7) |
+본 인계 노트 이후 스토리·NFR을 *변경*하려면:
+
+1. `prompts.md`에 변경 요청 프롬프트를 새로 기록.
+2. `aidlc-docs/plans/`에 변경 계획서 신설.
+3. 사용자 승인 후 산출물 수정.
+4. 본 인계 노트의 §1 표와 §2 위험 항목을 갱신.
+
+> *조용한 수정 금지* — 동결 이후의 모든 변경은 위 4단계를 거친다.

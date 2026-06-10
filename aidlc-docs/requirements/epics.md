@@ -3,6 +3,7 @@
 - **결정 근거**: [`aidlc-docs/plans/user_stories_plan.md`](../plans/user_stories_plan.md) 부록 A · 결정 3.A
 - **MVP 범위**: [E1](#e1) · [E2](#e2) · [E3](#e3) + [E4](#e4) 일부 (인용 1-hop 시각화만)
 - **MVP 비포함(Won't this cycle)**: [E5](#e5) 재현성 자동 평가, [E6](#e6) 알림/트렌드 데일리, [E7](#e7) 개인화·필터 저장
+- **디바이스 정책**: 모든 Epic은 **모바일·태블릿·데스크톱 3개 폼팩터를 1차 지원**한다. Epic별 반응형 분기·터치 친화·모바일 응답 목표는 [`requirements/nfr.md`](nfr.md)의 `NFR-MOBILE-*` / `NFR-NET-*` / `NFR-A11Y-03` 키로 위임하며 각 사용자 스토리에서 인용한다.
 
 ---
 
