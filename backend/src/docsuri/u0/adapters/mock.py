@@ -47,7 +47,7 @@ class DeterministicEmbedding:
     """EmbeddingPort mock — 해시 기반 벡터 + 코퍼스 fixture 검색(필터 지원)."""
 
     def __init__(self, corpus_path: Path) -> None:
-        raw = json.loads(corpus_path.read_text())
+        raw = json.loads(corpus_path.read_text(encoding="utf-8"))
         self._papers: list[dict] = raw["papers"]
         self._vectors: list[Vector] = [
             _deterministic_vector(p["title"], "en") for p in self._papers
@@ -159,7 +159,7 @@ class FixtureGlossary:
     """Glossary mock — data/glossary_seed.json 50개 시드 (A6)."""
 
     def __init__(self, glossary_path: Path) -> None:
-        raw = json.loads(glossary_path.read_text())
+        raw = json.loads(glossary_path.read_text(encoding="utf-8"))
         self._entries = {e["term"].lower(): e for e in raw["entries"]}
 
     def lookup(self, term: str) -> KoTranslation | None:
@@ -174,7 +174,7 @@ class FixtureCitation:
     INCOMING_N = 5
 
     def __init__(self, corpus_path: Path) -> None:
-        raw = json.loads(corpus_path.read_text())
+        raw = json.loads(corpus_path.read_text(encoding="utf-8"))
         self._papers: list[dict] = raw["papers"]
 
     def _pick(self, paper_id: str, salt: str, n: int) -> list[PaperHit]:
