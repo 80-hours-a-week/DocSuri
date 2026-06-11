@@ -12,7 +12,8 @@ DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 @dataclass(frozen=True)
 class Settings:
     adapter_mode: str = "mock"
-    aws_region: str = "ap-northeast-1"  # ADR-D9: 도쿄
+    aws_region: str = "ap-northeast-2"  # DynamoDB / KB / LLM — 서울
+    aws_region_embed: str = "ap-northeast-1"  # Cohere Embed — 도쿄 (서울 미지원)
     bedrock_llm_model_id: str = "global.anthropic.claude-haiku-4-5-20251001-v1:0"  # ADR-D4
     bedrock_embed_model_id: str = "cohere.embed-multilingual-v3"  # ADR-D3
     kb_id: str = ""  # ADR-D2: Bedrock KB + S3 Vectors
@@ -37,7 +38,8 @@ def load_settings() -> Settings:
         raise ValueError(f"DOCSURI_ADAPTER_MODE must be 'mock' or 'aws', got: {mode!r}")
     return Settings(
         adapter_mode=mode,
-        aws_region=env.get("AWS_REGION", "ap-northeast-1"),
+        aws_region=env.get("AWS_REGION", "ap-northeast-2"),
+        aws_region_embed=env.get("AWS_REGION_EMBED", "ap-northeast-1"),
         bedrock_llm_model_id=env.get(
             "DOCSURI_BEDROCK_LLM_MODEL_ID", Settings.bedrock_llm_model_id
         ),
