@@ -38,7 +38,7 @@ _PERSONA_SYSTEM = {
 
 
 class BedrockEmbedding:
-    """EmbeddingPort — embed: Bedrock InvokeModel(Cohere v3) / search: S3 Vectors 직접 조회.
+    """EmbeddingPort — embed: Bedrock InvokeModel(Titan v2) / search: S3 Vectors 직접 조회.
 
     KB Retrieve는 텍스트 질의 전용이라 search(vec, k, filters) 시그니처와 맞지 않아
     S3 Vectors QueryVectors를 직접 사용한다 (ADR-D2 결과 3에 문서화된 경로).
@@ -47,21 +47,16 @@ class BedrockEmbedding:
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        self._bedrock = boto3.client("bedrock-runtime", region_name=settings.aws_region_embed)
-        self._s3v = boto3.client("s3vectors", region_name=settings.aws_region_embed)
+        self._bedrock = boto3.client("bedrock-runtime", region_name=settings.aws_region)
+        self._s3v = boto3.client("s3vectors", region_name=settings.aws_region)
 
     def embed(self, text: str, lang: Lang) -> Vector:
-        body = json.dumps(
-            {"texts": [text], "input_type": "search_query", "truncate": "END"}
-        )
+        body = json.dumps({"inputText": text, "dimensions": 1024, "normalize": True})
         response = self._bedrock.invoke_model(
             modelId=self._settings.bedrock_embed_model_id, body=body
         )
         payload = json.loads(response["body"].read())
-        embeddings = payload["embeddings"]
-        if isinstance(embeddings, dict):  # 일부 API 버전: {"float": [[...]]}
-            embeddings = embeddings["float"]
-        return embeddings[0]
+        return payload["embedding"]
 
     def search(
         self, vec: Vector, k: int, filters: SearchFilters | None = None
