@@ -50,7 +50,7 @@
   4. `CostGuard` 누적치·`Telemetry` 질의 저장소도 DynamoDB로 수렴 (Lambda 무상태). D10의 대시보드·로그 스택 선택은 별도 미결.
   5. 콜드스타트가 [NFR-PERF-01](../requirements/nfr.md#nfr-perf-01) 위반으로 관측되면 EventBridge 워밍 또는 (b)안 전환을 재논의 — 전환 비용은 코드 레벨에서 낮게 유지 (FastAPI는 양쪽 동일 코드).
 - **NFR 추적**: COST-01(유휴 $0) · PERF-01(콜드스타트 완화 전략 명시) · NET-02(재시도는 코드 레벨 `HttpClientPolicy`) · SEC-03(키는 Lambda 환경 변수/SSM).
-- **검증 항목 (환경 구축 시)**: 콜드스타트 실측이 P50<3s에 미치는 영향 측정 ([U0 §6](units/unit-u0-foundation.md) 빌드 가능 정의에 포함).
+- **검증 항목 (환경 구축 시)**: 콜드스타트 실측이 P50<3s에 미치는 영향 측정 ([U0 §6](units/unit-u0-foundation.md) 빌드 가능 정의에 포함). → ✅ **실측 완료 (2026-06-11)**: 컨테이너 이미지 Lambda(arm64) 콜드 init P50 887ms(정상상태 750~990ms, 최초 2.8s)·웜 ~2ms → P50<3s 위협 없음, **EventBridge 워밍 발동 조건 미충족 · D9 결정 유지** ([검증 보고서 §3](../reviews/u0-aws-env-verification.md)).
 
 ---
 
@@ -77,7 +77,7 @@
      → **팀 결정 (2026-06-10): (ii) 채택** — [ADR-D3](#adr-d3)에 기록.
   5. KB×S3 Vectors 결합의 도쿄 리전 가용성은 콘솔에서 최종 확인 (불가 시 결과 4의 (iii) 폴백).
 - **NFR 추적**: COST-01(<$1) · PERF-01(관리형 API, 콜드 없음) · DATA-01(arXiv 메타 S3 적재) · MOBILE-03(검색 경로 동일).
-- **검증 항목 (환경 구축 시)**: ① 도쿄 KB×S3 Vectors 생성 가능 여부 ② KB Retrieve의 연도 범위 필터(`year >= 2023` 형태) 표현력 ③ 100편 코퍼스 동기화 소요·비용 실측.
+- **검증 항목 (환경 구축 시)**: ① 도쿄 KB×S3 Vectors 생성 가능 여부 ② KB Retrieve의 연도 범위 필터(`year >= 2023` 형태) 표현력 ③ 100편 코퍼스 동기화 소요·비용 실측. → ✅ **실측 완료 (2026-06-11, 도쿄)**: ① KB(S3_VECTORS)+Cohere v3 1024d 생성·8편 색인 0실패 16.4s → **폴백(iii) 불요**. ② `greaterThanOrEquals`/`andAll`(KB Retrieve)·`$gte`/`$and`(S3 Vectors) 양쪽 정확 동작. ③ 8편 16.4s로 선검증(100편 별도 실측은 미수행) ([검증 보고서 §1·§2](../reviews/u0-aws-env-verification.md)).
 
 ---
 
@@ -117,6 +117,7 @@
 - **기각된 대안**: Sonnet 4.6 단독(~$126 — 예산 초과) · Nova Lite(~$2 — 비용 폴백으로 보존, KKL 4급 톤 검증 부담) · GPT-4o-mini(비-Bedrock).
 - **결과**: ① Bedrock **모델 호출 로깅** 활성화 — 토큰 수 자동 기록([NFR-OBS-02](../requirements/nfr.md#nfr-obs-02), [ADR-D10](#adr-d10) 정합). ② 혼합 라우팅(DIFF-01·02만 Sonnet 4.6, 시뮬 ~$43)은 `LlmPort` 게이트웨이 정책으로 *후속 허용* — [R2](../story-artifacts/handoff.md#r-2)·[R3](../story-artifacts/handoff.md#r-3) 대응 여지. ③ CRIS는 요청이 글로벌 상용 리전으로 라우팅될 수 있음 — 공개 논문·익명 세션([A2](../story-artifacts/handoff.md#a-2))이라 수용, ADR에 명시.
 - **위험 정리**: [R3 LLM 비용 변동성](../story-artifacts/handoff.md#r-3) — CostGuard 상한 + 본 시뮬로 **1차 닫힘** (실측 정산은 U0 §6 빌드 단계).
+- **검증 항목 (환경 구축 시)**: KKL 4급 톤 분기 실모델 검증. → ✅ **실측 완료 (2026-06-11)**: `global.` CRIS 실호출 — `pro` 260자(recurrence·attention·SOTA 전문어 보존, UX-02)·`student` 419자(비유 풀어쓰기+괄호 병기, UX-01) 두 톤 분기 동작, **접근 게이트 열림** ([검증 보고서 §4](../reviews/u0-aws-env-verification.md)).
 - **NFR 추적**: COST-01·02 · UX-01·02 · LANG-01 · PERF-02.
 
 ---
@@ -224,4 +225,4 @@
 - **D1~D10 전 항목 확정** (2026-06-10) — handoff §4 Open Decisions 종결. 변경은 [handoff §6](../story-artifacts/handoff.md) 4단계.
 - **위험 정리**: [R3](../story-artifacts/handoff.md#r-3) 1차 닫힘(ADR-D4) · [R6](../story-artifacts/handoff.md#r-6) 닫힘(ADR-D8) · [R4](../story-artifacts/handoff.md#r-4)는 `CitationApi` 구현 시 실증(U0) · [R1](../story-artifacts/handoff.md#r-1)·[R2](../story-artifacts/handoff.md#r-2)는 unit 진입 시.
 - **다음**: [handoff §5](../story-artifacts/handoff.md) 권장 순서대로 **U0 Foundation 빌드 라운드** 진입 — 포트 시그니처는 [component-model.md](component-model.md)(확정)이 단일 진실, 구현은 본 ADR §12 매핑. U0 §6 "빌드 가능 정의" 6항목이 통과 기준.
-- **환경 구축 시 검증 항목 모음**: 도쿄 KB×S3 Vectors 생성(ADR-D2) · KB 연도 범위 필터 표현력(ADR-D2) · Lambda 콜드스타트 실측(ADR-D9) · Haiku 4.5 KKL 4급 톤 검증(ADR-D4).
+- **환경 구축 시 검증 항목 모음**: 도쿄 KB×S3 Vectors 생성(ADR-D2) · KB 연도 범위 필터 표현력(ADR-D2) · Lambda 콜드스타트 실측(ADR-D9) · Haiku 4.5 KKL 4급 톤 검증(ADR-D4). → ✅ **4건 전부 실측 통과 (2026-06-11, SSO 계정 028317349537·도쿄)** — 세 결정(D2·D4·D9) 확인, 폴백·재논의 미발동. 상세: [`reviews/u0-aws-env-verification.md`](../reviews/u0-aws-env-verification.md) · 절차: [`plans/aws_env_verification_plan.md`](../plans/aws_env_verification_plan.md).
