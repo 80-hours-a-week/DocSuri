@@ -8,6 +8,7 @@ dependencies = [
     "httpx>=0.27",
     "boto3>=1.34",
     "fastapi>=0.111",
+    "uvicorn>=0.49.0",
 ]
 
 [project.optional-dependencies]
