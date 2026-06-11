@@ -13,6 +13,3 @@ __pycache__/
 *.pyc
 .venv/
 .env
-
-
-CLAUDE.md

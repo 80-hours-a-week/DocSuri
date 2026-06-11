@@ -53,8 +53,11 @@ class KeywordExpander:
         safe = sanitize_query(query)
         cache_key = f"expand:{normalize_query(query)}"
         cached = self._cache.get(cache_key)
-        if cached is not None:  # #2 동일 입력 재호출 차단
-            return list(_TERMS.validate_json(cached))
+        if cached is not None:  # 동일 입력 재호출 차단
+            try:
+                return list(_TERMS.validate_json(cached))
+            except Exception:  # 손상된 캐시 엔트리는 무시하고 재계산
+                pass
 
         terms: list[str] = []
         for token in _tokenize(safe):

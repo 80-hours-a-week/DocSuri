@@ -15,7 +15,12 @@ export default async function Home({
   const initialState = paramsToState(await searchParams);
   let initialResponse: SearchResponse | null = null;
   if (initialState.query.trim()) {
-    initialResponse = await performSearch(stateToRequest(initialState));
+    try {
+      initialResponse = await performSearch(stateToRequest(initialState));
+    } catch {
+      // 백엔드 오류 시 빈 상태로 SSR — 클라이언트가 재검색해 오류를 표면화한다.
+      initialResponse = null;
+    }
   }
 
   return (

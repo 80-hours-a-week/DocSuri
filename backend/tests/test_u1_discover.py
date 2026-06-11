@@ -54,6 +54,12 @@ def test_disc02_filter_and_citation_sort(u1env):
     cites = [p.citations for p in papers]
     assert cites == sorted(cites, reverse=True)  # 인용수 내림차순
 
+    # 분야 필터가 실제로 결과를 좁히는가 — 희소 태그는 상위 20보다 적게 반환된다.
+    rare = u1env.svc.orchestrator.search_for(
+        "neural network", filters=SearchFilters(field_tags=["cs.HC"])
+    ).result
+    assert 0 < len(rare.papers) < 20
+
 
 def test_disc02_filter_url_roundtrip(u1env):
     fs: FilterSortController = u1env.svc.filter_sort
@@ -107,4 +113,5 @@ def test_difficulty_estimator_labels_span_corpus(u1env):
     vec = u1env.u0.embedding.embed("ai", "en")
     hits = u1env.u0.embedding.search(vec, k=100)
     labels = {est.estimate(h).label for h in hits}
-    assert labels & {"입문", "중급", "고급"}  # 라벨이 실제로 부여됨
+    # 휴리스틱이 세 등급을 모두 산출해 분포가 갈리는지 (한 등급으로 쏠리지 않음)
+    assert labels == {"입문", "중급", "고급"}

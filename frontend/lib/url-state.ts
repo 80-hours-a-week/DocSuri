@@ -44,7 +44,11 @@ function read(params: ParamLike, key: string): string | undefined {
 }
 
 export function paramsToState(params: ParamLike): SearchState {
-  const num = (v: string | undefined) => (v != null && v !== "" ? Number(v) : null);
+  const num = (v: string | undefined) => {
+    if (v == null || v === "") return null;
+    const n = Number(v);
+    return Number.isNaN(n) ? null : n; // ymin=abc 같은 비정상 값은 무시
+  };
   const csv = (v: string | undefined) => (v ? v.split(",").filter(Boolean) : []);
   const sortRaw = read(params, "sort") as SortKey | undefined;
   return {

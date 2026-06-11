@@ -69,8 +69,11 @@ class KoEnQueryMapper:
         safe = sanitize_query(ko_query)
         cache_key = f"koen:{normalize_query(ko_query)}"
         cached = self._cache.get(cache_key)
-        if cached is not None:  # #2 동일 입력 재호출 차단
-            return QueryMapping.model_validate_json(cached)
+        if cached is not None:  # 동일 입력 재호출 차단
+            try:
+                return QueryMapping.model_validate_json(cached)
+            except Exception:  # 손상된 캐시 엔트리는 무시하고 재계산
+                pass
 
         en_keywords: list[str] = []
         for ko_term, en_term in KO_EN_SEED.items():

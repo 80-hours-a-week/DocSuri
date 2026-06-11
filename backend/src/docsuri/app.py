@@ -17,10 +17,15 @@ from .u1.service import build_u1
 
 
 def create_app() -> FastAPI:
+    app = FastAPI(title="DocSuri API", version="0.1.0")
+
+    # 헬스체크는 도메인 와이어링보다 먼저 등록 — 라우터 조립과 분리.
+    @app.get("/healthz")
+    def healthz() -> dict[str, str]:
+        return {"status": "ok"}
+
     settings = load_settings()
     u0 = build_u0(settings)
     u1 = build_u1(u0)
-
-    app = FastAPI(title="DocSuri API", version="0.1.0")
     app.include_router(build_router(u1))
     return app

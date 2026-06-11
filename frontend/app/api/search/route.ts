@@ -3,7 +3,7 @@
 
 import { NextResponse } from "next/server";
 
-import { performSearch } from "@/lib/search-service";
+import { performSearch, UpstreamError } from "@/lib/search-service";
 import type { SearchRequestBody } from "@/lib/types";
 
 const MAX_QUERY_LEN = 500;
@@ -46,5 +46,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ detail: "검색어가 비어 있거나 너무 깁니다." }, { status: 400 });
   }
 
-  return NextResponse.json(await performSearch(body));
+  try {
+    return NextResponse.json(await performSearch(body));
+  } catch (err) {
+    // 백엔드가 도달 가능하지만 오류 반환 → 상태를 그대로 전달(mock으로 가리지 않음).
+    if (err instanceof UpstreamError) {
+      return NextResponse.json(
+        { detail: "백엔드 검색에 실패했습니다." },
+        { status: err.status },
+      );
+    }
+    throw err;
+  }
 }

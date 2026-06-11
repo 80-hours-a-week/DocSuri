@@ -47,7 +47,7 @@ export function PaperCard({ paper }: { paper: SearchResultPaper }) {
           <div className="mt-2 space-y-1 text-sm text-muted-foreground">
             <p className="line-clamp-1">{paper.authors.join(", ")}</p>
             <div className="flex items-center gap-3">
-              <span>인용 {paper.citations.toLocaleString()}</span>
+              <span>인용 {paper.citations.toLocaleString("en-US")}</span>
               <Badge className={DIFFICULTY_STYLE[paper.difficulty]} variant="secondary">
                 {paper.difficulty}
               </Badge>

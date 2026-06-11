@@ -29,6 +29,13 @@ def test_sanitize_strips_delimiters_and_control_chars():
     assert "rag" in clean  # 정상 토큰은 보존
 
 
+def test_sanitize_strips_delimiter_case_and_space_variants():
+    # 대소문자·여백 변형도 무력화 (<USER_QUERY>, < user_query >)
+    clean = sanitize_query("a <USER_QUERY> b </ User_Query > c")
+    assert "query" not in clean.lower()
+    assert clean == "a b c"
+
+
 def test_sanitize_truncates_oversized_query():
     assert len(sanitize_query("a" * 5000)) <= 500
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 import time
 
 from ..u0.adapters import U0Ports
-from ..u0.ports import SearchFilters, TelemetryEvent
+from ..u0.ports import Lang, SearchFilters, TelemetryEvent
 from .difficulty import DifficultyEstimator
 from .dtos import SearchResponse, SearchResult, SearchResultPaper, SortKey
 from .filter_sort import sort_papers
@@ -60,8 +60,12 @@ class SearchOrchestrator:
         cache_key = _cache_key(query, filters, sort_key, selected_terms)
         cached = self._u0.cache.get(cache_key)
         if cached is not None:
-            self._record(op="search", started=started, cache_hit=True)
-            return SearchResponse.model_validate_json(cached)
+            try:
+                response = SearchResponse.model_validate_json(cached)
+                self._record(op="search", started=started, cache_hit=True)
+                return response
+            except Exception:  # 손상된 캐시 엔트리는 무시하고 재검색
+                pass
 
         lang = self._mapper.detect(query)
         mapping = self._mapper.map_explain(query) if lang == "ko" else None
@@ -71,7 +75,10 @@ class SearchOrchestrator:
         search_terms += selected_terms
         search_text = " ".join(search_terms).strip() or query
 
-        vec = self._u0.embedding.embed(search_text, lang)
+        # 매핑이 있으면 search_text가 영문 키워드이므로 임베딩 언어도 en
+        # (lang 자체는 SearchResult 표시·정렬 분기용으로 유지)
+        search_lang: Lang = "en" if mapping else lang
+        vec = self._u0.embedding.embed(search_text, search_lang)
         hits = self._u0.embedding.search(vec, k=TOP_K, filters=filters)
 
         papers = [

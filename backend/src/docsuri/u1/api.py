@@ -34,10 +34,6 @@ class SearchRequest(BaseModel):
 def build_router(services: U1Services) -> APIRouter:
     router = APIRouter()
 
-    @router.get("/healthz")
-    def healthz() -> dict[str, str]:
-        return {"status": "ok"}
-
     @router.post("/api/search", response_model=SearchResponse)
     def search(req: SearchRequest) -> SearchResponse:
         return services.orchestrator.search_for(
