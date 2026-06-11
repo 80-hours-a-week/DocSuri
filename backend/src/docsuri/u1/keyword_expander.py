@@ -7,7 +7,7 @@
   1) EXPANSION_SEED — 약어·정규 표현 결정적 확장 (U1 도메인 지식)
   2) LlmGateway — 시드 밖 보강(실모델). mock canned는 파싱 실패 → 시드만.
 
-CLAUDE.md 준수: #2 query 단위 캐시 · #1 입력 무해화+델리미터 · #4 LLM 실패 격리.
+보안·비용·견고성: query 단위 캐시 · 입력 무해화+델리미터 · LLM 실패 격리.
 """
 
 from __future__ import annotations

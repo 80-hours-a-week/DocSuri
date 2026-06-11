@@ -1,4 +1,4 @@
-"""입력 무해화 + LLM 프롬프트 경계 — CLAUDE.md Part 2-A(입력 검증)·Part 2-C(Prompt Injection 방어).
+"""입력 무해화 + LLM 프롬프트 경계 — 입력 검증 + Prompt Injection 방어.
 
 사용자 쿼리는 (1) 임베딩·캐시 키, (2) LLM 프롬프트로 흘러간다. 두 경로 모두에서
 제어문자·과길이를 제거하고, LLM에는 *데이터/지시 영역을 델리미터로 분리*해 Prompt

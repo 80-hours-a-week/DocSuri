@@ -1,6 +1,6 @@
-"""U1 입력 안전·비용·견고성 — CLAUDE.md Part 2-A(입력검증)·2-C(#1·#2·#4).
+"""U1 입력 안전·비용·견고성.
 
-#1 Prompt Injection 무해화 · #2 동일 입력 중복 LLM 호출 차단 · #4 LLM 실패 격리.
+Prompt Injection 무해화 · 동일 입력 중복 LLM 호출 차단 · LLM 실패 격리.
 """
 
 from __future__ import annotations

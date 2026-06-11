@@ -47,7 +47,7 @@ class SearchOrchestrator:
         sort_key: SortKey = "similarity",
         selected_terms: list[str] | None = None,
     ) -> SearchResponse:
-        # #3 입력 검증·무해화 — 비용 발생 경로 진입 전 차단 (CLAUDE.md Part 2-A)
+        # 입력 검증·무해화 — 비용 발생 경로 진입 전 차단
         query = sanitize_query(query)
         if not query:
             raise ValueError("검색어가 비어 있습니다.")

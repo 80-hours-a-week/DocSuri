@@ -8,10 +8,10 @@
      키워드를 못 주므로, 파싱 실패 시 시드만으로 동작한다.
 detect는 LLM 없이 한글 코드포인트 비율로 결정한다.
 
-CLAUDE.md 준수:
-  - #2 동일 입력 중복 호출 방지 — query 단위로 결과를 CachePort에 캐시(TTL 명시).
-  - #1 Prompt Injection — 사용자 입력을 무해화 후 <user_query> 델리미터로 분리.
-  - #4 실패 격리 — LLM 보강 실패가 시드 매핑을 죽이지 않도록 호출을 try로 감싼다.
+보안·비용·견고성:
+  - 동일 입력 중복 호출 방지 — query 단위로 결과를 CachePort에 캐시(TTL 명시).
+  - Prompt Injection 방어 — 사용자 입력을 무해화 후 <user_query> 델리미터로 분리.
+  - 실패 격리 — LLM 보강 실패가 시드 매핑을 죽이지 않도록 호출을 try로 감싼다.
 """
 
 from __future__ import annotations

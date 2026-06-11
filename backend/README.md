@@ -30,7 +30,8 @@ uv run uvicorn docsuri.app:create_app --factory   # FastAPI (mock 모드)
 
 `SearchResult`(= U3·U4와의 유일한 약속, component-model §3.7)는 동결 스키마이고,
 DISC-04 한→영 매핑 1줄은 UI 표시 전용이라 응답 엔벨로프(`query_mapping`)에만 싣는다.
-프론트엔드(Next.js/shadcn 결과 카드·필터 UI)는 다음 라운드 — [`u1_build_plan.md`](../aidlc-docs/plans/u1_build_plan.md) 범위 밖 참조.
+프론트엔드(Next.js/shadcn 검색폼·결과 카드·필터 UI)는 [`frontend/`](../frontend/README.md)에 구현돼 있다 —
+프론트의 BFF(`/api/search`)가 `BACKEND_URL`로 본 백엔드를 프록시한다(미설정 시 내장 mock).
 
 ## 어댑터 모드
 

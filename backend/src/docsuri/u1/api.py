@@ -17,7 +17,7 @@ from .service import U1Services
 
 
 class SearchRequest(BaseModel):
-    # #3 입력 검증 — 비용 발생 엔드포인트 진입 전 제약 (CLAUDE.md Part 2-A)
+    # 입력 검증 — 비용 발생 엔드포인트 진입 전 제약
     query: str = Field(min_length=1, max_length=MAX_QUERY_LEN)
     filters: SearchFilters = Field(default_factory=SearchFilters)
     sort_key: SortKey = "similarity"
