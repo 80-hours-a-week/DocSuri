@@ -73,3 +73,4 @@
 - [x] **E4. 리스트 뷰** — 3섹션 + 즉시 필터 + 카드 열기. 학부 모드 Top-3 전용(시연용 로컬 토글 — 전역 페르소나는 U2 소유 표기).
 - [x] **E5. 진입점 통합** — PaperCard `footer` prop·difficulty 옵셔널(U1 리뷰 요청), ResultList 패스스루, CitationFlow Drawer(데스크톱 사이드 패널/모바일 중첩 바텀시트, SSR 안전 미디어쿼리 구독).
 - [x] **E6. 검증** — pytest 60/60 · lint 0 · build 0 · **브라우저 E2E**(프로덕션 서버+실백엔드 프록시): 검색→그래프(노드 9·엣지 8)→노드 클릭→사이드 패널 PaperCard→학부 Top-3(인용수 내림차순)→375px 리스트 분기→즉시 필터. U4 §6 4/4 체크 갱신. 비고: Next 16 React Compiler lint 규칙으로 fetch 상태 패턴 보정(파생 loading + promise 콜백 setState). dev 서버 HMR-WS가 막힌 환경이라 E2E는 프로덕션 빌드로 수행.
+- [x] **E7. 코드 리뷰** — [`u4-code-review.md`](../reviews/u4-code-review.md) (U0 전례의 문서 리뷰, 본 PR에 동봉). **판정 승인** — U4-M1(경쟁 상태 가드)은 지적 즉시 본 PR에서 수정(reqId+닫기 무효화, lint·build 재검증), M2·L1~L5는 후속 배치. **본 계획 전 단계 종결.**
