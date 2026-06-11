@@ -98,10 +98,12 @@ And 그래프 시각화는 표시하지 않는다 (인지 부담 최소화)
 
 ## 6. 빌드 가능 정의 (Definition of Buildable)
 
-- [ ] [U0](unit-u0-foundation.md) `CitationApi.oneHop`을 JSON fixture로 mock해도 두 스토리 AC 통과
-- [ ] 동일 paper_id에서 데스크톱은 그래프, 모바일은 리스트 두 렌더가 분기
-- [ ] 노드 클릭/탭 → 논문 카드 사이드 패널/바텀시트 열림
-- [ ] [NFR-PERF-03](../../requirements/nfr.md#nfr-perf-03)·[NFR-MOBILE-03](../../requirements/nfr.md#nfr-mobile-03) 목표가 fixture 기반 측정에서 만족
+> ✅ **4/4 통과** (2026-06-11, U0 §6 갱신 위임 전례에 따라 체크) — 검증: pytest 10건(`test_u4_trace.py`+`test_u4_api.py`, fixture mock) + 브라우저 실동작(데스크톱 1280px 그래프·모바일 375px 리스트·학부 Top-3·노드→카드 패널·즉시 필터). 빌드 기록: [`u4_build_plan.md`](../../plans/u4_build_plan.md) · PR #22. TRACE-01은 R2 결정에 따라 01a(데이터)/01b(렌더)로 분할 수행.
+
+- [x] [U0](unit-u0-foundation.md) `CitationApi.oneHop`을 JSON fixture로 mock해도 두 스토리 AC 통과 — *pytest + mock 모드 E2E*
+- [x] 동일 paper_id에서 데스크톱은 그래프, 모바일은 리스트 두 렌더가 분기 — *백엔드 FormFactorRouter 단일 결정, 브라우저 확인*
+- [x] 노드 클릭/탭 → 논문 카드 사이드 패널/바텀시트 열림 — *U1 PaperCard 재사용, 데스크톱 우측 패널·모바일 바텀시트*
+- [x] [NFR-PERF-03](../../requirements/nfr.md#nfr-perf-03)·[NFR-MOBILE-03](../../requirements/nfr.md#nfr-mobile-03) 목표가 fixture 기반 측정에서 만족 — *fixture 조회 수십 ms 수준(UI에 조회 ms 표시), P95 5s/7s 예산 대비 충분. 실호출 측정은 환경 구축 라운드*
 
 ---
 

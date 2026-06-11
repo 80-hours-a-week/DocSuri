@@ -50,9 +50,26 @@
 
 ---
 
-## 범위 밖 (Out of Scope)
+---
 
-- React Flow 그래프·모바일 리스트 UI, 노드 검색창, 바텀시트 — **U4-UI 후속 라운드** (U1 스캐폴드 머지 후).
-- 다단계 인용 트리 (U4 §8 금지 — 후속 사이클).
-- Semantic Scholar 실호출 통합 테스트 — 환경 구축 라운드 (mock fixture로 검증).
-- U4 §6 체크박스 갱신 — UI 포함 전체 통과 시점에.
+# Part E — U4-UI 라운드 (TRACE-01b, 2026-06-11 개시)
+
+> **전제 충족**: U1 프론트 스캐폴드(`frontend/` — Next.js 16 App Router + shadcn/ui + vaul) develop 머지 확인. U1·U2 백엔드와 `app.py`(FastAPI 팩토리)도 머지됨. `origin/develop`을 본 브랜치에 머지 완료(충돌 0).
+> **따를 패턴**: 백엔드 = `u1/api.py` 라우터 스타일 / 프론트 = BFF 프록시+mock 폴백(`search-service.ts`) + 동결 DTO TS 미러(`types.ts`) + 엔벨로프(UI 보조 필드는 U1 `query_mapping` 전례).
+
+## E-클래리피케이션
+
+> ✅ 3건 모두 사용자 확인 (2026-06-11).
+
+- [x] **E-C1. PR 전략** — **PR #22에 이어서 커밋** 확정 (백엔드/프론트 커밋 분리, 머지 1회).
+- [x] **E-C2. U1 `paper-card.tsx` 수정** — **선택적 prop 추가 승인** (footer + difficulty 옵셔널화 — 기본 동작 불변, PR에서 U1 팀 리뷰 요청).
+- [x] **E-C3. 인용 화면 형태** — **검색 페이지 내 Drawer 오버레이** 확정. 노드/항목 선택 → 중첩 패널에 PaperCard.
+
+## E-실행 단계
+
+- [x] **E1. 백엔드 HTTP 표면** — `u4/api.py` `POST /api/citations` → 엔벨로프 `{view, top_influence}`. `app.py` 등록. TestClient 4건 통과 (**전체 pytest 60건**).
+- [x] **E2. 프론트 계약 미러·BFF** — types 미러 + BFF route + citation-service(프록시·mock 폴백) + mock-citations(결정적, U1 시드 풀 공유).
+- [x] **E3. 그래프 뷰** — `@xyflow/react@12.11` 도입. 피인용(좌)→중심→인용(우) 배치, 방향 엣지, 노드=버튼(클릭·Enter, ≥44px).
+- [x] **E4. 리스트 뷰** — 3섹션 + 즉시 필터 + 카드 열기. 학부 모드 Top-3 전용(시연용 로컬 토글 — 전역 페르소나는 U2 소유 표기).
+- [x] **E5. 진입점 통합** — PaperCard `footer` prop·difficulty 옵셔널(U1 리뷰 요청), ResultList 패스스루, CitationFlow Drawer(데스크톱 사이드 패널/모바일 중첩 바텀시트, SSR 안전 미디어쿼리 구독).
+- [x] **E6. 검증** — pytest 60/60 · lint 0 · build 0 · **브라우저 E2E**(프로덕션 서버+실백엔드 프록시): 검색→그래프(노드 9·엣지 8)→노드 클릭→사이드 패널 PaperCard→학부 Top-3(인용수 내림차순)→375px 리스트 분기→즉시 필터. U4 §6 4/4 체크 갱신. 비고: Next 16 React Compiler lint 규칙으로 fetch 상태 패턴 보정(파생 loading + promise 콜백 setState). dev 서버 HMR-WS가 막힌 환경이라 E2E는 프로덕션 빌드로 수행.
