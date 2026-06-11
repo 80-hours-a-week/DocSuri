@@ -4,7 +4,7 @@
 // 렌더 분기(graph|list)는 백엔드 FormFactorRouter의 결정(view.render)을 소비만 한다.
 // 노드/항목 선택 → 데스크톱: 우측 사이드 패널 / 모바일: 중첩 바텀시트 (TRACE-01 AC).
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { X } from "lucide-react";
 
 import { CitationGraph } from "@/components/citation-graph";
@@ -67,17 +67,24 @@ export function CitationFlow({
   // 로딩은 파생값 — effect 본문의 동기 setState 회피 (react-hooks/set-state-in-effect).
   const loading = paper !== null && resp === null && error === null;
 
+  // 경쟁 상태 가드 — 최신 요청의 응답만 반영 (U1 search-experience의 reqId 전례,
+  // u4-code-review U4-M1). 닫기 시에도 증가시켜 늦게 도착한 응답을 폐기한다.
+  const reqId = useRef(0);
+
   // setState는 promise 콜백 안에서만 — effect 동기 구간에 setState 없음
   // (react-hooks/set-state-in-effect 준수, 로딩 표시는 위 파생값).
   const load = useCallback((target: SearchResultPaper, asUndergrad: boolean) => {
+    const id = ++reqId.current;
     const started = performance.now();
     fetchCitations(target, window.innerWidth, asUndergrad ? "undergrad" : undefined)
       .then((result) => {
+        if (id !== reqId.current) return; // 더 새 요청 있음 — 폐기
         setResp(result);
         setError(null);
         setLatencyMs(Math.round(performance.now() - started));
       })
       .catch((e: unknown) => {
+        if (id !== reqId.current) return;
         setResp(null);
         setError(e instanceof Error ? e.message : "인용 흐름 조회 중 오류가 발생했습니다.");
       });
@@ -90,6 +97,7 @@ export function CitationFlow({
   }, [paper, undergrad, load]);
 
   const handleClose = useCallback(() => {
+    reqId.current += 1; // 진행 중 요청 무효화 — 닫힌 뒤 도착한 응답이 상태를 되살리지 못하게
     setResp(null);
     setSelected(null);
     setUndergrad(false);
