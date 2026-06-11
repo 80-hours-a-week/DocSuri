@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 팀 프로젝트 보드
+    url: https://github.com/orgs/80-hours-a-week/projects/2
+    about: 진행 현황은 보드에서 — unit 이슈(#15~#19)가 스테이지별로 정렬되어 있습니다.

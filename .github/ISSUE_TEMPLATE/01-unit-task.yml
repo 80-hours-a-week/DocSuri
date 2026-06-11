@@ -1,0 +1,46 @@
+name: "Unit 작업"
+description: "특정 unit의 구현 작업 — aidlc-docs 근거 링크 필수"
+title: "[U?] "
+labels: ["type:task"]
+body:
+  - type: dropdown
+    id: unit
+    attributes:
+      label: Unit
+      description: 이 작업이 속한 unit (units-overview.md §1)
+      options:
+        - U0 Foundation
+        - U1 Discover
+        - U2 Comprehend
+        - U3 Differentiate
+        - U4 Trace
+    validations:
+      required: true
+  - type: input
+    id: story
+    attributes:
+      label: 관련 스토리 ID
+      description: "예: US-DISC-01 (스토리와 무관한 인프라 작업이면 비워두기)"
+      placeholder: US-XXXX-NN
+  - type: textarea
+    id: work
+    attributes:
+      label: 작업 내용
+      description: 무엇을 만들고, 어디서 끝나는지 (범위 경계 포함)
+    validations:
+      required: true
+  - type: textarea
+    id: ac
+    attributes:
+      label: 완료 조건 (AC)
+      description: 해당 unit 문서 §6 "빌드 가능 정의"와 정합해야 합니다
+    validations:
+      required: true
+  - type: checkboxes
+    id: docs
+    attributes:
+      label: aidlc-docs 근거
+      description: 설계·코드 근거는 aidlc-docs/ 문서만 인정됩니다
+      options:
+        - label: 근거 문서(스토리 / unit / component-model §)를 본문에 링크했다
+          required: true
