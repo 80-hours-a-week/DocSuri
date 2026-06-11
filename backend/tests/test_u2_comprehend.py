@@ -213,6 +213,11 @@ def test_u2_glossary_scan_uses_limited_compressed_text(u0):
     result = engine.summarize(paper, "pro")
 
     assert glossary.calls <= 256
+    assert result.vocab_explanations
+    assert {hit.term.lower() for hit in result.vocab_explanations} >= {
+        "transformer",
+        "attention",
+    }
     assert all(hit.term in result.sections.combined_text() or hit.term in paper.plain_text() for hit in result.vocab_explanations)
 
 

@@ -35,10 +35,14 @@ def _candidate_terms(text: str) -> list[str]:
     candidates: list[str] = []
     # Common abbreviations are useful in prompts even when the seed glossary misses them.
     candidates.extend(re.findall(r"\b[A-Z]{2,}\b", text))
+    candidates.extend(_edge_ordered(words))
     for size in range(5, 1, -1):
-        for idx in range(0, max(0, len(words) - size + 1)):
-            candidates.append(" ".join(words[idx : idx + size]))
-    candidates.extend(words)
+        ngrams = [
+            " ".join(words[idx : idx + size])
+            for idx in range(0, max(0, len(words) - size + 1))
+        ]
+        for candidate in _edge_ordered(ngrams):
+            candidates.append(candidate)
     seen: set[str] = set()
     unique: list[str] = []
     for candidate in candidates:
@@ -47,3 +51,23 @@ def _candidate_terms(text: str) -> list[str]:
             seen.add(key)
             unique.append(candidate)
     return unique
+
+
+def _edge_ordered(items: list[str]) -> list[str]:
+    """Prioritize both document head and tail before middle content.
+
+    U2 compresses long papers by preserving the beginning and end. If we only
+    scan candidates in natural order, the lookup limit can be exhausted by head
+    filler terms before glossary terms in the preserved tail are checked.
+    """
+
+    ordered: list[str] = []
+    left = 0
+    right = len(items) - 1
+    while left <= right:
+        ordered.append(items[left])
+        if left != right:
+            ordered.append(items[right])
+        left += 1
+        right -= 1
+    return ordered
