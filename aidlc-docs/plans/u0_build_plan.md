@@ -54,7 +54,7 @@
 - [x] **D2. 시연 스크립트** — `scripts/u0_demo.py` 실행: **6/6 통과** (mock 모드, 자격 증명 불필요).
 - [x] **D3. 비용 시뮬 보고** — ADR §13 참조로 닫음 (월 ~$45 ≤ $50) + 데모 출력에 누적치 표시.
 - [x] **D4. U0 §6 체크리스트 갱신** — 사용자 승인 (2026-06-11: "검사 되면 통과") → unit-u0-foundation.md §6 6항목 [x] 처리 + 검증 출처 주석.
-- [ ] **D5. 코드 리뷰** — 사용자 지시 (2026-06-11): **리뷰는 별도 PR에서 문서로 작성** → `aidlc-docs/reviews/u0-code-review.md` (stacked PR) 진행 중.
+- [x] **D5. 코드 리뷰** — 사용자 지시 (2026-06-11): 별도 PR에서 문서로 작성 → [`aidlc-docs/reviews/u0-code-review.md`](../reviews/u0-code-review.md) (stacked PR). **판정: 승인 (demo-scope)** — High 0 · Medium 3(후속 라운드 배치) · Low 5. 팀 코멘트 자리 포함. **본 계획의 전 단계 완료.**
 
 ---
 
