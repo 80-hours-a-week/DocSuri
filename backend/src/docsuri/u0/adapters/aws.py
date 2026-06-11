@@ -47,8 +47,8 @@ class BedrockEmbedding:
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        self._bedrock = boto3.client("bedrock-runtime", region_name=settings.aws_region)
-        self._s3v = boto3.client("s3vectors", region_name=settings.aws_region)
+        self._bedrock = boto3.client("bedrock-runtime", region_name=settings.aws_region_embed)
+        self._s3v = boto3.client("s3vectors", region_name=settings.aws_region_embed)
 
     def embed(self, text: str, lang: Lang) -> Vector:
         body = json.dumps(
