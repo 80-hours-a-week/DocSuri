@@ -57,3 +57,47 @@ export const EMPTY_FILTERS: SearchFilters = {
   year_max: null,
   field_tags: [],
 };
+
+// ── U4 Trace — 백엔드 계약 미러: backend/src/docsuri/u4/views.py (CitationView §6.6 동결)
+//    + u4/api.py 엔벨로프. 필드를 임의로 추가/변경하지 않는다.
+
+export type Persona = "pro" | "undergrad";
+export type CitationRenderMode = "graph" | "list";
+
+export interface CitationPaper {
+  id: string;
+  title: string;
+  authors: string[];
+  year: number;
+  citations: number;
+  similarity: number;
+  field_tags: string[];
+  abstract_len: number;
+}
+
+export interface CitationView {
+  center: CitationPaper;
+  outgoing: CitationPaper[];
+  incoming: CitationPaper[];
+  render: CitationRenderMode;
+  max_nodes: number;
+}
+
+export interface CitationResponse {
+  view: CitationView;
+  top_influence: CitationPaper[]; // TRACE-02 — 피인용 가중 Top-3
+}
+
+// /api/citations 요청 본문 (백엔드 CitationRequest와 동일)
+export interface CitationRequestBody {
+  paper: {
+    id: string;
+    title: string;
+    authors: string[];
+    year: number;
+    citations: number;
+    similarity: number;
+  };
+  viewport_width: number;
+  persona?: Persona;
+}

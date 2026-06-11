@@ -11,7 +11,7 @@ import type {
   SearchResultPaper,
 } from "./types";
 
-interface SeedPaper {
+export interface SeedPaper {
   id: string;
   title: string;
   authors: string[];
@@ -19,6 +19,11 @@ interface SeedPaper {
   citations: number;
   field_tags: string[];
   difficulty: DifficultyLabel;
+}
+
+// U4 mock-citations가 같은 시드 풀을 공유한다 (mock 간 ID 정합).
+export function mockPaperPool(): SeedPaper[] {
+  return SEED;
 }
 
 // ~24편 시드 (난이도·연도·분야 혼합). 백엔드 corpus_seed.json의 대역.
