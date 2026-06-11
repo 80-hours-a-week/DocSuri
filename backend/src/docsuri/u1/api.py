@@ -8,18 +8,27 @@ POST /api/search 가 SearchResponse(SearchResult 계약 + UI 보조 매핑)를 �
 from __future__ import annotations
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ..u0.ports import SearchFilters
 from .dtos import SearchResponse, SortKey
+from .safety import MAX_QUERY_LEN, MAX_SELECTED_TERMS
 from .service import U1Services
 
 
 class SearchRequest(BaseModel):
-    query: str
+    # #3 입력 검증 — 비용 발생 엔드포인트 진입 전 제약 (CLAUDE.md Part 2-A)
+    query: str = Field(min_length=1, max_length=MAX_QUERY_LEN)
     filters: SearchFilters = Field(default_factory=SearchFilters)
     sort_key: SortKey = "similarity"
-    selected_terms: list[str] = Field(default_factory=list)
+    selected_terms: list[str] = Field(default_factory=list, max_length=MAX_SELECTED_TERMS)
+
+    @field_validator("query")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("검색어가 비어 있습니다.")
+        return value
 
 
 def build_router(services: U1Services) -> APIRouter:

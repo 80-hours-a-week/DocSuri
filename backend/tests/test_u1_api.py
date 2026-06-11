@@ -42,3 +42,10 @@ def test_search_korean_returns_mapping(client):
     assert body["result"]["lang"] == "ko"
     assert body["query_mapping"] is not None
     assert "transformer" in body["query_mapping"]["en_keywords"]
+
+
+def test_blank_and_missing_query_rejected(client):
+    # #3 입력 검증 — 비용 발생 경로 진입 전 422로 차단
+    assert client.post("/api/search", json={"query": "   "}).status_code == 422
+    assert client.post("/api/search", json={"query": ""}).status_code == 422
+    assert client.post("/api/search", json={}).status_code == 422

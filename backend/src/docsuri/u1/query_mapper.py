@@ -7,13 +7,25 @@
   2) LlmGateway — 시드에 없는 표현 보강 (실모델). mock LLM은 canned 한국어라 구조적
      키워드를 못 주므로, 파싱 실패 시 시드만으로 동작한다.
 detect는 LLM 없이 한글 코드포인트 비율로 결정한다.
+
+CLAUDE.md 준수:
+  - #2 동일 입력 중복 호출 방지 — query 단위로 결과를 CachePort에 캐시(TTL 명시).
+  - #1 Prompt Injection — 사용자 입력을 무해화 후 <user_query> 델리미터로 분리.
+  - #4 실패 격리 — LLM 보강 실패가 시드 매핑을 죽이지 않도록 호출을 try로 감싼다.
 """
 
 from __future__ import annotations
 
 from ..u0.llm_gateway import LlmGateway
-from ..u0.ports import Lang
+from ..u0.ports import CachePort, Lang
 from .dtos import QueryMapping
+from .safety import (
+    INJECTION_GUARD,
+    QUERY_CACHE_TTL_S,
+    normalize_query,
+    sanitize_query,
+    wrap_user_data,
+)
 
 # 한국어 학술어 → 영문 키워드 (U1 소속 도메인 지식, 사후 확장 가능)
 KO_EN_SEED: dict[str, str] = {
@@ -45,41 +57,58 @@ def _hangul_ratio(text: str) -> float:
 
 
 class KoEnQueryMapper:
-    def __init__(self, llm: LlmGateway) -> None:
+    def __init__(self, llm: LlmGateway, cache: CachePort) -> None:
         self._llm = llm
+        self._cache = cache
 
     def detect(self, query: str) -> Lang:
         return "ko" if _hangul_ratio(query) >= 0.3 else "en"
 
     def map_explain(self, ko_query: str) -> QueryMapping:
         """한국어 쿼리를 영문 키워드로 매핑하고 1줄 설명을 만든다 (US-DISC-04 AC)."""
+        safe = sanitize_query(ko_query)
+        cache_key = f"koen:{normalize_query(ko_query)}"
+        cached = self._cache.get(cache_key)
+        if cached is not None:  # #2 동일 입력 재호출 차단
+            return QueryMapping.model_validate_json(cached)
+
         en_keywords: list[str] = []
         for ko_term, en_term in KO_EN_SEED.items():
-            if ko_term in ko_query and en_term not in en_keywords:
+            if ko_term in safe and en_term not in en_keywords:
                 en_keywords.append(en_term)
 
-        # 실모델에서는 LLM이 시드 밖 표현을 보강한다. mock은 canned라 _parse가 비고,
-        # 그 경우 시드 결과만 사용한다. (호출 자체로 Telemetry·CostGuard가 작동)
-        completion = self._llm.complete(
-            prompt=(
-                "다음 한국어 연구 질문을 영문 검색 키워드로 바꿔라. "
-                f"키워드만 쉼표로 나열하라: {ko_query}"
-            ),
-            persona="undergrad",
-            budget_tokens=200,
-        )
-        for term in _parse_terms(completion.text):
+        for term in self._llm_keywords(safe):  # #4 실패해도 시드는 유지
             if term not in en_keywords:
                 en_keywords.append(term)
 
         if not en_keywords:
-            en_keywords = [ko_query.strip()]
+            en_keywords = [safe]
 
-        explanation = (
-            f"입력하신 \"{ko_query.strip()}\"을(를) 영문 키워드 "
-            f"{', '.join(en_keywords)}(으)로 매핑해 검색했습니다."
+        mapping = QueryMapping(
+            en_keywords=en_keywords,
+            explanation=(
+                f"입력하신 \"{safe}\"을(를) 영문 키워드 "
+                f"{', '.join(en_keywords)}(으)로 매핑해 검색했습니다."
+            ),
         )
-        return QueryMapping(en_keywords=en_keywords, explanation=explanation)
+        self._cache.set(cache_key, mapping.model_dump_json().encode(), QUERY_CACHE_TTL_S)
+        return mapping
+
+    def _llm_keywords(self, safe_query: str) -> list[str]:
+        """시드 밖 표현을 LLM으로 보강 — 실패 시 빈 목록(검색은 시드로 진행)."""
+        try:
+            completion = self._llm.complete(
+                prompt=(
+                    INJECTION_GUARD
+                    + "이 검색어를 영문 검색 키워드로 바꿔 쉼표로만 나열하라:\n"
+                    + wrap_user_data(safe_query)
+                ),
+                persona="undergrad",
+                budget_tokens=200,
+            )
+            return _parse_terms(completion.text)
+        except Exception:  # noqa: BLE001 — 보강 실패는 검색을 막지 않는다 (#4)
+            return []
 
 
 def _parse_terms(text: str) -> list[str]:

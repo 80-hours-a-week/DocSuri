@@ -26,8 +26,9 @@ class U1Services:
 
 
 def build_u1(u0: U0Ports) -> U1Services:
-    mapper = KoEnQueryMapper(u0.llm)
-    expander = KeywordExpander(u0.llm)
+    # mapper·expander는 query 단위 결과를 CachePort에 캐시한다 (동일 입력 중복 LLM 호출 차단).
+    mapper = KoEnQueryMapper(u0.llm, u0.cache)
+    expander = KeywordExpander(u0.llm, u0.cache)
     estimator = DifficultyEstimator()
     return U1Services(
         orchestrator=SearchOrchestrator(u0, mapper, expander, estimator),

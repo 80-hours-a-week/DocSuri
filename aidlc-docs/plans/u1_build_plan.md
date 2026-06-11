@@ -60,3 +60,21 @@
 - 배포·IaC·Lambda 패키징, AWS 실호출 통합 테스트(환경 구축 라운드, ADR §14).
 - `SearchResult` 계약 확장(한→영 매핑 DTO 편입 등 U3·U4 합의 사안).
 - 난이도 추정 정밀도 평가·튜닝(A7) — 본 unit 책임이나 별도 사이클.
+
+---
+
+## 후속 과제 (이번 라운드에서 의식적으로 남긴 기술 부채)
+
+CLAUDE.md 대조 리뷰(2026-06-11)에서 식별. 지금은 닫지 않되 추적한다.
+
+- **관측 op 세분화 + 실패 텔레메트리** (component-model §8.2 / CLAUDE.md 관측가능성) —
+  현재 `op="search"`만 기록하고 `expand`·`ko_en_map`은 `LlmGateway`의 `op="llm.complete"`로만
+  찍힌다. 또한 LLM 보강 실패(query_mapper·keyword_expander의 `_llm_*`)는 **조용히 삼켜져**
+  오류율이 어디에도 안 남는다. → **관측 스택(EMF/X-Ray) 환경구축 라운드**에서 구간 record +
+  실패 이벤트 기록으로 닫는다. (지금 로거 신설은 소비처 없는 오버엔지니어링.)
+- **LLM 구조적 출력(structured output / tool use)으로 키워드 파싱 견고화** (CLAUDE.md 2-C 환각·견고성) —
+  현재 `query_mapper`/`keyword_expander`는 LLM 자유텍스트를 `_parse_terms` 휴리스틱으로 긁는다.
+  Bedrock Converse `toolConfig`로 스키마 강제 출력을 받으면 파싱이 사라진다. 단, 이는 U0
+  `LlmPort.complete(prompt, persona, budget_tokens) -> Completion(text)` **시그니처 확장**이 필요 →
+  [handoff §6](../story-artifacts/handoff.md) 4단계로 **U0 소유자와 합의**해야 함(U1 단독 변경 금지, U1 §8).
+  중간책: U0 변경 없이 "JSON만" 프롬프트 + `json.loads` + 폴백(정규식보다 견고하나 API 강제는 아님).
