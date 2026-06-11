@@ -23,6 +23,9 @@ class Settings:
     ddb_glossary_table: str = "docsuri-glossary"
     ddb_cost_table: str = "docsuri-cost"
     cost_monthly_cap_usd: float = 50.0  # NFR-COST-01
+    # Cohere Embed 최대 입력 2048자 제약에 맞춘 청킹 상수
+    chunk_size: int = 2000  # 문자 단위
+    chunk_overlap: int = 200  # 청크 간 오버랩
     # ADR-D4 단가 (USD per 1M tokens) — 모델 교체 시 갱신
     llm_price_in_per_mtok: float = 1.0
     llm_price_out_per_mtok: float = 5.0
