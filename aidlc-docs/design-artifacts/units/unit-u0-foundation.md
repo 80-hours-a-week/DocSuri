@@ -92,12 +92,14 @@
 
 U0는 다음이 모두 작동할 때 *빌드 가능*하다 — 다른 unit 없이 단독 시연 가능.
 
-- [ ] `EmbeddingPort.embed("transformer")` → 임의 vector 반환 (실모델 OR 결정적 mock)
-- [ ] `EmbeddingPort.search(v, k=5)` → 5개 `PaperHit` 반환 (시드 코퍼스 100편 기준)
-- [ ] `LlmPort.complete(prompt, persona='pro', budget=2000)` → 한국어 200~400자 응답
-- [ ] `CachePort` 24h TTL 동작 시연 (set → 25h 후 miss)
-- [ ] `Telemetry` 출력에 latency·토큰·캐시 적중 키가 존재
-- [ ] [NFR-COST-01](../../requirements/nfr.md#nfr-cost-01) 시뮬레이션 — 데모 트래픽 가정 월 $50 이내인지 추정 보고서
+> ✅ **6/6 통과** (2026-06-11, 사용자 승인으로 체크 갱신) — 검증: `backend/tests/test_u0_buildable.py`(pytest 14/14) + `backend/scripts/u0_demo.py`(6/6, mock 모드). 빌드 기록: [`u0_build_plan.md`](../../plans/u0_build_plan.md) · PR #14.
+
+- [x] `EmbeddingPort.embed("transformer")` → 임의 vector 반환 (실모델 OR 결정적 mock) — *결정적 mock, 32차원*
+- [x] `EmbeddingPort.search(v, k=5)` → 5개 `PaperHit` 반환 (시드 코퍼스 100편 기준) — *arXiv 실수집 100편*
+- [x] `LlmPort.complete(prompt, persona='pro', budget=2000)` → 한국어 200~400자 응답 — *261자 확인*
+- [x] `CachePort` 24h TTL 동작 시연 (set → 25h 후 miss) — *시간 주입식 시뮬레이션*
+- [x] `Telemetry` 출력에 latency·토큰·캐시 적중 키가 존재 — *latency_ms·tokens_in/out·cache_hit*
+- [x] [NFR-COST-01](../../requirements/nfr.md#nfr-cost-01) 시뮬레이션 — 데모 트래픽 가정 월 $50 이내인지 추정 보고서 — *[ADR §13](../architecture_decision_record.md): 월 ~$45 + CostGuard 하드 거부*
 
 ---
 
