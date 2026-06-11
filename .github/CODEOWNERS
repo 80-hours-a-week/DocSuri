@@ -1,161 +1,64 @@
-# CODEOWNERS — mirrors AGENTS.md §7 Team Ownership matrix.
+# CODEOWNERS — AI-DLC Construction unit 소유 구조.
 #
-# Syntax: <pattern> <owner1> [<owner2> ...]
-# Later matches override earlier ones. Patterns relative to repo root.
-# All owners listed are GitHub team placeholders (@team-*) the org can
-# rename via Settings → Teams to map to real groups/individuals.
+# 근거 (단일 진실):
+#   - aidlc-docs/design-artifacts/units/units-overview.md §1 (unit 매트릭스) · §4 (인터페이스 합의)
+#   - 변경 절차: aidlc-docs/story-artifacts/handoff.md §6 (프롬프트 → 계획 → 승인 → 동기 갱신)
 #
-# Rules of thumb:
-# - A PR touching only a single owner area: that owner self-merges after CI.
-# - A PR touching multiple areas: every touched owner must approve.
-# - A PR touching an Owner port (infra/llm, crosscutting/glossary,
-#   crosscutting/anchor, crosscutting/verifier): every downstream consumer
-#   from AGENTS.md §7.3 must approve.
-# - PRs to AGENTS.md / feature-specs / Sprint-Backlog-*.md require
-#   @team-architect approval and a §-numbered rationale.
-
-# =============================================================================
-# Default fallback — anything not matched below.
-# =============================================================================
-*                                       @team-platform @team-architect
-
-# =============================================================================
-# Domain — feature owners (AGENTS.md §7.2)
-# =============================================================================
-
-# #01a Paper Search
-demo/app/domain/papers/search.py        @team-search
-demo/app/domain/papers/normalizer.py    @team-search
-
-# #01b Paper Ingest — shared models also owned by search (read-only for ingest).
-demo/app/domain/papers/ingest.py        @team-ingest
-demo/app/domain/papers/models.py        @team-search @team-ingest
-demo/app/infra/grobid/                  @team-ingest
-demo/app/infra/pdf/                     @team-ingest
-
-# #02 Summarization
-demo/app/domain/summarization/          @team-summary
-
-# #03 Translation
-demo/app/domain/translation/            @team-translation
-
-# #04 Monitoring & Notification
-demo/app/domain/monitoring/             @team-monitoring
-demo/app/workflows/monitoring_cron/     @team-monitoring
-demo/app/infra/notification/            @team-monitoring
-
-# #05 Similar Paper Exploration
-demo/app/domain/exploration/            @team-exploration
-
-# #06 Research Gap + #07 Project Trend share domain/analysis/ — split by file.
-demo/app/domain/analysis/               @team-analysis
-demo/app/workflows/gap_analysis/        @team-analysis
-demo/app/workflows/project_analysis/    @team-analysis
-demo/app/infra/code_embed/              @team-analysis
-
-# #08 Citation Genealogy
-demo/app/domain/citation/               @team-citation
-demo/app/infra/citation_graph/          @team-citation
-demo/app/infra/graphdb/                 @team-citation
-
-# #09 Reproducibility
-demo/app/domain/reproducibility/        @team-repro
-demo/app/workflows/repro_evaluation/    @team-repro
-demo/app/infra/github/                  @team-repro
-
-# #10 Reading Assistant
-demo/app/domain/reading/                @team-reading
-
-# #11 Reading Priority Classifier
-demo/app/domain/reading_priority/       @team-priority
-demo/app/crosscutting/bandit/           @team-priority
-
-# =============================================================================
-# Owner Ports — cross-cutting (AGENTS.md §7.3)
+# 소유 매핑 (2026-06-11 팀 확정):
+#   U0 Foundation     @revenantonthemission
+#   U1 Discover       @kyjness
+#   U2 Comprehend     @ELSAPHABA
+#   U3 Differentiate  @shr8596
+#   U4 Trace          @revenantonthemission
 #
-# Port owners CANNOT unilaterally change interfaces. Every consumer listed
-# in AGENTS.md §7.3 must approve. The CODEOWNERS rule below only auto-
-# requests review from the port owner; reviewers add consumer owners
-# manually for interface-changing PRs.
-# =============================================================================
-
-demo/app/infra/llm/                     @team-llm-port
-demo/app/crosscutting/glossary/         @team-glossary-port
-demo/app/crosscutting/anchor/           @team-anchor-port
-demo/app/crosscutting/verifier/         @team-verifier-port
-demo/app/crosscutting/events/           @team-platform
-demo/app/crosscutting/ratelimit/        @team-platform
-demo/app/crosscutting/audit/            @team-platform
-demo/app/crosscutting/safety/           @team-platform
-demo/app/infra/embedding/               @team-search
-demo/app/infra/temporal/                @team-platform
+# 규칙:
+#   - 패턴은 뒤에 오는 항목이 우선한다 (later match wins).
+#   - 모든 unit 경로는 프로세스 오너(@revenantonthemission)가 공동 소유 —
+#     "PR 작성자 = 단독 owner"인 경우 code-owner 리뷰 요구가 교착되는 것을 방지.
+#   - U0 포트 시그니처(ports.py) 변경 PR: units-overview §4 합의 표의 모든
+#     소비 unit owner가 리뷰에 참여해야 한다 (자동 요청 밖 — 수동 지정).
+#   - backend/src/docsuri/u<N>/ 패턴은 PR #14의 unit-슬라이스 레이아웃 기준.
+#     해당 경로가 생기기 전까지는 비활성(무해)이다.
 
 # =============================================================================
-# Platform — composition root, API surface, persistence
+# 기본 폴백
 # =============================================================================
-
-demo/app/main.py                        @team-platform
-demo/app/container.py                   @team-platform
-demo/app/api/                           @team-platform
-
-# API route files are platform-owned for routing, but content changes by
-# domain owners are routine — they request platform review only if the
-# routing layer itself changes.
-demo/app/api/routes_search.py           @team-platform @team-search
-demo/app/api/routes_ingest.py           @team-platform @team-ingest
-demo/app/api/routes_summary.py          @team-platform @team-summary
-demo/app/api/routes_translation.py      @team-platform @team-translation
-
-demo/app/infra/storage/                 @team-platform
-demo/app/infra/http/                    @team-platform
+*                                       @revenantonthemission
 
 # =============================================================================
-# Frontend
+# 거버넌스 — AI-DLC 문서 · repo 설정
 # =============================================================================
-
-demo/web/                               @team-frontend
-
-# =============================================================================
-# Build, infra config, ops
-# =============================================================================
-
-demo/pyproject.toml                     @team-platform
-demo/run.sh                             @team-platform
-demo/scripts/                           @team-platform
-demo/seed/                              @team-platform
-demo/tests/                             @team-platform
-demo/.env.example                       @team-platform
-demo/.gitignore                         @team-platform
-demo/Dockerfile*                        @team-platform
-demo/docker-compose*                    @team-platform
+aidlc-docs/                             @revenantonthemission
+.github/                                @revenantonthemission
 
 # =============================================================================
-# Architecture & specs — require @team-architect approval
+# Backend 공유 — 빌드 설정 · 스크립트 · 시드 데이터 · 테스트 하네스 (U0 소유)
 # =============================================================================
+backend/                                @revenantonthemission
 
-AGENTS.md                               @team-architect @team-platform
-feature-specs/                          @team-architect
-architecture.html                       @team-architect
-priorities.html                         @team-architect
-Sprint-Capacity-Plan.md                 @team-architect
+# =============================================================================
+# Unit별 소스 — backend/src/docsuri/u<N>/
+# =============================================================================
+backend/src/docsuri/u0/                 @revenantonthemission
+backend/src/docsuri/u1/                 @kyjness @revenantonthemission
+backend/src/docsuri/u2/                 @ELSAPHABA @revenantonthemission
+backend/src/docsuri/u3/                 @shr8596 @revenantonthemission
+backend/src/docsuri/u4/                 @revenantonthemission
 
-# Sprint backlogs — feature owner + architect cross-review.
-Sprint-Backlog-Search.md                @team-search @team-architect
-Sprint-Backlog-Ingest.md                @team-ingest @team-architect
-Sprint-Backlog-Summarization.md         @team-summary @team-architect
-Sprint-Backlog-Translation.md           @team-translation @team-architect
-Sprint-Backlog-Monitoring.md            @team-monitoring @team-architect
-Sprint-Backlog-Exploration.md           @team-exploration @team-architect
-Sprint-Backlog-Research-Gap.md          @team-analysis @team-architect
-Sprint-Backlog-Project-Trend.md         @team-analysis @team-architect
-Sprint-Backlog-Citation-Genealogy.md    @team-citation @team-architect
-Sprint-Backlog-Reproducibility.md       @team-repro @team-architect
-Sprint-Backlog-Reading-Assistant.md     @team-reading @team-architect
-Sprint-Backlog-Priority-Classifier.md   @team-priority @team-architect
-Sprint-Backlog-Verification-Tools.md    @team-verifier-port @team-architect
+# =============================================================================
+# Frontend — ADR-D5(Next.js)에 따라 U1이 UI 최초 진입. unit별 세분화는
+# U1 빌드에서 라우트 구조가 확정된 뒤 갱신한다.
+# =============================================================================
+frontend/                               @kyjness @revenantonthemission
 
-# Demo README (docs trail behind code; keep with platform).
-demo/README.md                          @team-platform
+# =============================================================================
+# Unit 설계 문서 — 해당 unit owner + 프로세스 오너 (aidlc-docs/ 규칙을 override)
+# =============================================================================
+aidlc-docs/design-artifacts/units/unit-u0-foundation.md      @revenantonthemission
+aidlc-docs/design-artifacts/units/unit-u1-discover.md        @kyjness @revenantonthemission
+aidlc-docs/design-artifacts/units/unit-u2-comprehend.md      @ELSAPHABA @revenantonthemission
+aidlc-docs/design-artifacts/units/unit-u3-differentiate.md   @shr8596 @revenantonthemission
+aidlc-docs/design-artifacts/units/unit-u4-trace.md           @revenantonthemission
 
-# CODEOWNERS itself — architect-owned to prevent drift from §7.
-.github/CODEOWNERS                      @team-architect
+# CODEOWNERS 자체 — 프로세스 오너 소유 (units-overview 매핑과의 드리프트 방지)
+.github/CODEOWNERS                      @revenantonthemission
