@@ -13,7 +13,7 @@ from docsuri.u2 import (
     SummaryEngine,
 )
 from docsuri.u0.adapters.mock import InMemoryTtlCache, ListTelemetry
-from docsuri.u0.ports import Completion
+from docsuri.u0.ports import Completion, KoTranslation
 from docsuri.u2.document_ingestor import _parse_arxiv_response
 
 
@@ -91,6 +91,21 @@ def test_u2_summary_cache_uses_7_day_key(u0, sample_paper):
     assert u0.telemetry.events[-1]["cache_hit"] is True
 
 
+def test_u2_summary_cache_expires_after_7_days(u0, sample_paper, fake_clock):
+    cache = InMemoryTtlCache(clock=fake_clock)
+    telemetry = ListTelemetry()
+    engine = SummaryEngine(u0.llm, cache, u0.glossary, telemetry)
+
+    first = engine.summarize(sample_paper, "pro")
+    second = engine.summarize(sample_paper, "pro")
+    fake_clock.advance(7 * 24 * 3600 + 1)
+    third = engine.summarize(sample_paper, "pro")
+
+    assert second == first
+    assert third == first
+    assert [event["cache_hit"] for event in telemetry.events] == [False, True, False]
+
+
 def test_u2_undergrad_readability_report(sample_paper, u0):
     engine = SummaryEngine(u0.llm, u0.cache, u0.glossary, u0.telemetry)
     result = engine.summarize(sample_paper, "undergrad")
@@ -135,10 +150,70 @@ def test_u2_undergrad_retry_preserves_aids(u0, sample_paper):
 
     result = engine.summarize(sample_paper, "undergrad")
 
-    assert "약어 풀이" in result.sections.question
+    assert "MLM(마스크 언어 모델)" in result.sections.question
     assert "수식 해석" in result.sections.method
     assert result.cost.tokens_in == 18
     assert result.cost.tokens_out == 140
+    assert engine.last_readability_report is not None
+    assert engine.last_readability_report.passed
+
+
+def test_u2_undergrad_failed_retry_is_not_cached(u0, sample_paper):
+    class AlwaysHardLlm:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def complete(self, prompt: str, persona: str, budget_tokens: int) -> Completion:
+            self.calls += 1
+            long_sentence = " ".join(["어려운설명"] * 30)
+            return Completion(
+                text=(
+                    f"연구 질문: {long_sentence}. 방법: {long_sentence}. "
+                    f"결과: {long_sentence}. 한계: {long_sentence}."
+                ),
+                tokens_in=10,
+                tokens_out=120,
+                model_id="always-hard-test",
+            )
+
+    llm = AlwaysHardLlm()
+    engine = SummaryEngine(
+        llm,  # type: ignore[arg-type]
+        InMemoryTtlCache(),
+        u0.glossary,
+        ListTelemetry(),
+    )
+
+    engine.summarize(sample_paper, "undergrad")
+    first_report = engine.last_readability_report
+    engine.summarize(sample_paper, "undergrad")
+
+    assert first_report is not None
+    assert not first_report.passed
+    assert llm.calls == 4
+
+
+def test_u2_glossary_scan_uses_limited_compressed_text(u0):
+    class CountingGlossary:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def lookup(self, term: str) -> KoTranslation | None:
+            self.calls += 1
+            return u0.glossary.lookup(term)
+
+    text = " ".join(f"term{i}" for i in range(2000))
+    text += " transformer attention retrieval-augmented generation"
+    paper = DocumentIngestor().ingest(
+        DocumentSource(kind="raw_text", paper_id="paper:glossary-limit", value=text)
+    )
+    glossary = CountingGlossary()
+
+    engine = SummaryEngine(u0.llm, InMemoryTtlCache(), glossary, ListTelemetry())
+    result = engine.summarize(paper, "pro")
+
+    assert glossary.calls <= 256
+    assert all(hit.term in result.sections.combined_text() or hit.term in paper.plain_text() for hit in result.vocab_explanations)
 
 
 def test_u2_selection_translator_desktop_and_mobile(u0):

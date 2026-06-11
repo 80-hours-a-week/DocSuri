@@ -2,20 +2,28 @@
 
 from __future__ import annotations
 
-import json
 import re
 import time
 
 from docsuri.u0.ports import CachePort, Glossary, LlmPort, Persona, Telemetry, TelemetryEvent
 
 from .glossary_tools import glossary_hits
-from .models import PaperText, SummaryResult, SummarySections, UsageCost
+from .models import PaperText, ReadabilityReport, SummaryResult, SummarySections, UsageCost
 from .prompts import build_summary_prompt
 from .readability import ReadabilityValidator
 
 SUMMARY_TTL_SECONDS = 7 * 24 * 3600
 DEFAULT_SUMMARY_BUDGET_TOKENS = 1200
 MAX_COMPRESSED_CHARS = 10_000
+ACRONYM_EXPLANATIONS = {
+    "AI": "인공지능",
+    "CNN": "합성곱 신경망",
+    "LLM": "대규모 언어 모델",
+    "MLM": "마스크 언어 모델",
+    "NLP": "자연어 처리",
+    "RAG": "검색 증강 생성",
+    "RNN": "순환 신경망",
+}
 
 
 class SummaryEngine:
@@ -34,6 +42,7 @@ class SummaryEngine:
         self._telemetry = telemetry
         self._validator = validator or ReadabilityValidator()
         self._budget_tokens = budget_tokens
+        self.last_readability_report: ReadabilityReport | None = None
 
     def summarize(self, paper_text: PaperText, mode: Persona) -> SummaryResult:
         started = time.perf_counter()
@@ -45,7 +54,7 @@ class SummaryEngine:
             return result
 
         compressed = _compress_paper_text(paper_text)
-        hits = glossary_hits(paper_text.plain_text(), self._glossary)
+        hits = glossary_hits(compressed, self._glossary)
         completion = self._llm.complete(
             build_summary_prompt(paper_text, mode, hits, compressed),
             persona=mode,
@@ -62,6 +71,7 @@ class SummaryEngine:
             cost=UsageCost(tokens_in=completion.tokens_in, tokens_out=completion.tokens_out),
         )
         report = self._validator.validate(result.sections.combined_text(), mode)
+        self.last_readability_report = report
         if mode == "undergrad" and not report.passed:
             retry_completion = self._llm.complete(
                 build_summary_prompt(paper_text, mode, hits, compressed)
@@ -75,9 +85,11 @@ class SummaryEngine:
             )
             result.cost.tokens_in += retry_completion.tokens_in
             result.cost.tokens_out += retry_completion.tokens_out
-            self._validator.validate(result.sections.combined_text(), mode)
+            report = self._validator.validate(result.sections.combined_text(), mode)
+            self.last_readability_report = report
 
-        self._cache.set(key, result.model_dump_json().encode(), SUMMARY_TTL_SECONDS)
+        if report.passed:
+            self._cache.set(key, result.model_dump_json().encode(), SUMMARY_TTL_SECONDS)
         self._record_summary(
             started,
             mode,
@@ -157,8 +169,14 @@ def _parse_summary_sections(text: str) -> SummarySections:
 def _add_undergrad_aids(sections: SummarySections, source_text: str) -> SummarySections:
     acronyms = sorted(set(re.findall(r"\b[A-Z]{2,}\b", source_text)))
     formulas = re.findall(r"[$][^$]{2,80}[$]|[A-Za-z]\s*=\s*[^.;,\n]{1,80}", source_text)
-    if acronyms and not any(acronym in sections.question for acronym in acronyms):
-        sections.question += f" 약어 풀이: {acronyms[0]}는 본문에 처음 나온 핵심 약어입니다."
+    known_acronyms = [
+        f"{acronym}({ACRONYM_EXPLANATIONS[acronym]})"
+        for acronym in acronyms
+        if acronym in ACRONYM_EXPLANATIONS
+    ]
+    if known_acronyms and not any(item in sections.question for item in known_acronyms):
+        sections.question += f" 약어 풀이: {', '.join(known_acronyms[:3])}."
     if formulas:
-        sections.method += f" 수식 해석: {formulas[0].strip('$')}는 입력과 출력의 관계를 간단히 나타낸 식입니다."
+        formula = formulas[0].strip("$").strip()
+        sections.method += f" 수식 해석: {formula}는 식의 왼쪽 값을 오른쪽 계산으로 얻는다는 뜻입니다."
     return sections

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -25,17 +26,28 @@ class DocumentIngestor:
         self._telemetry = telemetry
 
     def ingest(self, source: DocumentSource) -> PaperText:
+        started = time.perf_counter()
         if source.kind == "raw_text":
-            return self._from_raw_text(source)
-        if source.kind == "pdf_path":
-            return self._from_pdf_path(source)
-        if source.kind == "arxiv_url":
-            return self._from_arxiv_url(source)
-        if source.kind == "url":
+            paper = self._from_raw_text(source)
+        elif source.kind == "pdf_path":
+            paper = self._from_pdf_path(source)
+        elif source.kind == "arxiv_url":
+            paper = self._from_arxiv_url(source)
+        elif source.kind == "url":
             if "arxiv.org/" not in source.value:
                 raise ValueError("현재 U2 URL 입력은 arXiv URL만 지원합니다.")
-            return self._from_arxiv_url(source)
-        raise ValueError(f"지원하지 않는 문서 소스입니다: {source.kind}")
+            paper = self._from_arxiv_url(source)
+        else:
+            raise ValueError(f"지원하지 않는 문서 소스입니다: {source.kind}")
+        if self._telemetry:
+            self._telemetry.record(
+                TelemetryEvent(
+                    op="document.ingest",
+                    latency_ms=round((time.perf_counter() - started) * 1000, 3),
+                    cache_hit=False,
+                )
+            )
+        return paper
 
     def _from_raw_text(self, source: DocumentSource) -> PaperText:
         text = source.value.strip()
@@ -74,15 +86,13 @@ class DocumentIngestor:
         if not arxiv_id:
             raise ValueError("arXiv URL에서 논문 ID를 찾을 수 없습니다.")
         api_url = f"https://export.arxiv.org/api/query?id_list={arxiv_id}"
-        with httpx.Client(timeout=10.0) as client:
+        with httpx.Client(timeout=3.0) as client:
             response = request_with_retry(client, "GET", api_url)
-        response.raise_for_status()
-        paper = _parse_arxiv_response(response.text, fallback_id=arxiv_id)
-        if self._telemetry:
-            self._telemetry.record(
-                TelemetryEvent(op="document.ingest", latency_ms=0.0, cache_hit=False)
-            )
-        return paper
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise ValueError("arXiv 문서 조회에 실패했습니다. URL을 확인해 주세요.") from exc
+        return _parse_arxiv_response(response.text, fallback_id=arxiv_id)
 
 
 def _stable_id(text: str) -> str:

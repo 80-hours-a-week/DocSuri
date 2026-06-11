@@ -9,10 +9,17 @@ from docsuri.u0.ports import Glossary
 from .models import VocabExplanation
 
 
-def glossary_hits(text: str, glossary: Glossary) -> list[VocabExplanation]:
+DEFAULT_MAX_CANDIDATES = 256
+
+
+def glossary_hits(
+    text: str,
+    glossary: Glossary,
+    max_candidates: int = DEFAULT_MAX_CANDIDATES,
+) -> list[VocabExplanation]:
     seen: set[str] = set()
     hits: list[VocabExplanation] = []
-    for candidate in _candidate_terms(text):
+    for candidate in _candidate_terms(text)[:max_candidates]:
         key = candidate.lower()
         if key in seen:
             continue
@@ -24,10 +31,19 @@ def glossary_hits(text: str, glossary: Glossary) -> list[VocabExplanation]:
 
 
 def _candidate_terms(text: str) -> list[str]:
-    ascii_terms = re.findall(r"[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z][A-Za-z0-9-]*){0,4}", text)
     words = re.findall(r"[A-Za-z][A-Za-z0-9-]*", text)
-    candidates = ascii_terms + words
+    candidates: list[str] = []
     # Common abbreviations are useful in prompts even when the seed glossary misses them.
     candidates.extend(re.findall(r"\b[A-Z]{2,}\b", text))
-    candidates.sort(key=len, reverse=True)
-    return candidates
+    for size in range(5, 1, -1):
+        for idx in range(0, max(0, len(words) - size + 1)):
+            candidates.append(" ".join(words[idx : idx + size]))
+    candidates.extend(words)
+    seen: set[str] = set()
+    unique: list[str] = []
+    for candidate in candidates:
+        key = candidate.lower()
+        if key not in seen:
+            seen.add(key)
+            unique.append(candidate)
+    return unique
