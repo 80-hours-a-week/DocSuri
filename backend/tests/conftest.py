@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from docsuri.u0.adapters import build_u0
 from docsuri.u0.config import load_settings
+from docsuri.u1.service import build_u1
 
 
 class FakeClock:
@@ -30,3 +33,12 @@ def u0():
     settings = load_settings()
     assert settings.adapter_mode == "mock", "테스트는 mock 모드 전제"
     return build_u0(settings)
+
+
+@pytest.fixture()
+def u1env():
+    """함수 스코프 U0+U1 — 캐시·텔레메트리 상태를 테스트마다 격리한다."""
+    settings = load_settings()
+    assert settings.adapter_mode == "mock", "테스트는 mock 모드 전제"
+    u0 = build_u0(settings)
+    return SimpleNamespace(u0=u0, svc=build_u1(u0))
