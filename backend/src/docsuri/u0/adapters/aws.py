@@ -15,7 +15,7 @@ import boto3
 import httpx
 
 from ..config import Settings
-from ..cost_guard import CostStore
+from ..cost_guard import CostLimitExceeded, CostStore
 from ..http_policy import NetworkRetryExceeded, request_with_retry
 from ..ports import (
     CachePort,
@@ -205,13 +205,25 @@ class DynamoCostStore(CostStore):
             settings.ddb_cost_table
         )
 
-    def add(self, month_key: str, usd: float) -> float:
-        response = self._table.update_item(
-            Key={"month": month_key},
-            UpdateExpression="ADD usd :v",
-            ExpressionAttributeValues={":v": Decimal(str(usd))},
-            ReturnValues="UPDATED_NEW",
-        )
+    def add(self, month_key: str, usd: float, cap: float | None = None) -> float:
+        params: dict = {
+            "Key": {"month": month_key},
+            "UpdateExpression": "ADD usd :v",
+            "ExpressionAttributeValues": {":v": Decimal(str(usd))},
+            "ReturnValues": "UPDATED_NEW",
+        }
+        if cap is not None:
+            # U0-M1: 조건부 갱신으로 상한을 원자 강제 — 동시 Lambda 경쟁에서도
+            # 초과는 진행 중 호출 1건分으로 한정된다.
+            params["ConditionExpression"] = "attribute_not_exists(usd) OR usd < :cap"
+            params["ExpressionAttributeValues"][":cap"] = Decimal(str(cap))
+        try:
+            response = self._table.update_item(**params)
+        except self._table.meta.client.exceptions.ConditionalCheckFailedException:
+            raise CostLimitExceeded(
+                f"이번 달 LLM 비용 상한(USD {cap:.0f})에 도달하여 요청을 처리할 수 "
+                f"없습니다. 다음 달에 다시 시도하거나 운영자에게 문의해 주세요."
+            ) from None
         return float(response["Attributes"]["usd"])
 
     def total(self, month_key: str) -> float:

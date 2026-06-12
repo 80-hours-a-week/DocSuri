@@ -42,7 +42,10 @@ class CitationFetcher:
         self._clock = clock
 
     def _cache_key(self, paper_id: str) -> str:
-        window = int(self._clock() // 86_400)  # 일 단위 시간 윈도우 (U4 §5)
+        # 일 단위 시간 윈도우 (U4 §5) — 트레이드오프(U4-L1): UTC 자정에 키가
+        # 회전하므로 자정 직전 캐시 항목의 실효 수명은 TTL(24h)보다 짧을 수
+        # 있다. 설계 의도(버전·윈도우 단위 회전)와 단순성을 우선한 선택.
+        window = int(self._clock() // 86_400)
         return f"cite:{paper_id}:{API_VERSION}:{window}"
 
     def fetch(self, paper_id: str) -> OneHopResult:
