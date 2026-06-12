@@ -38,7 +38,7 @@ DISC-04 한→영 매핑 1줄은 UI 표시 전용이라 응답 엔벨로프(`que
 | 모드 | 선택 | 내용 |
 |---|---|---|
 | `mock` (기본) | `DOCSURI_ADAPTER_MODE=mock` | 결정적 mock — 코퍼스 fixture 검색, canned 한국어 LLM, 시간 주입식 TTL 캐시 |
-| `aws` | `DOCSURI_ADAPTER_MODE=aws` | ADR §12 실구현 — Bedrock(도쿄)·KB+S3 Vectors·DynamoDB·CloudWatch EMF. 자격 증명 필요 |
+| `aws` | `DOCSURI_ADAPTER_MODE=aws` | ADR §12 실구현 — Bedrock(서울)·KB+S3 Vectors·DynamoDB·CloudWatch EMF. 자격 증명 필요. 프로비저닝: `scripts/provision_aws.py` → 배포: `scripts/deploy_lambda.sh` (산출: `data/aws_outputs.json`) |
 
 환경 변수는 [`.env.example`](.env.example) 참조 (NFR-SEC-03: 평문 키 금지).
 

@@ -31,8 +31,8 @@
 ### Part A — 선행 정리
 
 - [x] **A1. 검증 하네스 회수** — **불필요 판정**: `test_aws_integration.py`가 이미 develop에 포함(머지 확인). 하네스 docstring의 구 리전 표기(도쿄)만 A3에서 소정리.
-- [ ] **A2. U0-M1 패치** — `DynamoCostStore`에 조건부 갱신(`usd < :cap`) 추가로 check→record 비원자성 해소 (CostGuard 하드 스톱의 원자화). InMemoryCostStore 동일 의미 적용 + 테스트.
-- [ ] **A3. 소정리** — U4-L1(캐시 윈도우 트레이드오프 주석), U4-M2(빈 상태 문구 보수화 — C4), 하네스 docstring 리전 표기 갱신.
+- [x] **A2. U0-M1 패치** — `DynamoCostStore`에 조건부 갱신(`usd < :cap`) 추가로 check→record 비원자성 해소 (CostGuard 하드 스톱의 원자화). InMemoryCostStore 동일 의미 적용 + 테스트.
+- [x] **A3. 소정리** — U4-L1(캐시 윈도우 트레이드오프 주석), U4-M2(빈 상태 문구 보수화 — C4), 하네스 docstring 리전 표기 갱신.
 
 ### Part B — 프로비저닝 (boto3, 서울, 태그 `project=docsuri-demo`) — *ADR-D2 "서울+Titan 재검증" 겸함*
 
@@ -42,16 +42,16 @@
 
 ### Part C — 백엔드 배포 (C2 범위)
 
-- [ ] **C-D1. Lambda 컨테이너** — Dockerfile(arm64, Web Adapter) + ECR push + 함수 생성(1024MB) + Function URL + 환경 변수(`DOCSURI_ADAPTER_MODE=aws`, 테이블·버킷·KB ID).
-- [ ] **C-D2. Amplify 준비** — `amplify.yml` 빌드 스펙 + 연결 가이드 문서 (실제 연동은 팀 액션).
+- [x] **C-D1. Lambda 컨테이너** — ✅ ECR `docsuri-backend` + `docsuri-api`(arm64·1024MB) 배포. **SCP가 익명 Function URL 차단(403) → API Gateway HTTP API `74vuv58ct7`로 우회** (`deploy_lambda.sh` 반영).
+- [x] **C-D2. Amplify 준비** — `amplify.yml` 작성 + **GitHub App 콘솔 연결 가이드**(보고서 §3-2). CLI OAuth 토큰 방식은 개인 토큰의 AWS 영구 저장이라 중단(권한 분류기 차단 동의) — C2 폴백 조항 적용, 연결은 팀 액션.
 
 ### Part D — 검증·마감
 
 - [x] **D1. aws 모드 통합 테스트** — ✅ **10/10 통과 (17.05s)**: Tier A(임베딩 1024d·한국어·Haiku 페르소나·지연) + Tier B(실 SS 1-hop·S3V 연도/분야 필터·DynamoDB TTL·용어집·비용 누적).
-- [ ] **D2. aws 모드 E2E** — Function URL로 `/healthz`·`/api/search`(실 Bedrock+S3V)·`/api/citations`(실 Semantic Scholar) 호출 + 프론트 로컬(BACKEND_URL=Function URL) 브라우저 확인. NFR-PERF 실측 기록.
-- [ ] **D3. 이중 캐시 실측(U4-L2)** — citation 1회 흐름의 DynamoDB 쓰기 수 확인, 비용 영향 기록.
-- [ ] **D4. 문서·커밋** — 구축 결과를 `aidlc-docs/reviews/env-setup-report.md`(리소스 목록·실측치·비용)로 기록, 계획 갱신, 커밋·PR.
-- [ ] **D5. 사용자 최종 리뷰** — Function URL·실측 결과 제출.
+- [x] **D2. aws 모드 E2E** — ✅ API URL 경유: 검색 미스 2.84s(P50<3s ✅)/적중 0.07s · 연도 필터 정확 · 인용 실 SS(out 15/in 14) · 콜드 E2E 1.91s · 프론트 브라우저 E2E(빈 상태 문구 실전 검증).
+- [x] **D3. 이중 캐시 실측(U4-L2)** — 신규 논문 1건/성공 2건, 항목 <1KB — 영향 무시 가능, 현 구조 유지.
+- [x] **D4. 문서·커밋** — [`env-setup-report.md`](../reviews/env-setup-report.md) 작성(리소스·실측·비자명 발견 4건·후속), README 리전 표기 갱신, 커밋·PR.
+- [ ] **D5. 사용자 최종 리뷰** — API URL·실측 결과 제출 완료, **피드백 + Amplify 콘솔 연결(팀 액션) 대기**.
 
 ---
 

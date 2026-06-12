@@ -20,4 +20,4 @@ AI/ML 논문 탐색·이해·차별화·인용 추적을 돕는 한국어 우선
 
 ## 기술 스택 (ADR 확정, 2026-06-10)
 
-Python 3.12 + FastAPI · Amazon Bedrock(Claude Haiku 4.5, Cohere Embed Multilingual v3) · Bedrock Knowledge Bases + S3 Vectors · DynamoDB · Lambda + Amplify Hosting (풀 서버리스, 도쿄 리전) · Next.js + shadcn/ui + React Flow
+Python 3.12 + FastAPI · Amazon Bedrock(Claude Haiku 4.5, Titan Text Embeddings V2) · Bedrock Knowledge Bases + S3 Vectors · DynamoDB · Lambda + API Gateway + Amplify Hosting (풀 서버리스, 서울 리전 — ADR-D3 재검토 반영) · Next.js + shadcn/ui + React Flow

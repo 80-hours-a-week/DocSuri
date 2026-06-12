@@ -22,5 +22,8 @@
   "numberOfDocumentsDeleted": 0,
   "numberOfDocumentsFailed": 0
  },
- "glossary_seeded": 50
+ "glossary_seeded": 50,
+ "api_url": "https://74vuv58ct7.execute-api.ap-northeast-2.amazonaws.com",
+ "api_gateway_id": "74vuv58ct7",
+ "note": "Function URL(NONE)은 조직 SCP가 익명 호출을 차단(403)해 API Gateway HTTP API로 우회"
 }
