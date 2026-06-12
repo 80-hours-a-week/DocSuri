@@ -1,4 +1,4 @@
-"""AWS 어댑터 — ADR §12 확정 매핑 (리전: ap-northeast-1 도쿄, ADR-D3·D9).
+"""AWS 어댑터 — ADR §12 확정 매핑 (서울 리전 ap-northeast-2).
 
 자격 증명이 없으면 import는 되지만 호출은 실패한다 — 통합 테스트는
 자격 증명 존재 시에만 실행(skip)된다. 콘솔 검증 항목은 ADR §14 참조.
@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+from pathlib import Path
 
 import boto3
 import httpx
@@ -72,23 +73,53 @@ class BedrockEmbedding:
         metadata_filter = _to_s3v_filter(filters)
         if metadata_filter:
             query["filter"] = metadata_filter
+        # 청크 중복 제거를 위해 k * 5개 청크를 가져온 뒤 논문 단위로 dedup
+        query["topK"] = k * 5
         response = self._s3v.query_vectors(**query)
-        hits = []
+        corpus = _load_corpus(self._settings.corpus_path)
+        seen: dict[str, PaperHit] = {}
         for item in response.get("vectors", []):
             meta = item.get("metadata", {})
-            hits.append(
-                PaperHit(
-                    id=meta.get("id", item.get("key", "")),
-                    title=meta.get("title", ""),
-                    authors=meta.get("authors", []),
-                    year=int(meta.get("year", 0)),
-                    citations=int(meta.get("citations", 0)),
-                    similarity=round(1.0 - float(item.get("distance", 0.0)), 4),
-                    field_tags=meta.get("field_tags", []),
-                    abstract_len=int(meta.get("abstract_len", 0)),
-                )
+            arxiv_id = _extract_arxiv_id(meta)
+            paper_id = arxiv_id or item.get("key", "")
+            # cosine distance 범위 0~2 → similarity 0~1 변환
+            similarity = round(1.0 - float(item.get("distance", 0.0)) / 2.0, 4)
+            # 같은 논문이면 similarity가 더 높은 청크만 유지
+            if paper_id in seen and seen[paper_id].similarity >= similarity:
+                continue
+            paper_meta = corpus.get(arxiv_id, {})
+            seen[paper_id] = PaperHit(
+                id=paper_id,
+                title=paper_meta.get("title", ""),
+                authors=paper_meta.get("authors", []),
+                year=int(paper_meta.get("year", 0)),
+                citations=int(paper_meta.get("citations", 0)),
+                similarity=similarity,
+                field_tags=paper_meta.get("field_tags", []),
+                abstract_len=int(paper_meta.get("abstract_len", 0)),
             )
-        return hits
+        # similarity 내림차순으로 k편 반환
+        return sorted(seen.values(), key=lambda h: h.similarity, reverse=True)[:k]
+
+
+def _extract_arxiv_id(meta: dict) -> str:
+    """KB 메타데이터의 sourceLocation에서 arXiv ID를 추출한다."""
+    try:
+        bedrock_meta = json.loads(meta.get("AMAZON_BEDROCK_METADATA", "{}"))
+        source_location = bedrock_meta.get("source", {}).get("sourceLocation", "")
+        return Path(source_location).stem  # "s3://.../2606.11190.pdf" → "2606.11190"
+    except (json.JSONDecodeError, AttributeError):
+        return ""
+
+
+def _load_corpus(corpus_path: Path) -> dict[str, dict]:
+    """corpus_seed.json을 arXiv ID → 메타데이터 딕셔너리로 로드한다."""
+    try:
+        with open(corpus_path) as f:
+            papers = json.load(f)["papers"]
+        return {p["id"]: p for p in papers}
+    except (FileNotFoundError, KeyError):
+        return {}
 
 
 def _to_s3v_filter(filters: SearchFilters | None) -> dict | None:
