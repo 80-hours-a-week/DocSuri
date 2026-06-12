@@ -28,7 +28,7 @@ CHECKS: list[tuple[str, bool, str]] = []
 
 def check(label: str, passed: bool, detail: str) -> None:
     CHECKS.append((label, passed, detail))
-    print(f"{'✅' if passed else '❌'} {label}\n   {detail}\n")
+    print(f"{'PASS' if passed else 'FAIL'} {label}\n   {detail}\n")
 
 
 def main() -> int:

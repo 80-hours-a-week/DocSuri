@@ -19,10 +19,7 @@ load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from scenario1_test import (
-    GapProposal,
     NoveltyReport,
-    SimilarPaperNote,
-    _build_gap_prompt,
     run_scenario1,
     run_scenario2,
 )
@@ -32,13 +29,13 @@ from docsuri.u0.ports import Persona
 
 def print_scenario2(report: NoveltyReport) -> None:
     print("\n" + "=" * 60)
-    print("🔬 시나리오 2: 연구 공백 제안")
+    print("시나리오 2: 연구 공백 제안")
     print("=" * 60)
     print(f"[Persona] {report.persona_mode}")
     print(f"\n[입력] 시나리오 1 차별성 분석 결과 (유사 논문 {len(report.similar_papers)}편)\n")
 
     if not report.gap_proposals:
-        print("❌ 연구 공백 제안 생성 실패")
+        print("연구 공백 제안 생성 실패")
         return
 
     print(f"[연구 공백 제안 {len(report.gap_proposals)}개]")

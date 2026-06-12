@@ -239,7 +239,7 @@ def run_scenario2(report: NoveltyReport) -> NoveltyReport:
 
 def print_report(report: NoveltyReport) -> None:
     print("\n" + "=" * 60)
-    print("📋 NoveltyReport")
+    print("NoveltyReport")
     print("=" * 60)
     print(f"[Persona] {report.persona_mode}")
     print(f"\n[주제]\n{report.user_topic[:100]}...\n")

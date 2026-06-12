@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+from decimal import Decimal
 from pathlib import Path
 
 import boto3
@@ -205,8 +206,6 @@ class DynamoCostStore(CostStore):
         )
 
     def add(self, month_key: str, usd: float) -> float:
-        from decimal import Decimal
-
         response = self._table.update_item(
             Key={"month": month_key},
             UpdateExpression="ADD usd :v",
@@ -295,6 +294,3 @@ class SemanticScholarCitation:
             )
         return hits
 
-
-def _stable_hash(value: str) -> int:
-    return int.from_bytes(hashlib.sha256(value.encode()).digest()[:4], "big")
