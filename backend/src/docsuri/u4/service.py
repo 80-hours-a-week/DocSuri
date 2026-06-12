@@ -22,7 +22,10 @@ from ..u0.ports import (
 )
 from .views import MAX_NODES, CitationView, RenderMode
 
-API_VERSION = "v1"
+# v2: 인용 소스를 Semantic Scholar→코퍼스 fixture로 전환하며 캐시 무효화.
+# 과거 404 빈 결과가 박힌 `cite:{id}:v1:{window}` 키를 네임스페이스째 우회한다
+# (옛 항목은 24h TTL로 자연 소멸 — DynamoDB 직접 정리 불필요).
+API_VERSION = "v2"
 TTL_S = 24 * 3600  # NFR-DATA-03: 인용 캐시 24h
 
 

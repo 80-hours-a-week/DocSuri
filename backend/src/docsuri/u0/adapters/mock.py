@@ -179,11 +179,17 @@ class FixtureCitation:
 
     def _pick(self, paper_id: str, salt: str, n: int) -> list[PaperHit]:
         digest = hashlib.sha256(f"{salt}:{paper_id}".encode()).digest()
-        picks = []
+        picks: list[PaperHit] = []
+        seen: set[str] = set()
         for i in range(n):
             idx = digest[i] % len(self._papers)
             candidate = self._papers[idx]
-            if candidate["id"] != paper_id:
+            cid = candidate["id"]
+            # 중심 논문 제외 + 방향 내 중복 제거 — 그래프 노드 id(outgoing:{id})와
+            # 엣지 id가 유일해야 React Flow가 노드·엣지를 누락/경고 없이 그린다
+            # (frontend mock-citations.ts pick과 동일 정책).
+            if cid != paper_id and cid not in seen:
+                seen.add(cid)
                 picks.append(PaperHit(**candidate))
         return picks
 

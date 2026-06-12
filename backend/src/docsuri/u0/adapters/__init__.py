@@ -80,6 +80,11 @@ def _build_aws(settings: Settings) -> U0Ports:
         session=mock.AnonymousSession(persona_mode=settings.default_persona),
         telemetry=telemetry,
         glossary=aws.DynamoGlossary(settings),
-        citation=aws.SemanticScholarCitation(cache=cache, api_key=settings.ss_api_key),
+        # 데모 스코프: 코퍼스 시드가 합성 arXiv ID(2606.xxxxx, 미래 날짜)라 Semantic
+        # Scholar에 존재하지 않아 1-hop 조회가 항상 404→빈 그래프가 된다. 외부 API
+        # 의존을 끊고 코퍼스 기반 결정적 fixture로 인용 흐름을 구성한다(frontend
+        # buildMockCitations와 동일 정책). 실데이터 연동(실 arXiv ID 코퍼스 +
+        # SemanticScholarCitation 재배선)은 후속 라운드 — 클래스·직접 테스트는 보존.
+        citation=mock.FixtureCitation(settings.corpus_path),
         cost_guard=guard,
     )
