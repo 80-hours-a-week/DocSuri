@@ -266,3 +266,17 @@
 
 **결정 확정**: `git_flow_pr2_plan.md` 부록 A의 잔여 결정 2.A·3.A·4.A 모두 권장안 채택. 즉 제외 6종 그대로, 커밋 메시지 §3 초안 그대로, PR 본문 §4 초안 그대로.
 **조치**: §5의 5.1~5.4 순차 실행. 커밋 범위에 본 계획서(`git_flow_pr2_plan.md`) 자체 포함하여 총 11 파일.
+
+---
+
+<a id="prompt-25"></a>
+## Prompt 25 — 2026-06-11
+
+> AWS를 실제로 적용하고 프로비저닝해서 환경 구축 검증 ① 도쿄 KB×S3 Vectors 생성 가능 여부 (ADR-D2) ② KB Retrieve 연도 범위 필터 표현력 (ADR-D2) ③ Lambda 콜드스타트 실측 — P50<3s 영향 (ADR-D9) ④ Haiku 4.5 KKL 4급 톤 검증 (ADR-D4) / U0 §6 체크박스 갱신 여부 결정 (동결 문서 — handoff §6 절차) 를 확인해봐
+>
+> (후속) sso-session으로 해줘 — 작업 계정을 SSO 프로필 `AdministratorAccess-028317349537`(계정 028317349537)로 지정
+>
+> (기록 방식 선택) 신규 산출물 + 동결 본문 갱신
+
+**변경 요청 성격**: ADR가 빌드 단계로 미뤄둔 "환경 구축 시 검증 항목"(ADR §14, D2/D4/D9의 *검증 항목* 라인)을 실 AWS(SSO 계정 `028317349537`, 도쿄 ap-northeast-1)에 실제 프로비저닝해 닫는 작업. D2·D4·D9 결정을 **확인**(변경 아님) — 4건 전부 통과, 폴백·재논의 조건 미발동.
+**조치**: handoff §6 4단계 적용 — (1) 본 프롬프트 기록, (2) [`aws_env_verification_plan.md`](plans/aws_env_verification_plan.md) 변경 계획서 신설, (3) 사용자 승인("신규 산출물 + 동결 본문 갱신"), (4) 신규 검증 산출물 [`reviews/u0-aws-env-verification.md`](reviews/u0-aws-env-verification.md) 작성 + 동결 본문(ADR-D2/D4/D9·§14, U0 §6 증거 라인)에 검증완료 주석 격상. U0 §6 **체크박스 상태는 불변**(6/6 — 설계상 mock 허용) — 증거 기반만 "mock → mock+실AWS"로 갱신.

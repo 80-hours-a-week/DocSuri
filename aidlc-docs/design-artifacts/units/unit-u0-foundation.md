@@ -93,6 +93,8 @@
 U0는 다음이 모두 작동할 때 *빌드 가능*하다 — 다른 unit 없이 단독 시연 가능.
 
 > ✅ **6/6 통과** (2026-06-11, 사용자 승인으로 체크 갱신) — 검증: `backend/tests/test_u0_buildable.py`(pytest 14/14) + `backend/scripts/u0_demo.py`(6/6, mock 모드). 빌드 기록: [`u0_build_plan.md`](../../plans/u0_build_plan.md) · PR #14.
+>
+> ➕ **실 AWS 근거 보강** (2026-06-11, 도쿄 ap-northeast-1) — 체크박스 상태는 불변(설계상 "실모델 OR 결정적 mock" 허용). 모델 의존 항목이 mock에 더해 실모델로도 확인됨: `embed`=Cohere v3 1024d · `search`=KB Retrieve(S3 Vectors, 연도 필터 동작) · `complete(persona='pro')`=Haiku 4.5 한국어 260자. 상세: [`reviews/u0-aws-env-verification.md`](../../reviews/u0-aws-env-verification.md) (ADR §14 검증 항목 닫힘).
 
 - [x] `EmbeddingPort.embed("transformer")` → 임의 vector 반환 (실모델 OR 결정적 mock) — *결정적 mock, 32차원*
 - [x] `EmbeddingPort.search(v, k=5)` → 5개 `PaperHit` 반환 (시드 코퍼스 100편 기준) — *arXiv 실수집 100편*
