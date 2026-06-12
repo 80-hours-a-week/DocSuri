@@ -1,0 +1,21 @@
+# Amplify Hosting 빌드 스펙 — ADR-D5 (Next.js SSR, 모노레포 frontend/)
+# 연결: env_setup_plan C-D2. BACKEND_URL은 Amplify 콘솔/CLI 환경 변수로 주입.
+version: 1
+applications:
+  - appRoot: frontend
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm ci
+        build:
+          commands:
+            - npm run build
+      artifacts:
+        baseDirectory: .next
+        files:
+          - "**/*"
+      cache:
+        paths:
+          - node_modules/**/*
+          - .next/cache/**/*

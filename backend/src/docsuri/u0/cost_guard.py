@@ -15,8 +15,14 @@ class CostLimitExceeded(Exception):
 
 
 class CostStore(Protocol):
-    def add(self, month_key: str, usd: float) -> float:
-        """월 누적에 더하고 누적치를 반환."""
+    def add(self, month_key: str, usd: float, cap: float | None = None) -> float:
+        """월 누적에 더하고 누적치를 반환.
+
+        cap이 주어지면 *원자적으로* 강제한다(u0-code-review U0-M1): 기존 누적이
+        이미 cap 이상이면 더하지 않고 CostLimitExceeded — check→record 사이의
+        동시 호출 경쟁으로 상한을 무한히 넘는 경로를 차단한다(초과는 진행 중
+        호출 1건分으로 한정).
+        """
         ...
 
     def total(self, month_key: str) -> float: ...
@@ -26,8 +32,14 @@ class InMemoryCostStore:
     def __init__(self) -> None:
         self._totals: dict[str, float] = {}
 
-    def add(self, month_key: str, usd: float) -> float:
-        self._totals[month_key] = self._totals.get(month_key, 0.0) + usd
+    def add(self, month_key: str, usd: float, cap: float | None = None) -> float:
+        current = self._totals.get(month_key, 0.0)
+        if cap is not None and current >= cap:
+            raise CostLimitExceeded(
+                f"이번 달 LLM 비용 상한(USD {cap:.0f})에 도달하여 요청을 처리할 수 "
+                f"없습니다. 다음 달에 다시 시도하거나 운영자에게 문의해 주세요."
+            )
+        self._totals[month_key] = current + usd
         return self._totals[month_key]
 
     def total(self, month_key: str) -> float:
@@ -66,7 +78,11 @@ class CostGuard:
             )
 
     def record_cost(self, tokens_in: int, tokens_out: int) -> float:
-        return self._store.add(self._month_key(), self._cost_usd(tokens_in, tokens_out))
+        # cap을 스토어에 전달해 누적 시점에 원자 강제 (U0-M1) — check_budget은
+        # 호출 전 사전 차단(예산 추정), 여기는 실측 기록 시 최종 방어선.
+        return self._store.add(
+            self._month_key(), self._cost_usd(tokens_in, tokens_out), cap=self._cap
+        )
 
     def accumulated_usd(self) -> float:
         return self._store.total(self._month_key())

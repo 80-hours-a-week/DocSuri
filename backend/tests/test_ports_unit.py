@@ -94,3 +94,24 @@ def test_http_policy_retries_then_korean_error():
     assert calls["n"] == 4  # 최초 1회 + 재시도 3회 (NFR-NET-02)
     assert sleeps == [1.0, 2.0, 4.0]  # 지수 백오프
     assert "네트워크" in str(exc.value)  # 4회차 사용자 알림
+
+
+def test_cost_store_atomic_cap_enforcement():
+    """U0-M1 — 누적 시점의 원자적 상한 강제 (check→record 경쟁 방어선)."""
+    store = InMemoryCostStore()
+    store.add("2026-06", 49.0, cap=50.0)  # 상한 미만 — 통과
+    store.add("2026-06", 2.0, cap=50.0)  # 시작 시점 49 < 50 — 통과(51로 1건분 초과 허용)
+    with pytest.raises(CostLimitExceeded):
+        store.add("2026-06", 0.01, cap=50.0)  # 이미 51 ≥ 50 — 원자 거부
+
+
+def test_cost_guard_record_enforces_cap():
+    guard = CostGuard(
+        store=InMemoryCostStore(),
+        monthly_cap_usd=0.000001,
+        price_in_per_mtok=1.0,
+        price_out_per_mtok=5.0,
+    )
+    guard.record_cost(tokens_in=1000, tokens_out=1000)  # 첫 기록은 0 < cap — 통과
+    with pytest.raises(CostLimitExceeded):
+        guard.record_cost(tokens_in=1, tokens_out=1)  # 누적이 cap 초과 — 기록 거부

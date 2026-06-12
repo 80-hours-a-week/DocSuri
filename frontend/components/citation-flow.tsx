@@ -172,10 +172,11 @@ export function CitationFlow({
             {!loading && !error && empty && (
               // R4 폴백 빈 상태 — 다음 행동 제안 (NFR-NET-03·UX-04)
               <div className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
-                <p className="font-medium">인용 정보를 가져오지 못했습니다.</p>
+                <p className="font-medium">인용 정보가 없거나 일시적으로 가져오지 못했습니다.</p>
                 <p className="mt-1 text-sm">
-                  외부 인용 데이터가 일시적으로 응답하지 않을 수 있어요. 잠시 후 다시
-                  시도하거나, arXiv 원문에서 참고 문헌을 확인해 보세요.
+                  신규 논문은 인용 데이터가 아직 없을 수 있고, 외부 데이터가 일시적으로
+                  응답하지 않을 수도 있어요. 잠시 후 다시 시도하거나 arXiv 원문에서
+                  참고 문헌을 확인해 보세요.
                 </p>
               </div>
             )}
