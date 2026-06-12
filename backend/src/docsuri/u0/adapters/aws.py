@@ -1,4 +1,4 @@
-"""AWS 어댑터 — ADR §12 확정 매핑 (리전: ap-northeast-1 도쿄, ADR-D3·D9).
+"""AWS 어댑터 — ADR §12 확정 매핑 (리전: ap-northeast-2 서울, ADR-D3·D9; 2026-06-11 재검토).
 
 자격 증명이 없으면 import는 되지만 호출은 실패한다 — 통합 테스트는
 자격 증명 존재 시에만 실행(skip)된다. 콘솔 검증 항목은 ADR §14 참조.
@@ -38,7 +38,7 @@ _PERSONA_SYSTEM = {
 
 
 class BedrockEmbedding:
-    """EmbeddingPort — embed: Bedrock InvokeModel(Cohere v3) / search: S3 Vectors 직접 조회.
+    """EmbeddingPort — embed: Bedrock InvokeModel(Titan V2) / search: S3 Vectors 직접 조회.
 
     KB Retrieve는 텍스트 질의 전용이라 search(vec, k, filters) 시그니처와 맞지 않아
     S3 Vectors QueryVectors를 직접 사용한다 (ADR-D2 결과 3에 문서화된 경로).
@@ -51,17 +51,13 @@ class BedrockEmbedding:
         self._s3v = boto3.client("s3vectors", region_name=settings.aws_region)
 
     def embed(self, text: str, lang: Lang) -> Vector:
-        body = json.dumps(
-            {"texts": [text], "input_type": "search_query", "truncate": "END"}
-        )
+        # Titan Text Embeddings V2 (ADR-D3 재검토 2026-06-11): 단건 inputText → embedding.
+        # Cohere의 input_type/batch 구분이 없어 lang은 쓰지 않는다 (포트 계약상 유지).
         response = self._bedrock.invoke_model(
-            modelId=self._settings.bedrock_embed_model_id, body=body
+            modelId=self._settings.bedrock_embed_model_id,
+            body=json.dumps({"inputText": text}),
         )
-        payload = json.loads(response["body"].read())
-        embeddings = payload["embeddings"]
-        if isinstance(embeddings, dict):  # 일부 API 버전: {"float": [[...]]}
-            embeddings = embeddings["float"]
-        return embeddings[0]
+        return json.loads(response["body"].read())["embedding"]
 
     def search(
         self, vec: Vector, k: int, filters: SearchFilters | None = None
