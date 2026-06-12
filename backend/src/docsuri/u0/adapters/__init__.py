@@ -53,7 +53,7 @@ def _build_mock(settings: Settings) -> U0Ports:
         embedding=mock.DeterministicEmbedding(settings.corpus_path),
         llm=LlmGateway(mock.CannedKoreanLlm(), guard, telemetry),
         cache=mock.InMemoryTtlCache(),
-        session=mock.AnonymousSession(persona_mode=settings.default_persona),  # type: ignore[arg-type]
+        session=mock.AnonymousSession(persona_mode=settings.default_persona),
         telemetry=telemetry,
         glossary=mock.FixtureGlossary(settings.glossary_path),
         citation=mock.FixtureCitation(settings.corpus_path),
@@ -77,9 +77,9 @@ def _build_aws(settings: Settings) -> U0Ports:
         llm=LlmGateway(aws.BedrockLlm(settings), guard, telemetry),
         cache=cache,
         # 익명 세션은 서버 무상태 (ADR §12) — aws 모드에서도 동일 mock 구현 사용
-        session=mock.AnonymousSession(persona_mode=settings.default_persona),  # type: ignore[arg-type]
+        session=mock.AnonymousSession(persona_mode=settings.default_persona),
         telemetry=telemetry,
         glossary=aws.DynamoGlossary(settings),
-        citation=aws.SemanticScholarCitation(cache=cache),
+        citation=aws.SemanticScholarCitation(cache=cache, api_key=settings.ss_api_key),
         cost_guard=guard,
     )

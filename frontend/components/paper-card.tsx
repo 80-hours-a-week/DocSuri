@@ -3,7 +3,7 @@
 // 결과 카드 — NFR-UX-03: 데스크톱(≥768px) 6메타 1뷰 / 모바일 3메타 + "더 보기" 펼침.
 // 우선 메타(항상 노출): 제목·연도·유사도. 펼침 메타: 저자·인용수·난이도.
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +17,19 @@ const DIFFICULTY_STYLE: Record<DifficultyLabel, string> = {
   고급: "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200",
 };
 
-export function PaperCard({ paper }: { paper: SearchResultPaper }) {
+// U4 재사용(component-model §6.3·6.4)을 위한 확장: 인용 노드에는 difficulty(U1 검색
+// 전용 메타)가 없어 옵셔널, footer로 카드 하단 액션 주입(예: "인용 흐름 보기").
+export type CardPaper = Omit<SearchResultPaper, "difficulty"> & {
+  difficulty?: DifficultyLabel;
+};
+
+export function PaperCard({
+  paper,
+  footer,
+}: {
+  paper: CardPaper;
+  footer?: ReactNode;
+}) {
   const [expanded, setExpanded] = useState(false);
   const arxivUrl = `https://arxiv.org/abs/${paper.id}`;
   const similarityPct = Math.round(paper.similarity * 100);
@@ -48,9 +60,11 @@ export function PaperCard({ paper }: { paper: SearchResultPaper }) {
             <p className="line-clamp-1">{paper.authors.join(", ")}</p>
             <div className="flex items-center gap-3">
               <span>인용 {paper.citations.toLocaleString("en-US")}</span>
-              <Badge className={DIFFICULTY_STYLE[paper.difficulty]} variant="secondary">
-                {paper.difficulty}
-              </Badge>
+              {paper.difficulty && (
+                <Badge className={DIFFICULTY_STYLE[paper.difficulty]} variant="secondary">
+                  {paper.difficulty}
+                </Badge>
+              )}
             </div>
           </div>
         </div>
@@ -69,6 +83,8 @@ export function PaperCard({ paper }: { paper: SearchResultPaper }) {
             <>더 보기 <ChevronDown className="size-4" aria-hidden /></>
           )}
         </Button>
+
+        {footer && <div className="mt-3">{footer}</div>}
       </CardContent>
     </Card>
   );

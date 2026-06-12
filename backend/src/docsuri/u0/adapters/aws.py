@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import time
 from decimal import Decimal
@@ -258,9 +257,14 @@ class SemanticScholarCitation:
     TTL_S = 24 * 3600
     LIMIT = 15  # U4 CitationView max_nodes=30 — 방향당 15
 
-    def __init__(self, cache: CachePort, client: httpx.Client | None = None) -> None:
+    def __init__(
+        self, cache: CachePort, client: httpx.Client | None = None, api_key: str = ""
+    ) -> None:
         self._cache = cache
-        self._client = client or httpx.Client(timeout=10.0)
+        headers = {"User-Agent": "DocSuri/0.1 (academic paper assistant)"}
+        if api_key:  # 코드 리뷰 M2 — 레이트 리밋 완화용 (DOCSURI_SS_API_KEY)
+            headers["x-api-key"] = api_key
+        self._client = client or httpx.Client(timeout=10.0, headers=headers)
 
     def one_hop(self, paper_id: str) -> OneHopResult:
         cache_key = f"cite:{paper_id}:v1"
@@ -294,4 +298,5 @@ class SemanticScholarCitation:
                 )
             )
         return hits
+
 

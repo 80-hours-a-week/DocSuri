@@ -2,6 +2,8 @@
 
 // 결과 목록 — 상위 20 카드 렌더. 빈 상태에 다음 행동 제안 (NFR-UX-04).
 
+import type { ReactNode } from "react";
+
 import type { SearchResultPaper } from "@/lib/types";
 import { PaperCard } from "./paper-card";
 
@@ -9,9 +11,11 @@ interface ResultListProps {
   papers: SearchResultPaper[];
   loading: boolean;
   searched: boolean;
+  /** 카드 하단 액션 주입 — U4 "인용 흐름 보기" 등 (paper-card footer 패스스루). */
+  renderFooter?: (paper: SearchResultPaper) => ReactNode;
 }
 
-export function ResultList({ papers, loading, searched }: ResultListProps) {
+export function ResultList({ papers, loading, searched, renderFooter }: ResultListProps) {
   if (loading) {
     return (
       <div className="space-y-3" aria-busy>
@@ -46,7 +50,7 @@ export function ResultList({ papers, loading, searched }: ResultListProps) {
         상위 {papers.length}건
       </p>
       {papers.map((p) => (
-        <PaperCard key={p.id} paper={p} />
+        <PaperCard key={p.id} paper={p} footer={renderFooter?.(p)} />
       ))}
     </div>
   );

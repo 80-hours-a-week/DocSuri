@@ -118,7 +118,10 @@ class CannedKoreanLlm:
 
 
 class InMemoryTtlCache:
-    """CachePort mock — 시간 주입식이라 'set → 25h 후 miss'(U0 §6)를 시뮬레이션 가능."""
+    """CachePort mock — 시간 주입식이라 'set → 25h 후 miss'(U0 §6)를 시뮬레이션 가능.
+
+    스레드 비안전 — Lambda 단일 호출 모델 전제. 멀티스레드 서버로 전용 시 락 필요 (리뷰 L4).
+    """
 
     def __init__(self, clock: Callable[[], float] = time.time) -> None:
         self._clock = clock

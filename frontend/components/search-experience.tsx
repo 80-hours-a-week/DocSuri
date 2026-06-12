@@ -5,12 +5,15 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Network } from "lucide-react";
 
+import { CitationFlow } from "@/components/citation-flow";
 import { FilterSortBar } from "@/components/filter-sort-bar";
 import { ExpandedTerms } from "@/components/expanded-terms";
 import { QueryMappingNote } from "@/components/query-mapping";
 import { ResultList } from "@/components/result-list";
 import { SearchBar } from "@/components/search-bar";
+import { Button } from "@/components/ui/button";
 import { searchPapers } from "@/lib/api";
 import type {
   ExpandedTerm,
@@ -37,6 +40,8 @@ export function SearchExperience({ initialState, initialResponse }: SearchExperi
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(initialResponse !== null);
+  // U4 — "인용 흐름 보기" 대상 (TRACE-01 진입점)
+  const [citationPaper, setCitationPaper] = useState<SearchResultPaper | null>(null);
 
   const reqId = useRef(0);
 
@@ -101,7 +106,24 @@ export function SearchExperience({ initialState, initialResponse }: SearchExperi
         </p>
       )}
 
-      <ResultList papers={papers} loading={loading} searched={searched} />
+      <ResultList
+        papers={papers}
+        loading={loading}
+        searched={searched}
+        renderFooter={(p) => (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-11 w-full md:w-auto"
+            onClick={() => setCitationPaper(p)}
+          >
+            <Network className="size-4" aria-hidden />
+            인용 흐름 보기
+          </Button>
+        )}
+      />
+
+      <CitationFlow paper={citationPaper} onClose={() => setCitationPaper(null)} />
     </div>
   );
 }

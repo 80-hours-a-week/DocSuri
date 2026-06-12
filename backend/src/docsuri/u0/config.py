@@ -6,6 +6,8 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .ports import Persona
+
 DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 
 
@@ -28,7 +30,8 @@ class Settings:
     # ADR-D4 단가 (USD per 1M tokens) — 모델 교체 시 갱신
     llm_price_in_per_mtok: float = 1.0
     llm_price_out_per_mtok: float = 5.0
-    default_persona: str = "pro"
+    default_persona: Persona = "pro"
+    ss_api_key: str = ""  # Semantic Scholar (선택 — 레이트 리밋 완화, 리뷰 M2)
     corpus_path: Path = field(default_factory=lambda: DATA_DIR / "corpus_seed.json")
     glossary_path: Path = field(default_factory=lambda: DATA_DIR / "glossary_seed.json")
 
@@ -54,4 +57,5 @@ def load_settings() -> Settings:
         ddb_glossary_table=env.get("DOCSURI_DDB_GLOSSARY_TABLE", Settings.ddb_glossary_table),
         ddb_cost_table=env.get("DOCSURI_DDB_COST_TABLE", Settings.ddb_cost_table),
         cost_monthly_cap_usd=float(env.get("DOCSURI_COST_MONTHLY_CAP_USD", "50")),
+        ss_api_key=env.get("DOCSURI_SS_API_KEY", ""),
     )

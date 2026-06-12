@@ -27,9 +27,10 @@ def request_with_retry(
             sleep(backoff)
         try:
             response = client.request(method, url, **kwargs)
-            if response.status_code >= 500:
+            # 429(레이트 리밋)도 재시도 대상 — 코드 리뷰 M2 (Semantic Scholar에서 실측)
+            if response.status_code >= 500 or response.status_code == 429:
                 last_error = httpx.HTTPStatusError(
-                    f"server error {response.status_code}",
+                    f"retryable status {response.status_code}",
                     request=response.request,
                     response=response,
                 )
