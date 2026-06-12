@@ -12,9 +12,9 @@ DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 @dataclass(frozen=True)
 class Settings:
     adapter_mode: str = "mock"
-    aws_region: str = "ap-northeast-2"  # 서울 — 전 서비스 통일
+    aws_region: str = "ap-northeast-2"  # ADR-D9: 서울 (ADR-D3 재검토 2026-06-11)
     bedrock_llm_model_id: str = "global.anthropic.claude-haiku-4-5-20251001-v1:0"  # ADR-D4
-    bedrock_embed_model_id: str = "amazon.titan-embed-text-v2:0"  # 서울 지원, 1024차원
+    bedrock_embed_model_id: str = "amazon.titan-embed-text-v2:0"  # ADR-D3 (재검토: Titan V2)
     kb_id: str = ""  # ADR-D2: Bedrock KB + S3 Vectors
     s3v_bucket: str = "docsuri-vectors"  # S3 Vectors 직접 조회용 (ADR-D2 결과 3)
     s3v_index: str = "papers"

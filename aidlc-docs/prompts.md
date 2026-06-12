@@ -280,3 +280,13 @@
 
 **변경 요청 성격**: ADR가 빌드 단계로 미뤄둔 "환경 구축 시 검증 항목"(ADR §14, D2/D4/D9의 *검증 항목* 라인)을 실 AWS(SSO 계정 `028317349537`, 도쿄 ap-northeast-1)에 실제 프로비저닝해 닫는 작업. D2·D4·D9 결정을 **확인**(변경 아님) — 4건 전부 통과, 폴백·재논의 조건 미발동.
 **조치**: handoff §6 4단계 적용 — (1) 본 프롬프트 기록, (2) [`aws_env_verification_plan.md`](plans/aws_env_verification_plan.md) 변경 계획서 신설, (3) 사용자 승인("신규 산출물 + 동결 본문 갱신"), (4) 신규 검증 산출물 [`reviews/u0-aws-env-verification.md`](reviews/u0-aws-env-verification.md) 작성 + 동결 본문(ADR-D2/D4/D9·§14, U0 §6 증거 라인)에 검증완료 주석 격상. U0 §6 **체크박스 상태는 불변**(6/6 — 설계상 mock 허용) — 증거 기반만 "mock → mock+실AWS"로 갱신.
+
+---
+
+<a id="prompt-26"></a>
+## Prompt 26 — 2026-06-11
+
+> 임베딩 모델 때문에 도쿄 리전을 이용하는 것보다 titan을 쓰더라도 한국 리전을 쓰는 게 더 낫지 않을까?
+
+**맥락**: Construction 단계 *환경 구축 라운드* — Prompt 25(도쿄 환경 검증) 직후, ADR-D3 *결정 자체*를 재검토하는 변경 요청. `handoff.md` §6 *동결 후 변경 정책*의 **1단계(변경 요청 기록)**.
+**조치**: AWS Tier-A 통합 스파이크 실측으로 ADR-D3 전제(Cohere의 ko↔en 교차언어 우위)를 검증 → 변경 계획서 `aidlc-docs/plans/adr_d3_reconsideration_plan.md` 작성(§6 2단계). 결과 요약: 실제 arXiv 코퍼스에서 **Titan=Cohere 동률**("충분히 좋음" 충족) · 지연·주권·비용 축은 서울 우위/중립 · **Cohere 서울 불가 확정** → **서울(ap-northeast-2)+Titan V2 재상정**. 사용자·팀 승인(3단계) 완료 → ADR-D2/D3/D4/D9·config·aws.py 갱신, handoff §6 4단계 N/A(handoff에 리전 표기 없음).
