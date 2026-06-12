@@ -33,3 +33,12 @@ out/
 .amplify/
 
 # 잠금 파일(uv.lock, package-lock.json)은 재현성을 위해 커밋한다 — 무시하지 말 것.
+
+# IDE
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.env
