@@ -141,7 +141,14 @@ def _parse_summary_sections(text: str) -> SummarySections:
     extracted: dict[str, str] = {}
     positions: list[tuple[str, int, int]] = []
     for key, pattern in labels.items():
+        # 두 형식 인식: ① 인라인 라벨("연구 질문: …") ② 마크다운 헤딩 라인
+        # ("## 연구 질문") — 실 LLM(Haiku) 검증에서 ②로 응답해 fallback으로
+        # 빠지며 섹션이 밀리던 결함 보강 (2026-06-12, 실모델 정합).
         match = re.search(pattern + r"\s*[:：]", text)
+        if match is None:
+            match = re.search(
+                r"(?m)^[ \t]*#{1,6}[ \t]*\**" + pattern + r"\**[ \t]*$", text
+            )
         if match:
             positions.append((key, match.start(), match.end()))
     positions.sort(key=lambda item: item[1])

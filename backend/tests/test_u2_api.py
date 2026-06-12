@@ -114,3 +114,19 @@ def test_translation_rejects_blank_and_oversize(client):
     assert (
         client.post("/api/translations", json={"source_excerpt": "x" * 2001}).status_code == 422
     )
+
+
+def test_parse_sections_markdown_headings():
+    """실 LLM(Haiku) 응답 형식 회귀 — 마크다운 헤딩 라벨 인식 (2026-06-12 실측 결함)."""
+    from docsuri.u2.summary_engine import _parse_summary_sections
+
+    text = (
+        "# 논문 요약 분석\n\n## 연구 질문\n기존 RNN의 한계를 푼다.\n\n"
+        "## 방법\nTransformer를 제안한다.\n\n## 결과\n성능이 향상됐다.\n\n"
+        "## 한계\n장문 일반화는 미검증.\n"
+    )
+    sections = _parse_summary_sections(text)
+    assert "기존 RNN" in sections.question
+    assert "Transformer" in sections.method
+    assert "성능" in sections.result
+    assert "장문" in sections.limit
