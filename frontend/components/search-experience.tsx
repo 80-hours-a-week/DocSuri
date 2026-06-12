@@ -5,9 +5,10 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Network } from "lucide-react";
+import { BookOpenText, Network } from "lucide-react";
 
 import { CitationFlow } from "@/components/citation-flow";
+import { ComprehendFlow } from "@/components/comprehend-flow";
 import { FilterSortBar } from "@/components/filter-sort-bar";
 import { ExpandedTerms } from "@/components/expanded-terms";
 import { QueryMappingNote } from "@/components/query-mapping";
@@ -42,6 +43,8 @@ export function SearchExperience({ initialState, initialResponse }: SearchExperi
   const [searched, setSearched] = useState(initialResponse !== null);
   // U4 — "인용 흐름 보기" 대상 (TRACE-01 진입점)
   const [citationPaper, setCitationPaper] = useState<SearchResultPaper | null>(null);
+  // U2 — "요약 보기" 대상 (COMP-01 진입점)
+  const [summaryPaper, setSummaryPaper] = useState<SearchResultPaper | null>(null);
 
   const reqId = useRef(0);
 
@@ -111,18 +114,30 @@ export function SearchExperience({ initialState, initialResponse }: SearchExperi
         loading={loading}
         searched={searched}
         renderFooter={(p) => (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-11 w-full md:w-auto"
-            onClick={() => setCitationPaper(p)}
-          >
-            <Network className="size-4" aria-hidden />
-            인용 흐름 보기
-          </Button>
+          <div className="flex flex-col gap-2 md:flex-row">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-11 w-full md:w-auto"
+              onClick={() => setSummaryPaper(p)}
+            >
+              <BookOpenText className="size-4" aria-hidden />
+              요약 보기
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-11 w-full md:w-auto"
+              onClick={() => setCitationPaper(p)}
+            >
+              <Network className="size-4" aria-hidden />
+              인용 흐름 보기
+            </Button>
+          </div>
         )}
       />
 
+      <ComprehendFlow paper={summaryPaper} onClose={() => setSummaryPaper(null)} />
       <CitationFlow paper={citationPaper} onClose={() => setCitationPaper(null)} />
     </div>
   );

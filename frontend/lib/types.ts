@@ -101,3 +101,63 @@ export interface CitationRequestBody {
   viewport_width: number;
   persona?: Persona;
 }
+
+// ── U2 Comprehend — 백엔드 계약 미러: backend/src/docsuri/u2/models.py(§3 동결)
+//    + u2/api.py 엔벨로프. 필드를 임의로 추가/변경하지 않는다.
+
+export type SectionKey = "question" | "method" | "result" | "limit";
+
+export interface SummarySections {
+  question: string;
+  method: string;
+  result: string;
+  limit: string;
+}
+
+export interface VocabExplanation {
+  term: string;
+  ko: string;
+  note: string;
+}
+
+export interface SummaryResult {
+  paper_id: string;
+  mode: Persona;
+  sections: SummarySections;
+  vocab_explanations: VocabExplanation[];
+  cost: { tokens_in: number; tokens_out: number };
+}
+
+export interface ReadabilityReport {
+  mode: Persona;
+  passed: boolean;
+  metrics: {
+    sentence_count: number;
+    average_eojeol_per_sentence: number;
+    max_eojeol_per_sentence: number;
+    difficult_token_count: number;
+  };
+  issues: string[];
+}
+
+export interface SummaryResponse {
+  summary: SummaryResult;
+  readability: ReadabilityReport | null;
+  paper: { title: string; abstract: string }; // UI 보조 — COMP-04 원문 패널
+}
+
+export interface SummaryRequestBody {
+  paper_id: string;
+  mode: Persona;
+}
+
+export interface TranslationResult {
+  source_excerpt: string;
+  target_text: string;
+  glossary_hits: VocabExplanation[];
+}
+
+export interface TranslationRequestBody {
+  source_excerpt: string;
+  input_mode: "desktop" | "mobile";
+}
