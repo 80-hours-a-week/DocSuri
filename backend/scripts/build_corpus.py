@@ -25,13 +25,17 @@ ARXIV_URL = (
 SS_BATCH_URL = "https://api.semanticscholar.org/graph/v1/paper/batch?fields=citationCount"
 ATOM = "{http://www.w3.org/2005/Atom}"
 OUT_PATH = Path(__file__).resolve().parents[1] / "data" / "corpus_seed.json"
+# KB 색인용 본문(제목+저자+초록) — corpus_seed.json의 PaperHit 스키마를 오염시키지
+# 않도록 별도 파일에 둔다 (환경 구축 라운드 B2).
+DOCS_PATH = Path(__file__).resolve().parents[1] / "data" / "corpus_docs.json"
 
 
-def fetch_arxiv(client: httpx.Client) -> list[dict]:
+def fetch_arxiv(client: httpx.Client) -> tuple[list[dict], dict[str, str]]:
     response = client.get(ARXIV_URL, timeout=30.0)
     response.raise_for_status()
     root = ET.fromstring(response.text)
     papers = []
+    docs: dict[str, str] = {}
     for entry in root.findall(f"{ATOM}entry"):
         raw_id = entry.findtext(f"{ATOM}id", "")  # http://arxiv.org/abs/2401.12345v1
         arxiv_id = raw_id.rsplit("/", 1)[-1].rsplit("v", 1)[0]
@@ -57,7 +61,10 @@ def fetch_arxiv(client: httpx.Client) -> list[dict]:
                 "abstract_len": len(summary),
             }
         )
-    return papers
+        docs[arxiv_id] = (
+            f"{title}\n\nAuthors: {', '.join(authors[:8])}\n\nAbstract: {summary}"
+        )
+    return papers, docs
 
 
 def enrich_citations(client: httpx.Client, papers: list[dict]) -> str:
@@ -82,11 +89,12 @@ def enrich_citations(client: httpx.Client, papers: list[dict]) -> str:
 
 def main() -> int:
     with httpx.Client(headers={"User-Agent": "DocSuri-corpus-builder/0.1"}) as client:
-        papers = fetch_arxiv(client)
+        papers, docs = fetch_arxiv(client)
         if len(papers) < 100:
             print(f"경고: arXiv가 {len(papers)}편만 반환 — 100편 미만", file=sys.stderr)
         citations_source = enrich_citations(client, papers)
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    DOCS_PATH.write_text(json.dumps({"docs": docs}, ensure_ascii=False, indent=1))
     OUT_PATH.write_text(
         json.dumps(
             {

@@ -36,9 +36,9 @@
 
 ### Part B — 프로비저닝 (boto3, 서울, 태그 `project=docsuri-demo`) — *ADR-D2 "서울+Titan 재검증" 겸함*
 
-- [ ] **B1. `scripts/provision_aws.py`** — DynamoDB 3테이블(cache·glossary·cost, TTL 속성 `expires_at` — U0-L5 정합) · S3 소스 버킷 + S3 Vectors 버킷·인덱스(**cosine, 1024d Titan V2** — U0-M3 명시) · KB 서비스 롤 + KB + 데이터소스(`dataDeletionPolicy=RETAIN` — teardown 함정 선제 회피). idempotent(존재 시 skip).
-- [ ] **B2. 데이터 적재** — `build_corpus.py` 확장(초록 본문도 저장: `corpus_docs.json`) 후 재수집 → 100편 본문+`.metadata.json` 사이드카 S3 업로드 → KB ingestion job · glossary 50개 → DynamoDB 적재. **서울 KB×S3 Vectors×Titan 생성·색인 성공 = ADR-D2 잔여 재검증 닫힘.**
-- [ ] **B3. `scripts/teardown_aws.py`** — 역순 삭제(KB→인덱스→버킷→테이블), 검증 세션의 함정 대응 포함.
+- [x] **B1. `scripts/provision_aws.py`** — DynamoDB 3테이블(cache·glossary·cost, TTL 속성 `expires_at` — U0-L5 정합) · S3 소스 버킷 + S3 Vectors 버킷·인덱스(**cosine, 1024d Titan V2** — U0-M3 명시) · KB 서비스 롤 + KB + 데이터소스(`dataDeletionPolicy=RETAIN` — teardown 함정 선제 회피). idempotent(존재 시 skip).
+- [x] **B2. 데이터 적재** — ✅ 실행 완료 (2026-06-12): KB `VSQ5KSCBMY` 생성, **100편 색인 25.6s 0실패, 용어집 50건** → **ADR-D2 잔여 '서울+Titan 재검증' 닫힘.** — `build_corpus.py` 확장(초록 본문도 저장: `corpus_docs.json`) 후 재수집 → 100편 본문+`.metadata.json` 사이드카 S3 업로드 → KB ingestion job · glossary 50개 → DynamoDB 적재. **서울 KB×S3 Vectors×Titan 생성·색인 성공 = ADR-D2 잔여 재검증 닫힘.**
+- [x] **B3. `scripts/teardown_aws.py`** — 역순 삭제(KB→인덱스→버킷→테이블), 검증 세션의 함정 대응 포함.
 
 ### Part C — 백엔드 배포 (C2 범위)
 
@@ -47,7 +47,7 @@
 
 ### Part D — 검증·마감
 
-- [ ] **D1. aws 모드 통합 테스트** — 하네스 전체(Tier A+B — DynamoDB 캐시·용어집·비용 누적 경로 포함) 통과.
+- [x] **D1. aws 모드 통합 테스트** — ✅ **10/10 통과 (17.05s)**: Tier A(임베딩 1024d·한국어·Haiku 페르소나·지연) + Tier B(실 SS 1-hop·S3V 연도/분야 필터·DynamoDB TTL·용어집·비용 누적).
 - [ ] **D2. aws 모드 E2E** — Function URL로 `/healthz`·`/api/search`(실 Bedrock+S3V)·`/api/citations`(실 Semantic Scholar) 호출 + 프론트 로컬(BACKEND_URL=Function URL) 브라우저 확인. NFR-PERF 실측 기록.
 - [ ] **D3. 이중 캐시 실측(U4-L2)** — citation 1회 흐름의 DynamoDB 쓰기 수 확인, 비용 영향 기록.
 - [ ] **D4. 문서·커밋** — 구축 결과를 `aidlc-docs/reviews/env-setup-report.md`(리소스 목록·실측치·비용)로 기록, 계획 갱신, 커밋·PR.
