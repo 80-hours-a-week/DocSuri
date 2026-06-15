@@ -4,7 +4,7 @@
 - **프로젝트명**: DocSuri (연구 지원 애플리케이션)
 - **프로젝트 유형**: Greenfield(그린필드)
 - **시작일**: 2026-06-15T04:36:30Z
-- **현재 단계**: INCEPTION — Workflow Planning 완료(`execution-plan.md` 승인 대기); 다음: Application Design
+- **현재 단계**: INCEPTION — Application Design(진행); Workflow Planning 승인 완료. PR #34 머지·PR #35(보정) open
 - **문서 언어**: 한국어(`aidlc-docs/` 산출물). 업스트림 룰셋(`AGENTS.md`, `.aidlc-rule-details/`)은 영어 유지.
 
 ## 워크스페이스 상태
@@ -36,8 +36,8 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - [~] 리버스 엔지니어링 — N/A (Greenfield, 건너뜀)
 - [x] 요구사항 분석(Requirements Analysis) — 완료·승인 (2026-06-15); `requirements.md`. 명확화 2라운드; 모순 전건 해소; 확장 전부 활성
 - [x] 사용자 스토리(User Stories) — 계획 승인(PQ1–5=A); Part 2에서 `stories.md`(스토리 **21개**, 6 에픽: Hero 1 + Discovery 7 + Accounts 2 + Library 3 + Ingestion 3 + Reliability 5) + `personas.md`(P1 박지훈, P2, OP) 생성; FR-1..11 전부 커버; **승인 완료**. **적대적 비평 패스 완료(2026-06-15, 7/7 critic)** → requirements/stories 보정 반영.
-- [x] Workflow Planning — `execution-plan.md` 작성 완료(승인 대기). 판정: 리버스 엔지니어링만 SKIP, 그 외 전 단계 EXECUTE.
-- [ ] Application Design — **EXECUTE**
+- [x] Workflow Planning — `execution-plan.md` **승인 완료**. 판정: 리버스 엔지니어링만 SKIP, 그 외 전 단계 EXECUTE.
+- [~] Application Design — 진행 중 (6 유닛 컴포넌트·메서드·비즈니스 규칙·의존성)
 - [ ] Units Generation — **EXECUTE** (예비 유닛: U1 인제스천, U2 디스커버리 API, U3 계정/인증, U4 검색저장/라이브러리, U5 모바일 웹, U6 신뢰성/운영)
 
 ### 🟢 CONSTRUCTION 단계 (유닛별 루프)

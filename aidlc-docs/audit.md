@@ -140,3 +140,19 @@
 **맥락**: INCEPTION — Workflow Planning 게이트(Tier-1 보정 + 팀원 확인 완료) → 승인 대기.
 
 ---
+
+## Workflow Planning — 승인 + PR 상태
+**시각**: 2026-06-15T08:10:00Z
+**사용자 입력(원문)**: "Approve & Continue(" (선행: /effort ultracode)
+**AI 응답**: 실행 계획 승인 → **Application Design** 진행. PR 상태: PR #34(리셋+요구사항+사용자 스토리) develop 머지 완료(0b11fb7); 후속 보정 커밋 3d1490c는 PR #35로 제출(open). 이후 인셉션 커밋은 feature/aidlc-inception(PR #35)로 누적.
+**맥락**: INCEPTION — Workflow Planning Step 10 승인 → Application Design.
+
+---
+
+## Application Design — 설계 계획 게이트 발행
+**시각**: 2026-06-15T08:20:00Z
+**사용자 입력**: (없음 — AI 행위; 승인 프롬프트 기록)
+**AI 응답**: `inception/plans/application-design-plan.md` 발행 — 설계 질문 7건(DQ1 아키텍처 스타일, DQ2 FE/BE 토폴로지, DQ3 인제스천 실행 모델, DQ4 컴포넌트 조직, DQ5 횡단 관심사 위치, DQ6 통신 패턴, DQ7 API 스타일), 각 권장안 포함. 승인 시 6 유닛 컴포넌트·메서드·서비스·의존성을 멀티에이전트 워크플로(병렬 생성→비평→통합)로 생성 예정. 기술 스택은 본 단계 비확정(NFR/Construction). GATE: 답변/승인 대기.
+**맥락**: INCEPTION — Application Design Step 1~6 → Step 7(답변/승인 대기).
+
+---
