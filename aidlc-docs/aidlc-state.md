@@ -4,13 +4,13 @@
 - **프로젝트명**: DocSuri (연구 지원 애플리케이션)
 - **프로젝트 유형**: Greenfield(그린필드)
 - **시작일**: 2026-06-15T04:36:30Z
-- **현재 단계**: INCEPTION — 사용자 스토리(Part 2 완료); `stories.md` + `personas.md` 리뷰 게이트; 다음: Workflow Planning
+- **현재 단계**: INCEPTION — Workflow Planning 완료(`execution-plan.md` 승인 대기); 다음: Application Design
 - **문서 언어**: 한국어(`aidlc-docs/` 산출물). 업스트림 룰셋(`AGENTS.md`, `.aidlc-rule-details/`)은 영어 유지.
 
 ## 워크스페이스 상태
 - **기존 코드**: 없음(워킹 트리 블랭크 슬레이트; 이전 데모 사이클 폐기, git `ba3b6a9`로 복구 가능)
 - **리버스 엔지니어링 필요**: 아니오(Greenfield — 디스크에 소스 파일 없음)
-- **워크스페이스 루트**: /Users/revenantonthemission/Projects/DocSuri
+- **워크스페이스 루트**: 리포지토리 루트(머신별 상대; 예: `<홈>/Projects/DocSuri`) — 절대 경로는 머신마다 다름
 - **프로그래밍 언어**: (미정 — Construction 단계)
 - **빌드 시스템**: (미정 — Construction 단계)
 - **프로젝트 구조**: 비어 있음(AI-DLC Prompt 1부터 재시작)
@@ -25,7 +25,7 @@
 |---|---|---|---|
 | Security Baseline | 예 | Full(15개 규칙 전부 차단성) | Requirements Analysis (2026-06-15) |
 | Resiliency Baseline | 예 | Full(15개 규칙 전부 차단성) | Requirements Analysis (2026-06-15) |
-| Property-Based Testing | 예 | Full(10개 규칙 전부 차단성) | Requirements Analysis (2026-06-15) |
+| Property-Based Testing | 예 | Partial(PBT-02/03/07/08/09만 차단성; 01/04/05/06/10 권고) | Requirements Analysis (2026-06-15); Full→Partial 변경 2026-06-15(팀원 권고, 기술 스택 확정 후 재평가) |
 
 _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명확화를 유발: RTO/RPO + DR 전략(RESILIENCY-02), 변경 관리(RESILIENCY-03), 장애 대응(RESILIENCY-15). `inception/requirements/requirement-clarification-questions.md`에서 질의함. 후속 단계로 보류: CI/CD + 롤백 + 배포 방식(RESILIENCY-04 → NFR Design), 리전 토폴로지(RESILIENCY-08 → Infra Design), 복원력 테스트(RESILIENCY-14 → NFR Design)._
 
@@ -35,14 +35,18 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - [x] 워크스페이스 탐지(Workspace Detection) — Greenfield (2026-06-15)
 - [~] 리버스 엔지니어링 — N/A (Greenfield, 건너뜀)
 - [x] 요구사항 분석(Requirements Analysis) — 완료·승인 (2026-06-15); `requirements.md`. 명확화 2라운드; 모순 전건 해소; 확장 전부 활성
-- [x] 사용자 스토리(User Stories) — 계획 승인(PQ1–5=A); Part 2에서 `stories.md`(스토리 19개, 6 에픽, 히어로 US-H1 포함) + `personas.md`(P1 박지훈, P2, OP) 생성; FR-1..11 전부 커버; 리뷰 게이트. (적대적 INVEST/커버리지 비평 패스는 API 회복 후 보류.)
-- [ ] Workflow Planning — 다음
-- [ ] Application Design
-- [ ] Units Generation
+- [x] 사용자 스토리(User Stories) — 계획 승인(PQ1–5=A); Part 2에서 `stories.md`(스토리 **21개**, 6 에픽: Hero 1 + Discovery 7 + Accounts 2 + Library 3 + Ingestion 3 + Reliability 5) + `personas.md`(P1 박지훈, P2, OP) 생성; FR-1..11 전부 커버; **승인 완료**. **적대적 비평 패스 완료(2026-06-15, 7/7 critic)** → requirements/stories 보정 반영.
+- [x] Workflow Planning — `execution-plan.md` 작성 완료(승인 대기). 판정: 리버스 엔지니어링만 SKIP, 그 외 전 단계 EXECUTE.
+- [ ] Application Design — **EXECUTE**
+- [ ] Units Generation — **EXECUTE** (예비 유닛: U1 인제스천, U2 디스커버리 API, U3 계정/인증, U4 검색저장/라이브러리, U5 모바일 웹, U6 신뢰성/운영)
 
-### 🟢 CONSTRUCTION 단계
-- [ ] 유닛별 루프(Functional Design / NFR / Infra / Code Generation)
-- [ ] 빌드 & 테스트
+### 🟢 CONSTRUCTION 단계 (유닛별 루프)
+- [ ] Functional Design — **EXECUTE**
+- [ ] NFR Requirements — **EXECUTE**
+- [ ] NFR Design — **EXECUTE** (보류된 RES-4 CI/CD·롤백·배포, RES-14 복원력 테스트 확정)
+- [ ] Infrastructure Design — **EXECUTE** (AWS 자원·리전 토폴로지 RES-8 확정)
+- [ ] Code Generation — **EXECUTE** (항상)
+- [ ] 빌드 & 테스트 — **EXECUTE** (항상)
 
 ### 🟡 OPERATIONS 단계
 - [ ] Operations (플레이스홀더)
