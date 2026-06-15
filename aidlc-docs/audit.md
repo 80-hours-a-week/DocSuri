@@ -156,3 +156,19 @@
 **맥락**: INCEPTION — Application Design Step 1~6 → Step 7(답변/승인 대기).
 
 ---
+
+## Application Design — 계획 승인(변경 포함) + 긴장 탐지
+**시각**: 2026-06-15T08:35:00Z
+**사용자 입력(원문)**: "approve plan" (파일에서 DQ3=C, DQ6=C로 변경; DQ1/2/4/5/7=권장안 A/A/C/A/A)
+**AI 응답**: DQ3=C(이벤트 드리븐 인제스천)는 일관. 그러나 **DQ6=C(이벤트 드리븐 전반)** 는 (a) 동기 sub-3s 디스커버리 읽기 경로(NFR-P1)와 (b) 모듈형 모놀리스(DQ1=A)와 긴장 — 사용자 검색은 본질적으로 요청→응답. Step 8(답변 분석) 모순 점검에 따라 침묵 재해석 대신 명확화 1건 발행.
+**맥락**: INCEPTION — Application Design Step 8(모순/모호성) → DQ6 명확화.
+
+---
+
+## Application Design — DQ6 해소 + 산출물 생성
+**시각**: 2026-06-15T09:10:00Z
+**사용자 입력(원문, AskUserQuestion)**: DQ6 = "이벤트 백본 + 동기 읽기".
+**AI 응답**: DQ6 재조정 확정(인제스천/인덱싱/비용·인시던트/운영=이벤트 백본; 디스커버리 READ=동기 REST, NFR-P1). 멀티에이전트 워크플로(wgtjxo8nk; 6 유닛 병렬 → 3 critic → 통합, API 정상) 실행으로 `application-design/` 5문서 생성: components.md, component-methods.md, services.md, component-dependency.md, application-design.md. critic 3건 모두 needs-fixes → 통합 단계에서 blocking/major 보정 반영: 근거화/기권 단일 권위(U6.GroundingEnforcementHook; U2는 얇은 GroundingAdapter로 강등), SearchExecuted 이벤트 생산자 신설(U2→U4 이력), SEC-8 객체 소유권 단일 결정점(U3.AuthorizationGuard), QT-3 소유자 신설(U6.ReliabilityEvalProbe), rerun 게이트웨이 재진입(백도어 차단), 팬텀 컴포넌트/트레이스 제거(IncidentSignalPublisher·RES-1), VectorSpec 공유 계약. 기술 스택 미확정(capability 참조 유지). 6 유닛 U1~U6. aidlc-docs 외 레거시 미참조.
+**맥락**: INCEPTION — Application Design Step 10(생성)+11 → Step 12(리뷰 게이트).
+
+---
