@@ -1,326 +1,326 @@
-# Requirements Clarification Questions
+# 요구사항 명확화 질문 (Requirements Clarification Questions)
 
-**Stage**: INCEPTION → Requirements Analysis · **Depth**: Comprehensive · **Date**: 2026-06-15
+**단계**: INCEPTION → 요구사항 분석 · **깊이**: Comprehensive · **일자**: 2026-06-15
 
-## Intent Analysis (from your Prompt 1)
-- **Request type**: New Project (greenfield restart)
-- **Scope**: An AI-assisted research-support application for researchers and postgraduates, spanning the research lifecycle but to be narrowed to a single-anchor MVP.
-- **Complexity**: High · **Clarity of brief**: Vague (one sentence) → questions below resolve the scope.
-- **One-liner**: _Build an AI tool that supports researchers and postgraduates in their research work, scoped from a one-sentence brief into a focused, demo-able MVP._
+## 의도 분석 (Prompt 1 기반)
+- **요청 유형**: 신규 프로젝트(그린필드 재시작)
+- **범위**: 연구자·대학원생을 위한 AI 기반 연구 지원 앱. 연구 라이프사이클 전반에 걸치되 단일 앵커 MVP로 좁힘.
+- **복잡도**: 높음 · **요청 명확도**: 모호(한 문장) → 아래 질문으로 범위 해소.
+- **한 줄 요약**: _연구자·대학원생의 연구 작업을 돕는 AI 도구를, 한 문장 브리프에서 집중되고 데모 가능한 MVP로 좁힌다._
 
-## How to answer
-Fill in the letter after each `[Answer]:` tag. If no option fits, pick the **Other** letter and describe your choice after the tag. You can answer **directly in this file** or just **reply in chat** (e.g. `Q1: B, Q2: C, …`) — either works, and you don't have to answer all at once. The first four questions (goal, persona, job, magic moment) are the keystones; the rest refine from them.
+## 답변 방법
+각 `[Answer]:` 태그 뒤에 글자를 기입하세요. 맞는 선택지가 없으면 **기타** 글자를 고르고 태그 뒤에 설명하세요. **본 파일에 직접** 기입하거나 **채팅으로 답변**(예: `Q1: B, Q2: C, …`)해도 됩니다 — 한 번에 다 답할 필요는 없습니다. 첫 네 질문(목표, 페르소나, 작업, 매직 모먼트)이 핵심 키스톤이며 나머지는 거기서 정제됩니다.
 
-When you're done (or want to answer in rounds), say so and I'll check for contradictions before writing `requirements.md`.
+완료(또는 라운드로 나눠 답변) 시 알려주시면 `requirements.md` 작성 전 모순을 점검합니다.
 
 ---
 
-## Section A — Product & Scope
+## 섹션 A — 제품 & 범위
 
-## Question 1 — Cycle goal / success bar
-What is the goal and success bar for THIS cycle (what does "done" mean this time)?
+## Question 1 — 사이클 목표 / 성공 기준
+이번 사이클의 목표와 성공 기준("이번엔 무엇이 완료인가")은?
 
-_Why it matters:_ Determines how seriously compliance, auth, citation-faithfulness, and cost controls are actually built versus stubbed.
+_왜 중요한가:_ 컴플라이언스·인증·인용 충실도·비용 통제를 실제로 얼마나 구축할지 vs 스텁할지를 결정.
 
-A) Throwaway demo — boots and looks convincing in a sprint review; no real users, disposable infra
+A) 일회성 데모 — 스프린트 리뷰에서 부팅·그럴듯; 실사용자 없음, 일회용 인프라
 
-B) Internal pilot — real researchers/postgrads use it on real tasks; reliable enough to trust, not publicly hardened
+B) 내부 파일럿 — 실제 연구자/대학원생이 실제 작업에 사용; 신뢰할 만하나 공개 하드닝은 아님
 
-C) Production launch — durable, supportable service for ongoing real use, with the operational/compliance rigor that implies
+C) 프로덕션 출시 — 지속·지원 가능한 서비스, 그에 따른 운영/컴플라이언스 엄격성
 
-D) Learning exercise — the point is practicing AI-DLC and AWS; the product itself is secondary
+D) 학습 연습 — 핵심은 AI-DLC·AWS 연습; 제품 자체는 부차
 
-E) Other (please describe after [Answer]: tag below)
+E) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: C
 
-## Question 2 — Primary persona
-Which SINGLE user must v1 delight first (others become secondary)? The brief names two divergent types.
+## Question 2 — 주 페르소나
+v1이 가장 먼저 만족시켜야 할 단일 사용자는?(브리프가 명시한 두 유형은 상이함)
 
-_Why it matters:_ Picking ONE primary persona is the most scope-shaping choice — an expert PI and a beginner postgrad need almost opposite things.
+_왜 중요한가:_ 단일 주 페르소나 선정은 가장 범위를 결정하는 선택 — 전문 PI와 초심 대학원생은 거의 반대 니즈.
 
-A) Postgraduate / PhD student doing an early-stage literature review and checking thesis novelty (needs guidance, summaries, reading-level help)
+A) 대학원/박사과정 — 초기 문헌 리뷰·논문 신규성 점검(가이드·요약·읽기 수준 지원 필요)
 
-B) Active researcher / postdoc tracking a specific subfield (needs depth, expert vocabulary, breadth, recency)
+B) 현역 연구자/박사후 — 특정 세부 분야 추적(깊이·전문 용어·폭·최신성 필요)
 
-C) Supervisor / PI overseeing several students' topics and reading lists (needs to vet directions, spot overlap, curate reading)
+C) 지도교수/PI — 여러 학생의 주제·읽기 목록 관리(방향 검토·중복 발견·읽기 큐레이션)
 
-D) Undergraduate / coursework newcomer reading papers (needs heavy translation and jargon de-jargoning)
+D) 학부/수업 초심자 — 논문 읽기(과중한 번역·전문용어 풀이 필요)
 
-E) Other (please describe after [Answer]: tag below)
+E) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: B
 
-## Question 3 — Primary job-to-be-done (MVP anchor)
-Which ONE research-lifecycle stage should the MVP anchor on as its primary job (everything else becomes secondary or out-of-scope for v1)?
+## Question 3 — 주 작업(MVP 앵커)
+MVP가 주 작업으로 앵커링할 단일 연구 라이프사이클 단계는?(그 외는 v1에서 부차 또는 범위 제외)
 
-_Why it matters:_ The five clusters are effectively five different products with different data, UX, and eval needs — naming the anchor bounds everything downstream.
+_왜 중요한가:_ 다섯 클러스터는 사실상 데이터·UX·평가 니즈가 다른 다섯 제품 — 앵커 선정이 하류 전체를 한정.
 
-A) DISCOVERY & search — find relevant papers fast (Semantic Scholar / ResearchRabbit-style)
+A) 디스커버리 & 검색 — 관련 논문을 빠르게 찾기(Semantic Scholar / ResearchRabbit 류)
 
-B) EVIDENCE SYNTHESIS / Q&A — ask a research question, get a cited, evidence-backed answer (Elicit / Consensus-style)
+B) 근거 합성 / Q&A — 연구 질문에 인용·근거 기반 답(Elicit / Consensus 류)
 
-C) READING & COMPREHENSION — summarize and explain individual papers, chat with a PDF (Scholarcy / SciSpace-style)
+C) 읽기 & 이해 — 개별 논문 요약·설명, PDF와 대화(Scholarcy / SciSpace 류)
 
-D) REFERENCE & note MANAGEMENT — collect, organize, annotate, and cite a personal library (Zotero + Obsidian-style)
+D) 레퍼런스 & 노트 관리 — 개인 라이브러리 수집·정리·주석·인용(Zotero + Obsidian 류)
 
-E) WRITING & drafting — help structure and write the manuscript with citations (Overleaf + Paperpal-style)
+E) 작성 & 초고 — 인용과 함께 원고 구조화·작성 지원(Overleaf + Paperpal 류)
 
-F) Other (please describe after [Answer]: tag below)
+F) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: A
 
-## Question 4 — The "magic moment" demo journey
-Within that anchor, which ONE end-to-end journey is the "magic moment" the demo must absolutely nail (others can be partial)?
+## Question 4 — "매직 모먼트" 데모 여정
+그 앵커 안에서, 데모가 반드시 성공시켜야 할 단일 종단 여정은?(나머지는 부분적이어도 됨)
 
-_Why it matters:_ One hero journey demos better than four half-built ones; this becomes the primary UI surface and the demo's success criterion.
+_왜 중요한가:_ 단일 히어로 여정이 반쯤 만든 넷보다 데모가 잘됨 — 이것이 주 UI 표면이자 데모 성공 기준.
 
-A) Discover: type a plain-language research intent and get the most relevant papers in seconds
+A) 디스커버: 자연어 연구 의도를 입력하면 가장 관련성 높은 논문을 수초 내 받기
 
-B) Comprehend: open a paper and get a reading-level-adapted summary plus translation of dense passages
+B) 이해: 논문을 열면 읽기 수준 맞춤 요약 + 난해 구절 번역
 
-C) Synthesize: ask a question and get an answer with inline citations, or a comparison table across many papers
+C) 합성: 질문하면 인라인 인용 답변, 또는 다수 논문 비교표
 
-D) Differentiate: paste a topic/draft and see overlap with prior work plus candidate research gaps
+D) 차별화: 주제/초안을 붙이면 선행 연구와의 중복 + 연구 갭 후보
 
-E) Trace: pick a paper and visually walk its citations to find foundational and follow-up work
+E) 추적: 논문을 골라 인용을 시각적으로 따라가 기반·후속 연구 발견
 
-F) Other (please describe after [Answer]: tag below)
+F) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: A
 
-## Question 5 — Discipline scope
-What discipline scope should the v1 corpus and features target?
+## Question 5 — 분야 범위
+v1 코퍼스·기능이 겨냥할 분야 범위는?
 
-_Why it matters:_ Discipline scope cascades into paper source, citation coverage, and non-English / scanned-PDF handling.
+_왜 중요한가:_ 분야 범위는 논문 소스·인용 커버리지·비영어/스캔 PDF 처리로 파급.
 
-A) Single field, deep (e.g. AI/ML over arXiv) — narrow corpus, fast demo, like the prior cycle
+A) 단일 분야 심화(예: arXiv의 AI/ML) — 좁은 코퍼스, 빠른 데모, 이전 사이클과 유사
 
-B) Broad STEM (CS, bio, physics, engineering) — wider corpus, mixed PDF quality
+B) 광범위 STEM(CS, 생물, 물리, 공학) — 더 넓은 코퍼스, 혼재된 PDF 품질
 
-C) Humanities & social sciences — book/chapter citations, more non-English, fewer preprints
+C) 인문·사회과학 — 책/장(chapter) 인용, 비영어 다수, 프리프린트 적음
 
-D) Discipline-agnostic / broad — works across any field the user searches
+D) 분야 불문/광범위 — 사용자가 검색하는 모든 분야에서 작동
 
-E) Other (please describe after [Answer]: tag below)
+E) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: A
 
-## Question 6 — Primary paper source
-What should be the PRIMARY source of papers at launch? (Each implies a very different integration and discipline coverage.)
+## Question 6 — 주 논문 소스
+출시 시 논문의 주 소스는?(각각 통합·분야 커버리지가 크게 다름)
 
-_Why it matters:_ The data source is the deepest architecture fork — it sets integration effort, discipline coverage, and whether full text even exists.
+_왜 중요한가:_ 데이터 소스는 가장 깊은 아키텍처 분기 — 통합 노력·분야 커버리지·전문 존재 여부를 결정.
 
-A) The researcher's own PDF library, uploaded or synced (no external API, any field, paywall-proof)
+A) 연구자 자신의 PDF 라이브러리(업로드/동기화; 외부 API 불필요, 모든 분야, 유료장벽 무관)
 
-B) arXiv API (free, full-text preprints, but STEM/CS/physics/math-heavy)
+B) arXiv API(무료, 전문 프리프린트, STEM/CS/물리/수학 중심)
 
-C) PubMed / PMC E-utilities (free, biomedical & life-sciences focused)
+C) PubMed / PMC E-utilities(무료, 생의학·생명과학 중심)
 
-D) Crossref + OpenAlex / Semantic Scholar (broad cross-discipline metadata + citation graph, mostly abstracts not full text)
+D) Crossref + OpenAlex / Semantic Scholar(광범위 교차분야 메타데이터 + 인용 그래프, 대개 초록 위주·비전문)
 
-E) Sync with an existing reference manager (Zotero / Mendeley, with ORCID identity)
+E) 기존 레퍼런스 매니저 동기화(Zotero / Mendeley, ORCID 신원)
 
-F) Other (please describe after [Answer]: tag below)
+F) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: B
 
-## Question 7 — What the AI reads + AI strategy + synthesis scale
-What should the AI actually read and reason over, and via which AI strategy and at what synthesis scale? (Sets ingestion, grounding fidelity, latency, and cost.)
+## Question 7 — AI가 읽는 대상 + AI 전략 + 합성 규모
+AI가 실제로 읽고 추론할 대상, 어떤 AI 전략과 합성 규모로?(인제스천·근거 충실도·지연·비용을 설정)
 
-_Why it matters:_ This couples document input + AI approach + single-vs-many-paper scale into one decision that defines the ingestion pipeline and hallucination posture.
+_왜 중요한가:_ 문서 입력 + AI 접근 + 단일-대-다수 논문 규모를 하나로 결합해 인제스천 파이프라인과 할루시네이션 태세를 정의.
 
-A) Metadata + abstracts only, with extractive/non-generative assist (summaries, dedup, citation-graph nav) — cheapest, lowest hallucination, no vector DB
+A) 메타데이터+초록만, 추출형/비생성 보조(요약·디덥·인용그래프 내비) — 최저가, 최저 할루시네이션, 벡터DB 불필요
 
-B) Per-document full text — chat with / summarize ONE uploaded PDF at a time (parsing/OCR needed, exact-quote grounding, no vector store)
+B) 문서 단위 전문 — 업로드 PDF 한 건씩 대화/요약(파싱/OCR 필요, 정확 인용 근거, 벡터 스토어 없음)
 
-C) RAG over a persistent personal corpus — multi-paper synthesis or "ask my whole library" across MANY documents (vector store, e.g. Bedrock KB + S3 Vectors, as the prior cycle)
+C) 지속 개인 코퍼스 RAG — 다수 문서 전반의 다논문 합성 또는 "내 라이브러리 전체에 질문"(벡터 스토어, 예: Bedrock KB + S3 Vectors, 이전 사이클처럼)
 
-D) Agentic live search — an agent queries external scholarly APIs and chains steps on demand (most capable, highest cost/latency/complexity)
+D) 에이전트형 라이브 검색 — 에이전트가 외부 학술 API를 질의하고 단계를 연쇄(가장 강력, 비용/지연/복잡도 최고)
 
-E) Other (please describe after [Answer]: tag below)
+E) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: C
 
-## Question 8 — Delivery platform
-What is the primary delivery platform? (Decides auth model, offline story, and whether local files are first-class.)
+## Question 8 — 전달 플랫폼
+주 전달 플랫폼은?(인증 모델·오프라인 스토리·로컬 파일 1급 여부를 결정)
 
-_Why it matters:_ Platform dictates auth, offline/local-file needs, and the ingestion path.
+_왜 중요한가:_ 플랫폼은 인증·오프라인/로컬 파일 니즈·인제스천 경로를 좌우.
 
-A) Responsive web application (browser-based, nothing to install) — matches the team's prior Amplify/Next.js experience
+A) 반응형 웹 앱(브라우저 기반, 설치 불필요) — 팀의 이전 Amplify/Next.js 경험에 부합
 
-B) Installable desktop app (Zotero/Mendeley-style) — reads local PDF folders, works offline
+B) 설치형 데스크톱 앱(Zotero/Mendeley 류) — 로컬 PDF 폴더 읽기, 오프라인 동작
 
-C) Mobile-first app for reading and querying on the go
+C) 모바일 우선 앱 — 이동 중 읽기·질의
 
-D) Browser extension overlaying publisher pages and Google Scholar (the only practical way to ride on Scholar, which has no API)
+D) 브라우저 확장 — 게재처 페이지·Google Scholar 오버레이(API 없는 Scholar에 올라타는 유일한 실용 방법)
 
-E) Other (please describe after [Answer]: tag below)
+E) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: C
 
-## Question 9 — Solo vs collaborative
-Is v1 a solo tool or collaboration-aware? (Major architecture fork for auth and data model — costly to retrofit.)
+## Question 9 — 단독 vs 협업
+v1은 단독 도구인가 협업 인지형인가?(인증·데이터 모델의 큰 분기 — 후행 적용 비용 큼)
 
-_Why it matters:_ Solo vs collaborative decides multi-tenancy and auth, which are expensive to add later.
+_왜 중요한가:_ 단독 vs 협업이 멀티테넌시·인증을 결정하며 후행 추가 비용이 큼.
 
-A) Solo, anonymous — no login, no saved state across sessions (fastest demo, like the prior cycle)
+A) 단독, 익명 — 로그인·세션 간 저장 없음(최속 데모, 이전 사이클처럼)
 
-B) Solo with personal accounts — login, private saved searches/library, history
+B) 단독 + 개인 계정 — 로그인, 비공개 검색 저장/라이브러리, 이력
 
-C) Small-group shared — a lab or reading group shares one library, lists, and annotations
+C) 소그룹 공유 — 랩/읽기 그룹이 라이브러리·목록·주석 공유
 
-D) Supervisor-student linked — advisor curates/reviews, student consumes, with handoff between them
+D) 지도교수-학생 연동 — 지도교수 큐레이션/검토, 학생 소비, 둘 간 핸드오프
 
-E) Other (please describe after [Answer]: tag below)
+E) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: B
 
-## Question 10 — Audience / reach & access
-Who is the intended audience/reach this cycle, and how do they get access?
+## Question 10 — 대상/도달 범위 & 접근
+이번 사이클의 의도된 대상/도달 범위와 접근 방식은?
 
-_Why it matters:_ Reach drives auth, tenant isolation, GDPR exposure, abuse controls, and the cost ceiling.
+_왜 중요한가:_ 도달 범위는 인증·테넌트 격리·GDPR 노출·남용 통제·비용 상한을 좌우.
 
-A) A single lab or our own team — a handful of known users, minimal access control
+A) 단일 랩 또는 우리 팀 — 소수의 알려진 사용자, 최소 접근 통제
 
-B) A department or institution — many users behind SSO, with shared and per-user corpora and data isolation
+B) 학과 또는 기관 — SSO 뒤 다수 사용자, 공유·사용자별 코퍼스, 데이터 격리
 
-C) Public / open self-signup — anyone can register, like Elicit / Consensus / Perplexity
+C) 공개 / 오픈 셀프 가입 — 누구나 등록(Elicit / Consensus / Perplexity 류)
 
-D) Invite-only external pilot — a curated set of outside researchers onboarded manually
+D) 초대 전용 외부 파일럿 — 수작업 온보딩한 외부 연구자 집합
 
-E) Other (please describe after [Answer]: tag below)
+E) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: C
 
-## Question 11 — AI-writing / academic-integrity stance
-Where on the spectrum from evidence-grounded assistance to AI-generated WRITING should the product sit, given academic-integrity and journal AI-authorship policies?
+## Question 11 — AI 작성 / 학술 무결성 입장
+학술 무결성·저널 AI 저자권 정책을 고려할 때, 근거 기반 보조에서 AI 생성 작성까지의 스펙트럼에서 제품의 위치는?
 
-_Why it matters:_ The integrity / AI-authorship stance sets product positioning and legal/reputational exposure; many journals and universities restrict undisclosed AI-generated writing.
+_왜 중요한가:_ 무결성/AI 저자권 입장이 제품 포지셔닝과 법적/평판 노출을 결정 — 다수 저널·대학이 미공개 AI 생성 작성을 제한.
 
-A) Read-only evidence assistant — finds, summarizes, compares papers with citations; never drafts prose for the user's own paper
+A) 읽기 전용 근거 보조 — 인용과 함께 논문을 찾고·요약·비교; 사용자 본인 논문의 산문을 작성하지 않음
 
-B) Drafting aid with mandatory citations & AI-use disclosure — can produce text, but every claim is sourced and AI involvement is flagged
+B) 인용 의무 + AI 사용 고지 초안 보조 — 텍스트 생성 가능하나 모든 주장에 출처, AI 관여 표시
 
-C) Full writing assistant — drafts manuscript sections / literature reviews as polished prose; integrity compliance left to the user
+C) 완전 작성 보조 — 원고 섹션/문헌 리뷰를 다듬은 산문으로 작성; 무결성 준수는 사용자 책임
 
-D) Defer — ship only retrieval/summarization now and decide the writing stance later
+D) 보류 — 지금은 검색/요약만 출시하고 작성 입장은 추후 결정
 
-E) Other (please describe after [Answer]: tag below)
+E) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: D
 
-## Question 12 — Source-access & copyright posture
-What is the source-access and copyright posture for the papers/PDFs the system ingests?
+## Question 12 — 소스 접근 & 저작권 태세
+시스템이 인제스트하는 논문/PDF의 소스 접근·저작권 태세는?
 
-_Why it matters:_ Copyright posture (open-access vs user-upload vs full-text) is a hard constraint on the ingestion pipeline and the legal-risk profile.
+_왜 중요한가:_ 저작권 태세(오픈액세스 vs 사용자 업로드 vs 전문)는 인제스천 파이프라인과 법적 위험 프로파일에 대한 강한 제약.
 
-A) Open-access only — restrict to arXiv, PubMed Central, DOAJ, OpenAlex and similar redistributable sources
+A) 오픈액세스 전용 — arXiv, PubMed Central, DOAJ, OpenAlex 등 재배포 가능 소스로 한정
 
-B) User-uploaded only — operate solely on documents the user already has lawful access to; store nothing they don't supply
+B) 사용자 업로드 전용 — 사용자가 적법 접근 권한을 가진 문서로만 운영; 제공하지 않은 것은 저장 안 함
 
-C) Metadata + abstracts only — index titles/abstracts/citations without storing full paywalled text
+C) 메타데이터+초록만 — 제목/초록/인용을 색인하되 유료 전문은 저장 안 함
 
-D) Fetch and store full text broadly, including paywalled PDFs — accept the copyright exposure for richer answers
+D) 유료 PDF 포함 전문을 광범위 수집·저장 — 더 풍부한 답을 위해 저작권 노출 감수
 
-E) Other (please describe after [Answer]: tag below)
+E) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: A
 
-## Question 13 — Citation-faithfulness / hallucination control
-What level of citation-faithfulness / hallucination control must outputs meet this cycle (the core correctness/trust attribute)?
+## Question 13 — 인용 충실도 / 할루시네이션 통제
+이번 사이클에서 출력이 충족할 인용 충실도/할루시네이션 통제 수준은?(핵심 정확성/신뢰 속성)
 
-_Why it matters:_ Fabricated citations are the signature failure mode of LLM research tools — grounding strictness decides whether we need a retrieval-grounded architecture with refusal behavior.
+_왜 중요한가:_ 날조 인용은 LLM 연구 도구의 대표 실패 모드 — 근거 엄격성이 거부 동작을 갖춘 검색 근거 아키텍처 필요 여부를 결정.
 
-A) Strict — every factual claim links to a specific retrieved passage; refuse to answer when no supporting source exists
+A) 엄격 — 모든 사실 주장이 특정 검색 구절에 연결; 뒷받침 소스가 없으면 답변 거부
 
-B) Cited-but-lenient — show sources where available but allow unsourced synthesis, with a visible "verify before citing" warning
+B) 인용하되 관대 — 가능하면 소스 표시하되 비근거 합성 허용, "인용 전 확인" 경고 가시화
 
-C) Best-effort for demo — plausible citations acceptable now; rigorous grounding deferred to a later cycle
+C) 데모용 최선 — 지금은 그럴듯한 인용 허용; 엄밀 근거화는 이후 사이클로 보류
 
-D) Human-in-the-loop — surface sources and expect the researcher to verify every claim themselves
+D) 휴먼 인 더 루프 — 소스를 표면화하고 연구자가 모든 주장을 직접 검증하길 기대
 
-E) Other (please describe after [Answer]: tag below)
+E) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: A
 
-## Question 14 — Quality acceptance (how we'll know it works)
-Beyond citation grounding, which quality attribute must the MVP demonstrably meet, and how will we know it passed?
+## Question 14 — 품질 인수(작동 여부를 어떻게 알 것인가)
+인용 근거화 외에, MVP가 입증 가능하게 충족할 품질 속성과 통과 판정 방법은?
 
-_Why it matters:_ Defines the acceptance mechanism (eval set / accessibility / graceful degradation) — how we KNOW it works, not just that it boots.
+_왜 중요한가:_ 인수 메커니즘(평가셋 / 접근성 / 우아한 저하)을 정의 — "부팅"이 아니라 "작동을 어떻게 아는가".
 
-A) Output quality verified by an eval set — a held-out set of questions/papers with expected answers the demo must score against (testability over a fixed gold set)
+A) 평가셋으로 출력 품질 검증 — 기대 답이 있는 보류 질의/논문 세트로 데모를 채점(고정 골드셋 테스트 가능성)
 
-B) Accessibility & multilingual readability — WCAG-conformant UI and non-English / reading-level support for international postgrads (institutional accessibility duty)
+B) 접근성 & 다국어 가독성 — WCAG 준수 UI와 비영어/읽기 수준 지원(국제 대학원생을 위한 기관 접근성 의무)
 
-C) Reliability & graceful degradation — clear handling of ingestion failures, scanned/garbled PDFs, empty-retrieval, and API outages rather than silent wrong answers
+C) 신뢰성 & 우아한 저하 — 인제스천 실패·스캔/깨진 PDF·빈 검색·API 장애를 조용한 오답 대신 명확히 처리
 
-D) Demo-only spot-check — a human eyeballs a few outputs before the sprint review; no formal acceptance gate
+D) 데모용 스팟체크 — 스프린트 리뷰 전 사람이 몇 개 출력을 눈으로 확인; 정식 인수 게이트 없음
 
-E) Other (please describe after [Answer]: tag below)
+E) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: C
 
-## Question 15 — Cost vs richness ceiling
-Where should the MVP sit on the cost-vs-richness spectrum, and at what scale?
+## Question 15 — 비용 vs 풍부함 상한
+MVP가 비용-풍부함 스펙트럼에서 위치할 지점과 규모는?
 
-_Why it matters:_ Fixes the cost/model/concurrency ceiling and the privacy/self-host axis before design (mirrors the prior cycle's CostGuard hard-stop).
+_왜 중요한가:_ 설계 전에 비용/모델/동시성 상한을 명시적으로 고정하고, AWS 관리형 기본값이 묻어버릴 프라이버시/셀프호스트 축을 표면화(이전 사이클 CostGuard 하드스톱 반영).
 
-A) Thin demo on a hard cost cap — cheapest model (e.g. Haiku), abstracts only, internal pilot, strict monthly budget guardrail
+A) 강한 비용 상한의 얇은 데모 — 최저가 모델(예: Haiku), 초록만, 내부 파일럿, 엄격 월 예산 가드레일
 
-B) Mid-tier — full-text RAG on a moderate model, a single lab/group (tens of users)
+B) 중간 티어 — 적당한 모델의 전문 RAG, 단일 랩/그룹(수십 명)
 
-C) Rich experience — frontier model, full-text + citation graph, public/campus beta (hundreds+ concurrent), per-query cost accepted
+C) 리치 경험 — 프런티어 모델, 전문 + 인용 그래프, 공개/캠퍼스 베타(수백+ 동시), 질의당 비용 수용
 
-D) Privacy-first / self-hostable — keep papers and queries on infrastructure the institution controls, even at higher engineering cost
+D) 프라이버시 우선 / 셀프호스트 가능 — 더 높은 엔지니어링 비용을 감수하더라도 논문·질의를 기관 통제 인프라에 유지
 
-E) Other (please describe after [Answer]: tag below)
+E) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: B
 
 ---
 
-## Section B — AI-DLC Extension Opt-Ins
+## 섹션 B — AI-DLC 확장 옵트인
 
-_These three decide which extra rule sets the workflow enforces for the rest of the project. They're recorded in `aidlc-state.md`; opting out means those rules are never loaded._
+_이 세 가지가 프로젝트 잔여 기간에 워크플로가 강제할 추가 규칙 세트를 결정한다. `aidlc-state.md`에 기록되며, 옵트아웃 시 해당 규칙은 절대 로드되지 않는다._
 
-## Question: Security Extensions
-Should security extension rules be enforced for this project?
+## Question: Security 확장
+이 프로젝트에 보안 확장 규칙을 강제할까?
 
-A) Yes — enforce all SECURITY rules as blocking constraints (recommended for production-grade applications)
+A) 예 — 모든 SECURITY 규칙을 차단 제약으로 강제(프로덕션급 애플리케이션 권장)
 
-B) No — skip all SECURITY rules (suitable for PoCs, prototypes, and experimental projects)
+B) 아니오 — 모든 SECURITY 규칙 건너뜀(PoC·프로토타입·실험 프로젝트 적합)
 
-X) Other (please describe after [Answer]: tag below)
+X) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: A
 
-## Question: Resiliency Extensions
-Should the resiliency baseline be applied to this project?
+## Question: Resiliency 확장
+이 프로젝트에 복원력 베이스라인을 적용할까?
 
-**What this extension is.** Enabling it applies a set of **directional, design-time best practices** for building resilient systems, derived from the **AWS Well-Architected Framework (Reliability Pillar)** and resilience-review guidance. It steers requirements, design, and code toward fault tolerance, high availability, observability, and recoverability — covering 15 practice areas across business goals, change management, observability, high availability, disaster recovery, and continuous improvement.
+**이 확장이란.** 활성화하면 회복력 있는 시스템 구축을 위한 **방향성 있는 설계 시점 베스트 프랙티스** 세트를 적용하며, 이는 **AWS Well-Architected Framework(Reliability Pillar)** 및 회복력 리뷰 지침에서 도출된다. 요구사항·설계·코드를 내결함성·고가용성·관측성·복구성으로 유도하며 비즈니스 목표·변경 관리·관측성·고가용성·재해 복구·지속 개선의 15개 실천 영역을 다룬다.
 
-**What this extension is NOT.** Enabling it does **not** make your workload production-ready, nor does it certify or guarantee any availability, RTO, or RPO target. It is a **starting point** that scaffolds good resiliency decisions early — it is not a substitute for a formal **AWS Well-Architected Review** of the built system.
+**이 확장이 아닌 것.** 활성화한다고 워크로드가 프로덕션 준비되거나 어떤 가용성·RTO·RPO 목표를 인증/보장하지는 않는다. 좋은 복원력 결정을 조기에 스캐폴딩하는 **출발점**이며, 구축된 시스템의 정식 **AWS Well-Architected Review**를 대체하지 않는다.
 
-Treat the output as a well-grounded **first draft of your resiliency posture** to build on and validate — not a finished, production-certified result.
+산출물은 구축·검증할 **복원력 태세의 근거 있는 초안**으로 다루라 — 완성된, 프로덕션 인증 결과가 아니다.
 
-A) Yes — apply the resiliency baseline as directional best practices and design-time guidance (recommended for business-critical workloads, as an informed starting point that you can validate and harden before go-live)
+A) 예 — 복원력 베이스라인을 방향성 베스트 프랙티스·설계 시점 지침으로 적용(비즈니스 핵심 워크로드 권장; 출시 전 검증·강화할 수 있는 정보 기반 출발점)
 
-B) No — skip the resiliency baseline (suitable for PoCs, prototypes, and experimental projects where rapid iteration matters more than reliability)
+B) 아니오 — 복원력 베이스라인 건너뜀(신뢰성보다 빠른 반복이 중요한 PoC·프로토타입·실험 프로젝트 적합)
 
-X) Other (please describe after [Answer]: tag below)
+X) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: A
 
-## Question: Property-Based Testing Extension
-Should property-based testing (PBT) rules be enforced for this project?
+## Question: Property-Based Testing 확장
+이 프로젝트에 속성 기반 테스트(PBT) 규칙을 강제할까?
 
-A) Yes — enforce all PBT rules as blocking constraints (recommended for projects with business logic, data transformations, serialization, or stateful components)
+A) 예 — 모든 PBT 규칙을 차단 제약으로 강제(비즈니스 로직·데이터 변환·직렬화·상태 컴포넌트가 있는 프로젝트 권장)
 
-B) Partial — enforce PBT rules only for pure functions and serialization round-trips (suitable for projects with limited algorithmic complexity)
+B) 부분 — 순수 함수와 직렬화 라운드트립에만 PBT 규칙 강제(알고리즘 복잡도가 제한적인 프로젝트 적합)
 
-C) No — skip all PBT rules (suitable for simple CRUD applications, UI-only projects, or thin integration layers with no significant business logic)
+C) 아니오 — 모든 PBT 규칙 건너뜀(단순 CRUD·UI 전용·유의미한 비즈니스 로직 없는 얇은 통합 계층 적합)
 
-X) Other (please describe after [Answer]: tag below)
+X) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: A
