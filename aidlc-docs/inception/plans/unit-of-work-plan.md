@@ -21,7 +21,7 @@ C) 기타 재그룹핑(아래 기술).
 
 X) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: A (approve plan — 권장안 수락)
 
 ## UQ2 — 코드 조직 / 리포 구조 (Greenfield)
 디렉터리·배포 구조는?
@@ -34,7 +34,7 @@ C) 단일 앱 단일 디렉터리.
 
 X) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: A (approve plan — 권장안 수락)
 
 ## UQ3 — 배포 단위 매핑
 런타임 배포 단위(모듈형 모놀리스 전제)는?
@@ -47,7 +47,7 @@ C) 기타.
 
 X) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: A (approve plan — 권장안 수락)
 
 ## UQ4 — 빌드/개발 순서
 어떤 순서로 구축할까? (각 유닛은 CONSTRUCTION 유닛별 루프로 진행)
@@ -60,7 +60,7 @@ C) 기타.
 
 X) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: A (approve plan — 권장안 수락)
 
 ## UQ5 — 공유 계약 소유권
 공유 계약(VectorSpec 임베딩 스키마, 결과/DTO, 이벤트 스키마)은 어디서 소유?
@@ -71,15 +71,15 @@ B) 생산자 유닛이 각자 소유·노출.
 
 X) 기타 (아래 [Answer]: 태그 뒤에 기술)
 
-[Answer]: 
+[Answer]: A (approve plan — 권장안 수락)
 
 ---
 
 ## 필수 유닛 산출물 (답변·승인 후 생성)
-- [ ] `application-design/unit-of-work.md` — 유닛 정의·책임 + **코드 조직 전략(Greenfield)**
-- [ ] `application-design/unit-of-work-dependency.md` — 유닛 의존성 매트릭스(동기/이벤트/공유)
-- [ ] `application-design/unit-of-work-story-map.md` — 스토리(21개) → 유닛 매핑(전수 할당 검증)
-- [ ] 유닛 경계·의존성 검증, 모든 스토리 유닛 할당 확인
+- [x] `application-design/unit-of-work.md` — 유닛 정의·책임 + **코드 조직 전략(Greenfield)**
+- [x] `application-design/unit-of-work-dependency.md` — 유닛 의존성 매트릭스(동기/이벤트/공유)
+- [x] `application-design/unit-of-work-story-map.md` — 스토리(21개) → 유닛 매핑(전수 할당 검증)
+- [x] 유닛 경계·의존성 검증, 모든 스토리 유닛 할당 확인
 
 ## 생성 단계 (승인 후)
 - application-design/ + stories.md 기반으로 3 산출물 생성, 스토리 전수 매핑·의존성 비순환 검증. (설계가 이미 확정적이므로 직접 생성 + 정합 검증; 필요 시 경량 비평.)
