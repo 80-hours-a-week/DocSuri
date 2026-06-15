@@ -140,3 +140,59 @@
 **맥락**: INCEPTION — Workflow Planning 게이트(Tier-1 보정 + 팀원 확인 완료) → 승인 대기.
 
 ---
+
+## Workflow Planning — 승인 + PR 상태
+**시각**: 2026-06-15T08:10:00Z
+**사용자 입력(원문)**: "Approve & Continue(" (선행: /effort ultracode)
+**AI 응답**: 실행 계획 승인 → **Application Design** 진행. PR 상태: PR #34(리셋+요구사항+사용자 스토리) develop 머지 완료(0b11fb7); 후속 보정 커밋 3d1490c는 PR #35로 제출(open). 이후 인셉션 커밋은 feature/aidlc-inception(PR #35)로 누적.
+**맥락**: INCEPTION — Workflow Planning Step 10 승인 → Application Design.
+
+---
+
+## Application Design — 설계 계획 게이트 발행
+**시각**: 2026-06-15T08:20:00Z
+**사용자 입력**: (없음 — AI 행위; 승인 프롬프트 기록)
+**AI 응답**: `inception/plans/application-design-plan.md` 발행 — 설계 질문 7건(DQ1 아키텍처 스타일, DQ2 FE/BE 토폴로지, DQ3 인제스천 실행 모델, DQ4 컴포넌트 조직, DQ5 횡단 관심사 위치, DQ6 통신 패턴, DQ7 API 스타일), 각 권장안 포함. 승인 시 6 유닛 컴포넌트·메서드·서비스·의존성을 멀티에이전트 워크플로(병렬 생성→비평→통합)로 생성 예정. 기술 스택은 본 단계 비확정(NFR/Construction). GATE: 답변/승인 대기.
+**맥락**: INCEPTION — Application Design Step 1~6 → Step 7(답변/승인 대기).
+
+---
+
+## Application Design — 계획 승인(변경 포함) + 긴장 탐지
+**시각**: 2026-06-15T08:35:00Z
+**사용자 입력(원문)**: "approve plan" (파일에서 DQ3=C, DQ6=C로 변경; DQ1/2/4/5/7=권장안 A/A/C/A/A)
+**AI 응답**: DQ3=C(이벤트 드리븐 인제스천)는 일관. 그러나 **DQ6=C(이벤트 드리븐 전반)** 는 (a) 동기 sub-3s 디스커버리 읽기 경로(NFR-P1)와 (b) 모듈형 모놀리스(DQ1=A)와 긴장 — 사용자 검색은 본질적으로 요청→응답. Step 8(답변 분석) 모순 점검에 따라 침묵 재해석 대신 명확화 1건 발행.
+**맥락**: INCEPTION — Application Design Step 8(모순/모호성) → DQ6 명확화.
+
+---
+
+## Application Design — DQ6 해소 + 산출물 생성
+**시각**: 2026-06-15T09:10:00Z
+**사용자 입력(원문, AskUserQuestion)**: DQ6 = "이벤트 백본 + 동기 읽기".
+**AI 응답**: DQ6 재조정 확정(인제스천/인덱싱/비용·인시던트/운영=이벤트 백본; 디스커버리 READ=동기 REST, NFR-P1). 멀티에이전트 워크플로(wgtjxo8nk; 6 유닛 병렬 → 3 critic → 통합, API 정상) 실행으로 `application-design/` 5문서 생성: components.md, component-methods.md, services.md, component-dependency.md, application-design.md. critic 3건 모두 needs-fixes → 통합 단계에서 blocking/major 보정 반영: 근거화/기권 단일 권위(U6.GroundingEnforcementHook; U2는 얇은 GroundingAdapter로 강등), SearchExecuted 이벤트 생산자 신설(U2→U4 이력), SEC-8 객체 소유권 단일 결정점(U3.AuthorizationGuard), QT-3 소유자 신설(U6.ReliabilityEvalProbe), rerun 게이트웨이 재진입(백도어 차단), 팬텀 컴포넌트/트레이스 제거(IncidentSignalPublisher·RES-1), VectorSpec 공유 계약. 기술 스택 미확정(capability 참조 유지). 6 유닛 U1~U6. aidlc-docs 외 레거시 미참조.
+**맥락**: INCEPTION — Application Design Step 10(생성)+11 → Step 12(리뷰 게이트).
+
+---
+
+## Application Design — 승인
+**시각**: 2026-06-15T09:20:00Z
+**사용자 입력(원문)**: "Approve & Continue"
+**AI 응답**: Application Design 승인 → **Units Generation**(INCEPTION 마지막 단계) 진행. application-design/ 5문서 확정. PR #35로 커밋 c78bea5 누적.
+**맥락**: INCEPTION — Application Design Step 12 승인 → Units Generation.
+
+---
+
+## Units Generation — Part 1 분해 계획 게이트
+**시각**: 2026-06-15T09:30:00Z
+**사용자 입력**: (없음 — AI 행위; 승인 프롬프트 기록)
+**AI 응답**: `inception/plans/unit-of-work-plan.md` 발행 — 분해 질문 5건(UQ1 유닛 집합, UQ2 코드 조직/리포 구조, UQ3 배포 단위 매핑, UQ4 빌드 순서, UQ5 공유 계약 소유권), 각 권장안 포함. 승인 시 unit-of-work.md/unit-of-work-dependency.md/unit-of-work-story-map.md 생성(스토리 21개 전수 매핑·비순환 검증). GATE: 답변/승인 대기(Step 9).
+**맥락**: INCEPTION — Units Generation Part 1 Step 1~8 → Step 9(승인 대기).
+
+---
+
+## Units Generation — Part 1 승인 + Part 2 생성·검증
+**시각**: 2026-06-15T09:45:00Z
+**사용자 입력(원문)**: "approve plan" (UQ1~5 전부 권장안 A 수락; 파일 [Answer] A 기입)
+**AI 응답**: Part 2 실행 — `unit-of-work.md`(6 유닛 정의 + 4 배포 단위 + Greenfield 모노레포 코드 조직 + 데모 우선 빌드 순서), `unit-of-work-dependency.md`(유닛 의존성 매트릭스 sync/event/lib + 비순환 검증 + ASCII 흐름도 3종), `unit-of-work-story-map.md`(스토리 21개 전수 → 유닛 Owner 매핑) 생성. 적대적 검증 1 agent: **solid**(전 항목 통과 — 스토리 21개 전수, 코드 의존 DAG[U2↔U6 shared/ports 역전·U2↔U4 event·U2→U1 capability], UQ 정합, 단일-소유자 규칙 일치), 경미 2건(문구)·결함 0. **INCEPTION 단계 전부 완료.**
+**맥락**: INCEPTION — Units Generation Part 2 완료 → Step 16(리뷰 게이트). 다음 단계 = CONSTRUCTION.
+
+---
