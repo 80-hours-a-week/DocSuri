@@ -212,3 +212,11 @@
 **맥락**: CONSTRUCTION — U1 Functional Design Step 6~9(산출물 승인) → NFR Requirements 진입.
 
 ---
+
+## CONSTRUCTION — U1 프로덕션 재스코핑 + NFR Requirements 승인 → NFR Design
+**시각**: 2026-06-16T02:48:00Z
+**사용자 입력(원문)**: "Go straight to production and Don't think about demos." · "Update the documents straight to production level and let our team review them." · "Isn't it better to use cross-lingual embedding models like Cohere in production level?" · "And we could raise the monthly cost limit to $1600. That's the whole credit given to our team." · [5 결정 원문] "1. Store: Decided to use OpenSearch. 2. Query language: We assume cross-lingual queries. 3. OA license verification: Go through strict OA license verification. 4. $1600 cap agreed. 5. stay fully abstract." · "go"
+**AI 응답**: 데모 트랙 폐기·프로덕션 직행. **FD 프로덕션 재스코핑**(Q1=D 풀 슬라이스 5cat×5yr 수십만·Q2=C OA 전문 청킹·Q12=B 이벤트 경로 활성·Q13=B tombstone; SEC-9 전문 보관·BR-21 본문 크기 활성). **NFR Requirements 산출물 생성**(nfr-requirements·tech-stack-decisions): Python·OpenSearch[전역]·**cross-lingual 임베딩(Cohere Embed Multilingual v3, 1024·코사인)[전역]**·EventBridge·SQS·S3·Hypothesis·SEC-10. **NFR-C1=$1600/월(시스템 전역, 기존 $300 대체)**. **BR-1 엄격 OA 라이선스 검증**(재배포 가능 라이선스만). **FD 완전 추상**(구체 모델/차원/스토어/큐는 NFR docs 단일 진실 원천). 적대적 검증 누적 4패스(NFR 계획·프로덕션 산출물 전수)→ stale 잔재($300/Titan) 수정·일관성 확인. 팀 5결정 전수 반영·"go" 승인. aidlc-state 갱신·단일 커밋.
+**맥락**: CONSTRUCTION — U1 FD 재스코핑 + NFR Requirements Step 6~9(승인) → NFR Design 진입.
+
+---

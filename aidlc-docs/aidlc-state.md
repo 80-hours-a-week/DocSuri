@@ -4,7 +4,7 @@
 - **프로젝트명**: DocSuri (연구 지원 애플리케이션)
 - **프로젝트 유형**: Greenfield(그린필드)
 - **시작일**: 2026-06-15T04:36:30Z
-- **현재 단계**: CONSTRUCTION 진행(유닛별 루프, 데모 우선 U1). **U1 Functional Design 완료·승인(2026-06-16)**; 다음: **U1 NFR Requirements**(기술 스택 선정). PR #36 머지(INCEPTION→develop). 브랜치 `feature/aidlc-construction-u1`.
+- **현재 단계**: CONSTRUCTION 진행(유닛별 루프, **프로덕션 직행** U1 — 데모 트랙 폐기). **U1 Functional Design(프로덕션 재스코핑)·NFR Requirements 완료·승인(2026-06-16)**; 다음: **U1 NFR Design**(NFR 패턴·논리 컴포넌트·보류 RES-4/RES-14). PR #36 머지(INCEPTION→develop). 브랜치 `feature/aidlc-construction-u1`.
 - **문서 언어**: 한국어(`aidlc-docs/` 산출물). 업스트림 룰셋(`AGENTS.md`, `.aidlc-rule-details/`)은 영어 유지.
 
 ## 워크스페이스 상태
@@ -43,9 +43,10 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 
 ### 🟢 CONSTRUCTION 단계 (유닛별 루프)
 
-**U1 Ingestion** (데모 우선 1번):
-- [x] Functional Design — **완료·승인 (2026-06-16)**. `construction/u1-ingestion/functional-design/`(domain-entities·business-logic-model·business-rules). 답변 Q1~17=A·**Q13=B**(철회 tombstone 활성). 적대적 검증 2패스(계획·산출물). 데모 범위: Q2=A 초록 전용·Q1=A cs.LG~1년·Q12=A 이벤트 스텁. 기술 스택 미정(NFR Requirements).
-- [ ] NFR Requirements — **EXECUTE (진행 중)** — 기술 스택(언어·프레임워크·임베딩 모델·벡터 스토어·큐·스케줄러) 선정
+**U1 Ingestion** (프로덕션 직행 1번; 데모 트랙 폐기):
+- [x] Functional Design — **완료·승인·프로덕션 재스코핑 (2026-06-16)**. `construction/u1-ingestion/functional-design/`(domain-entities·business-logic-model·business-rules). 프로덕션: **Q1=D 풀 슬라이스(5cat×5yr 수십만)·Q2=C OA 전문 청킹·Q12=B 이벤트 경로 활성·Q13=B 철회 tombstone**. INV-1 커밋순서·논문 단위 원자성·PBT-08 P1~P6. **FD 완전 추상(기술 무관)**. 적대적 검증 3패스.
+- [x] NFR Requirements — **완료·승인 (2026-06-16)**. `construction/u1-ingestion/nfr-requirements/`(nfr-requirements·tech-stack-decisions). 스택: Python·**OpenSearch[전역]**·**cross-lingual 임베딩(Cohere Embed Multilingual v3, 1024·코사인)[전역]**·EventBridge·SQS·S3·Hypothesis·SEC-10. **NFR-C1=$1600/월(시스템 전역, 기존 $300 대체)**. **엄격 OA 라이선스 검증(BR-1)**. VectorSpec PIN·AS-4 수치 확정.
+- [ ] NFR Design — **EXECUTE (다음)** — NFR 패턴·논리 컴포넌트 + 보류 RES-4(CI/CD·롤백·배포)·RES-14(복원력 테스트)
 - [ ] (이하 U2~U6 Functional Design은 각 유닛 루프 진입 시)
 
 **공통 후속 단계** (per-unit 또는 횡단):
