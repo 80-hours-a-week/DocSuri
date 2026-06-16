@@ -1,8 +1,9 @@
 """App-shell smoke + contract tests.
 
-These run with NO modules installed (the state of ``develop``): the shell must boot, serve
-health, generate OpenAPI, and gracefully report accounts/discovery as skipped. The graceful
-mount is what lets this PR land before the track PRs.
+The shell must boot, serve health, generate OpenAPI, and never let one module sink the rest.
+With the ``docsuri-discovery`` path source now declared (backend/pyproject.toml), accounts +
+discovery actually MOUNT here; the graceful-skip path is still exercised via an injected
+absent module (``test_absent_module_skips_gracefully``).
 """
 
 from __future__ import annotations
@@ -47,6 +48,26 @@ def test_module_registry_complete_and_disjoint() -> None:
     mounted, skipped = set(readyz["mounted"]), set(readyz["skipped"])
     assert mounted.isdisjoint(skipped)
     assert mounted | skipped == {"accounts", "discovery"}
+
+
+def test_discovery_and_accounts_actually_mount() -> None:
+    # Regression guard: discovery silently graceful-skipped on develop until it became a
+    # declared dependency (pyproject path source). test_module_registry_complete_and_disjoint
+    # only checks the {accounts, discovery} *set* — which stayed green even while discovery was
+    # skipped. Assert both actually MOUNT, with nothing skipped.
+    result = create_app(_TEST_SETTINGS).state.mount_result
+    assert set(result.mounted) == {"accounts", "discovery"}, result.skipped
+    assert result.skipped == []
+
+
+def test_discovery_search_endpoint_is_live() -> None:
+    # The mounted discovery router serves /api/search end-to-end through the mock pipeline.
+    # NOTE: grounding here is still StubGroundingHook (always-pass); real INV-1 enforcement
+    # lands with U6/track6 (see aidlc-docs/construction/u6-integration-proposal.md). This
+    # asserts the route is LIVE, not that fabrication is blocked.
+    resp = _client().post("/api/search", json={"query": "transformer attention"})
+    assert resp.status_code == 200
+    assert "cards" in resp.json()
 
 
 def test_absent_module_skips_gracefully_not_fatal() -> None:
