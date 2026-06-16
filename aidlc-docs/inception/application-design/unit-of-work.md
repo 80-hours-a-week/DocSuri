@@ -47,12 +47,12 @@
 ```
 구체 언어·프레임워크·런타임은 **NFR Requirements/Construction**에서 확정(이전 사이클 Python 백엔드 + Next.js 프런트는 선행 사례).
 
-## 빌드/개발 순서 (UQ4=A 데모 우선)
-1. **U1 Ingestion** — 코퍼스·인덱스가 있어야 검색 가능(US-I1 시드 빌드 우선).
-2. **U2 Discovery** (+ U6 게이트웨이 미들웨어 최소 스캐폴드) — 동기 검색 경로.
-3. **U5 Frontend** — 히어로 US-H1 종단 동작(매직 모먼트 가시화).
-4. **U3 Accounts** — 공개 가입/로그인.
-5. **U4 Library** — 검색 저장·라이브러리·이력.
-6. **U6 Reliability/Ops 강화** — 비용 가드·AI 인시던트 탐지·관측성·헬스 전면화(게이트웨이 최소본은 2단계에서 선행).
+## 빌드/개발 순서 (병렬화 조율 반영 - 2026-06-16)
+개발 기간 단축을 위해 `shared/` 공용 규약을 선행 작성한 뒤, 아래와 같이 3개 독립 트랙으로 병렬 개발을 진행합니다.
+
+* **준비 단계**: `shared/` 규약 고정 (`vector-spec` 및 API DTO, 이벤트 스펙 선행 작성)
+* **[트랙 1] 데이터 파이프라인**: **U1 Ingestion** (인제스천 워커) ──> **U6 Reliability/Ops** (비동기 탐지 워커)
+* **[트랙 2] 인증 및 사용자 데이터**: **U3 Accounts** (가입/로그인) ──> **U4 Library** (저장/라이브러리)
+* **[트랙 3] 사용자 검색 및 UI**: **U2 Discovery** (Mock API 기반 선행 개발) ──> **U5 Frontend** (UI 화면 및 인터랙션)
 
 > 각 유닛은 CONSTRUCTION의 유닛별 루프(Functional/NFR/Infra Design → Code Generation)로 진행한다.

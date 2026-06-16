@@ -3,7 +3,7 @@
 **단계**: CONSTRUCTION → NFR Requirements (유닛별 루프, U1) · **유닛**: U1 Ingestion · **일자**: 2026-06-16
 **근거**: `construction/u1-ingestion/functional-design/`(FD 산출물·답변 Q1~17=A·**FD Q13=B**) · `requirements.md` · `unit-of-work.md`(UQ2 모노레포·UQ5 공유계약)
 **목적**: U1 비기능 요구사항 확정 + **기술 스택 선정**. FD 보류 수치(AS-4)·VectorSpec 구체값 확정.
-**고도(altitude)**: **스택 종류·NFR 목표**를 정한다. 클라우드 자원 매핑·리전 토폴로지(RES-8)는 **Infra Design**; CI/CD·롤백·배포·복원력 테스트(RES-4/RES-14)는 **NFR Design**으로 계속 보류. (단 SEC-10의 "무엇을 산출/핀할지"는 본 단계, "CI에서 어떻게 스캔할지"는 NFR Design.)
+**고도(altitude)**: **스택 종류·NFR 목표**를 정한다. 클라우드 자원 매핑·리전/AZ 토폴로지(RES-2)는 **Infra Design**; CI/CD·롤백·배포·복원력 테스트(RES-4/RES-12)는 **NFR Design**으로 계속 보류. (단 SEC-10의 "무엇을 산출/핀할지"는 본 단계, "CI에서 어떻게 스캔할지"는 NFR Design.)
 **데모 우선**: 머지 기준 "데모가 부팅되는가". 권장안은 로컬 부팅·저비용에 편향하되 프로덕션 타깃(팀 AWS 선행 사례)을 함께 문서화(2-트랙).
 **검증**: 본 계획은 적대적 비평(3 렌즈: 고도/경계·완전성·근거/교차유닛) 1패스로 보강(arXiv 접근 질문 신설·스토어 능력 기준·철회 신호 타당성 등).
 
@@ -45,7 +45,7 @@
 
 ## 3. 가정 (잘못이면 §4 또는 지적으로 정정)
 
-- **NS-1**: 리전 토폴로지(RES-8)·IaC·CI/CD·롤백·배포(RES-4)·복원력 테스트(RES-14)는 본 단계 밖(NFR Design/Infra).
+- **NS-1**: 리전/AZ 토폴로지(RES-2)·IaC·CI/CD·롤백·배포(RES-4)·복원력 테스트(RES-12)는 본 단계 밖(NFR Design/Infra).
 - **NS-2**: VectorSpec·벡터+lexical 스토어·공용 언어 등 `[전역]` 결정은 U1에서 확정하되 U2~U6 상속(재논의 아님).
 - **NS-3**: 정량 NFR(NFR-C1 $300/월, NFR-S1 ~3,000/동시 50)은 제안값 → U1 관점 확정/조정.
 - **NS-4**: C-5(AWS 지향)는 프로덕션 타깃 선호이나 데모 부팅 스택과 분리(2-트랙).
@@ -190,6 +190,6 @@
 1. 팀이 `§4` `[Answer]:` 채움(또는 채팅; "approve recommendations"로 일괄 권장 수락 가능). `[전역]`(Q1·Q3·Q4)은 시스템 전역 영향 인지 후 결정.
 2. 모호 답변 시 후속 명확화.
 3. 답변 확정 → `§2` 산출물 생성(nfr-requirements.md / tech-stack-decisions.md + VectorSpec 확정 + AS-4 수치).
-4. 완료 메시지 + 리뷰 게이트 → 승인 시 다음 단계(**NFR Design** — NFR 패턴·논리 컴포넌트·보류 RES-4/RES-14).
+4. 완료 메시지 + 리뷰 게이트 → 승인 시 다음 단계(**NFR Design** — NFR 패턴·논리 컴포넌트·보류 RES-4/RES-12).
 
 > 본 계획·질문은 **리뷰 게이트**입니다. 답변 전까지 산출물 미생성, 미커밋.

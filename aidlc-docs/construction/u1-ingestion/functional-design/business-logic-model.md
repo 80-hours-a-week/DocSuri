@@ -94,7 +94,7 @@ handle(error|class, context):
 
 ### Tombstone 순서 규칙 (Q13=B)
 - `tombstone(paperId)`는 인덱스에서 해당 PaperId의 **전 청크** 제거. tombstone 경로도 INV-1 순서(durable → markIngested(paperId+vN) → advanceWatermark).
-- **순서는 `DeduplicationGuard.isNew`로 강제**: 철회 후 엄격히 더 새로운 vN → CHANGED → 재upsert(부활); 동일/이전 vN → DUPLICATE → 무시(stale upsert가 신규 버전·철회를 덮지 않음).
+- **순서 규칙 = 버전 단조(highest-vN-wins)**: 제어평면 DedupState가 paperId별 `current_version` + 상태(INDEXED/TOMBSTONED) 보유. **upsert(vN)**는 `vN ≥ current_version`, **tombstone(vW)**는 `vW ≥ current_version`일 때만 적용(아니면 무시) — **`current_version`에 대한 원자적 compare-and-set**(실현=NFR Design). **`current_version > vW`면 삭제 무시**(strictly-newer-vN-wins). **`isNew`는 인서트 스킵 판정이며 삭제 가드가 아님** — 삭제는 위 버전 비교로 가드. 원자적이라 도착 순서 무관 수렴(예: v2 삭제·v3 인서트 경쟁 → v3 생존).
 - **재구축 시에도** 동일 철회-신호 탐지(BR-14)가 parse 경로에서 능동 실행(능동 재탐지).
 
 ---

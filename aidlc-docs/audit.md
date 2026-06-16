@@ -220,3 +220,35 @@
 **맥락**: CONSTRUCTION — U1 FD 재스코핑 + NFR Requirements Step 6~9(승인) → NFR Design 진입.
 
 ---
+
+## CONSTRUCTION — U1 NFR Design 계획 검토
+**시각**: 2026-06-16T03:41:00Z
+**사용자 입력(원문)**: "u1-ingestion-nfr-design-plan에 대해 검토해봐."
+**AI 응답**: U1 Ingestion NFR Design 계획(`u1-ingestion-nfr-design-plan.md`) 검토 의견 작성. NFR Requirements 정합성 확인(OpenSearch, Cohere Multilingual v3, SQS/S3, $1600 비용 상한), 사용자 Q3 CD 도구 답변 반영 확인, 미답변 질문 Q1~14(Q3 제외) 및 권장 옵션 정리 및 사용자 피드백 대기.
+**맥락**: CONSTRUCTION — U1 NFR Design 계획 검토 및 답변 게이트 대기.
+
+---
+
+## CONSTRUCTION — U1 NFR Design 계획 승인 및 산출물 생성
+**시각**: 2026-06-16T03:50:00Z
+**사용자 입력(원문)**: "approve the rest of recommendations"
+**AI 응답**: U1 Ingestion NFR Design 계획서(`u1-ingestion-nfr-design-plan.md`)의 모든 미답변 질문(Q1~Q14, Q3 제외)에 대해 권장 옵션(A 및 Q13의 RDS 우선/DynamoDB 폴백 패턴) 적용 완료. 계획서 파일의 답변 기입 및 체크박스 완료 처리. NFR Design 설계 산출물 2종(`nfr-design-patterns.md`, `logical-components.md`) 생성.
+**맥락**: CONSTRUCTION — U1 NFR Design 계획 승인 및 설계 진행.
+
+---
+
+## CONSTRUCTION — 병렬 개발 가능 유닛 검토 및 제안
+**시각**: 2026-06-16T05:03:00Z
+**사용자 입력(원문)**: "기간을 줄여보고 싶은데 병렬로 구현할 수 있는 유닛은 없을까?"
+**AI 응답**: 개발 기간 단축을 위한 유닛 간 의존성 분석 진행. U1 Ingestion, U2 Discovery, U3 Accounts, U5 Frontend의 병렬 개발 가능 구조와 이를 위한 shared/ 모듈 계약 선행 정의 방안 제안.
+**맥락**: CONSTRUCTION — 유닛 개발 스케줄링 검토 및 제안.
+
+---
+
+## CONSTRUCTION — U1 NFR Design 팀 피드백 반영·SSOT ID 정렬·승인 → shared/ 규약
+**시각**: 2026-06-16T05:24:00Z
+**사용자 입력(원문)**: [팀 피드백] "tombstone 삭제 순서 — 구멍: isNew는 인서트 스킵이지 삭제 가드 아님; 명시 규칙 필요(strictly-newer-vN-wins)" · "indexStats 헬스 — (a)인증·인가 내부정보 노출 (b)count 호출 비용 캐싱/근사" · "correct the ID Drift according to SSOT" · "go, then author the shared/ contract specs"
+**AI 응답**: NFR Design 산출물 검증(팀 생성본의 §2 매핑 가짜 명칭 11/12·indexStats REST 라우트 수정) + **팀 피드백 2건 반영**: (1) tombstone 순서 = **버전 단조 compare-and-set**(제어평면 `current_version`+state; upsert/tombstone 모두 `≥current_version`; `current_version>vW`면 삭제 무시) — BR-14·business-logic·domain-entities·patterns·logical-components 5곳 정합; (2) indexStats **내부 전용+서비스 인증(SEC-7/8/9)**+**캐시 TTL/근사 카운트**. **SSOT ID 정정**: RES-14→RES-12·RES-8→RES-2(토폴로지) 전 문서 정렬. 팀 "go" 승인. 단일 커밋. 다음: shared/ 규약(vector-spec·DTOs·events·ports).
+**맥락**: CONSTRUCTION — U1 NFR Design 승인 + SSOT 정렬 → shared/ 공용 규약 작성(3 트랙 선행).
+
+---

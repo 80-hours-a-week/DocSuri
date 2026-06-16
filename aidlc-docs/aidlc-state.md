@@ -4,7 +4,7 @@
 - **프로젝트명**: DocSuri (연구 지원 애플리케이션)
 - **프로젝트 유형**: Greenfield(그린필드)
 - **시작일**: 2026-06-15T04:36:30Z
-- **현재 단계**: CONSTRUCTION 진행(유닛별 루프, **프로덕션 직행** U1 — 데모 트랙 폐기). **U1 Functional Design(프로덕션 재스코핑)·NFR Requirements 완료·승인(2026-06-16)**; 다음: **U1 NFR Design**(NFR 패턴·논리 컴포넌트·보류 RES-4/RES-14). PR #36 머지(INCEPTION→develop). 브랜치 `feature/aidlc-construction-u1`.
+- **현재 단계**: CONSTRUCTION 진행(유닛별 루프, **프로덕션 직행** U1 — 데모 트랙 폐기). **U1 Functional Design·NFR Requirements 완료·승인(2026-06-16)**; **U1 NFR Design 완료·승인(2026-06-16)**. 병렬화 조율(shared/ 규약 선행 및 3개 병렬 트랙) 반영. 다음: **shared/ 공용 규약 작성**(vector-spec·DTOs·events·ports 선행) → 3 트랙 병렬(U1 Infra·U3 Accounts·U2 mock). PR #36 머지(INCEPTION→develop). 브랜치 `feature/aidlc-construction-u1`.
 - **문서 언어**: 한국어(`aidlc-docs/` 산출물). 업스트림 룰셋(`AGENTS.md`, `.aidlc-rule-details/`)은 영어 유지.
 
 ## 워크스페이스 상태
@@ -46,12 +46,14 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 **U1 Ingestion** (프로덕션 직행 1번; 데모 트랙 폐기):
 - [x] Functional Design — **완료·승인·프로덕션 재스코핑 (2026-06-16)**. `construction/u1-ingestion/functional-design/`(domain-entities·business-logic-model·business-rules). 프로덕션: **Q1=D 풀 슬라이스(5cat×5yr 수십만)·Q2=C OA 전문 청킹·Q12=B 이벤트 경로 활성·Q13=B 철회 tombstone**. INV-1 커밋순서·논문 단위 원자성·PBT-08 P1~P6. **FD 완전 추상(기술 무관)**. 적대적 검증 3패스.
 - [x] NFR Requirements — **완료·승인 (2026-06-16)**. `construction/u1-ingestion/nfr-requirements/`(nfr-requirements·tech-stack-decisions). 스택: Python·**OpenSearch[전역]**·**cross-lingual 임베딩(Cohere Embed Multilingual v3, 1024·코사인)[전역]**·EventBridge·SQS·S3·Hypothesis·SEC-10. **NFR-C1=$1600/월(시스템 전역, 기존 $300 대체)**. **엄격 OA 라이선스 검증(BR-1)**. VectorSpec PIN·AS-4 수치 확정.
-- [ ] NFR Design — **EXECUTE (다음)** — NFR 패턴·논리 컴포넌트 + 보류 RES-4(CI/CD·롤백·배포)·RES-14(복원력 테스트)
+- [x] NFR Design — **완료·승인 (2026-06-16)**. `construction/u1-ingestion/nfr-design/`(nfr-design-patterns·logical-components). 버전 단조 tombstone(`current_version` compare-and-set)·indexStats 내부경계+캐시TTL·RES-1 의존성맵·verify-all-then-commit·CI=GHA(CD는 Infra)·RES-12 폴트인젝션. 적대적 검증 + 팀 피드백 2건(tombstone 순서·indexStats 경계) 반영. _ID: RES-12(복원력 테스트)._
 - [ ] (이하 U2~U6 Functional Design은 각 유닛 루프 진입 시)
 
 **공통 후속 단계** (per-unit 또는 횡단):
-- [ ] NFR Design — **EXECUTE** (보류된 RES-4 CI/CD·롤백·배포, RES-14 복원력 테스트 확정)
-- [ ] Infrastructure Design — **EXECUTE** (AWS 자원·리전 토폴로지 RES-8 확정)
+- [x] 병렬 개발 조율 (2026-06-16 반영) — `shared/` 공용 규약 선행 작성 및 3개 독립 트랙 병렬 진행 확정
+- [~] `shared/` 규약 작성 (vector-spec·DTOs·events·**ports** 선행) — **진행 중 (2026-06-16)**
+- [x] U1 NFR Design 승인 (2026-06-16)
+- [ ] Infrastructure Design — **EXECUTE** (AWS 자원·**리전/AZ 토폴로지 RES-2**·오토스케일링/쿼터 RES-8 확정)
 - [ ] Code Generation — **EXECUTE** (항상)
 - [ ] 빌드 & 테스트 — **EXECUTE** (항상)
 

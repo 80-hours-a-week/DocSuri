@@ -58,7 +58,7 @@
 | **StoredFullText** | `paperId`, `version`, `objectRef`, `contentType` | **Q2=C·SEC-9 활성**: OA 전문 오브젝트 스토리지 보관(공개 차단). 재구축·재처리 재사용(arXiv 재취득 회피). |
 | **WriteResult** | `written`, `skipped`, `failed[]` | upsert/tombstone 결과. `failed[]`→IngestionResilienceService. |
 | **IndexStats** | `docCount`, `vectorCount`, `lastWrite` | 소비 계약(business-logic §5): U6.HealthCheckService.deepCheck(RES-6) + RES-2 재구축 완전성 검증. `lastWrite`=성공 커밋 시 전진. **프로덕션: vectorCount ≫ docCount(다중 청크).** |
-| **Tombstone** | `paperId`, `tombstonedAt`, `reason` | **Q13=B 활성.** 철회 논문의 전 청크 제거. **순서 규칙**: tombstone 우선, 단 엄격히 더 새로운 vN upsert 우선(DeduplicationGuard.isNew로 강제). |
+| **Tombstone** | `paperId`, `tombstonedAt`, `reason` | **Q13=B 활성.** 철회 논문의 전 청크 제거. **순서 규칙(BR-14, 버전 단조)**: tombstone(vW)는 `vW ≥ current_version`일 때만 적용, 더 새로운 vN이 이미 있으면 무시(strictly-newer-vN-wins). 제어평면 `current_version` compare-and-set로 강제 — `isNew`는 인서트 스킵용이며 삭제 가드 아님. |
 
 > **단일 writer/단일 reader**: U1.VectorIndexWriter만 쓰고 U2.HybridRetriever만 읽음(잠금).
 
