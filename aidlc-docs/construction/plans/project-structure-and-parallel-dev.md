@@ -41,10 +41,10 @@
   2. **`backend/` app shell + `backend/middleware/`** — backend 모듈 3개(T1 미들웨어·T2 accounts/library·T3 discovery)가 **같은 앱**에 결선. 부트스트랩·라우터·DI·공통 미들웨어는 공유 표면.
 
 ## 3. 조율 존 소유 & 변경 프로토콜
-> **배정(2026-06-16)**: Track1 @ELSAPHABA · Track2 @revenantonthemission · Track3 @kyjness. **`.github/CODEOWNERS` 작성됨**(PR #38 포함). 조율 존 소유자는 **기본값(확인 요)**: `shared/` → @revenantonthemission, `backend/` app-shell → @ELSAPHABA.
+> **배정(2026-06-16)**: Track1 @ELSAPHABA · Track2 @revenantonthemission · Track3 @kyjness. **`.github/CODEOWNERS` 작성됨**(PR #38 포함). 조율 존 소유자: `shared/` → @revenantonthemission, `backend/` app-shell → @revenantonthemission (app-shell은 2026-06-16 Track 2로 재배정; U6 미들웨어 `backend/middleware/`는 @ELSAPHABA 유지).
 
 - **`shared/` 소유자 = @revenantonthemission**(기본값; UQ5=A 단일 소유). **계약 변경은 `shared/` 전용 PR + 3 트랙 사인오프**(변경이 전 트랙에 파급). 트랙 브랜치 안에서 `shared/`를 직접 편집 금지.
-- **`backend/` app shell 소유자 = @ELSAPHABA**(기본값; U6 게이트웨이/미들웨어가 shell의 횡단 관심사). 모듈 팀은 자기 `modules/*`만; app shell/미들웨어 결선 변경은 소유자 경유.
+- **`backend/` app shell 소유자 = @revenantonthemission**(2026-06-16 Track 2 재배정; app-shell 부트스트랩·라우터·DI 결선을 Track 2가 소유). **U6 게이트웨이 미들웨어 `backend/middleware/`는 @ELSAPHABA(Track 1) 유지** — app-shell(루트 결선)과 미들웨어(U6 횡단)는 분리 소유. 모듈 팀은 자기 `modules/*`만; app shell/미들웨어 결선 변경은 각 소유자 경유.
 - **CODEOWNERS 강제**(리뷰 라우팅, last-match-wins): `.github/CODEOWNERS` — 조율 존 → 지정 소유자, 각 레인 → 트랙. develop 브랜치 보호에서 "require review from Code Owners" 활성 권장.
 
 ## 4. 브랜치 전략 (git-flow, RES-3)
@@ -55,15 +55,16 @@
 ## 5. 선결 결정 (✅ 결정 완료 2026-06-16)
 - ✅ **A. backend 공유 스택 = Python** — backend(①) 모듈형 모놀리스 단일 런타임(U2/U3/U4/U6-미들웨어 공유) + ingestion(U1)·ops도 Python. **Track 2·3 unblocked**(공유 런타임 확정). PBT=Hypothesis 일관. _시스템 결정 — U2/U3/U4/U6 NFR Requirements는 이를 계승(재결정 아님)._
 - ✅ **B. `shared/` 포맷 = 언어 중립 SSOT** — JSON Schema/OpenAPI 단일 진실 원천 → Python(pydantic 등)·TS 타입 생성. **`ports`도 SSOT 기반 Python `Protocol`/TS interface 파생**(A=Python 확정으로 backend 스텁 결정 가능 — "ports deferred" 해제). 드리프트 방지. (워크플로 생성 참조 draft가 이 포맷.)
-- ✅ **C. 소유자 확정** — 트랙 3인 + `.github/CODEOWNERS`. 조율 존: `shared/` @revenantonthemission · `backend/` app-shell @ELSAPHABA **확정**.
+- ✅ **C. 소유자 확정** — 트랙 3인 + `.github/CODEOWNERS`. 조율 존: `shared/` @revenantonthemission · `backend/` app-shell @revenantonthemission **확정**(app-shell 2026-06-16 Track 2 재배정; `backend/middleware/`(U6)=@ELSAPHABA).
 - **D. frontend·ops 스택** — ops=Python(A 일관); frontend(U5)=TS/SSR 유력(U5 NFR Requirements에서 확정).
+- ✅ **E. CG-1 backend 웹 프레임워크 = FastAPI** — app-shell 소유자(@revenantonthemission, §5-C 재배정) 결정. discovery/accounts 모듈의 "@ELSAPHABA 사인오프 대기(CG-1)" 주석은 본 결정으로 해소. app-shell 스캐폴드 `backend/`(create_app·DI·미들웨어·헬스 + 모듈 **선택적 마운트**) 랜딩 — 모듈 부재 시 graceful skip이라 app-shell이 트랙 PR보다 먼저 develop에 머지 가능. `backend/middleware/`(U6 authn/authz·레이트·근거화)는 @ELSAPHABA 유지(seam만 제공).
 
 ## 6. 지금 세울 것 vs 트랙별 미룰 것
 | | 지금(승인 시 선행) | 트랙별(각 유닛 루프) |
 |---|---|---|
 | 디렉터리 | 위 §1 전체 트리(빈 디렉터리 + 레인별 README/소유) | 각 디렉터리 내부 구조 |
 | `shared/` | 계약 코드 패키지(언어중립 SSOT; @revenantonthemission, PR #38) | 계약은 동결(변경은 §3 프로토콜) |
-| backend | app-shell 스캐폴드(**Python**; @ELSAPHABA) | 각 모듈 구현 |
+| backend | app-shell 스캐폴드(**Python**; @revenantonthemission) | 각 모듈 구현 |
 | 루트 규약 | `.gitignore`·`docker-compose`(스텁)·CODEOWNERS·README·CI 스켈레톤 | 언어별 deps/lint/test(스택 확정 유닛부터) |
 
 > 루트 언어별 툴링: **Python 확정**(ingestion·backend·ops) → Python deps/lint/test·shared SSOT→pydantic codegen 진행 가능; frontend(TS)는 §5-D(U5 NFR Requirements) 후.
