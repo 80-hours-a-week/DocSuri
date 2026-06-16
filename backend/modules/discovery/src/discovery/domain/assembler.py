@@ -20,6 +20,9 @@ from docsuri_shared.dtos import (
 
 from .models import AbstainResult, Candidate, DegradeMode, GroundedResults
 
+# BR-9: a grounded-but-empty result must NEVER become an empty success page.
+_ABSTAIN_EMPTY = "no_results"
+
 
 def _card(candidate: Candidate, rank: int) -> ResultCardVM:
     """Project a real IndexRecord to the 7 card fields (SEC-9). ``relevance`` = 1-based rank
@@ -42,6 +45,12 @@ class ResultAssembler:
     ) -> SearchResponse:
         if isinstance(result, AbstainResult):
             return SearchResponse(AbstainDTO(reason=result.reason))
+
+        # BR-9 (enforced here, not just upstream): a grounded result with zero items is an
+        # abstain, never an empty success page — e.g. if grounding passes but filters all
+        # candidates out. Guarding at this layer keeps the invariant local to the assembler.
+        if not result.items:
+            return SearchResponse(AbstainDTO(reason=_ABSTAIN_EMPTY))
 
         cards = [_card(c, rank=i + 1) for i, c in enumerate(result.items)]
         if degrade_mode is DegradeMode.NORMAL:

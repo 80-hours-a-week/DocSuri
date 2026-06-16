@@ -20,8 +20,9 @@ from ..domain.models import AuthSession, RequestContext
 from ..service.orchestrator import SearchOrchestrationService, SearchUnavailable
 from .gateway_seam import run_search
 
-# Generic fail-closed message (SEC-9/SEC-15 — no internal detail).
+# Generic fail-closed messages (SEC-9/SEC-15 — no internal detail / stack / framework info).
 _UNAVAILABLE_MESSAGE = "Search is temporarily unavailable. Please try again shortly."
+_GENERIC_ERROR_MESSAGE = "Something went wrong. Please try again."
 
 
 def build_router(
@@ -54,5 +55,9 @@ def build_app(
     @app.exception_handler(SearchUnavailable)
     def _on_unavailable(_request, _exc):  # fail-closed: generic 503 (INV-3/SEC-15)
         return JSONResponse(status_code=503, content={"message": _UNAVAILABLE_MESSAGE})
+
+    @app.exception_handler(Exception)
+    def _on_unexpected(_request, _exc):  # global catch-all: generic 500, no leak (INV-3/SEC-15)
+        return JSONResponse(status_code=500, content={"message": _GENERIC_ERROR_MESSAGE})
 
     return app
