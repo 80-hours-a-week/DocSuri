@@ -38,11 +38,15 @@ class MountResult:
     cleanups: list[Cleanup] = field(default_factory=list)
 
 
-def mount_modules(app: FastAPI, settings: Settings) -> MountResult:
+def mount_modules(app: FastAPI, settings: Settings, integrations=None) -> MountResult:
     """Mount every available module. Never raises — a missing or broken module degrades to
-    a skip so the rest of the backend still serves."""
+    a skip so the rest of the backend still serves.
+
+    ``integrations`` defaults to the real registry; tests inject a guaranteed-absent
+    integration to exercise the skip path without depending on what's installed.
+    """
     result = MountResult()
-    for integration in (_mount_accounts, _mount_discovery):
+    for integration in (_INTEGRATIONS if integrations is None else integrations):
         name = integration.__name__.removeprefix("_mount_")
         try:
             integration(app, settings, result)
@@ -100,3 +104,8 @@ def _mount_discovery(app: FastAPI, settings: Settings, result: MountResult) -> N
     app.state.discovery_bundle = bundle
     app.include_router(build_router(bundle.orchestrator, bundle.grounding_hook))
     result.mounted.append("discovery")
+
+
+# The real registry. Each entry is a `(app, settings, result) -> None` mounter whose name
+# (minus the `_mount_` prefix) labels it in MountResult / `/readyz`.
+_INTEGRATIONS = (_mount_accounts, _mount_discovery)

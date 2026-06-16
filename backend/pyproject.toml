@@ -50,6 +50,10 @@ pythonpath = [".."]
 
 [tool.ruff]
 line-length = 100
+# Module lanes (modules/*) are self-owned and self-linted (discovery ships its own ruff
+# config; accounts lints within its own lane). The app-shell ruff config governs only the
+# shell's own files, so `ruff check .` here doesn't fail on another track's lint debt.
+extend-exclude = ["modules"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

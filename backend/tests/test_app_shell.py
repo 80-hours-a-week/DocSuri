@@ -39,12 +39,26 @@ def test_openapi_generates() -> None:
     assert schema.json()["info"]["title"] == "DocSuri Backend (modular monolith)"
 
 
-def test_modules_absent_are_skipped_not_fatal() -> None:
-    # On develop neither module is installed → both skip, shell still ready.
+def test_module_registry_complete_and_disjoint() -> None:
+    # Env-independent: which modules are installed in this checkout varies, but every
+    # registered module must land in exactly one bucket (never dropped, never both).
     readyz = _client().get("/readyz").json()
     assert readyz["status"] == "ready"
-    assert readyz["mounted"] == []
-    assert set(readyz["skipped"]) == {"accounts", "discovery"}
+    mounted, skipped = set(readyz["mounted"]), set(readyz["skipped"])
+    assert mounted.isdisjoint(skipped)
+    assert mounted | skipped == {"accounts", "discovery"}
+
+
+def test_absent_module_skips_gracefully_not_fatal() -> None:
+    # Inject a guaranteed-absent integration so the skip path is tested regardless of what
+    # is installed (the old version assumed the real modules were absent — broke on merge).
+    def _mount_ghost(app: FastAPI, settings: Settings, result) -> None:
+        raise ModuleNotFoundError("No module named 'ghost'", name="ghost")
+
+    app = create_app(_TEST_SETTINGS)
+    result = mount_modules(app, _TEST_SETTINGS, integrations=[_mount_ghost])
+    assert result.mounted == []
+    assert [name for name, _ in result.skipped] == ["ghost"]
 
 
 def test_mount_modules_never_raises_and_records_reasons() -> None:
