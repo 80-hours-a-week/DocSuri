@@ -196,3 +196,67 @@
 **맥락**: INCEPTION — Units Generation Part 2 완료 → Step 16(리뷰 게이트). 다음 단계 = CONSTRUCTION.
 
 ---
+
+## CONSTRUCTION — U1 Ingestion Functional Design 계획 게이트 + 답변
+**시각**: 2026-06-16T01:10:00Z
+**사용자 입력(원문)**: "PR #36 is merged. Start CONSTRUCTION with U1." → (계획 게이트 후) "approve recommendations" + 답변 파일 직접 편집(Q13=B, Q16=A 기입).
+**AI 응답**: CONSTRUCTION 유닛별 루프 착수. `construction/plans/u1-ingestion-functional-design-plan.md` 발행 — Functional Design 계획 + 17 질문(데모 우선, 기술 무관). 적대적 완전성 비평 1패스(3 렌즈: 커버리지·규칙/엣지케이스·추적성/고도) → needs-revision 판정의 4건 보강(이벤트 멱등 Q15·재구축↔증분 Q16·워터마크 역행 Q17·커밋순서 INV-1 + 마이너 정리). 팀이 권장안 일괄 승인하되 **Q13=B**(철회 탐지·tombstone 활성, 권장 A 대비 데모 범위 확대) 명시 오버라이드, Q16=A 직접 기입. 모호 답변 없음(전 letter 명시) → Step 6 진행.
+**맥락**: CONSTRUCTION — U1 Functional Design Step 1~5(계획 게이트 통과).
+
+---
+
+## CONSTRUCTION — U1 Ingestion Functional Design 산출물 승인 → NFR Requirements
+**시각**: 2026-06-16T01:26:00Z
+**사용자 입력(원문)**: "approve and proceed to NFR Requirements"
+**AI 응답**: Functional Design 산출물 3종 생성 — `construction/u1-ingestion/functional-design/{domain-entities,business-logic-model,business-rules}.md`(답변 Q1~17=A·단 Q13=B 반영; INV-1 커밋순서·철회 tombstone 분기·재구축↔증분 상호배제·PBT-08 속성 P1~P6·추적성 미커버 0). 적대적 검증 2패스째(답변 충실성·일관성·근거·완전성) → fix-first 판정의 9 수정 반영(tombstone 경로 워터마크 일관·IndexRecordBatch/ValidationResult/IngestItem 누락 엔티티 추가·고도 누수 정리). 팀 승인. aidlc-state.md FD 완료 표기·본 감사 기록. 다음: U1 NFR Requirements(기술 스택 선정).
+**맥락**: CONSTRUCTION — U1 Functional Design Step 6~9(산출물 승인) → NFR Requirements 진입.
+
+---
+
+## CONSTRUCTION — U1 프로덕션 재스코핑 + NFR Requirements 승인 → NFR Design
+**시각**: 2026-06-16T02:48:00Z
+**사용자 입력(원문)**: "Go straight to production and Don't think about demos." · "Update the documents straight to production level and let our team review them." · "Isn't it better to use cross-lingual embedding models like Cohere in production level?" · "And we could raise the monthly cost limit to $1600. That's the whole credit given to our team." · [5 결정 원문] "1. Store: Decided to use OpenSearch. 2. Query language: We assume cross-lingual queries. 3. OA license verification: Go through strict OA license verification. 4. $1600 cap agreed. 5. stay fully abstract." · "go"
+**AI 응답**: 데모 트랙 폐기·프로덕션 직행. **FD 프로덕션 재스코핑**(Q1=D 풀 슬라이스 5cat×5yr 수십만·Q2=C OA 전문 청킹·Q12=B 이벤트 경로 활성·Q13=B tombstone; SEC-9 전문 보관·BR-21 본문 크기 활성). **NFR Requirements 산출물 생성**(nfr-requirements·tech-stack-decisions): Python·OpenSearch[전역]·**cross-lingual 임베딩(Cohere Embed Multilingual v3, 1024·코사인)[전역]**·EventBridge·SQS·S3·Hypothesis·SEC-10. **NFR-C1=$1600/월(시스템 전역, 기존 $300 대체)**. **BR-1 엄격 OA 라이선스 검증**(재배포 가능 라이선스만). **FD 완전 추상**(구체 모델/차원/스토어/큐는 NFR docs 단일 진실 원천). 적대적 검증 누적 4패스(NFR 계획·프로덕션 산출물 전수)→ stale 잔재($300/Titan) 수정·일관성 확인. 팀 5결정 전수 반영·"go" 승인. aidlc-state 갱신·단일 커밋.
+**맥락**: CONSTRUCTION — U1 FD 재스코핑 + NFR Requirements Step 6~9(승인) → NFR Design 진입.
+
+---
+
+## CONSTRUCTION — U1 NFR Design 계획 검토
+**시각**: 2026-06-16T03:41:00Z
+**사용자 입력(원문)**: "u1-ingestion-nfr-design-plan에 대해 검토해봐."
+**AI 응답**: U1 Ingestion NFR Design 계획(`u1-ingestion-nfr-design-plan.md`) 검토 의견 작성. NFR Requirements 정합성 확인(OpenSearch, Cohere Multilingual v3, SQS/S3, $1600 비용 상한), 사용자 Q3 CD 도구 답변 반영 확인, 미답변 질문 Q1~14(Q3 제외) 및 권장 옵션 정리 및 사용자 피드백 대기.
+**맥락**: CONSTRUCTION — U1 NFR Design 계획 검토 및 답변 게이트 대기.
+
+---
+
+## CONSTRUCTION — U1 NFR Design 계획 승인 및 산출물 생성
+**시각**: 2026-06-16T03:50:00Z
+**사용자 입력(원문)**: "approve the rest of recommendations"
+**AI 응답**: U1 Ingestion NFR Design 계획서(`u1-ingestion-nfr-design-plan.md`)의 모든 미답변 질문(Q1~Q14, Q3 제외)에 대해 권장 옵션(A 및 Q13의 RDS 우선/DynamoDB 폴백 패턴) 적용 완료. 계획서 파일의 답변 기입 및 체크박스 완료 처리. NFR Design 설계 산출물 2종(`nfr-design-patterns.md`, `logical-components.md`) 생성.
+**맥락**: CONSTRUCTION — U1 NFR Design 계획 승인 및 설계 진행.
+
+---
+
+## CONSTRUCTION — 병렬 개발 가능 유닛 검토 및 제안
+**시각**: 2026-06-16T05:03:00Z
+**사용자 입력(원문)**: "기간을 줄여보고 싶은데 병렬로 구현할 수 있는 유닛은 없을까?"
+**AI 응답**: 개발 기간 단축을 위한 유닛 간 의존성 분석 진행. U1 Ingestion, U2 Discovery, U3 Accounts, U5 Frontend의 병렬 개발 가능 구조와 이를 위한 shared/ 모듈 계약 선행 정의 방안 제안.
+**맥락**: CONSTRUCTION — 유닛 개발 스케줄링 검토 및 제안.
+
+---
+
+## CONSTRUCTION — U1 NFR Design 팀 피드백 반영·SSOT ID 정렬·승인 → shared/ 규약
+**시각**: 2026-06-16T05:24:00Z
+**사용자 입력(원문)**: [팀 피드백] "tombstone 삭제 순서 — 구멍: isNew는 인서트 스킵이지 삭제 가드 아님; 명시 규칙 필요(strictly-newer-vN-wins)" · "indexStats 헬스 — (a)인증·인가 내부정보 노출 (b)count 호출 비용 캐싱/근사" · "correct the ID Drift according to SSOT" · "go, then author the shared/ contract specs"
+**AI 응답**: NFR Design 산출물 검증(팀 생성본의 §2 매핑 가짜 명칭 11/12·indexStats REST 라우트 수정) + **팀 피드백 2건 반영**: (1) tombstone 순서 = **버전 단조 compare-and-set**(제어평면 `current_version`+state; upsert/tombstone 모두 `≥current_version`; `current_version>vW`면 삭제 무시) — BR-14·business-logic·domain-entities·patterns·logical-components 5곳 정합; (2) indexStats **내부 전용+서비스 인증(SEC-7/8/9)**+**캐시 TTL/근사 카운트**. **SSOT ID 정정**: RES-14→RES-12·RES-8→RES-2(토폴로지) 전 문서 정렬. 팀 "go" 승인. 단일 커밋. 다음: shared/ 규약(vector-spec·DTOs·events·ports).
+**맥락**: CONSTRUCTION — U1 NFR Design 승인 + SSOT 정렬 → shared/ 공용 규약 작성(3 트랙 선행).
+
+---
+
+## CONSTRUCTION — shared/ 공용 계약 작성 완료 + develop PR
+**시각**: 2026-06-16T05:44:00Z
+**사용자 입력(원문)**: "go and make a PR to origin/develop."
+**AI 응답**: shared/ 공용 계약 5문서 작성·검증(ship) — `construction/shared/`: vector-spec.md(🔒FROZEN: Cohere Embed Multilingual v3·1024·코사인·writer=search_document/reader=search_query 비대칭·IndexRecord 스키마), dtos.md(U2/U3/U4 DTO·카드↔IndexRecord 정합·SEC-8/9/12 비노출), events.md(SearchExecutedEvent 🔒·NewArxivEvent 소비형상 FROZEN-인접·U3 신호·U1 실패신호·U6 인시던트), ports.md(Grounding/Cost/Observability 후크 IF·의존성 역전 U6구현↔U2/U1의존), overview.md(소유권 UQ5=A·트랙 소비). 병렬 작성+적대적 검증(이름 충실성 clean·6 마이너 수정). 3 트랙 unblocked. 단일 커밋 후 `feature/aidlc-construction-u1` → `develop` PR(템플릿 형식): U1 FD+NFR Req+NFR Design+shared 계약+프로덕션 재스코핑 일체.
+**맥락**: CONSTRUCTION — shared/ 계약 완료 → develop PR(병렬 트랙 선행 랜딩).
+
+---

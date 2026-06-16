@@ -91,9 +91,9 @@ flowchart TD
 - [ ] **NFR 요구사항 — 실행(EXECUTE)**
   - **근거**: 성능·보안·확장성·비용 요구 존재, 기술 스택 선정 필요(PBT 프레임워크 선정 포함).
 - [ ] **NFR 설계 — 실행(EXECUTE)**
-  - **근거**: NFR 요구사항 실행됨 → NFR 패턴 반영. 보류된 Resiliency 결정(CI/CD·롤백·배포 방식 RES-4, 복원력 테스트 RES-14)이 여기서 확정.
+  - **근거**: NFR 요구사항 실행됨 → NFR 패턴 반영. 보류된 Resiliency 결정(CI/CD·롤백·배포 방식 RES-4, 복원력 테스트 RES-12)이 여기서 확정. _(ID 정정 2026-06-16: RES-14→RES-12, SSOT requirements.md §7.)_
 - [ ] **인프라 설계 — 실행(EXECUTE)**
-  - **근거**: AWS 자원 명세(벡터 스토어, 컴퓨트, DB, 호스팅), 배포 아키텍처, 리전 토폴로지(RES-8) 확정.
+  - **근거**: AWS 자원 명세(벡터 스토어, 컴퓨트, DB, 호스팅), 배포 아키텍처, 리전/AZ 토폴로지(RES-2) 확정. _(ID 정정 2026-06-16: 토폴로지=RES-2; RES-8은 오토스케일링/쿼터.)_
 - [ ] **코드 생성 — 실행(EXECUTE, 항상)**
   - **근거**: 구현 계획 + 코드/테스트 생성.
 - [ ] **빌드 & 테스트 — 실행(EXECUTE, 항상)**
@@ -102,9 +102,13 @@ flowchart TD
 ### 🟡 OPERATIONS 단계
 - [ ] 운영 — 플레이스홀더 (향후 배포·모니터링 워크플로)
 
-## 추정 일정 (Estimated Timeline)
-- 캘린더가 아닌 **AI-DLC 단계 기준**: INCEPTION 잔여 2단계(애플리케이션 설계, 유닛 생성) + CONSTRUCTION 유닛별 루프 ×6 유닛(각 기능설계·NFR·인프라·코드 생성) + 빌드 & 테스트.
-- 각 단계는 승인 게이트로 구분되며, 데모 우선(히어로 US-H1) 순서로 진행 권장.
+## 추정 일정 (Estimated Timeline) - 병렬 개발 조율 반영 (2026-06-16)
+- **준비 단계**: `shared/` 공용 규약 패키지 선행 설계 및 작성.
+- **CONSTRUCTION 개발 단계 (3개 병렬 트랙)**:
+  * **Track 1**: U1 Ingestion ──> U6 Reliability/Ops (데이터 및 탐지 파이프라인)
+  * **Track 2**: U3 Accounts ──> U4 Library (회원 관리 및 개인화 데이터)
+  * **Track 3**: U2 Discovery (Mock API 활용 선행) ──> U5 Frontend (UI 및 클라이언트 구현)
+- 각 유닛은 CONSTRUCTION 유닛별 루프(Functional -> NFR Req -> NFR Design -> Infra Design -> CodeGen -> Build & Test)를 병렬 진행합니다.
 
 ## 성공 기준 (Success Criteria)
 - **주 목표**: 매직 모먼트(자연어 의도 → 폰에서 수초 내 근거화된 arXiv 결과)를 충족하는 프로덕션급 디스커버리 MVP.
