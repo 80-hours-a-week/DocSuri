@@ -1,0 +1,38 @@
+from __future__ import annotations
+
+from enum import StrEnum
+
+
+class DedupDecision(StrEnum):
+    NEW = "NEW"
+    CHANGED = "CHANGED"
+    DUPLICATE = "DUPLICATE"
+    STALE = "STALE"
+
+
+class JobKind(StrEnum):
+    SEED_REBUILD = "SEED_REBUILD"
+    INCREMENTAL = "INCREMENTAL"
+    EVENT = "EVENT"
+
+
+class FailureClass(StrEnum):
+    RETRIABLE = "RETRIABLE"
+    PERMANENT = "PERMANENT"
+
+
+class FailureReason(StrEnum):
+    FETCH_FAILURE = "FETCH_FAILURE"
+    PARSE_FAILURE = "PARSE_FAILURE"
+    VALIDATION_VIOLATION = "VALIDATION_VIOLATION"
+    NON_OA = "NON_OA"
+    RATE_LIMITED = "RATE_LIMITED"
+    TIMEOUT = "TIMEOUT"
+    DEPENDENCY_UNAVAILABLE = "DEPENDENCY_UNAVAILABLE"
+    BULK_INDEX_PARTIAL_FAILURE = "BULK_INDEX_PARTIAL_FAILURE"
+    POISON_EVENT = "POISON_EVENT"
+
+
+class DedupStateKind(StrEnum):
+    INDEXED = "INDEXED"
+    TOMBSTONED = "TOMBSTONED"

@@ -260,3 +260,91 @@
 **맥락**: CONSTRUCTION — shared/ 계약 완료 → develop PR(병렬 트랙 선행 랜딩).
 
 ---
+
+## CONSTRUCTION — U1 Ingestion 구현 설계 준비
+**시각**: 2026-06-16T07:52:42Z
+**사용자 입력(원문)**: ".aidlc-rule-details\\construction\\code-generation.md , .aidlc-rule-details\\extensions\\security\\baseline\\security-baseline.md , .aidlc-rule-details\\extensions\\resiliency\\baseline\\resiliency-baseline.md .aidlc-rule-details\\common\\overconfidence-prevention.md , aidlc-docs 폴더 하위의 문서들을 읽고, U1 Ingestion을 어떻게 구현해야 할지 먼저 설계하세요."
+**AI 응답**: AI-DLC 공통 규칙(process-overview·session-continuity·content-validation·question-format-guide·welcome-message), 요청 세부 규칙(code-generation·security-baseline·resiliency-baseline·overconfidence-prevention), 활성 확장 규칙(PBT Partial), aidlc-docs 하위 U1·shared·requirements·stories·application-design 산출물 및 실제 `shared/` 코드 패키지를 읽고 U1 Ingestion 구현 설계 합성 착수. 코드 생성은 아직 수행하지 않음.
+**맥락**: CONSTRUCTION — U1 Code Generation 전 구현 설계 및 계획 준비.
+
+---
+
+## CONSTRUCTION — U1 Code Generation 계획 생성 및 승인 프롬프트
+**시각**: 2026-06-16T08:18:19Z
+**사용자 입력(원문)**: "좋아요. 이제 코드를 작성해 구현해 주세요."
+**AI 응답**: `aidlc-docs/construction/plans/u1-ingestion-code-generation-plan.md` 생성. 계획은 U1 Ingestion 애플리케이션 코드(`ingestion/`), 테스트, PBT, AWS adapter 경계, Dockerfile, 코드 요약 문서를 17단계로 생성하도록 정의. AI-DLC Code Generation 규칙에 따라 실제 코드 생성은 명시 승인 후 진행. 승인 프롬프트: "`u1-ingestion-code-generation-plan.md`를 승인하면 계획 순서대로 U1 코드를 생성하겠습니다. 승인하시려면 `Approve plan` 또는 `승인`이라고 답해주세요. 변경이 필요하면 수정 요청을 주세요."
+**맥락**: CONSTRUCTION — U1 Code Generation Part 1(Planning), 승인 대기.
+
+---
+
+## CONSTRUCTION — U1 Code Generation 계획 승인
+**시각**: 2026-06-16T08:22:03Z
+**사용자 입력(원문)**: "승인합니다. 진행해 주세요."
+**AI 응답**: U1 Code Generation 계획 승인으로 기록. `u1-ingestion-code-generation-plan.md`의 17단계 순서대로 애플리케이션 코드, 테스트, 배포 스캐폴드, 코드 요약 문서 생성을 시작.
+**맥락**: CONSTRUCTION — U1 Code Generation Part 2(Generation) 전환.
+
+---
+
+## CONSTRUCTION — U1 Code Generation 생성 및 검증 완료
+**시각**: 2026-06-16T08:46:02Z
+**사용자 입력(원문)**: "(이전 승인에 따라 진행)"
+**AI 응답**: U1 Ingestion 코드 생성 완료. 생성 범위: `ingestion/` Python 패키지(domain/ports/processors/resilience/application/adapters/cli/worker), Postgres migration, Dockerfile, README, tests, `uv.lock`, 코드 요약 문서. 검증 결과: `python -m pytest ingestion/tests` 21 passed, `python -m ruff check ingestion` All checks passed, `uv lock` 성공. 리뷰 요청 프롬프트 준비.
+**맥락**: CONSTRUCTION — U1 Code Generation Part 2 완료, 사용자 리뷰/승인 대기.
+
+---
+
+## CONSTRUCTION — U1 Code Generation 승인 및 Build and Test 전환
+**시각**: 2026-06-16T08:49:44Z
+**사용자 입력(원문)**: "다음 단계를 진행해 주세요."
+**AI 응답**: 사용자 입력을 U1 Code Generation 생성 코드 승인 및 다음 단계 진행 요청으로 기록. `aidlc-state.md`에서 U1 Code Generation을 완료로 전환하고 Build and Test 지시문 생성 착수.
+**맥락**: CONSTRUCTION — U1 Code Generation 승인 → Build and Test.
+
+---
+
+## Build and Test Stage
+**Timestamp**: 2026-06-16T08:52:34Z
+**Build Status**: Instructions generated; U1 local validation previously passed
+**Test Status**: Pass for local U1 validation (`pytest` 21 passed, `ruff` pass, CLI smoke `NEW`)
+**Files Generated**:
+- build-instructions.md
+- unit-test-instructions.md
+- integration-test-instructions.md
+- performance-test-instructions.md
+- contract-test-instructions.md
+- security-test-instructions.md
+- build-and-test-summary.md
+**Context**: CONSTRUCTION — Build and Test 지시문 생성 완료, 사용자 리뷰/승인 대기.
+
+---
+
+## OPERATIONS — Placeholder
+**Timestamp**: 2026-06-16T08:57:38Z
+**User Input**: "네, 다음 단계를 진행해 주세요."
+**AI Response**: Build and Test 승인으로 기록하고 Operations placeholder 단계로 전환. `.aidlc-rule-details/operations/operations.md`에 따라 현재 AI-DLC는 Build and Test 이후 실제 Operations 실행 절차를 제공하지 않음을 확인. `aidlc-docs/operations/operations-placeholder.md`를 생성하고 상태를 placeholder 확인 완료로 갱신.
+**Context**: OPERATIONS — placeholder acknowledged; workflow ends after Construction Build and Test in current ruleset.
+
+---
+
+## Documentation — PR Draft
+**Timestamp**: 2026-06-16T09:02:39Z
+**User Input**: ".github\\PULL_REQUEST_TEMPLATE.md 양식을 기반으로, 2026060161800_PR.md 를 작성해 주세요."
+**AI Response**: `.github/PULL_REQUEST_TEMPLATE.md` 구조를 기반으로 루트에 `2026060161800_PR.md` 생성. U1 Ingestion 구현 범위, 테스트 결과, 문서 업데이트, 배포 제외 범위, 체크리스트를 정리.
+**Context**: PR 문서 초안 작성.
+
+---
+
+## Documentation — Commit Message
+**Timestamp**: 2026-06-16T09:06:12Z
+**User Input**: "커밋 메시지 좀 써주십쇼"
+**AI Response**: 현재 변경 범위(U1 Ingestion 구현, Build and Test/Operations 문서, PR 초안)를 기준으로 커밋 메시지 제안.
+**Context**: 커밋 메시지 작성 지원.
+
+---
+
+## Git — Undo Latest Commit
+**Timestamp**: 2026-06-16T09:10:06Z
+**User Input**: "실수로 커밋을 develop에 올려버렸어요. 가장 최근의 커밋을 취소해 주세요. 단, 스테이징은 유지해 주세요."
+**AI Response**: `develop` 브랜치의 최신 커밋 `62ba062 feat(ingestion): implement U1 ingestion worker`를 `git reset --soft HEAD~1`로 취소. 커밋에 포함된 변경사항은 staged 상태로 유지.
+**Context**: Git 작업 — 최신 커밋 취소, staging 유지.
+
+---
