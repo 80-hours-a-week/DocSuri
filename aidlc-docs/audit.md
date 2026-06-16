@@ -196,3 +196,19 @@
 **맥락**: INCEPTION — Units Generation Part 2 완료 → Step 16(리뷰 게이트). 다음 단계 = CONSTRUCTION.
 
 ---
+
+## CONSTRUCTION — U1 Ingestion Functional Design 계획 게이트 + 답변
+**시각**: 2026-06-16T01:10:00Z
+**사용자 입력(원문)**: "PR #36 is merged. Start CONSTRUCTION with U1." → (계획 게이트 후) "approve recommendations" + 답변 파일 직접 편집(Q13=B, Q16=A 기입).
+**AI 응답**: CONSTRUCTION 유닛별 루프 착수. `construction/plans/u1-ingestion-functional-design-plan.md` 발행 — Functional Design 계획 + 17 질문(데모 우선, 기술 무관). 적대적 완전성 비평 1패스(3 렌즈: 커버리지·규칙/엣지케이스·추적성/고도) → needs-revision 판정의 4건 보강(이벤트 멱등 Q15·재구축↔증분 Q16·워터마크 역행 Q17·커밋순서 INV-1 + 마이너 정리). 팀이 권장안 일괄 승인하되 **Q13=B**(철회 탐지·tombstone 활성, 권장 A 대비 데모 범위 확대) 명시 오버라이드, Q16=A 직접 기입. 모호 답변 없음(전 letter 명시) → Step 6 진행.
+**맥락**: CONSTRUCTION — U1 Functional Design Step 1~5(계획 게이트 통과).
+
+---
+
+## CONSTRUCTION — U1 Ingestion Functional Design 산출물 승인 → NFR Requirements
+**시각**: 2026-06-16T01:26:00Z
+**사용자 입력(원문)**: "approve and proceed to NFR Requirements"
+**AI 응답**: Functional Design 산출물 3종 생성 — `construction/u1-ingestion/functional-design/{domain-entities,business-logic-model,business-rules}.md`(답변 Q1~17=A·단 Q13=B 반영; INV-1 커밋순서·철회 tombstone 분기·재구축↔증분 상호배제·PBT-08 속성 P1~P6·추적성 미커버 0). 적대적 검증 2패스째(답변 충실성·일관성·근거·완전성) → fix-first 판정의 9 수정 반영(tombstone 경로 워터마크 일관·IndexRecordBatch/ValidationResult/IngestItem 누락 엔티티 추가·고도 누수 정리). 팀 승인. aidlc-state.md FD 완료 표기·본 감사 기록. 다음: U1 NFR Requirements(기술 스택 선정).
+**맥락**: CONSTRUCTION — U1 Functional Design Step 6~9(산출물 승인) → NFR Requirements 진입.
+
+---

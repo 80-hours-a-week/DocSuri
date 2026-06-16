@@ -4,7 +4,7 @@
 - **프로젝트명**: DocSuri (연구 지원 애플리케이션)
 - **프로젝트 유형**: Greenfield(그린필드)
 - **시작일**: 2026-06-15T04:36:30Z
-- **현재 단계**: INCEPTION 완료(Units Generation 리뷰 게이트); 다음: CONSTRUCTION(유닛별 루프, 데모 우선 U1부터). PR #34 머지·PR #35 open
+- **현재 단계**: CONSTRUCTION 진행(유닛별 루프, 데모 우선 U1). **U1 Functional Design 완료·승인(2026-06-16)**; 다음: **U1 NFR Requirements**(기술 스택 선정). PR #36 머지(INCEPTION→develop). 브랜치 `feature/aidlc-construction-u1`.
 - **문서 언어**: 한국어(`aidlc-docs/` 산출물). 업스트림 룰셋(`AGENTS.md`, `.aidlc-rule-details/`)은 영어 유지.
 
 ## 워크스페이스 상태
@@ -42,8 +42,13 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - [ ] Units Generation — **EXECUTE** (예비 유닛: U1 인제스천, U2 디스커버리 API, U3 계정/인증, U4 검색저장/라이브러리, U5 모바일 웹, U6 신뢰성/운영)
 
 ### 🟢 CONSTRUCTION 단계 (유닛별 루프)
-- [ ] Functional Design — **EXECUTE**
-- [ ] NFR Requirements — **EXECUTE**
+
+**U1 Ingestion** (데모 우선 1번):
+- [x] Functional Design — **완료·승인 (2026-06-16)**. `construction/u1-ingestion/functional-design/`(domain-entities·business-logic-model·business-rules). 답변 Q1~17=A·**Q13=B**(철회 tombstone 활성). 적대적 검증 2패스(계획·산출물). 데모 범위: Q2=A 초록 전용·Q1=A cs.LG~1년·Q12=A 이벤트 스텁. 기술 스택 미정(NFR Requirements).
+- [ ] NFR Requirements — **EXECUTE (진행 중)** — 기술 스택(언어·프레임워크·임베딩 모델·벡터 스토어·큐·스케줄러) 선정
+- [ ] (이하 U2~U6 Functional Design은 각 유닛 루프 진입 시)
+
+**공통 후속 단계** (per-unit 또는 횡단):
 - [ ] NFR Design — **EXECUTE** (보류된 RES-4 CI/CD·롤백·배포, RES-14 복원력 테스트 확정)
 - [ ] Infrastructure Design — **EXECUTE** (AWS 자원·리전 토폴로지 RES-8 확정)
 - [ ] Code Generation — **EXECUTE** (항상)
