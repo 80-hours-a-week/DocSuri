@@ -57,6 +57,7 @@
 - ✅ **B. `shared/` 포맷 = 언어 중립 SSOT** — JSON Schema/OpenAPI 단일 진실 원천 → Python(pydantic 등)·TS 타입 생성. **`ports`도 SSOT 기반 Python `Protocol`/TS interface 파생**(A=Python 확정으로 backend 스텁 결정 가능 — "ports deferred" 해제). 드리프트 방지. (워크플로 생성 참조 draft가 이 포맷.)
 - ✅ **C. 소유자 확정** — 트랙 3인 + `.github/CODEOWNERS`. 조율 존: `shared/` @revenantonthemission · `backend/` app-shell @revenantonthemission **확정**(app-shell 2026-06-16 Track 2 재배정; `backend/middleware/`(U6)=@ELSAPHABA).
 - **D. frontend·ops 스택** — ops=Python(A 일관); frontend(U5)=TS/SSR 유력(U5 NFR Requirements에서 확정).
+- ✅ **E. CG-1 backend 웹 프레임워크 = FastAPI** — app-shell 소유자(@revenantonthemission, §5-C 재배정) 결정. discovery/accounts 모듈의 "@ELSAPHABA 사인오프 대기(CG-1)" 주석은 본 결정으로 해소. app-shell 스캐폴드 `backend/`(create_app·DI·미들웨어·헬스 + 모듈 **선택적 마운트**) 랜딩 — 모듈 부재 시 graceful skip이라 app-shell이 트랙 PR보다 먼저 develop에 머지 가능. `backend/middleware/`(U6 authn/authz·레이트·근거화)는 @ELSAPHABA 유지(seam만 제공).
 
 ## 6. 지금 세울 것 vs 트랙별 미룰 것
 | | 지금(승인 시 선행) | 트랙별(각 유닛 루프) |
