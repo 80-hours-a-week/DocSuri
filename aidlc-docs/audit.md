@@ -252,3 +252,11 @@
 **맥락**: CONSTRUCTION — U1 NFR Design 승인 + SSOT 정렬 → shared/ 공용 규약 작성(3 트랙 선행).
 
 ---
+
+## CONSTRUCTION — shared/ 공용 계약 작성 완료 + develop PR
+**시각**: 2026-06-16T05:44:00Z
+**사용자 입력(원문)**: "go and make a PR to origin/develop."
+**AI 응답**: shared/ 공용 계약 5문서 작성·검증(ship) — `construction/shared/`: vector-spec.md(🔒FROZEN: Cohere Embed Multilingual v3·1024·코사인·writer=search_document/reader=search_query 비대칭·IndexRecord 스키마), dtos.md(U2/U3/U4 DTO·카드↔IndexRecord 정합·SEC-8/9/12 비노출), events.md(SearchExecutedEvent 🔒·NewArxivEvent 소비형상 FROZEN-인접·U3 신호·U1 실패신호·U6 인시던트), ports.md(Grounding/Cost/Observability 후크 IF·의존성 역전 U6구현↔U2/U1의존), overview.md(소유권 UQ5=A·트랙 소비). 병렬 작성+적대적 검증(이름 충실성 clean·6 마이너 수정). 3 트랙 unblocked. 단일 커밋 후 `feature/aidlc-construction-u1` → `develop` PR(템플릿 형식): U1 FD+NFR Req+NFR Design+shared 계약+프로덕션 재스코핑 일체.
+**맥락**: CONSTRUCTION — shared/ 계약 완료 → develop PR(병렬 트랙 선행 랜딩).
+
+---

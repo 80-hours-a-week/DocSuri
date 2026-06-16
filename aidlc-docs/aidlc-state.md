@@ -4,7 +4,7 @@
 - **프로젝트명**: DocSuri (연구 지원 애플리케이션)
 - **프로젝트 유형**: Greenfield(그린필드)
 - **시작일**: 2026-06-15T04:36:30Z
-- **현재 단계**: CONSTRUCTION 진행(유닛별 루프, **프로덕션 직행** U1 — 데모 트랙 폐기). **U1 Functional Design·NFR Requirements 완료·승인(2026-06-16)**; **U1 NFR Design 완료·승인(2026-06-16)**. 병렬화 조율(shared/ 규약 선행 및 3개 병렬 트랙) 반영. 다음: **shared/ 공용 규약 작성**(vector-spec·DTOs·events·ports 선행) → 3 트랙 병렬(U1 Infra·U3 Accounts·U2 mock). PR #36 머지(INCEPTION→develop). 브랜치 `feature/aidlc-construction-u1`.
+- **현재 단계**: CONSTRUCTION 진행(유닛별 루프, **프로덕션 직행** U1 — 데모 트랙 폐기). **U1 Functional Design·NFR Requirements 완료·승인(2026-06-16)**; **U1 NFR Design 완료·승인(2026-06-16)**. 병렬화 조율(shared/ 규약 선행 및 3개 병렬 트랙) 반영. **shared/ 공용 규약 작성 완료**(5문서, 3 트랙 unblocked). 다음: **3 트랙 병렬 착수**(Track1 U1 Infra Design·Track2 U3 Accounts FD·Track3 U2 mock FD). U1 설계 일체 develop PR 랜딩. PR #36 머지(INCEPTION→develop). 브랜치 `feature/aidlc-construction-u1`.
 - **문서 언어**: 한국어(`aidlc-docs/` 산출물). 업스트림 룰셋(`AGENTS.md`, `.aidlc-rule-details/`)은 영어 유지.
 
 ## 워크스페이스 상태
@@ -51,7 +51,7 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 
 **공통 후속 단계** (per-unit 또는 횡단):
 - [x] 병렬 개발 조율 (2026-06-16 반영) — `shared/` 공용 규약 선행 작성 및 3개 독립 트랙 병렬 진행 확정
-- [~] `shared/` 규약 작성 (vector-spec·DTOs·events·**ports** 선행) — **진행 중 (2026-06-16)**
+- [x] `shared/` 규약 작성 (vector-spec·DTOs·events·ports) — **완료 (2026-06-16)**. `construction/shared/`(5문서). vector-spec 🔒FROZEN(Cohere 1024·코사인·input_type 비대칭·IndexRecord); DTOs/events/ports SSOT 정합·적대적 검증(ship). **3 트랙 unblocked.**
 - [x] U1 NFR Design 승인 (2026-06-16)
 - [ ] Infrastructure Design — **EXECUTE** (AWS 자원·**리전/AZ 토폴로지 RES-2**·오토스케일링/쿼터 RES-8 확정)
 - [ ] Code Generation — **EXECUTE** (항상)
