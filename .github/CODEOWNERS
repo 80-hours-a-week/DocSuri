@@ -5,17 +5,17 @@
 # 리뷰 라우팅 + 경계 강제용. 실제 "필수 리뷰"는 develop 브랜치 보호 규칙(require review from Code Owners)으로 활성화.
 #
 # 트랙 배정(팀, 2026-06-16): Track1 → @ELSAPHABA · Track2 → @revenantonthemission · Track3 → @kyjness
-# ⚠️ 조율 존 소유자(shared/·backend app-shell)는 기본값 — 팀 확인 필요(§5-C).
+# 조율 존 소유자(shared/·backend app-shell) 확정(2026-06-16, §5-C). backend 런타임 = Python(§5-A).
 #   · shared/ 는 UQ5=A 단일 소유. 계약 변경은 소유자 리뷰 + 3 트랙 사인오프(team norm) + shared/ 전용 PR.
 
 # ── 조율 존 (cross-track) ──
-/shared/                         @revenantonthemission   # UQ5=A 공용 계약 단일 소유 (기본값 — 확인 요; 변경=cross-track 사인오프)
+/shared/                         @revenantonthemission   # UQ5=A 공용 계약 단일 소유 (확정; 변경=cross-track 사인오프)
 /.github/                        @revenantonthemission   # CI·PR 템플릿·CODEOWNERS
 /aidlc-docs/                     @revenantonthemission   # 설계 산출물(아래 유닛별이 우선)
 /aidlc-docs/construction/u1-ingestion/   @ELSAPHABA      # U1 설계(Track 1)
 
 # ── backend 모듈형 모놀리스(배포 ①, 단일 런타임) ──
-/backend/                        @ELSAPHABA              # app-shell·부트스트랩·라우터·DI 결선 (기본값 — 확인 요)
+/backend/                        @ELSAPHABA              # app-shell·부트스트랩·라우터·DI 결선 (확정; Python 모듈형 모놀리스)
 /backend/middleware/             @ELSAPHABA              # U6 게이트웨이 미들웨어 (Track 1)
 /backend/modules/discovery/      @kyjness                # U2 (Track 3)
 /backend/modules/accounts/       @revenantonthemission   # U3 (Track 2)

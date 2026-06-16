@@ -1,6 +1,6 @@
 # project-structure-and-parallel-dev.md — 프로젝트 구조 + 병렬 개발 조율 (제안)
 
-**단계**: CONSTRUCTION → 병렬 트랙 착수 전 구조/조율 제안 · **일자**: 2026-06-16 · **상태**: 🟡 **제안(팀 승인 대기)** — 승인 전 디렉터리/파일 미생성
+**단계**: CONSTRUCTION → 병렬 트랙 착수 전 구조/조율 · **일자**: 2026-06-16 · **상태**: ✅ **§5 결정 완료(2026-06-16)** — backend=**Python** · shared/=**언어중립 SSOT** · 소유자 확정. 구조/프로토콜 수락. 스캐폴드: `shared/` 코드=@revenantonthemission(PR #38), 트랙별 디렉터리=각 트랙 착수 시.
 **근거**: `unit-of-work.md`(UQ2=A 모노레포·코드 조직·4 배포 단위·UQ5=A `shared/` 단일 소유) · `execution-plan.md`(3 트랙) · U1 FD/NFR/NFR Design(Python·OpenSearch·Cohere…) · `shared/` 계약 5종
 **목적**: 팀원 3명이 3 트랙을 **충돌 없이 병렬 개발**하도록 (1) 디렉터리 구조·소유, (2) 조율 존, (3) 브랜치/변경 프로토콜, (4) 지금 세울 것 vs 트랙별로 미룰 것, (5) **선결 결정**을 합의.
 
@@ -52,21 +52,21 @@
 - **트랙 브랜치**: 3 트랙은 `shared/`·app-shell 포함된 **develop에서 분기**(`feature/track1-…`, `feature/track2-…`, `feature/track3-…`). 각 트랙 PR → develop. 정기 리베이스/머지로 동기.
 - **U2 mock(Track 3)**: U5는 `shared/dtos`(SearchResponse 계약) 기반 **mock U2 응답**으로 선행 — U2 실 구현 전 병렬 진행.
 
-## 5. ⚠️ 선결 결정 (팀 합의 필요 — 병렬 착수 전)
-- **A. backend 공유 스택** *(가장 중요)* — backend(①)는 단일 모놀리스라 **U2/U3/U4/U6-미들웨어가 한 언어/프레임워크 공유**. ⇒ backend 스택은 **유닛별이 아니라 시스템(backend-플랫폼) 결정**이며 **Track 2·3 구현 전 확정 필요**. U1=Python 잠금 고려 시 backend=Python 유력(미확정). _권장: backend 플랫폼 스택을 별도 결정(또는 U3/U2 중 먼저 NFR Requirements 진입하는 유닛에서 시스템 결정으로 격상)._
-- **B. polyglot `shared/` 계약 포맷** — Python 서비스 + TS 프런트(유력) ⇒ `shared/` 계약을 **언어 중립 SSOT(JSON Schema/OpenAPI → Python·TS 타입 생성)** vs **언어별 수기 유지** 중 택. _권장: 언어 중립 SSOT(드리프트 방지)._
-- ✅ **C. 소유자**(2026-06-16): 트랙 3인 배정 + `.github/CODEOWNERS` 작성. 조율 존 소유자는 **기본값**(`shared/` @revenantonthemission · `backend/` app-shell @ELSAPHABA) — **팀 확인 요**.
-- **D. frontend·ops 스택** — 각 트랙 NFR Requirements에서(독립 배포라 backend와 분리 가능; frontend=TS/SSR 유력).
+## 5. 선결 결정 (✅ 결정 완료 2026-06-16)
+- ✅ **A. backend 공유 스택 = Python** — backend(①) 모듈형 모놀리스 단일 런타임(U2/U3/U4/U6-미들웨어 공유) + ingestion(U1)·ops도 Python. **Track 2·3 unblocked**(공유 런타임 확정). PBT=Hypothesis 일관. _시스템 결정 — U2/U3/U4/U6 NFR Requirements는 이를 계승(재결정 아님)._
+- ✅ **B. `shared/` 포맷 = 언어 중립 SSOT** — JSON Schema/OpenAPI 단일 진실 원천 → Python(pydantic 등)·TS 타입 생성. **`ports`도 SSOT 기반 Python `Protocol`/TS interface 파생**(A=Python 확정으로 backend 스텁 결정 가능 — "ports deferred" 해제). 드리프트 방지. (워크플로 생성 참조 draft가 이 포맷.)
+- ✅ **C. 소유자 확정** — 트랙 3인 + `.github/CODEOWNERS`. 조율 존: `shared/` @revenantonthemission · `backend/` app-shell @ELSAPHABA **확정**.
+- **D. frontend·ops 스택** — ops=Python(A 일관); frontend(U5)=TS/SSR 유력(U5 NFR Requirements에서 확정).
 
 ## 6. 지금 세울 것 vs 트랙별 미룰 것
 | | 지금(승인 시 선행) | 트랙별(각 유닛 루프) |
 |---|---|---|
 | 디렉터리 | 위 §1 전체 트리(빈 디렉터리 + 레인별 README/소유) | 각 디렉터리 내부 구조 |
-| `shared/` | 계약 코드 패키지(§5-B 포맷 결정 후) | 계약은 동결(변경은 §3 프로토콜) |
-| backend | app-shell 스캐폴드(§5-A 스택 결정 후) | 각 모듈 구현 |
+| `shared/` | 계약 코드 패키지(언어중립 SSOT; @revenantonthemission, PR #38) | 계약은 동결(변경은 §3 프로토콜) |
+| backend | app-shell 스캐폴드(**Python**; @ELSAPHABA) | 각 모듈 구현 |
 | 루트 규약 | `.gitignore`·`docker-compose`(스텁)·CODEOWNERS·README·CI 스켈레톤 | 언어별 deps/lint/test(스택 확정 유닛부터) |
 
-> 루트 언어별 툴링은 **스택 확정된 것부터**(U1=Python 확정 → ingestion/shared-py 가능; backend/frontend는 §5-A/D 후).
+> 루트 언어별 툴링: **Python 확정**(ingestion·backend·ops) → Python deps/lint/test·shared SSOT→pydantic codegen 진행 가능; frontend(TS)는 §5-D(U5 NFR Requirements) 후.
 
 ---
 
