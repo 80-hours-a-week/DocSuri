@@ -1,0 +1,55 @@
+[project]
+name = "docsuri-backend"
+version = "0.1.0"
+description = "DocSuri backend modular monolith — app-shell (bootstrap·router·DI·middleware wiring). Deploy unit ①. Track 2 (@revenantonthemission)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    # Shared contracts (DTOs/events/vector-spec/ports) — single source of truth, never forked.
+    "docsuri-shared",
+    # CG-1: backend web framework = FastAPI (app-shell decision, owner @revenantonthemission).
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    # Runtime for the in-tree accounts (U3) module — modules share the shell's stack (§5-A).
+    # accounts has no pyproject of its own, so deploy unit ① declares its third-party deps:
+    #   argon2-cffi → password hashing · httpx → reCAPTCHA v3 client.
+    "sqlalchemy>=2.0,<3",
+    "redis>=5.0",
+    "pydantic>=2.7,<3",
+    "argon2-cffi>=23.0",
+    "httpx>=0.27",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+# docsuri-shared comes from the in-repo path (shared/ is on develop). docsuri-discovery is
+# NOT declared here: discovery isn't on develop yet, and a path source to a missing dir would
+# break `uv sync`. The assembled backend installs docsuri-discovery; until then the app-shell
+# imports `discovery` optionally at runtime (graceful skip). See backend/README.md §Assembly.
+[tool.uv.sources]
+docsuri-shared = { path = "../shared/python", editable = true }
+
+# The backend is an APPLICATION, not a distributed library: its import root is the repo ROOT
+# (accounts is imported as `backend.modules.accounts`), so uv installs only its dependencies
+# and the `backend` package is imported via PYTHONPATH (run from the repo root). This avoids a
+# double-import (editable install + path) and the matching no build-system is needed.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+# Put the repo ROOT on sys.path so `backend.*` (and in-tree `backend.modules.*`) import the
+# same way they do under uvicorn run from the repo root.
+pythonpath = [".."]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

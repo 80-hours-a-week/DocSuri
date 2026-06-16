@@ -1,0 +1,38 @@
+# Full-local backend dependencies (deploy unit ① support services).
+# Optional: the app-shell boots without these (SQLite, no Redis). Bring them up when you
+# need the accounts (U3) module's real persistence + session store.
+#
+#   docker compose -f backend/docker-compose.yml up -d
+#   export DATABASE_URL=postgresql+psycopg://docsuri:docsuri@localhost:5432/docsuri
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: docsuri
+      POSTGRES_PASSWORD: docsuri
+      POSTGRES_DB: docsuri
+    ports:
+      - "5432:5432"
+    volumes:
+      - docsuri-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docsuri"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7
+    # accounts/U3 is Fail-Closed on session-store loss (NFR-Design) — multi-AZ in prod;
+    # a single node is fine for local dev.
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  docsuri-pgdata:
