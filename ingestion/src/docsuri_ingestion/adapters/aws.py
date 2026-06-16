@@ -102,6 +102,7 @@ class OpenSearchVectorIndex:
         )
         self._index_name = index_name
         self._stats_cache = IndexStatsTtlCache(ttl_seconds=stats_ttl_seconds)
+        self._last_write_timestamp: datetime | None = None
 
     def bulk_upsert(self, batch: IndexRecordBatch) -> None:
         lines: list[str] = []
@@ -117,6 +118,7 @@ class OpenSearchVectorIndex:
                 reason=FailureReason.BULK_INDEX_PARTIAL_FAILURE,
                 stage="index",
             )
+        self._record_write()
         self._stats_cache.invalidate()
 
     def tombstone_paper(self, tombstone: Tombstone) -> None:
@@ -128,6 +130,7 @@ class OpenSearchVectorIndex:
             refresh=True,
             conflicts="proceed",
         )
+        self._record_write()
         self._stats_cache.invalidate()
 
     def delete_stale_chunks(self, paper_id: str, keep_chunk_ids: set[str]) -> None:
@@ -146,6 +149,7 @@ class OpenSearchVectorIndex:
             refresh=True,
             conflicts="proceed",
         )
+        self._record_write()
         self._stats_cache.invalidate()
 
     def index_stats(self) -> IndexStats:
@@ -159,9 +163,12 @@ class OpenSearchVectorIndex:
             index_name=self._index_name,
             total_documents=count,
             vector_count=count,
-            last_write_timestamp=None,
+            last_write_timestamp=self._last_write_timestamp,
             dependencies={"opensearch": "UP"},
         )
+
+    def _record_write(self) -> None:
+        self._last_write_timestamp = datetime.now(UTC)
 
 
 class IndexStatsTtlCache:

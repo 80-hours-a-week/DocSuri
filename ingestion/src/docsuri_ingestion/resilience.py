@@ -216,4 +216,4 @@ class IngestionResilienceService:
 def is_retriable(exc: Exception) -> bool:
     if isinstance(exc, IngestionError):
         return exc.failure_class is FailureClass.RETRIABLE
-    return isinstance(exc, (ConnectionError, TimeoutError))
+    return isinstance(exc, ConnectionError | TimeoutError)

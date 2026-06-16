@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
+from docsuri_shared.vector_spec import DIMENSIONS, IndexRecord
 
+from docsuri_ingestion.adapters.aws import OpenSearchVectorIndex
 from docsuri_ingestion.adapters.local import (
     FailingEmbeddingPort,
     FakeArxivSource,
@@ -15,8 +18,8 @@ from docsuri_ingestion.adapters.local import (
 from docsuri_ingestion.application import RefreshOrchestrationService
 from docsuri_ingestion.domain.enums import DedupDecision, FailureReason, JobKind
 from docsuri_ingestion.domain.errors import PermanentIngestionError, RetriableIngestionError
-from docsuri_ingestion.domain.models import IngestionJob
-from docsuri_ingestion.worker import job_from_payload
+from docsuri_ingestion.domain.models import IndexRecordBatch, IngestionJob
+from docsuri_ingestion.worker import job_from_payload, process_message
 
 from .conftest import build_test_pipeline
 
@@ -119,6 +122,69 @@ def test_arxiv_404_permanent_failure_goes_to_dlq() -> None:
             IngestionJob(job_id="job-1", kind=JobKind.EVENT, arxiv_ref="2401.99999v1")
         )
     assert queue.dlq[-1]["reason"] == FailureReason.FETCH_FAILURE.value
+
+
+def test_worker_does_not_duplicate_pipeline_permanent_failure_dlq() -> None:
+    pipeline, _, _, queue, observability = build_test_pipeline(
+        arxiv=NotFoundArxivSource(), retry_attempts=1
+    )
+    queue.send_job(IngestionJob(job_id="job-1", kind=JobKind.EVENT, arxiv_ref="2401.99999v1"))
+    message = queue.receive_messages(max_messages=1)[0]
+    runtime = SimpleNamespace(pipeline=pipeline, queue=queue, observability=observability)
+
+    process_message(runtime, message)
+
+    assert len(queue.dlq) == 1
+    assert queue.acked == [message.message_id]
+
+
+class FakeOpenSearchClient:
+    def __init__(self) -> None:
+        self.bulk_calls = 0
+
+    def bulk(self, body: str):
+        self.bulk_calls += 1
+        return {"errors": False, "items": []}
+
+    def count(self, *, index: str):
+        return {"count": 1}
+
+
+class FakeStatsCache:
+    def __init__(self) -> None:
+        self.invalidations = 0
+
+    def invalidate(self) -> None:
+        self.invalidations += 1
+
+
+def test_opensearch_index_stats_reports_last_successful_write_timestamp() -> None:
+    index = OpenSearchVectorIndex.__new__(OpenSearchVectorIndex)
+    index._client = FakeOpenSearchClient()
+    index._index_name = "papers"
+    index._stats_cache = FakeStatsCache()
+    index._last_write_timestamp = None
+    record = IndexRecord(
+        chunkId="2401.00001:0000",
+        paperId="2401.00001",
+        version=1,
+        vector=[0.0] * DIMENSIONS,
+        section="abstract",
+        lexicalTerms="retrieval augmented generation",
+        title="A Test Paper",
+        authors=["A. Author"],
+        year=2024,
+        arxivId="2401.00001v1",
+        abstract="Abstract",
+        abstractSnippet="Abstract",
+        arxivUrl="https://arxiv.org/abs/2401.00001",
+        categories=["cs.LG"],
+    )
+
+    index.bulk_upsert(IndexRecordBatch(paper_id="2401.00001", version=1, records=(record,)))
+    stats = index._fetch_stats()
+
+    assert stats.last_write_timestamp is not None
 
 
 def test_poison_event_payload_becomes_permanent_error_for_dlq_boundary() -> None:

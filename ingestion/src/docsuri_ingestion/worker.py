@@ -18,21 +18,32 @@ def main(argv: list[str] | None = None) -> int:
     queue = runtime.queue
     while True:
         for message in queue.receive_messages(max_messages=10):
-            try:
-                job = job_from_payload(message.body)
-                runtime.pipeline.ingest_one(job)
-            except IngestionError as exc:
-                runtime.observability.emit_failure_signal(
-                    getattr(message, "message_id", "unknown"),
-                    stage=exc.stage,
-                    error=exc.public_error(),
-                )
-                if exc.failure_class is FailureClass.PERMANENT:
-                    queue.send_to_dlq(message.body, reason=exc.public_error())
-                    queue.ack(message)
-            else:
-                queue.ack(message)
+            process_message(runtime, message)
         time.sleep(1.0)
+
+
+def process_message(runtime, message) -> None:
+    queue = runtime.queue
+    try:
+        job = job_from_payload(message.body)
+    except IngestionError as exc:
+        runtime.observability.emit_failure_signal(
+            getattr(message, "message_id", "unknown"),
+            stage=exc.stage,
+            error=exc.public_error(),
+        )
+        if exc.failure_class is FailureClass.PERMANENT:
+            queue.send_to_dlq(message.body, reason=exc.public_error())
+            queue.ack(message)
+        return
+
+    try:
+        runtime.pipeline.ingest_one(job)
+    except IngestionError as exc:
+        if exc.failure_class is FailureClass.PERMANENT:
+            queue.ack(message)
+    else:
+        queue.ack(message)
 
 
 def job_from_payload(payload) -> IngestionJob:
