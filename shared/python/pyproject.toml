@@ -1,0 +1,44 @@
+[project]
+name = "docsuri-shared"
+version = "0.1.0"
+description = "DocSuri shared contracts — Python binding generated from the language-neutral JSON Schema SSOT in shared/ (DTOs, events, vector-spec) plus hand-authored ports (Protocol) and the deterministic chunkId helper."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    # pydantic v2 models are GENERATED from shared/**/*.schema.json (see tools/generate.py).
+    "pydantic>=2.7,<3",
+]
+
+[project.urls]
+"Spec SSOT" = "https://example.invalid/aidlc-docs/construction/shared"
+
+[dependency-groups]
+# Dev-only. Codegen + validation + property-based tests are not runtime deps of consumers.
+dev = [
+    "datamodel-code-generator>=0.25",
+    "jsonschema>=4.20",
+    "hypothesis>=6.100",
+    "pytest>=8.0",
+    "pyyaml>=6.0",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/docsuri_shared"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+# _generated/ is machine-authored; never lint or hand-edit it (§5-B: regenerate, don't edit).
+extend-exclude = ["src/docsuri_shared/_generated"]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
