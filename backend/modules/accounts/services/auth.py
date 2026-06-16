@@ -1,0 +1,153 @@
+import asyncio
+import logging
+from datetime import datetime
+from argon2.exceptions import VerificationError, InvalidHash
+
+from ..models import DomainException, AccountStatus, UserRole, Principal, SessionRecord
+from ..password import get_password_hasher
+from ..repository.credential import CredentialRepository, AccountTable
+from ..integrations.recaptcha import RecaptchaClient
+from .session_manager import SessionManager
+
+logger = logging.getLogger(__name__)
+
+# 봇 방지(CAPTCHA) 강제 시작 임계치 / 계정 잠금(LOCKED) 전환 임계치 (BR-A4, BR-A5)
+CAPTCHA_THRESHOLD = 10
+LOCKOUT_THRESHOLD = 10
+
+class AuthenticationService:
+    """로그인 자격증명 비교, 무차별 대입 방어(Exponential Backoff), reCAPTCHA 검증 및 해시 자동 업그레이드를 관리하는 서비스 (US-A2)"""
+
+    def __init__(
+        self,
+        credential_repo: CredentialRepository,
+        session_manager: SessionManager,
+        recaptcha_client: RecaptchaClient,
+        observability_hub = None,
+        lockout_threshold: int = LOCKOUT_THRESHOLD
+    ):
+        self._repo = credential_repo
+        self._session_manager = session_manager
+        self._recaptcha_client = recaptcha_client
+        self._observability_hub = observability_hub
+        self._lockout_threshold = lockout_threshold
+        # OWASP 권장 강도 해싱 파라미터 (m=65536, t=3, p=4) — password.py의 단일 팩토리 공유
+        self._hasher = get_password_hasher()
+
+    async def authenticate(self, email: str, password: str, recaptcha_token: str | None = None, remote_ip: str | None = None) -> str:
+        """
+        사용자 자격증명을 검증하고 보안 세션을 발급합니다.
+        실패 횟수에 따라 지수 백오프 및 reCAPTCHA 검증을 강제합니다. (BR-A4)
+        """
+        account = self._repo.get_by_email(email)
+        
+        # 1. 봇 및 브루트포스 남용 방어: reCAPTCHA 검증 강제 (실패 횟수 >= 임계치) (BR-A4)
+        if account and account.failure_count >= CAPTCHA_THRESHOLD:
+            if not recaptcha_token:
+                raise DomainException("보안 강화를 위해 봇 방지 인증(CAPTCHA)이 필요합니다.")
+            
+            captcha_ok = await self._recaptcha_client.verify_token(recaptcha_token, remote_ip)
+            if not captcha_ok:
+                raise DomainException("봇 방지(CAPTCHA) 검증에 실패했습니다. (Fail-Closed)")
+
+        # 2. 자격증명 비교 및 타이밍 공격 방어 (Constant-Time Verification) (SEC-12)
+        target_hash = account.password_hash if account else self._repo.dummy_hash
+        
+        is_verified = False
+        needs_rehash = False
+        
+        try:
+            # 해시 비교 연산 실행. Argon2 KDF(m=64MB)는 수십 ms를 소모하는 CPU 바운드 동기 작업이므로
+            # asyncio.to_thread로 워커 스레드에 위임해 이벤트 루프 차단(동시 로그인 직렬화/DoS)을 방지한다.
+            is_verified = await asyncio.to_thread(self._hasher.verify, target_hash, password)
+            # 해시 강도 업그레이드 필요 여부 체크 (인코딩 파라미터 파싱만 하므로 KDF 미수행 → 동기 호출로 충분)
+            needs_rehash = self._hasher.check_needs_rehash(target_hash)
+        except (VerificationError, InvalidHash):
+            # 자격증명 불일치 혹은 해시 깨짐
+            is_verified = False
+        
+        # 실제 데이터베이스에 계정이 존재하지 않는 경우, 
+        # 비교 연산 결과가 True 일지라도 강제로 False 처리하여 계정 부존재 상태를 숨깁니다 (타이밍 공격 차단)
+        if not account:
+            is_verified = False
+
+        if not is_verified:
+            # 3. 인증 실패 처리 및 브루트포스 exponential backoff 지연 (BR-A4)
+            delay_seconds = 0
+            if account:
+                account.failure_count += 1
+                account.last_failed_at = datetime.utcnow()
+                # BR-A5: 실패 횟수가 잠금 임계치에 도달하면 계정을 LOCKED로 전환한다(관리자 해제 필요).
+                # 잠금 상태는 올바른 자격증명 입력 시 status 분기에서 사용자에게 통지되므로
+                # 계정 부존재 여부를 노출하지 않는다.
+                if account.failure_count >= self._lockout_threshold:
+                    account.status = AccountStatus.LOCKED.value
+                self._repo.update_account(account)
+
+                # 실패 횟수 3회차부터 지수 백오프 지연 계산
+                # 3회: 1초, 4회: 2초, 5회: 4초, 6회: 8초 ... (최대 120초 상한 설정으로 무한 락 방어)
+                if account.failure_count >= 3:
+                    delay_seconds = min(2 ** (account.failure_count - 3), 120)
+
+            # 관측성 신호 수집(SEC-12): 어떤 자격증명이 틀렸는지/이메일 파생값을 싣지 않고,
+            # shared/events/account-signals.schema.json 의 AuthFailureSignal 규약대로 일반화된 'reason'만 발행한다.
+            # (Python builtin hash()는 PYTHONHASHSEED로 프로세스마다 달라져 상관관계 분석이 불가능하고
+            #  이메일 파생 식별자는 SEC-3 PII 최소화 원칙에 위배되므로 사용하지 않는다.)
+            if self._observability_hub:
+                self._observability_hub.emitMetric("AuthFailureSignal", 1, {"reason": "invalid_credentials"})
+                self._observability_hub.emitLog({
+                    "event": "AuthFailureSignal",
+                    "reason": "invalid_credentials",
+                })
+
+            # 피드백 ③ 반영: 동기 time.sleep() 대신 asyncio.sleep()을 활용하여 
+            # 동기 워커 스레드가 차단되는 Thread Exhaustion DoS 공격을 방어함 (비동기 리소스 양보)
+            if delay_seconds > 0:
+                logger.warning(f"Authentication failed. Applying non-blocking backoff delay of {delay_seconds} seconds.")
+                await asyncio.sleep(delay_seconds)
+
+            raise DomainException("이메일 또는 비밀번호가 올바르지 않습니다.")
+
+        # 4. 자격증명 일치 성공 시 계정 상태 검증
+        if account.status == AccountStatus.PENDING.value:
+            raise DomainException("이메일 인증이 완료되지 않았습니다. 메일함의 인증 링크를 확인해 주세요. (BR-A5)")
+        elif account.status == AccountStatus.LOCKED.value:
+            raise DomainException("로그인 실패 누적으로 잠긴 계정입니다. 관리자에게 문의해 주세요. (BR-A5)")
+
+        # 5. 성공 시 실패 통계 초기화
+        if account.failure_count > 0:
+            account.failure_count = 0
+            account.last_failed_at = None
+            self._repo.update_account(account)
+
+        # 6. 해시 자동 업그레이드 (Rehash) (SEC-12)
+        if needs_rehash:
+            try:
+                # 해싱도 CPU 바운드 동기 작업이므로 워커 스레드에 위임 (이벤트 루프 비차단)
+                new_hash = await asyncio.to_thread(self._hasher.hash, password)
+                account.password_hash = new_hash
+                self._repo.update_account(account)
+                logger.info(f"Password hash upgraded to latest security standard for account: {account.id}")
+            except Exception as rehash_err:
+                logger.error(f"Failed to upgrade password hash silently: {str(rehash_err)}")
+
+        # 7. 세션 생성
+        # 권한 상승(ADMIN)은 이메일 접두사 같은 사용자 제어 입력으로 절대 부여하지 않는다.
+        # 공개 가입(US-A1)에서 'admin@...' 주소를 등록하면 누구나 관리자가 되는 권한 상승 결함이 되므로,
+        # ADMIN은 별도 관리자 프로비저닝 경로(시딩/콘솔)로만 부여한다.
+        principal = Principal(
+            user_id=account.id,
+            role=UserRole.USER,
+            mfa_verified=False
+        )
+        
+        session_info = await self._session_manager.issue(principal)
+        
+        if self._observability_hub:
+            self._observability_hub.emitLog({
+                "event": "LoginSuccess",
+                "accountId": account.id,
+                "role": principal.role
+            })
+            
+        return session_info.handle
