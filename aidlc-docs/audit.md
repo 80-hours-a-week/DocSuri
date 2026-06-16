@@ -260,6 +260,84 @@
 **맥락**: CONSTRUCTION — shared/ 계약 완료 → develop PR(병렬 트랙 선행 랜딩).
 
 ---
+
+## CONSTRUCTION — Track 3 레인 스캐폴드 + U2 Discovery Functional Design 계획
+**시각**: 2026-06-16T08:00:00Z
+**사용자 입력(원문)**: "지금 내가 맡은 역할은 Track3거든? 어떤걸 해야하는지 정리해줘" · "일단 레인 스캐폴딩 부터해줘" · "U2 Functional Design 계획 수립해줘"
+**AI 응답**: 규칙(code-generation·security/resiliency baseline·overconfidence-prevention) + aidlc-docs 전체·shared 계약 정독 후 Track 3(@kyjness=U2 Discovery mock 선행→U5 Frontend) 역할 정리. 레인 스캐폴드 생성(`backend/modules/discovery/README.md`·`frontend/README.md` — 소유·범위·소비 계약·보안 불변식). U2 Functional Design 계획서(`construction/plans/u2-discovery-functional-design-plan.md`) 작성: 7컴포넌트·INV-1(단일 근거화 게이트)·§4 명확화 질문 11개(질문 게이트). cross-lingual(TD-3 한국어 질의)·capability 어댑터 seam(VectorStoreAdapter·LexicalIndexAdapter·LlmGatewayAdapter) 반영.
+**맥락**: CONSTRUCTION — Track 3 병렬 착수(U2 mock 선행). 답변 게이트 대기.
+
+---
+
+## CONSTRUCTION — U2 Discovery Functional Design 답변 승인(전부 A) → 산출물 생성
+**시각**: 2026-06-16T08:20:00Z
+**사용자 입력(원문)**: "전부 A로 진행하고 산출물 생성해줘"
+**AI 응답**: U2 FD 계획서 §4 질문 11개(Q1~Q11) **전부 권장안 A 확정**(계획서 [Answer] 기입·§2 체크박스 완료). 모호 답변 없음(전건 명시 A). Functional Design 산출물 3종 생성: `construction/u2-discovery/functional-design/`의 domain-entities.md(식별자·입력·질의계획·검색/랭킹·근거화경계·출력DTO·관계도·공유계약), business-logic-model.md(SearchOrchestrationService 동기 파이프라인·저하 매트릭스 Q6=A·7컴포넌트·mock-first 경계), business-rules.md(BR-1~18·MR-1~4 mock규칙·PBT-02/03/07/09·추적성·INV-1/2/3). 핵심 결정: Q1=A(임베딩+lexical, LLM재작성 없음)·Q2=A(RRF·PaperId 디덥)·Q3=A(baseline 랭킹·relevance 비-raw)·Q4=A(기권 vs 빈결과 구분, 빈 성공 금지)·Q5=A(검색 인증 필수)·Q6=A(2단계 저하)·Q7=A(NFC·다국어)·Q8/Q9=A(포트 스텁·어댑터 mock)·Q10=A(N=20)·Q11=A(비차단 이벤트). 미커밋(백엔드 완료 후). 리뷰 게이트 대기.
+**맥락**: CONSTRUCTION — U2 Functional Design 완료 → 리뷰 게이트(승인 시 U2 NFR Requirements).
+
+---
+
+## CONSTRUCTION — U2 Discovery Functional Design 승인 → U2 NFR Requirements 진입
+**시각**: 2026-06-16T08:40:00Z
+**사용자 입력(원문)**: "승인할게, U2 NFR Requirements로 진행해줘"
+**AI 응답**: U2 Functional Design 산출물 3종 **승인**. `aidlc-state.md`에 U2 Discovery FD 완료 기록. U2 NFR Requirements 단계 진입 — 계획서(`construction/plans/u2-discovery-nfr-requirements-plan.md`) 작성: NFR 목표(NFR-P1 P50<3s 검증·NFR-C1 시스템 전역 상한 내 U2 슬라이스·NFR-R2 저하) + 기술 스택 선정(API 런타임=§5-A Python 계승, 검색/랭킹/임베딩 어댑터, mock-first 전략, PBT=Hypothesis) + §4 명확화 질문(질문 게이트). cross-lingual(TD-3)·OpenSearch(TD-4) 시스템 전역 결정 계승.
+**맥락**: CONSTRUCTION — U2 NFR Requirements 계획 작성 → 답변 게이트 대기.
+
+---
+
+## CONSTRUCTION — U2 NFR Requirements 답변(Q1=FastAPI 합의 전제·그 외 A) → 산출물 생성
+**시각**: 2026-06-16T09:00:00Z
+**사용자 입력(원문)**: "A(FastAPI)로 제안하되 \"app-shell 소유자 합의 전제\"로 기록"
+**AI 응답**: U2 NFR Requirements 계획서 §4 답변 확정 — **Q1=A FastAPI(⚠️ app-shell 소유자 @ELSAPHABA 합의 전제·잠정, backend-shared)**·**Q2~Q10=A**. 계획서 [Answer] 기입·체크박스 완료. 산출물 2종 생성: `construction/u2-discovery/nfr-requirements/`의 tech-stack-decisions.md(TD-U2-1 FastAPI[합의대기]·TD-U2-2~4 [전역 계승] Python/Cohere search_query/OpenSearch·TD-U2-5 opensearch-py+앱RRF·TD-U2-6 Bedrock 질의임베딩·TD-U2-7 임베딩 캐시 TTL·TD-U2-8 Hypothesis·TD-U2-9 공급망)·nfr-requirements.md(NFR-P1 예산 분해[U2 단계+U6 근거화 별도]·stateless 수평확장·임베딩장애→lexical 폴백/인덱스장애→fail-closed·NFR-C1 U2 슬라이스=질의 임베딩 1회·SEC 위임 경계·QT-2 한국어 평가셋·mock-first 포트 2구현). 미커밋(백엔드 완료 후). 리뷰 게이트 대기.
+**맥락**: CONSTRUCTION — U2 NFR Requirements 완료 → 리뷰 게이트(승인 시 U2 NFR Design).
+
+---
+
+## CONSTRUCTION — U2 NFR Requirements 승인 → U2 NFR Design 진입
+**시각**: 2026-06-16T09:20:00Z
+**사용자 입력(원문)**: "승인할게, U2 NFR Design으로 진행해줘"
+**AI 응답**: U2 NFR Requirements 산출물 2종 **승인**. `aidlc-state.md`에 U2 NFR Requirements 완료 기록. U2 NFR Design 진입 — 계획서(`construction/plans/u2-discovery-nfr-design-plan.md`) 작성: 복원력/성능/확장성/보안 패턴 + 논리 컴포넌트 + §4 명확화 질문(질문 게이트). NFR Requirements 결정(앱 RRF·임베딩 캐시·예산 분해·lexical 폴백/fail-closed·mock 2구현·FastAPI 잠정) 정합.
+**맥락**: CONSTRUCTION — U2 NFR Design 계획 작성 → 답변 게이트 대기.
+
+---
+
+## CONSTRUCTION — U2 NFR Design 답변(전부 A·Q8 backend 공유 전제) → 산출물 생성
+**시각**: 2026-06-16T09:40:00Z
+**사용자 입력(원문)**: "전부 A로 진행하고 산출물 생성해줘"
+**AI 응답**: U2 NFR Design 계획서 §4 답변 확정 — **Q1~Q9=A**(Q8=CI=GHA 확정·CD/무중단 배포는 backend 공유 app-shell/Infra 합의 전제·잠정). 계획서 [Answer] 기입·체크박스 완료. 산출물 2종 생성: `construction/u2-discovery/nfr-design/`의 nfr-design-patterns.md(동기 fail-fast+폴백[재시도 최소·U1 워커와 정반대]·의존성별 서킷[임베딩→lexical/인덱스→fail-closed]·비용 degradeMode≠장애 서킷 구분·임베딩 read-through 캐시 TTL·k-NN∥BM25 병렬 RRF·stateless 수평확장 공유상태·SEC 계층 분리 방어심층·CI=GHA·RES-12 폴트인젝션)·logical-components.md(FastAPI U2 라우터+EmbeddingAdapter/Cache+SearchAdapter+GroundingAdapter[INV-1]+U6 포트·FD 7컴포넌트 매핑·mock-first 2구현 토폴로지). 미커밋(백엔드 완료 후). 리뷰 게이트 대기.
+**맥락**: CONSTRUCTION — U2 NFR Design 완료 → 리뷰 게이트(승인 시 Infra Design 또는 mock-first Code Generation 선행).
+
+---
+
+## CONSTRUCTION — U2 NFR Design 승인 → mock-first Code Generation 진입(Part 1 계획)
+**시각**: 2026-06-16T10:00:00Z
+**사용자 입력(원문)**: "승인할게, mock-first Code Generation으로 진행해줘"
+**AI 응답**: U2 NFR Design 산출물 2종 **승인**. `aidlc-state.md`에 U2 NFR Design 완료 기록. Code Generation(mock-first) 진입 — Part 1 계획서(`construction/plans/u2-discovery-code-generation-plan.md`) 작성 예정: 번호형 생성 단계(프로젝트 구조·도메인 로직·어댑터 mock·포트 스텁·API 라우터·테스트·문서) + 코드 위치(`backend/modules/discovery/`)·shared/python(docsuri_shared) 임포트 정합. 계획 승인 게이트 대기(승인 전 코드 미생성).
+**맥락**: CONSTRUCTION — U2 Code Generation Part 1(계획) → 승인 게이트.
+
+---
+
+## CONSTRUCTION — U2 Code Generation 계획(Part 1) 작성 완료 → 승인 프롬프트
+**시각**: 2026-06-16T10:10:00Z
+**AI 응답**: U2 mock-first Code Generation 계획서(`construction/plans/u2-discovery-code-generation-plan.md`) 작성. 코드 위치=`backend/modules/discovery/`(Track3 클린 레인); docsuri_shared 계약 import 정합 확인(DTO camelCase·SearchResponse RootModel·ports snake_case·chunk_id·EMBEDDING_SPEC). 생성 단계 10개(구조·도메인 모델·U2 포트·6 도메인 컴포넌트·캐시·오케스트레이터·mock 어댑터/스텁·FastAPI 라우터·PBT 테스트·문서). 조율 표시: pyproject 모듈 로컬 잠정·FastAPI/backend 패키징=app-shell(@ELSAPHABA) 합의 전제·real 어댑터(opensearch-py/boto3) 미구현(포트만). **승인 게이트** — 승인 전 코드 미생성.
+**맥락**: CONSTRUCTION — U2 Code Generation 계획 승인 대기(Part 1 → Part 2 게이트).
+
+---
+
+## CONSTRUCTION — U2 Code Generation 계획 승인 → Part 2 코드 생성
+**시각**: 2026-06-16T10:30:00Z
+**사용자 입력(원문)**: "승인할게, 코드 생성 진행해줘"
+**AI 응답**: U2 mock-first Code Generation 계획(Part 1) **승인**. Part 2 실행 — `backend/modules/discovery/`에 코드/테스트 생성(Step 1~10). INV-1 준수 설계: **enforce 호출은 게이트웨이 seam(api/router, U6 대역)이 수행**하고 orchestrator(U2 도메인)는 plan_and_retrieve/finalize로 분리(enforce 미호출). 계획서 체크박스 마킹.
+**맥락**: CONSTRUCTION — U2 Code Generation Part 2(생성) 진행.
+
+---
+
+## CONSTRUCTION — U2 Code Generation Part 2 완료 (mock-first, 테스트 통과)
+**시각**: 2026-06-16T11:00:00Z
+**AI 응답**: U2 mock-first 코드 생성 완료(`backend/modules/discovery/`). Step 1~10 전부: 모듈 pyproject(uv·docsuri-shared path dep)·도메인 6컴포넌트·U2 포트·임베딩 캐시·오케스트레이터(plan_and_retrieve/finalize 분리로 **INV-1 enforce 미호출** 보장; enforce는 `api/gateway_seam.run_search`=U6 게이트웨이 대역이 단일 호출)·mock 어댑터/스텁(KO↔EN cross-lingual+QT-2 픽스처, MR-2)·thin FastAPI 라우터·PBT/단위/폴트인젝션 테스트. **검증: `uv run pytest` → 27 passed; `uv run ruff check` → clean.** `.venv` gitignore 확인. 미커밋(백엔드 완료 후). 리뷰 게이트(승인 시 다음: U5 Frontend 또는 Infra/real 어댑터).
+**맥락**: CONSTRUCTION — U2 Code Generation 완료 → 리뷰 게이트.
+
+---
 ## Track 2 착수 및 워크스페이스 세션 재개
 **시각**: 2026-06-16T16:41:47+09:00
 **사용자 입력(원문)**: "Now our project is finished with the shared code. Let's start Track 2."
