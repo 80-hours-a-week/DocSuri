@@ -1,0 +1,69 @@
+# Contract Test Instructions
+
+## Purpose
+
+Validate that U1 writes and consumes shared contracts without drift.
+
+## Contract Sources
+
+- `shared/vector-spec/vector-spec.yaml`
+- `shared/vector-spec/index-record.schema.json`
+- `shared/events/ingestion.schema.json`
+- `shared/python/src/docsuri_shared/`
+
+## Test Scenarios
+
+### Scenario 1: IndexRecord Contract
+
+- Description: U1 assembled records must validate against generated `docsuri_shared.IndexRecord`.
+- Existing coverage:
+  - `IndexRecordAssembler` creates `IndexRecord` objects directly.
+  - PBT verifies chunk-to-record cardinality and embedding alignment.
+
+Command:
+
+```powershell
+$env:PYTHONPATH="ingestion/src;shared/python/src"
+python -m pytest ingestion/tests/test_properties.py
+```
+
+Expected result: all generated records satisfy the shared pydantic model.
+
+### Scenario 2: Embedding Space Contract
+
+- Description: U1 writer must use `EMBEDDING_SPEC.input_type_writer == "search_document"`
+  and vectors must be 1024 dimensions.
+- Existing coverage:
+  - `assert_writer_embedding_role`
+  - `EmbeddingBatch` dimension validation
+  - `BedrockCohereEmbeddingPort` dimension validation
+
+Command:
+
+```powershell
+$env:PYTHONPATH="ingestion/src;shared/python/src"
+python -m pytest ingestion/tests/test_domain_units.py ingestion/tests/test_properties.py
+```
+
+### Scenario 3: Ingestion Failure Signal Contract
+
+- Description: U1 failure signal must use `docsuri_shared.events.IngestionFailureSignal`.
+- Existing coverage:
+  - `IngestFailureHandler.emit_failure_signal`
+  - orchestration failure tests
+
+Command:
+
+```powershell
+$env:PYTHONPATH="ingestion/src;shared/python/src"
+python -m pytest ingestion/tests/test_orchestration.py
+```
+
+## Additional Shared Contract Validation
+
+Run shared package tests when shared schemas change:
+
+```powershell
+$env:PYTHONPATH="shared/python/src"
+python -m pytest shared/python/tests
+```
