@@ -8,9 +8,15 @@ import type { NextRequest } from 'next/server';
  * desktop mockup frame is same-origin, so the app is never embedded by a third
  * party. Concrete values / nonce strategy are refined at code/Infra stage.
  */
+// Next.js dev (Fast Refresh / HMR / webpack) evaluates code via `eval`, which
+// requires 'unsafe-eval'. Allow it ONLY in development; production stays strict
+// (no unsafe-eval) per SEC-4.
+const isDev = process.env.NODE_ENV !== 'production';
+const scriptSrc = ["'self'", "'unsafe-inline'", ...(isDev ? ["'unsafe-eval'"] : [])].join(' ');
+
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  `script-src ${scriptSrc}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   "connect-src 'self'",
