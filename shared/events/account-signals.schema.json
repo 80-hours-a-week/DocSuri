@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docsuri.dev/shared/events/account-signals.schema.json",
+  "title": "U3 Account / Auth Signals",
+  "description": "🟡 PROVISIONAL (events.md §3 — shapes finalized in U3 FD; here only the fact-of-publish, producer/consumer, meaning, and security invariants are fixed). U3 SignupService/AuthenticationService emit these after domain processing (services.md). Contains: AccountCreated, SignupAbuseSignal, AuthFailureSignal. All payloads: NO plaintext passwords/credentials (FR-7/SEC-12 invariant), PII minimized (SEC-3), generalized failure reasons (SEC-12). Use $defs root selection to validate a specific shape.",
+  "$defs": {
+    "AccountCreated": {
+      "title": "AccountCreated",
+      "description": "Producer: U3.SignupService — published after policy/uniqueness validation, hashing, and persistence succeed (services.md register orchestration). Consumer: U6 Observability/Ops (signup telemetry + audit fan-out). Delivery: at-least-once → consumer idempotent (suppress duplicate signup telemetry). PII minimized (SEC-3); plaintext password/credentials NEVER included (FR-7/SEC-12 invariant). Trace: FR-7, US-A1, NFR-O1.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Identifier of the newly created account (no credentials; PII-minimized — SEC-3). Trace: events.md §3.1, FR-7."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Account creation time (date-time; concrete wire format is Infra Design). Trace: events.md §3.1."
+        }
+      },
+      "required": ["userId", "timestamp"],
+      "additionalProperties": false
+    },
+    "SignupAbuseSignal": {
+      "title": "SignupAbuseSignal",
+      "description": "Producer: U3.SignupService — emitted on abuse indications (rate/duplicate, etc.). Consumer: U6 Ops (signup-abuse mitigation, coupled with gateway rate-limiting SEC-11). Delivery: at-least-once → consumer idempotent (duplicate-signal safe). NO secrets/PII exposed (SEC-3); reason generalized. Trace: SEC-11, RES-11.",
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Time the abuse indication was observed (date-time). Trace: events.md §3.2."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Generalized abuse-indication category (e.g. rate/duplicate — non-sensitive label; no PII/secrets, SEC-3). Trace: events.md §3.2, SEC-11."
+        }
+      },
+      "required": ["reason"],
+      "additionalProperties": false
+    },
+    "AuthFailureSignal": {
+      "title": "AuthFailureSignal",
+      "description": "Producer: U3.AuthenticationService — emitted on credential-verification failure (preserving the 'do not reveal credential existence' invariant). Consumer: U6 Ops (brute-force detection → lockout/delay/CAPTCHA enforcement + alerting). Delivery: at-least-once → consumer idempotent. Failure reason GENERALIZED — MUST NOT reveal which credential was wrong, and MUST NOT carry plaintext credentials (SEC-12). Trace: SEC-12, RES-11.",
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Time of the authentication-failure event (date-time). Trace: events.md §3.3."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Generalized failure reason — does NOT reveal which credential was wrong; no plaintext credentials (SEC-12). Trace: events.md §3.3, SEC-12."
+        }
+      },
+      "required": ["reason"],
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/AccountCreated" },
+    { "$ref": "#/$defs/SignupAbuseSignal" },
+    { "$ref": "#/$defs/AuthFailureSignal" }
+  ]
+}

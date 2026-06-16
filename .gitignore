@@ -1,0 +1,15 @@
+# 로컬 도구·OS 노이즈 (local tooling / OS noise)
+.serena/
+.DS_Store
+
+# Python (shared/python/ binding — backend·ingestion·ops = Python, §5-A)
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+*.egg-info/
+build/
+dist/
+# uv.lock IS committed (reproducible installs); _generated/ IS committed (drift-checked).
