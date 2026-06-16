@@ -260,3 +260,147 @@
 **맥락**: CONSTRUCTION — shared/ 계약 완료 → develop PR(병렬 트랙 선행 랜딩).
 
 ---
+## Track 2 착수 및 워크스페이스 세션 재개
+**시각**: 2026-06-16T16:41:47+09:00
+**사용자 입력(원문)**: "Now our project is finished with the shared code. Let's start Track 2."
+**AI 응답**: 로컬 `develop` 브랜치를 `origin/develop`로 업데이트하고, Track 2 작업을 위한 새 피처 브랜치 `feature/track2-accounts`를 생성 및 체크아웃함. 이후 세션 재개(Session Continuity) 규칙 및 감사 로그(Audit Log) 작성을 위해 `aidlc-state.md` 및 `audit.md` 구조 확인을 진행함.
+**맥락**: CONSTRUCTION — Track 2 착수 준비 및 브랜치 구성.
+
+---
+
+## 세션 재개 감사 로그 조회 피드백
+**시각**: 2026-06-16T17:01:42+09:00
+**사용자 입력(원문)**: "why are you keep reading that file?"
+**AI 응답**: 세션 재개 시 이전 단계 산출물을 필수적으로 읽고 로드해야 하는 개발 가이드라인과 감사 로그(audit.md)를 덮어쓰지 않고 변경 사항을 덧붙이기 위해(append-only) 파일 구조를 확인하는 중임을 설명함. 환영 메시지 출력 및 세션 재개 질문 파일(`track2-resumption-questions.md`)을 개설하여 사용자에게 제시함.
+**맥락**: CONSTRUCTION — 감사 로그 구조 확인 및 피드백 대응.
+
+---
+
+## 중복 파일 조회 피드백 및 세션 재개 대기
+**시각**: 2026-06-16T17:02:07+09:00
+**사용자 입력(원문)**: "I mean, you're reading the same file again and again"
+**AI 응답**: 세션 간의 대화가 단절될 때 이전 메모리가 유실되므로, 컨텍스트 복원 및 설계 규칙 준수를 위해 여러 문서와 설정 파일을 매번 읽게 됨을 설명함. 브랜치 구성 및 질문 파일(`track2-resumption-questions.md`) 작성을 모두 마치고 사용자의 결정을 대기 중임을 안내함.
+**맥락**: CONSTRUCTION — 중복 조회 피드백 대응 및 승인 대기.
+
+---
+
+## 세션 재개 결정 수령 및 U3 Functional Design 진입
+**시각**: 2026-06-16T17:04:06+09:00
+**사용자 입력(원문)**: "I filled in the answer" (선택: Q1=A)
+**AI 응답**: 사용자의 A(U3 Accounts Functional Design 진행) 답변을 확인하고 U3 Functional Design 단계에 진입함. U3 Functional Design 계획서 작성을 시작함.
+**맥락**: CONSTRUCTION — U3 Accounts Functional Design 계획 단계 진입.
+
+---
+
+## U3 Accounts Functional Design 질문 답변 수령 및 검증
+**시각**: 2026-06-16T17:52:31+09:00
+**사용자 입력(원문)**: "답변 다 작성했어."
+**사용자 입력(답변 파일, 원문 선택)**: Q1=B(최소 10자 복잡도+로컬 블랙리스트), Q2=A(Argon2id), Q3=B(Sliding 2h + 절대 30d 세션), Q4=B(지수 백오프+10회 CAPTCHA), Q5=B(이메일 인증 링크 검증 필수), Q6=A(Stateless 인가 결정), Q7=B(시딩 관리자+TOTP MFA 강제).
+**AI 응답**: 답변 파일에서 7개 질문의 응답을 확인 및 추출함. 답변 간 논리적 모순이나 모호함이 없음을 검증하고, U3 Accounts Functional Design 산출물(domain-entities.md, business-logic-model.md, business-rules.md)을 기술 무관(technology-agnostic) 관점에 맞춰 작성함.
+**맥락**: CONSTRUCTION — U3 Accounts Functional Design 질문 답변 분석 및 설계 문서 생성.
+
+---
+
+## U3 Accounts Functional Design 승인 및 NFR Requirements 진입
+**시각**: 2026-06-16T17:58:39+09:00
+**사용자 입력(원문)**: "continue to the next stage."
+**AI 응답**: 사용자의 승인을 확인하고 U3 Accounts Functional Design 단계를 완료함. 다음 단계인 NFR Requirements로 전환하고 계획서 및 질문 게이트 작성을 준비함.
+**맥락**: CONSTRUCTION — U3 Accounts Functional Design 승인 및 NFR Requirements 계획 단계 진입.
+
+---
+
+## U3 Accounts NFR Requirements 질문 답변 수령 및 검증
+**시각**: 2026-06-16T18:03:55+09:00
+**사용자 입력(원문)**: "답변 작성했어"
+**사용자 입력(답변 파일, 원문 선택)**: Q1=A(세션 검증 P50<5ms/P99<20ms 초저지연), Q2=A(argon2-cffi 라이브러리), Q3=A(세션 스토리지 고가용성 Multi-AZ), Q4=A(Amazon RDS PostgreSQL + Amazon ElastiCache Redis 복합), Q5=B(Google reCAPTCHA v3 연동), Q6=A(Amazon SES 이메일 발송).
+**AI 응답**: 답변 파일에서 6개 질문의 응답을 확인 및 추출함. 답변 간 논리적 모순이나 모호함이 없음을 검증하고, U3 Accounts NFR Requirements 산출물(nfr-requirements.md, tech-stack-decisions.md)을 작성함.
+**맥락**: CONSTRUCTION — U3 Accounts NFR Requirements 질문 답변 분석 및 설계 문서 생성.
+
+---
+
+## U3 Accounts NFR Requirements 승인 및 NFR Design 진입
+**시각**: 2026-06-16T18:08:26+09:00
+**사용자 입력(원문)**: "Continue to next stage."
+**AI 응답**: 사용자의 승인을 확인하고 U3 Accounts NFR Requirements 단계를 완료함. 다음 단계인 NFR Design으로 전환하고 계획서 및 질문 게이트 작성을 준비함.
+**맥락**: CONSTRUCTION — U3 Accounts NFR Requirements 승인 및 NFR Design 계획 단계 진입.
+
+---
+
+## U3 Accounts NFR Design 질문 답변 수령 및 검증
+**시각**: 2026-06-16T18:15:42+09:00
+**사용자 입력(원문)**: "답변 작성했어"
+**사용자 입력(답변 파일, 원문 선택)**: Q1=A(Redis 장애 시 RDS 폴백 없이 Fail-Closed, 타임아웃 1-2초 및 단기 서킷 브레이커), Q2=reCAPTCHA는 B(Fail-Closed) / SES는 A(소프트 폴백: PENDING 계정 영속화 후 EmailDeliveryFailureSignal 및 로컬 큐/로그 적재), Q3=A(PostgreSQL 풀 10/20, 대기 3초; Redis 풀 최대 50), Q4=A(배포정의 단계 Secrets Manager 값 환경변수 주입하여 API 속도제한 예방), Q5=A(프런트엔드 Origin 명시 바인딩 CORS).
+**AI 응답**: 답변 파일에서 5개 질문의 응답을 확인 및 추출함. 답변 간 논리적 모순이나 모호함이 없음을 검증하고, U3 Accounts NFR Design 산출물(nfr-design-patterns.md, logical-components.md)을 작성함.
+**맥락**: CONSTRUCTION — U3 Accounts NFR Design 질문 답변 분석 및 설계 문서 생성.
+
+---
+
+## U3 Accounts NFR Design 승인 및 Infrastructure Design 진입
+**시각**: 2026-06-16T18:17:01+09:00
+**사용자 입력(원문)**: "continue to the next stage."
+**AI 응답**: 사용자의 승인을 확인하고 U3 Accounts NFR Design 단계를 완료함. 다음 단계인 Infrastructure Design으로 전환하고 계획서 및 질문 게이트 작성을 준비함.
+**맥락**: CONSTRUCTION — U3 Accounts NFR Design 승인 및 Infrastructure Design 계획 단계 진입.
+
+---
+
+## U3 Accounts Infrastructure Design 질문 답변 수령 및 검증
+**시각**: 2026-06-16T18:21:08+09:00
+**사용자 입력(원문)**: "답변 작성했어."
+**사용자 입력(답변 파일, 원문 선택)**: Q1=B(AWS ECS Fargate 상시구동 1-2개 태스크), Q2=B(db.t4g.small RDBMS Multi-AZ), Q3=B(cache.t4g.micro Redis Multi-AZ 1복제본), Q4=A(ECS 퍼블릭 서브넷 + NAT Gateway 배제, RDS/Redis는 사설 격리 서브넷 배치 및 보안그룹 제한으로 비용 및 보안 최적화), Q5=B(DNS DNS 레코드 등록 SES 도메인 인증).
+**AI 응답**: 답변 파일에서 5개 질문의 응답을 확인 및 추출함. 답변 간 논리적 모순이나 모호함이 없음을 검증하고, U3 Accounts Infrastructure Design 산출물(infrastructure-design.md, deployment-architecture.md)을 작성함.
+**맥락**: CONSTRUCTION — U3 Accounts Infrastructure Design 질문 답변 분석 및 설계 문서 생성.
+
+---
+
+## U3 Accounts Infrastructure Design 승인 및 Code Generation 계획 진입
+**시각**: 2026-06-16T18:25:00+09:00
+**사용자 입력(원문)**: "답변 작성했어." (세션 재개 질문 파일에 답변 A 기입 후, 진행 승인 요청)
+**AI 응답**: 사용자 답변을 통해 U3 Accounts Infrastructure Design 완료 및 승인을 확인하고 계획서 체크박스를 업데이트함. `aidlc-state.md` 상태를 `Code Generation` 진행 중으로 전환함. 이후 U3 Accounts의 소스 코드 생성을 위한 구체적인 계획서(`u3-accounts-code-generation-plan.md`) 작성을 시작함.
+**맥락**: CONSTRUCTION — U3 Accounts Code Generation Part 1 Planning 진입.
+
+
+## U3 Accounts Code Generation 계획 피드백 수령 및 반영
+**시각**: 2026-06-16T18:27:03+09:00
+**사용자 입력(원문)**: "답변 작성했어"
+**사용자 입력(답변 파일, 원문 선택)**: Q1=C. 
+- ① Phase 2 (Step 4) — 블랙리스트 로드 성능 최적화: common_passwords.txt를 매번 패스워드 검증 요청이 올 때마다 파일 I/O로 읽으면 성능 저하가 발생합니다. 가이드: password.py 모듈 기동 시(초기 로딩 단계) 메모리에 set 구조로 딱 한 번 캐싱하여, 검증 시에는 O(1) 시차로 즉시 룩업되도록 구현 규칙을 바인딩하세요.
+- ② Phase 4 (Step 8) — Redis Connection Pool 및 예외 처리: NFR Design에서 Redis 풀 크기를 최대 50으로 넉넉히 설정하기로 했습니다. 가이드: redis.ConnectionPool(max_connections=50, socket_timeout=2.0)을 명시적으로 구성하고, redis.exceptions.ConnectionError 및 TimeoutError 발생 시 비즈니스 예외인 SessionStoreUnavailableException으로 래핑하여 상위 레이어로 Fail-Closed 신호를 던지도록 설계해야 합니다.
+- ③ Phase 5 (Step 10) — Exponential Backoff와 DoS 방어의 조화: 로그인 3회 실패 시부터 응답을 지연(Exponential Backoff)시킬 때, 단순 time.sleep()을 사용하면 동기식 워커 스레드가 차단되어 고의적인 로그인 요청으로 전체 서버 스레드를 고갈시키는 Thread Exhaustion DoS 공격에 취약해질 수 있습니다. 가이드: 백오프 지연은 스레드를 블로킹하는 방식 대신, 게이트웨이(U6) 레이어나 비동기 논리로 처리하거나, 본 모듈이 동기식 멀티스레드 런타임인 경우 백오프 대기 시간만큼 클라이언트에게 지연 응답을 주기 전 워커 자원을 효율적으로 넘겨줄 수 있는 가벼운 메커니즘을 고려해야 합니다.
+- ④ Phase 5 (Step 11) — Stateless 인가의 순수성 유지: AuthorizationGuard가 Stateless하게 동작하기 위해, 인바운드 인풋으로 주체(principal)와 함께 타 모듈이 먼저 조회한 리소스 소유자 식별자(resource_owner_id)를 인자로 명확히 받도록 함수 시그니처를 설계해야 합니다.
+**AI 응답**: 사용자 피드백 ①~④를 `u3-accounts-code-generation-plan.md` 계획서에 즉각 반영하여 각 Step별 설계 규칙으로 삽입함. 블랙리스트 O(1) set 로드, Redis ConnectionPool(50, timeout 2.0) 및 SessionStoreUnavailableException 래핑, FastAPI async/await asyncio.sleep을 이용한 비동기 백오프 지연(워커 고갈 DoS 방어), `AuthorizationGuard.authorize`에 `resource_owner_id` 명시 인자화 명세를 계획서에 추가함. `track2-code-generation-questions.md` 질문 파일을 초기화하여 재승인을 받도록 갱신함.
+**맥락**: CONSTRUCTION — U3 Accounts Code Generation Part 1 Planning (피드백 반영 및 재승인 게이트 수립).
+
+## U3 Accounts Code Generation 계획 최종 승인 및 코드 생성 착수
+**시각**: 2026-06-16T18:28:01+09:00
+**사용자 입력(원문)**: "답변 작성했어."
+**사용자 입력(답변 파일, 원문 선택)**: Q1=A(업데이트된 계획을 승인하며, Phase 1 Step 1~2부터 코드 생성을 시작함)
+**AI 응답**: 사용자 재승인을 확인하여 `aidlc-state.md`를 업데이트하고, Code Generation Part 2 실제 코드 생성 단계를 개시함. Phase 1 (Step 1~2: 스케폴딩 및 DTO 스키마 구성) 작업을 진행함.
+**맥락**: CONSTRUCTION — U3 Accounts Code Generation Part 2 Generation 진입.
+
+---
+
+## U3 Accounts 실제 소스 코드 생성 완료
+**시각**: 2026-06-16T18:32:00+09:00
+**사용자 입력(원문)**: (없음 — AI 행위)
+**AI 응답**: `plans/u3-accounts-code-generation-plan.md`에 작성된 17개의 단계를 차례대로 실행하여 U3 Accounts 모듈의 실제 소스 코드, DDL 마이그레이션 스크립트, PBT 테스트 코드 및 README 문서를 모두 생성함. 모든 계획서 체크박스를 `[x]`로 업데이트하고 사용자 리뷰를 위한 최종 대기 단계로 진입함.
+**맥락**: CONSTRUCTION — U3 Accounts Code Generation Part 2 Generation 완료 및 승인 대기.
+
+---
+
+## U3 Accounts Code Generation 승인 및 Build and Test 진입
+**시각**: 2026-06-16T18:31:55+09:00
+**사용자 입력(원문)**: "continue to next stage"
+**AI 응답**: 사용자 코드 생성 승인에 맞춰 U3 Accounts Code Generation 완료 처리. 다음 단계인 `Build and Test`에 진입하여 빌드 및 테스트 지침서들을 생성하기 시작함.
+**맥락**: CONSTRUCTION — U3 Accounts Build and Test 진입.
+
+---
+
+
+
+
+
+
+
+
+
+
