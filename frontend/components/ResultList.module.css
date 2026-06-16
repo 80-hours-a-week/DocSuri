@@ -1,0 +1,14 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.banner {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--color-warn-bg);
+  color: var(--color-warn-text);
+  font-size: 13px;
+}

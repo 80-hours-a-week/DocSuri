@@ -1,46 +1,46 @@
 # frontend — U5 Frontend (Track 3)
 
-> **Owner:** @kyjness (Track 3) · **Deploy unit:** ④ frontend (independent) · **Stack:** TS / SSR likely — confirmed in U5 NFR Requirements (§5-D)
-> **Status:** 🟡 lane scaffold — implementation deferred to the U5 CONSTRUCTION loop (FD → NFR → Code Generation).
+> **Owner:** @kyjness (Track 3) · **Deploy unit:** ④ frontend (independent) · **Stack:** Next.js (App Router SSR) · TypeScript · CSS Modules · pnpm
+> **Status:** 🟢 hero slice implemented (mock-first). Library/history screens deferred to a follow-up pass.
 
-SSR phone-first web UI: search, results, account, library, status. This is an
-**independent deploy unit** (④), not part of the backend monolith.
+SSR phone-first web UI: hero → signup → login → search → grounded results + state UX.
+Independent deploy unit (④), not part of the backend monolith.
 
-## Responsibility
+## Quick start
 
-- **Stories owned:** US-H1 (hero: signup → query → grounded result), US-D7 (empty /
-  failure / degraded UX — `StateView`).
-- **Contributes UI to:** US-D1/D4 (search & result cards), US-A1/A2 (account),
-  US-L1/L2/L3 (library / history).
+```bash
+pnpm install
+pnpm dev            # http://localhost:3000  (runs fully on MockTransport — no backend needed)
+pnpm test           # Vitest + Testing Library (32 tests)
+pnpm build          # Next.js production build (standalone)
+pnpm e2e            # Playwright hero-flow E2E (phone viewport)
+pnpm gen:types      # refresh the schema drift-dump under types/.schema-raw/
+```
 
-## Talks to the backend via the gateway
+### Mock-first demo
+The app runs against `MockTransport` (DTO-derived fixtures). The search box branches by keyword so every terminal state is demoable:
 
-User paths enter through the **U6 gateway** (single entry), which fronts U2/U3/U4
-handlers — no direct module calls. The client is a thin `ApiClient` that branches on the
-`SearchResponse` union (page / abstain / degraded / validation error) to surface FR-11
-terminal states.
+| 입력에 포함 | 결과 |
+|---|---|
+| (일반어) | 결과 카드 페이지 |
+| `없음` / `empty` | 빈 결과 |
+| `기권` / `abstain` | 기권(근거 없음) |
+| `저하` / `degraded` | 저하 배너 + 부분 결과 |
+| `오류` / `error` | 서버 오류 + 재시도 |
+| `네트워크` / `fail` | 네트워크 오류 + 재시도 |
 
-## Mock-first (parallel with U2)
+(로그인은 mock에서 아무 이메일/비밀번호로 통과합니다.)
 
-U5 develops against **mock U2 responses** built from `shared/dtos/search.schema.json`,
-so the frontend does not wait for the real U2 read path. Same `shared/dtos` contract on
-both sides → no drift.
+## Architecture
+- **ApiClient + Transport seam** (`lib/api/`) — single entry to the backend → U6 gateway. Mock now, swap to `HttpTransport` (server-only) when the gateway lands; components are untouched.
+- **Session** — httpOnly cookie (transport); only non-sensitive `SessionInfo` reaches the client (SEC-3/12).
+- **State machine** — `SearchScreen` branches the `SearchResponse` union (page/empty/abstain/degraded/invalid) via `StateView`; abstain ≠ empty (BR-U5-9).
+- **Security** — `ResultCard` renders only the 7 exposed fields (SEC-9), escapes external text, http/https + noopener links; CSP/`frame-ancestors 'self'` in `middleware.ts`; 2-layer error boundaries (fail-closed, SEC-15).
 
-## Consumes (from `shared/`, do not fork or edit)
-
-- `shared/dtos/*.schema.json` — search (U2), accounts (U3), library/history (U4) DTOs.
-  TS types are generated from these schemas, **deferred to U5** (§5-D); same JSON Schema
-  origin as the Python binding, so the two never drift.
+## Contract (from `shared/`, do not fork or edit)
+- `shared/dtos/*.schema.json` is the SSOT. `types/generated/*.ts` mirror the exposed contract; `pnpm gen:types` dumps a raw codegen to `types/.schema-raw/` for drift review. See `aidlc-docs/construction/u5-frontend/code/README.md` for the TypeGen design note.
 
 ## Invariants
-
-- Render only externally-exposed DTO fields (SEC-9) — never display internal scores,
-  owner ids, or debug meta.
-- `password` is request-input-only; session is a secure cookie, never shown in a body
-  (SEC-12 / SEC-3).
-- Add stable `data-testid` to interactive elements (automation-friendly UI rule).
-
-## Layout (TBD)
-
-Internal structure (routes, components, ApiClient, mock) is defined and created during
-the U5 functional/NFR design loop — not before approval.
+- Render only externally-exposed DTO fields (SEC-9). `password` is request-input-only (SEC-12/3).
+- Stable `data-testid` on interactive elements (automation-friendly).
+- All backend calls go through `ApiClient` → U6 gateway (no direct fetch in components).
