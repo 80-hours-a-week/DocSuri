@@ -30,5 +30,11 @@ No dependencies should be installed into the global or user Python environment.
 
 - Application code lives under `ops/` and `backend/middleware/`.
 - Shared contracts are consumed from `docsuri_shared`; they are not forked here.
+- `InMemoryTelemetrySource`, `InMemoryIncidentStore`, and `CapturingAlertPublisher` are
+  local/test adapters. Production event sources must implement
+  `TelemetrySource.receive(max_messages)` and `TelemetrySource.ack(event)` against the
+  chosen event backbone.
+- `InMemoryRateLimiter` is process-local. Multi-worker production deployments should use a
+  shared backend such as Redis before relying on rate limits for abuse control.
 - Cloud EventBridge/SQS/SNS/PagerDuty/CloudWatch integrations are adapter seams for later
   infrastructure work.

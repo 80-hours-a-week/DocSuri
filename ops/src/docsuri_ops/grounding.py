@@ -7,7 +7,10 @@ from typing import Any
 
 from docsuri_ops.domain.models import GroundingDecision, GroundingViolation
 
-_VERSION_SUFFIX = re.compile(r"v\d+$")
+_ARXIV_ID_WITH_VERSION = re.compile(
+    r"^(?P<base>(?:\d{4}\.\d{4,5}|[a-z][a-z.-]+/\d{7}))v\d+$",
+    re.IGNORECASE,
+)
 
 
 @dataclass(slots=True)
@@ -130,7 +133,10 @@ def _get(value: Any, field: str) -> Any:
 
 
 def _normalize_identifier(value: str) -> str:
-    normalized = value.strip()
+    normalized = value.strip().lower()
     if "/" in normalized:
         normalized = normalized.rstrip("/").split("/")[-1]
-    return _VERSION_SUFFIX.sub("", normalized)
+    match = _ARXIV_ID_WITH_VERSION.match(normalized)
+    if match:
+        return match.group("base")
+    return normalized

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, field
 
 from docsuri_shared.events import ClassifiedIncident, OpsAlert
@@ -73,3 +74,18 @@ class CapturingAlertPublisher:
             return False
         self.alerts.append(alert)
         return True
+
+
+@dataclass(slots=True)
+class InMemoryTelemetrySource:
+    queued: deque[TelemetryEvent] = field(default_factory=deque)
+    acked: list[str] = field(default_factory=list)
+
+    def receive(self, max_messages: int = 10) -> list[TelemetryEvent]:
+        messages: list[TelemetryEvent] = []
+        while self.queued and len(messages) < max_messages:
+            messages.append(self.queued.popleft())
+        return messages
+
+    def ack(self, event: TelemetryEvent) -> None:
+        self.acked.append(event.event_id)

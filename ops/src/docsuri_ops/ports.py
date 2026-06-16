@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Protocol
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Any
+from typing import Any, Protocol
 
 from .domain.models import (
     AlertRecord,

@@ -41,6 +41,28 @@ def test_grounding_passes_when_exposed_card_is_retrieved() -> None:
     assert decision.violations == ()
 
 
+def test_grounding_normalizes_arxiv_identifier_case_and_version() -> None:
+    hook = GroundingEnforcementHook()
+
+    decision = hook.enforce(
+        {"cards": [{"arxivId": "2401.00001V1"}]},
+        [{"arxivId": "2401.00001v2", "paperId": "2401.00001"}],
+    )
+
+    assert decision.verdict == "pass"
+
+
+def test_grounding_does_not_strip_version_suffix_from_non_arxiv_ids() -> None:
+    hook = GroundingEnforcementHook()
+
+    decision = hook.enforce(
+        {"cards": [{"paperId": "internal-paper-v2"}]},
+        [{"paperId": "internal-paper"}],
+    )
+
+    assert decision.verdict == "block"
+
+
 def test_grounding_blocks_fabricated_arxiv_id() -> None:
     hook = GroundingEnforcementHook()
 

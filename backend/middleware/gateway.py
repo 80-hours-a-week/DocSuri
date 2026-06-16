@@ -15,6 +15,7 @@ def install_gateway_middleware(
     observability=None,
     rate_limiter=None,
     production: bool = True,
+    trust_proxy_headers: bool = False,
 ) -> None:
     @app.middleware("http")
     async def _u6_gateway(request: Request, call_next):
@@ -23,7 +24,7 @@ def install_gateway_middleware(
         request.state.context = RequestContext(request_id=request_id)
 
         if rate_limiter is not None:
-            key = request.headers.get("X-Forwarded-For") or request.client.host
+            key = _rate_limit_key(request, trust_proxy_headers=trust_proxy_headers)
             if not rate_limiter.allow(str(key)):
                 response = JSONResponse(
                     status_code=429,
@@ -50,6 +51,18 @@ def install_gateway_middleware(
         response.headers["X-Request-ID"] = request_id
         apply_security_headers(response)
         return response
+
+
+def _rate_limit_key(request: Request, *, trust_proxy_headers: bool = False) -> str:
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if trust_proxy_headers and forwarded_for:
+        first_hop = forwarded_for.split(",", maxsplit=1)[0].strip()
+        if first_hop:
+            return first_hop
+
+    client = getattr(request, "client", None)
+    host = getattr(client, "host", None)
+    return str(host or "unknown-client")
 
 
 def _emit_error(observability, request_id: str, exc: Exception) -> None:

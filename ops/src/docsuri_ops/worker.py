@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from docsuri_ops.domain.models import BudgetState, TelemetryEvent
 from docsuri_ops.incidents import AiIncidentDetectorSuite, IncidentEventPublisher
+from docsuri_ops.ports import TelemetrySource
 
 
 @dataclass(slots=True)
@@ -32,18 +33,21 @@ def run_once(
 
 
 def run_polling_loop(
-    source,
+    source: TelemetrySource,
     suite: AiIncidentDetectorSuite,
     publisher: IncidentEventPublisher,
     *,
+    max_messages: int = 10,
     interval_seconds: float = 1.0,
     stop_after: int | None = None,
 ) -> WorkerResult:
     total = WorkerResult(processed=0, published=0)
     iterations = 0
     while stop_after is None or iterations < stop_after:
-        events = source.poll()
+        events = tuple(source.receive(max_messages=max_messages))
         result = run_once(events, suite, publisher)
+        for event in events:
+            source.ack(event)
         total = WorkerResult(
             processed=total.processed + result.processed,
             published=total.published + result.published,

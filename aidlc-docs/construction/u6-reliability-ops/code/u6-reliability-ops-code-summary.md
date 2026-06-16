@@ -31,6 +31,7 @@
 - Shared events are consumed from `docsuri_shared.events`; U6 maps internal incident classes to shared enum values `a`, `b`, and `c`.
 - Shared ports are consumed without modifying `shared/`; U6 implements the runtime behavior locally.
 - App-shell integration is intentionally left as a wiring step through `backend.middleware.configure_u6_middleware`.
+- Worker polling now follows the local `TelemetrySource.receive(max_messages)` / `ack(event)` port contract. Cloud-backed event source and alert publisher adapters remain infrastructure follow-up work.
 
 ## Security and Resiliency Notes
 
@@ -38,4 +39,6 @@
 - Incident and alert payloads expose request correlation, severity, and class only.
 - Duplicate event ids and duplicate incident keys are suppressed in local stores.
 - Middleware maps unhandled production errors to generic responses and adds security headers.
+- Middleware does not trust `X-Forwarded-For` by default; proxy header use requires explicit `trust_proxy_headers=True` and consumes the first forwarded hop only.
+- The local in-memory rate limiter compacts expired keys and is documented as process-local; Redis or another shared backend is required before multi-worker production enforcement.
 - Deep health marks stale or mismatched index stats as degraded and dependency failures as unhealthy.
