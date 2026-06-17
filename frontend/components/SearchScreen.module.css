@@ -60,6 +60,13 @@
   color: var(--color-danger);
 }
 
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 4px 0;
+}
+
 .results {
   min-height: 80px;
 }

@@ -41,6 +41,10 @@ export class HttpTransport implements Transport {
         body = null;
       }
     }
-    return { status: res.status, body };
+    // Capture Set-Cookie (e.g. the login session cookie) so the BFF can relay it
+    // to the browser. getSetCookie() is the spec way to read multiple values.
+    const setCookies =
+      typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : [];
+    return { status: res.status, body, setCookies };
   }
 }

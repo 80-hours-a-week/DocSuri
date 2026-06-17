@@ -398,7 +398,7 @@
 ---
 ## CONSTRUCTION — Track 3 레인 스캐폴드 + U2 Discovery Functional Design 계획
 **시각**: 2026-06-16T08:00:00Z
-**사용자 입력(원문)**: "지금 내가 맡은 역할은 Track3거든? 어떤걸 해야하는지 정리해줘" · "일단 레인 스캐폴딩 부터해줘" · "U2 Functional Design 계획 수립해줘"
+**사용자 입력(원문)**: "지금 내가 맡은 역할은 Track3야 어떤걸 해야하는지 정리해줘" · "일단 레인 스캐폴딩 부터해줘" · "U2 Functional Design 계획 수립해줘"
 **AI 응답**: 규칙(code-generation·security/resiliency baseline·overconfidence-prevention) + aidlc-docs 전체·shared 계약 정독 후 Track 3(@kyjness=U2 Discovery mock 선행→U5 Frontend) 역할 정리. 레인 스캐폴드 생성(`backend/modules/discovery/README.md`·`frontend/README.md` — 소유·범위·소비 계약·보안 불변식). U2 Functional Design 계획서(`construction/plans/u2-discovery-functional-design-plan.md`) 작성: 7컴포넌트·INV-1(단일 근거화 게이트)·§4 명확화 질문 11개(질문 게이트). cross-lingual(TD-3 한국어 질의)·capability 어댑터 seam(VectorStoreAdapter·LexicalIndexAdapter·LlmGatewayAdapter) 반영.
 **맥락**: CONSTRUCTION — Track 3 병렬 착수(U2 mock 선행). 답변 게이트 대기.
 
@@ -610,7 +610,7 @@
 
 ## CONSTRUCTION — U5 Frontend Functional Design 계획·답변 + 산출물 생성
 **시각**: 2026-06-16T19:40:00+09:00
-**사용자 입력(원문)**: "u5 프론트엔드 시작해줘 (근데 알아서 필요한 파일 읽는거지..?새로 추가된 것도)" · "frontend 내 claude.md 파일과 기존 aidlc 관련 파일 내용 충돌하는건 없는지 확인해줘" · "Q1=슬라이스" · "응 둘 다 반영하고 나머지 질문도 답해줘"
+**사용자 입력(원문)**: "u5 프론트엔드 시작해줘" · "frontend 내 claude.md 파일과 기존 aidlc 관련 파일 내용 충돌하는건 없는지 확인해줘" · "Q1=슬라이스" · "응 둘 다 반영하고 나머지 질문도 답해줘"
 **AI 응답**: U5 자체 CONSTRUCTION 루프 Functional Design 착수(`feature/u5`, develop 동기화 확인; U5 산출물/코드 0 → FD부터). frontend 개발지침 ↔ aidlc 충돌 점검: (1)룰셋 경로 오타(rules→rule) (2)PWA·오프라인 over-scope(SSR 동기 REST와 불일치) 플래그. 사용자 결정으로 개발지침의 PWA·오프라인 라인 제거(SSR 범위 로딩/실패/빈 상태로 교체), backend/frontend 개발지침에 "산출물 표기"(코드·커밋·문서에 지침 파일명 비언급) 규칙 추가. FD 계획서(`plans/u5-frontend-functional-design-plan.md`) 작성·질문 전수 권장안 확정: 히어로 슬라이스 우선(Q1)·전역스토어 없음(Q2)·기권≠빈결과 구분(Q3)·relevance=U2 표시값 그대로 SEC-9(Q4)·검색 인증 가드(Q5)·accounts.schema 파생 검증(Q6)·목업 의미규칙만(Q7)·라이브러리/이력 커서(Q8)·DTO 파생 mock+transport 스왑(Q9)·XSS/링크/접근성(Q10). 산출물 4종 생성: `construction/u5-frontend/functional-design/`(domain-entities·business-logic-model·business-rules·frontend-components). 미커밋(승인 게이트).
 **맥락**: CONSTRUCTION — U5 Frontend Functional Design 산출물 완료 → 리뷰 게이트.
 
@@ -705,5 +705,14 @@
 **User Input**: "진행해줘 브랜치명은 feature/u2-v2 로"
 **AI Response**: "U2 mock-first 읽기 경로에 실 어댑터를 추가함(Track3 소유 `backend/modules/discovery/`). `adapters/`에 BedrockCohereQueryEmbedder(search_query·dim 검증·실패 시 EmbeddingUnavailable), OpenSearchVectorStoreAdapter(k-NN cosine)·OpenSearchLexicalIndexAdapter(BM25)(IndexRecord 역직렬화·실패 시 IndexUnavailable fail-closed), EventBridgeEventPublisher(논블로킹 SearchExecuted→U4), DiscoverySettings(env, U1 writer와 동일 env명 재사용) 구현. `real_wiring.build_real_orchestrator`(MR-4 계약 불변 스왑), `scripts/seed_local_opensearch`(인덱스 매핑+미니코퍼스 시드) 추가. pyproject에 `real` extra(opensearch-py/boto3, lazy import). 검증: `uv run pytest` 43 passed(신규 단위 11: bedrock5·opensearch4·event2)+1 skip(api extra)·ruff clean. **로컬 라이브 검증**: docker OpenSearch(green) 시드 후 통합테스트 3 passed(k-NN·BM25·하이브리드 PaperId 디덥). app-shell 엔드투엔드 스모크: env 설정 시 RealBundle 마운트·`/api/search` 200·라이브 OpenSearch에서 실 카드 반환(Bedrock creds 부재 시 lexical-only graceful degrade). **로컬 검증이 버그 1건 포착**: `@dataclass(slots=True)`에서 `cls.<field>` 기본값 참조가 slot 디스크립터를 반환하던 문제 → 모듈 상수로 수정. **조율존(app-shell) 변경**: `backend/wiring.py::_mount_discovery`에 read-path 토글(env 있으면 real, 없으면 mock) 추가 — @ELSAPHABA 사인오프 필요. app-shell 테스트 13 passed 무회귀."
 **Context**: CONSTRUCTION — U2 Discovery real 어댑터(OpenSearch/Bedrock/EventBridge) Code Generation. 브랜치 `feature/u2-v2`. 의존성 플래그: 프로덕션 실행은 공유 인프라(OpenSearch 클러스터·Bedrock 접근·이벤트 버스 — U1 보류 인프라 + 시스템 횡단) 필요, env로 분리됨.
+
+---
+
+
+## U5 Frontend production 패스 — 계약 정렬 + 실 transport(BFF) + 라이브러리/이력 (크리티컬 패스 ⑤)
+**Timestamp**: 2026-06-17T12:35:00Z
+**User Input**: "승인, Step 1부터 진행해줘" (계획서 `u5-frontend-production-pass-plan.md` 승인; 범위=풀 기능 ①②③; auth 갭 백엔드 트랙 분리·MFA 범위 밖·로컬+계약테스트 검증)
+**AI Response**: "U5 mock-first 슬라이스를 production-ready 앱 코드로 끌어올림(브랜치 `feature/u5-v2`). **P1 계약 정렬**: 프런트 경로를 머지된 실 백엔드로 정렬(`/search`→`/api/search`, `/accounts/*`→`/auth/*`); login 계약 정정(실 login=httpOnly 쿠키만+`{status,message}` 반환 → `ApiClient.login()`을 `Promise<void>`로, 세션은 `GET /auth/session` 동기화; LoginForm 무변경); MFA-required 분기 부재 확인→graceful; 생성타입 드리프트 갱신(`types/generated/library.ts`에 SavedSearchPage·LibraryItem*·LibraryItemMeta·*Page·History*·SearchResultSetDTO 추가, 와이어 `arXivId` vs meta `arxivId` 차이 미러). **P2 실 transport(BFF)**: `app/bff/[...path]/route.ts`(서버 catch-all; `DOCSURI_GATEWAY_URL`→`HttpTransport` 쿠키 포워딩+Set-Cookie 릴레이, 없으면 mock), `lib/api/routeHandlerTransport.ts`(클라, `/bff/*` 동일출처), `getApiClient`가 `NEXT_PUBLIC_DOCSURI_REAL_API`로 분기, `server-only` 클라 미유출(빌드 확인), 호출처 5곳 교체. **P3 화면(US-L1/L2/L3)**: ApiClient stub 7개→실구현+rerunSaved/rerunHistory/clearHistory, `/library`·`/library/saved`·`/library/history`(커서 페이지·rerun 인라인·담기/저장/삭제/비우기), 공용 `usePaginatedList`·`OutcomeView`·`LibraryTabs`·`cardFromMeta`(relevance 제거 SEC-9), 진입점(AppHeader 내비·ResultCard 담기·SearchScreen 검색저장). **검증: `tsc --noEmit` 0 · `vitest` 48 passed(9 files; 신규 apiLibrary·libraryScreens + contract 라이브러리 DTO 계약 확장) · `next lint` clean · `next build` 성공(라우트 10, `/bff/[...path]` 동적).** 적대적 자기검토 반영(SEC-9 라이브러리 meta 6필드·SEC-8 owner 미노출·커서 경계·rerun 분기·login 계약 정정·server-only)."
+**Context**: CONSTRUCTION — U5 Frontend production 패스 Code Generation. 브랜치 `feature/u5-v2`. **의존성 플래그(U5 외부)**: ① 게이트웨이가 세션쿠키→`request.state.principal` 미주입 → `/library/*`·`/api/search`가 실 백엔드에서 401(fail-closed) = `backend/` 조율존 + 시스템 인프라 단계; ② reCAPTCHA 토큰 미전송(사이트키=시크릿/인프라 필요); ③ 인프라/CD/호스팅·구체 CSP·정량 SLO = 공통 인프라 단계(④). 미커밋(푸시/PR 승인 대기).
 
 ---

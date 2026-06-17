@@ -1,7 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import type { ResultCardVM, SearchResultPageDTO, SessionInfo } from '@/types/generated';
+import type {
+  ResultCardVM,
+  SearchResultPageDTO,
+  SessionInfo,
+  LibraryPageDTO,
+  SavedSearchPageDTO,
+  HistoryPageDTO,
+} from '@/types/generated';
 import { pageResponse, degradedResponse } from '@/mocks/searchFixtures';
 import { mockLogin } from '@/mocks/accountFixtures';
+import { mockListLibrary, mockListSaved, mockListHistory } from '@/mocks/libraryFixtures';
 
 // DTO contract test (LC-7) — the mock fixtures must conform to the generated
 // types (which derive from shared/dtos). If the schema/types drift, this fails.
@@ -37,5 +45,32 @@ describe('DTO contract', () => {
     const s: SessionInfo = mockLogin('a@b.co');
     expect(s.userId).toBeTruthy();
     expect('token' in s).toBe(false);
+  });
+});
+
+const META_FIELDS = ['title', 'authors', 'year', 'arxivId', 'abstractSnippet', 'arxivUrl'];
+
+describe('U4 library DTO contract', () => {
+  it('library page conforms to LibraryPageDTO; meta carries only card fields (SEC-9)', () => {
+    const page: LibraryPageDTO = mockListLibrary(20, undefined);
+    expect(page.items.length).toBeGreaterThan(0);
+    const item = page.items[0];
+    expect(Object.keys(item.meta).sort()).toEqual([...META_FIELDS].sort());
+    // No internal score/relevance and no owner userId leak into the snapshot.
+    expect('relevance' in item.meta).toBe(false);
+    expect('userId' in (item as unknown as Record<string, unknown>)).toBe(false);
+    expect('score' in (item as unknown as Record<string, unknown>)).toBe(false);
+  });
+
+  it('saved-search page conforms to SavedSearchPageDTO (owner not exposed)', () => {
+    const page: SavedSearchPageDTO = mockListSaved(20, undefined);
+    expect(page.items[0].query).toBeTruthy();
+    expect('userId' in (page.items[0] as unknown as Record<string, unknown>)).toBe(false);
+  });
+
+  it('history page conforms to HistoryPageDTO', () => {
+    const page: HistoryPageDTO = mockListHistory(20, undefined);
+    expect(typeof page.items[0].resultCount).toBe('number');
+    expect(page.items[0].executedAt).toBeTruthy();
   });
 });

@@ -20,6 +20,20 @@ import {
   mockLogout,
   mockCurrentSession,
 } from '@/mocks/accountFixtures';
+import {
+  mockListSaved,
+  mockCreateSaved,
+  mockDeleteSaved,
+  mockListLibrary,
+  mockAddLibrary,
+  mockRemoveLibrary,
+  mockListHistory,
+  mockClearHistory,
+} from '@/mocks/libraryFixtures';
+import type {
+  SavedSearchCreateDTO,
+  LibraryItemCreateDTO,
+} from '@/types/generated';
 
 function matches(q: string, ...needles: string[]): boolean {
   const lower = q.toLowerCase();
@@ -31,7 +45,17 @@ export class MockTransport implements Transport {
     // Small latency so loading states are observable.
     await new Promise((r) => setTimeout(r, 120));
 
-    if (req.path === '/search' && req.method === 'POST') {
+    // Split the (possibly query-bearing) path: collections paginate via ?limit&cursor.
+    const qIdx = req.path.indexOf('?');
+    const path = qIdx >= 0 ? req.path.slice(0, qIdx) : req.path;
+    const sp = new URLSearchParams(qIdx >= 0 ? req.path.slice(qIdx + 1) : '');
+    const limit = Number(sp.get('limit') ?? '20') || 20;
+    const cursor = sp.get('cursor') ?? undefined;
+
+    const libraryRes = this.routeLibrary(req, path, limit, cursor);
+    if (libraryRes) return libraryRes;
+
+    if (req.path === '/api/search' && req.method === 'POST') {
       const query = String((req.body as { query?: unknown })?.query ?? '');
       if (matches(query, '네트워크', 'fail')) throw new Error('mock network failure');
       if (matches(query, '오류', 'error')) return { status: 500, body: null };
@@ -41,22 +65,77 @@ export class MockTransport implements Transport {
       return { status: 200, body: pageResponse };
     }
 
-    if (req.path === '/accounts/signup' && req.method === 'POST') {
+    if (req.path === '/auth/signup' && req.method === 'POST') {
       return { status: 201, body: mockSignup() };
     }
-    if (req.path === '/accounts/login' && req.method === 'POST') {
+    if (req.path === '/auth/login' && req.method === 'POST') {
+      // Mirror the real backend: set the (mock) session and return {status,message}
+      // only — the SessionInfo is read back via GET /auth/session (SEC-12).
       const email = String((req.body as { email?: unknown })?.email ?? 'mock@docsuri.dev');
-      return { status: 200, body: mockLogin(email) };
+      mockLogin(email);
+      return { status: 200, body: { status: 'success', message: '로그인에 성공했습니다.' } };
     }
-    if (req.path === '/accounts/logout' && req.method === 'POST') {
+    if (req.path === '/auth/logout' && req.method === 'POST') {
       mockLogout();
       return { status: 204, body: null };
     }
-    if (req.path === '/accounts/session' && req.method === 'GET') {
+    if (req.path === '/auth/session' && req.method === 'GET') {
       const session = mockCurrentSession();
       return session ? { status: 200, body: session } : { status: 401, body: null };
     }
 
     return { status: 404, body: null };
+  }
+
+  // U4 saved-search / library / history routes. Returns null when `path` is not a
+  // library route so the caller falls through to the auth/search branches.
+  private routeLibrary(
+    req: TransportRequest,
+    path: string,
+    limit: number,
+    cursor?: string,
+  ): TransportResponse | null {
+    // Saved searches ----------------------------------------------------------
+    if (path === '/library/saved-searches') {
+      if (req.method === 'GET') return { status: 200, body: mockListSaved(limit, cursor) };
+      if (req.method === 'POST') {
+        return { status: 201, body: mockCreateSaved(req.body as SavedSearchCreateDTO) };
+      }
+    }
+    const savedRerun = path.match(/^\/library\/saved-searches\/([^/]+)\/rerun$/);
+    if (savedRerun && req.method === 'POST') return { status: 200, body: pageResponse };
+    const savedId = path.match(/^\/library\/saved-searches\/([^/]+)$/);
+    if (savedId && req.method === 'DELETE') {
+      return mockDeleteSaved(decodeURIComponent(savedId[1]))
+        ? { status: 204, body: null }
+        : { status: 404, body: null };
+    }
+
+    // Library -----------------------------------------------------------------
+    if (path === '/library/items') {
+      if (req.method === 'GET') return { status: 200, body: mockListLibrary(limit, cursor) };
+      if (req.method === 'POST') {
+        return { status: 201, body: mockAddLibrary(req.body as LibraryItemCreateDTO) };
+      }
+    }
+    const libId = path.match(/^\/library\/items\/([^/]+)$/);
+    if (libId && req.method === 'DELETE') {
+      return mockRemoveLibrary(decodeURIComponent(libId[1]))
+        ? { status: 204, body: null }
+        : { status: 404, body: null };
+    }
+
+    // History -----------------------------------------------------------------
+    if (path === '/library/history') {
+      if (req.method === 'GET') return { status: 200, body: mockListHistory(limit, cursor) };
+      if (req.method === 'DELETE') {
+        mockClearHistory();
+        return { status: 204, body: null };
+      }
+    }
+    const histRerun = path.match(/^\/library\/history\/([^/]+)\/rerun$/);
+    if (histRerun && req.method === 'POST') return { status: 200, body: pageResponse };
+
+    return null;
   }
 }
