@@ -29,19 +29,11 @@ export function getMockApiClient(): ApiClient {
   return mockSingleton;
 }
 
-/**
- * Server-side factory (DOCSURI_GATEWAY_URL set): lazily imports HttpTransport so
- * the `server-only` guard fires only on this path. Pass `cookieHeader` from the
- * inbound request to forward the session cookie. Used by the BFF route handler.
- */
-export async function getServerApiClient(cookieHeader?: string): Promise<ApiClient> {
-  const gatewayUrl = process.env.DOCSURI_GATEWAY_URL;
-  if (gatewayUrl) {
-    const { HttpTransport } = await import('./httpTransport');
-    return new ApiClient(new HttpTransport({ baseUrl: gatewayUrl, cookieHeader }));
-  }
-  return getMockApiClient();
-}
+// Server-side (DOCSURI_GATEWAY_URL -> real gateway) lives ONLY in the BFF route
+// handler (app/bff/[...path]/route.ts), which imports HttpTransport directly. We
+// must NOT reference httpTransport from here: this module is in the client graph
+// (getApiClient is imported by client components), and a `server-only` import —
+// even a dynamic one — pulls it into the client bundle and fails the build.
 
 /**
  * Resolve the active ApiClient. Pass an explicit transport in tests. Otherwise
