@@ -16,7 +16,7 @@ class SearchStack(Stack):
         self._sg = ec2.SecurityGroup(
             self, "OpenSearchSg",
             vpc=vpc,
-            description="OpenSearch domain — inbound HTTPS from ECS tasks only",
+            description="OpenSearch domain - inbound HTTPS from ECS tasks only",
             allow_all_outbound=False,
         )
 

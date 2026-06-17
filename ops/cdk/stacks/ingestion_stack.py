@@ -46,12 +46,8 @@ class IngestionStack(Stack):
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        # --- ECR ---
-        self.repo = ecr.Repository(
-            self, "IngestionRepo",
-            repository_name="docsuri-ingestion",
-            removal_policy=RemovalPolicy.RETAIN,
-        )
+        # --- ECR (already created manually; import by name) ---
+        self.repo = ecr.Repository.from_repository_name(self, "IngestionRepo", "docsuri-ingestion")
 
         # --- SQS: ingestion queue + DLQ (infra-design §2.3) ---
         dlq = sqs.Queue(
