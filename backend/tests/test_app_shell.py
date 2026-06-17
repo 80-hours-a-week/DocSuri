@@ -53,10 +53,11 @@ def test_module_registry_complete_and_disjoint() -> None:
 def test_discovery_and_accounts_actually_mount() -> None:
     # Regression guard: discovery silently graceful-skipped on develop until it became a
     # declared dependency (pyproject path source). test_module_registry_complete_and_disjoint
-    # only checks the {accounts, discovery} *set* — which stayed green even while discovery was
-    # skipped. Assert both actually MOUNT, with nothing skipped.
+    # only checks the registry *set* — which stayed green even while discovery was skipped.
+    # Subset (not ==) so a newly-added module (e.g. library/U4) doesn't break this guard;
+    # `skipped == []` still proves every registered module actually mounts.
     result = create_app(_TEST_SETTINGS).state.mount_result
-    assert set(result.mounted) == {"accounts", "discovery"}, result.skipped
+    assert {"accounts", "discovery"} <= set(result.mounted), result.skipped
     assert result.skipped == []
 
 
