@@ -1,8 +1,9 @@
+import re
+from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from uuid import UUID
-import re
-from datetime import datetime
-from dataclasses import dataclass
+
 
 class DomainException(Exception):
     """Base domain exception for Accounts module"""

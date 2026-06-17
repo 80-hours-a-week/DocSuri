@@ -1,8 +1,15 @@
+import logging
 import secrets
 from datetime import datetime, timedelta
-import logging
 
-from ..models import SessionRecord, Principal, UserRole, SessionExpiredException, UnauthorizedException, SessionStoreUnavailableException
+from ..models import (
+    Principal,
+    SessionExpiredException,
+    SessionRecord,
+    SessionStoreUnavailableException,
+    UnauthorizedException,
+    UserRole,
+)
 from ..repository.session import SessionRepository
 
 logger = logging.getLogger(__name__)

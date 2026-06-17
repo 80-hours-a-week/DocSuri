@@ -1,18 +1,23 @@
 import os
+from datetime import UTC, datetime, timedelta
 from functools import lru_cache
-from fastapi import APIRouter, Depends, Request, Response, HTTPException, Header, Query
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
 
-from .schemas import SignupRequest, SignupResult, LoginRequest, SessionInfo
-from .models import DomainException, UnauthorizedException, SessionExpiredException, SessionStoreUnavailableException
-from .services.signup import SignupService
-from .services.auth import AuthenticationService
-from .services.session_manager import SessionManager
-from .repository.credential import CredentialRepository
-from .repository.session import SessionRepository
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
+from sqlalchemy.orm import Session
+
 from .integrations.email import get_email_client
 from .integrations.recaptcha import RecaptchaClient
+from .models import (
+    DomainException,
+    SessionExpiredException,
+    UnauthorizedException,
+)
+from .repository.credential import CredentialRepository
+from .repository.session import SessionRepository
+from .schemas import LoginRequest, SessionInfo, SignupRequest, SignupResult
+from .services.auth import AuthenticationService
+from .services.session_manager import SessionManager
+from .services.signup import SignupService
 
 router = APIRouter(prefix="/auth", tags=["Accounts/Auth"])
 
@@ -76,15 +81,15 @@ async def signup(
         )
         # verify-all-then-commit: 컨트롤러 엔드포인트 도달 완료 시점에만 세션 최종 commit 강제
         db.commit()
-        # 필드명으로 생성한다. 직렬화 시 serialization_alias 로 'accountId' 키가 출력된다.
-        return SignupResult(account_id=account_id)
+        # 공유 SSOT DTO(docsuri_shared) — 필드명이 곧 wire 키(accountId)다.
+        return SignupResult(accountId=account_id)
 
     except DomainException as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception:
         db.rollback()
-        raise HTTPException(status_code=500, detail="회원가입 처리 중 알 수 없는 장애가 발생했습니다. (Fail-Closed)")
+        raise HTTPException(status_code=500, detail="회원가입 처리 중 알 수 없는 장애가 발생했습니다. (Fail-Closed)") from None
 
 
 @router.post("/login")
@@ -123,10 +128,10 @@ async def login(
     except DomainException as e:
         db.rollback()
         # 자격증명 비노출(SEC-BR-2): "이메일 또는 비밀번호가 올바르지 않습니다." 등으로 일반화된 401 반환
-        raise HTTPException(status_code=401, detail=str(e))
-    except Exception as e:
+        raise HTTPException(status_code=401, detail=str(e)) from e
+    except Exception:
         db.rollback()
-        raise HTTPException(status_code=500, detail="인증 처리 중 서버 장애가 발생했습니다. (Fail-Closed)")
+        raise HTTPException(status_code=500, detail="인증 처리 중 서버 장애가 발생했습니다. (Fail-Closed)") from None
 
 
 @router.get("/verify-email")
@@ -142,10 +147,10 @@ async def verify_email(
         return {"status": "success", "message": "이메일 인증이 성공적으로 완료되었습니다. 이제 로그인할 수 있습니다."}
     except DomainException as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception:
         db.rollback()
-        raise HTTPException(status_code=500, detail="이메일 검증 처리 중 서버 장애가 발생했습니다.")
+        raise HTTPException(status_code=500, detail="이메일 검증 처리 중 서버 장애가 발생했습니다.") from None
 
 
 @router.get("/session", response_model=SessionInfo)
@@ -164,16 +169,16 @@ async def get_session(
         principal = await session_mgr.verify(session_id)
 
         # 30일 절대만료 시점 또는 sliding 2시간 만료 시점 제공
-        # 여기서는 편의상 sliding 2시간 만료 시점으로 expiresAt 반환
-        expires_at = datetime.utcnow() + timedelta(hours=2)
+        # 편의상 sliding 2시간 만료 시점으로 expiresAt 반환 (shared SessionInfo는 tz-aware 요구).
+        expires_at = datetime.now(UTC) + timedelta(hours=2)
 
-        # 필드명으로 생성한다. 직렬화 시 serialization_alias 로 'userId'/'expiresAt' 키가 출력된다.
-        return SessionInfo(user_id=principal.user_id, expires_at=expires_at)
+        # 공유 SSOT DTO(docsuri_shared) — 필드명이 곧 wire 키(userId/expiresAt)다.
+        return SessionInfo(userId=principal.user_id, expiresAt=expires_at)
 
     except (UnauthorizedException, SessionExpiredException) as e:
-        raise HTTPException(status_code=401, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="세션 검증 중 서버 오류가 발생했습니다. (Fail-Closed)")
+        raise HTTPException(status_code=401, detail=str(e)) from e
+    except Exception:
+        raise HTTPException(status_code=500, detail="세션 검증 중 서버 오류가 발생했습니다. (Fail-Closed)") from None
 
 
 @router.post("/logout")

@@ -1,7 +1,9 @@
+import logging
 import os
 import re
-import logging
+
 from argon2 import PasswordHasher
+
 from .models import InvalidPasswordException
 
 logger = logging.getLogger(__name__)
@@ -14,7 +16,7 @@ BLACKLIST_PATH = os.path.join(RESOURCES_DIR, "common_passwords.txt")
 _common_passwords = set()
 if os.path.exists(BLACKLIST_PATH):
     try:
-        with open(BLACKLIST_PATH, "r", encoding="utf-8") as f:
+        with open(BLACKLIST_PATH, encoding="utf-8") as f:
             for line in f:
                 pwd = line.strip()
                 if pwd:

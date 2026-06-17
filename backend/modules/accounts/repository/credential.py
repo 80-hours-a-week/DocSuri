@@ -1,8 +1,10 @@
-from sqlalchemy import Column, String, DateTime, Integer, Boolean, create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from datetime import datetime
 from uuid import uuid4
-from ..models import DomainException, AccountStatus, UserRole
+
+from sqlalchemy import Column, DateTime, Integer, String
+from sqlalchemy.orm import Session, declarative_base
+
+from ..models import AccountStatus, DomainException
 
 Base = declarative_base()
 

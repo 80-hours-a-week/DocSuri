@@ -1,19 +1,19 @@
 import asyncio
 import logging
 from datetime import datetime
-from argon2.exceptions import VerificationError, InvalidHash
 
-from ..models import DomainException, AccountStatus, UserRole, Principal, SessionRecord
-from ..password import get_password_hasher
-from ..repository.credential import CredentialRepository, AccountTable
+from argon2.exceptions import InvalidHash, VerificationError
+
 from ..integrations.recaptcha import RecaptchaClient
+from ..models import AccountStatus, DomainException, Principal, UserRole
+from ..password import get_password_hasher
+from ..repository.credential import CredentialRepository
 from .session_manager import SessionManager
 
 logger = logging.getLogger(__name__)
 
-# 봇 방지(CAPTCHA) 강제 시작 임계치 / 계정 잠금(LOCKED) 전환 임계치 (BR-A4, BR-A5)
+# 봇 방지(CAPTCHA) 강제 시작 임계치 (BR-A4). 자동 계정 잠금(LOCKED)은 BR-A4에 의해 금지된다.
 CAPTCHA_THRESHOLD = 10
-LOCKOUT_THRESHOLD = 10
 
 class AuthenticationService:
     """로그인 자격증명 비교, 무차별 대입 방어(Exponential Backoff), reCAPTCHA 검증 및 해시 자동 업그레이드를 관리하는 서비스 (US-A2)"""
@@ -24,13 +24,11 @@ class AuthenticationService:
         session_manager: SessionManager,
         recaptcha_client: RecaptchaClient,
         observability_hub = None,
-        lockout_threshold: int = LOCKOUT_THRESHOLD
     ):
         self._repo = credential_repo
         self._session_manager = session_manager
         self._recaptcha_client = recaptcha_client
         self._observability_hub = observability_hub
-        self._lockout_threshold = lockout_threshold
         # OWASP 권장 강도 해싱 파라미터 (m=65536, t=3, p=4) — password.py의 단일 팩토리 공유
         self._hasher = get_password_hasher()
 
@@ -77,11 +75,9 @@ class AuthenticationService:
             if account:
                 account.failure_count += 1
                 account.last_failed_at = datetime.utcnow()
-                # BR-A5: 실패 횟수가 잠금 임계치에 도달하면 계정을 LOCKED로 전환한다(관리자 해제 필요).
-                # 잠금 상태는 올바른 자격증명 입력 시 status 분기에서 사용자에게 통지되므로
-                # 계정 부존재 여부를 노출하지 않는다.
-                if account.failure_count >= self._lockout_threshold:
-                    account.status = AccountStatus.LOCKED.value
+                # BR-A4: 계정을 자동으로 잠그지 않는다 — 자동 LOCKED 전환은 타인의 정상 계정을 겨냥한
+                # DoS를 유발하므로 금지(점진적 backoff + 10회차 CAPTCHA로 방어). LOCKED는 관리자 수동
+                # 잠금 경로에서만 설정될 수 있다.
                 self._repo.update_account(account)
 
                 # 실패 횟수 3회차부터 지수 백오프 지연 계산
@@ -94,8 +90,8 @@ class AuthenticationService:
             # (Python builtin hash()는 PYTHONHASHSEED로 프로세스마다 달라져 상관관계 분석이 불가능하고
             #  이메일 파생 식별자는 SEC-3 PII 최소화 원칙에 위배되므로 사용하지 않는다.)
             if self._observability_hub:
-                self._observability_hub.emitMetric("AuthFailureSignal", 1, {"reason": "invalid_credentials"})
-                self._observability_hub.emitLog({
+                self._observability_hub.emit_metric("AuthFailureSignal", 1, {"reason": "invalid_credentials"})
+                self._observability_hub.emit_log({
                     "event": "AuthFailureSignal",
                     "reason": "invalid_credentials",
                 })
@@ -112,7 +108,8 @@ class AuthenticationService:
         if account.status == AccountStatus.PENDING.value:
             raise DomainException("이메일 인증이 완료되지 않았습니다. 메일함의 인증 링크를 확인해 주세요. (BR-A5)")
         elif account.status == AccountStatus.LOCKED.value:
-            raise DomainException("로그인 실패 누적으로 잠긴 계정입니다. 관리자에게 문의해 주세요. (BR-A5)")
+            # 자동 잠금은 BR-A4로 금지 — 이 분기는 관리자 수동 잠금 계정만 처리한다.
+            raise DomainException("관리자에 의해 잠긴 계정입니다. 관리자에게 문의해 주세요.")
 
         # 5. 성공 시 실패 통계 초기화
         if account.failure_count > 0:
@@ -144,7 +141,7 @@ class AuthenticationService:
         session_info = await self._session_manager.issue(principal)
         
         if self._observability_hub:
-            self._observability_hub.emitLog({
+            self._observability_hub.emit_log({
                 "event": "LoginSuccess",
                 "accountId": account.id,
                 "role": principal.role

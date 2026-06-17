@@ -1,5 +1,7 @@
 from enum import Enum
-from .models import Principal, UserRole, Action, AccountId
+
+from .models import AccountId, Action, Principal, UserRole
+
 
 class Decision(str, Enum):
     ALLOW = "ALLOW"
