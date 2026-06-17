@@ -41,7 +41,8 @@ class SessionRepository:
             "created_at": session.created_at.isoformat(),
             "last_active_at": session.last_active_at.isoformat(),
             "expires_at": session.expires_at.isoformat(),
-            "role": session.role
+            "role": session.role,
+            "mfa_verified": session.mfa_verified,
         }
         
         # absolute 만료 일시까지 남은 초 계산 (TTL)
@@ -73,7 +74,8 @@ class SessionRepository:
                 created_at=datetime.fromisoformat(data["created_at"]),
                 last_active_at=datetime.fromisoformat(data["last_active_at"]),
                 expires_at=datetime.fromisoformat(data["expires_at"]),
-                role=data.get("role", UserRole.USER.value)  # 구버전 레코드 호환: 누락 시 USER
+                role=data.get("role", UserRole.USER.value),  # 구버전 레코드 호환: 누락 시 USER
+                mfa_verified=bool(data.get("mfa_verified", False)),  # 누락 시 MFA 미통과로 안전 폴백
             )
         except (RedisConnectionError, RedisTimeoutError) as e:
             raise self._wrap_exception(e) from e

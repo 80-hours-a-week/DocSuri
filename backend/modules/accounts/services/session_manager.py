@@ -37,7 +37,8 @@ class SessionManager:
             created_at=now,
             last_active_at=last_active_at,
             expires_at=expires_at,
-            role=principal.role.value  # 발급 시 역할을 세션에 보존 (verify에서 복원)
+            role=principal.role.value,  # 발급 시 역할을 세션에 보존 (verify에서 복원)
+            mfa_verified=principal.mfa_verified,  # BR-A7: MFA 통과 여부도 세션에 보존
         )
         
         # Redis 세션 저장
@@ -94,8 +95,23 @@ class SessionManager:
         return Principal(
             user_id=session.user_id,
             role=role,
-            mfa_verified=False
+            mfa_verified=session.mfa_verified,  # BR-A7: 세션에 보존된 MFA 통과 여부 복원
         )
+
+    async def elevate_mfa(self, session_token: str) -> Principal:
+        """BR-A7: TOTP 검증 통과 후 현재 세션을 MFA 통과 상태로 승격한다 (2단계 인증).
+        세션을 먼저 재검증(만료/sliding 갱신)한 뒤 mfa_verified=True로 저장한다."""
+        principal = await self.verify(session_token)  # 만료 검증 + sliding 갱신
+        session = await self._repo.get(session_token)
+        if not session:
+            raise SessionExpiredException("세션이 유효하지 않거나 만료되었습니다.")
+        session.mfa_verified = True
+        try:
+            await self._repo.save(session)
+        except SessionStoreUnavailableException as e:
+            logger.critical(f"Failed to persist MFA elevation: {str(e)}")
+            raise UnauthorizedException("MFA 승격 저장 실패로 인증을 거부합니다.") from e
+        return Principal(user_id=principal.user_id, role=principal.role, mfa_verified=True)
 
     async def invalidate(self, session_token: str) -> None:
         """세션을 즉각 파기하여 로그아웃 처리합니다."""

@@ -3,8 +3,10 @@ from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from .guard import AuthorizationGuard, Decision
 from .integrations.email import get_email_client
 from .integrations.recaptcha import RecaptchaClient
 from .models import (
@@ -18,8 +20,14 @@ from .schemas import LoginRequest, SessionInfo, SignupRequest, SignupResult
 from .services.auth import AuthenticationService
 from .services.session_manager import SessionManager
 from .services.signup import SignupService
+from .services.totp import TotpService
 
 router = APIRouter(prefix="/auth", tags=["Accounts/Auth"])
+
+
+# U3-내부 관리자 MFA DTO (공유 SSOT 계약 아님 — admin MFA는 U3-private이라 docsuri_shared에 없음).
+class MfaVerifyRequest(BaseModel):
+    code: str
 
 # DB 세션 디펜던시 스텁 (메인 App shell에서 오버라이드 예정)
 def get_db_session() -> Session:
@@ -57,6 +65,11 @@ def get_auth_service(
     recaptcha: RecaptchaClient = Depends(get_recaptcha_client)
 ) -> AuthenticationService:
     return AuthenticationService(repo, manager, recaptcha)
+
+def get_totp_service(
+    repo: CredentialRepository = Depends(get_credential_repo),
+) -> TotpService:
+    return TotpService(repo)
 
 
 @router.post("/signup", response_model=SignupResult, status_code=201)
@@ -197,3 +210,87 @@ async def logout(
 
     response.delete_cookie(key="session_id")
     return {"status": "success", "message": "로그아웃되었습니다."}
+
+
+@router.post("/mfa/enroll")
+async def mfa_enroll(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    credential_repo: CredentialRepository = Depends(get_credential_repo),
+    totp_svc: TotpService = Depends(get_totp_service),
+    db: Session = Depends(get_db_session),
+):
+    """현재 로그인 사용자의 TOTP MFA를 등록하고 otpauth:// 프로비저닝 URI(QR용)를 반환한다 (BR-A7).
+    관리자 제어 평면 접근 전 1회 등록이 필요하며, 재등록 시 기존 시크릿을 교체한다."""
+    session_id = request.cookies.get("session_id")
+    if not session_id:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
+    try:
+        principal = await session_mgr.verify(session_id)
+        account = credential_repo.get_by_id(principal.user_id)
+        if not account:
+            raise HTTPException(status_code=401, detail="유효하지 않은 세션입니다.")
+        provisioning_uri = totp_svc.enroll(account)
+        db.commit()
+        # 평문 시크릿은 응답에 포함하지 않는다 — otpauth URI(QR)만 전달 (SEC-3).
+        return {"provisioningUri": provisioning_uri}
+    except (UnauthorizedException, SessionExpiredException) as e:
+        raise HTTPException(status_code=401, detail=str(e)) from e
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="MFA 등록 중 서버 오류가 발생했습니다. (Fail-Closed)") from None
+
+
+@router.post("/mfa/verify")
+async def mfa_verify(
+    req: MfaVerifyRequest,
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    credential_repo: CredentialRepository = Depends(get_credential_repo),
+    totp_svc: TotpService = Depends(get_totp_service),
+):
+    """제출된 TOTP 코드를 검증하고, 통과 시 현재 세션을 MFA 통과 상태로 승격한다 (2단계, BR-A7)."""
+    session_id = request.cookies.get("session_id")
+    if not session_id:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
+    try:
+        principal = await session_mgr.verify(session_id)
+        account = credential_repo.get_by_id(principal.user_id)
+        if not account or not totp_svc.verify(account, req.code):
+            # 코드 불일치/미등록 — 자격증명 비노출(SEC-9) 일반화 메시지로 거부 (Fail-Closed)
+            raise HTTPException(status_code=401, detail="MFA 코드 검증에 실패했습니다.")
+        await session_mgr.elevate_mfa(session_id)
+        return {"status": "success", "message": "MFA 인증이 완료되었습니다."}
+    except (UnauthorizedException, SessionExpiredException) as e:
+        raise HTTPException(status_code=401, detail=str(e)) from e
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="MFA 검증 중 서버 오류가 발생했습니다. (Fail-Closed)") from None
+
+
+@router.get("/admin/whoami")
+async def admin_whoami(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """관리자 제어 평면 예시 엔드포인트 — ADMIN 역할 + TOTP MFA 통과 세션만 허용한다 (BR-A7).
+    인가 판정은 단일 권위 AuthorizationGuard.authorize_admin에 위임한다 (SEC-8)."""
+    session_id = request.cookies.get("session_id")
+    if not session_id:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
+    try:
+        principal = await session_mgr.verify(session_id)
+        decision = AuthorizationGuard.authorize_admin(principal, mfa_verified=principal.mfa_verified)
+        if decision != Decision.ALLOW:
+            # 역할 부족 또는 MFA 미통과 — 기본 거부(SEC-8). 구체 사유는 노출하지 않는다(SEC-9).
+            raise HTTPException(status_code=403, detail="관리자 권한 또는 MFA 인증이 필요합니다.")
+        return {"userId": principal.user_id, "role": principal.role.value, "mfaVerified": True}
+    except (UnauthorizedException, SessionExpiredException) as e:
+        raise HTTPException(status_code=401, detail=str(e)) from e
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="관리자 인가 검증 중 서버 오류가 발생했습니다. (Fail-Closed)") from None

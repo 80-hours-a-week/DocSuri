@@ -92,3 +92,5 @@ class SessionRecord:
     expires_at: datetime
     # 발급 시점의 역할을 세션에 보존해 verify() 가 실제 역할을 복원할 수 있게 한다 (하드코딩 USER 제거).
     role: str = UserRole.USER.value
+    # BR-A7: TOTP MFA 통과 여부를 세션에 보존 — 관리자 제어 평면 인가(authorize_admin)가 이 값을 읽는다.
+    mfa_verified: bool = False

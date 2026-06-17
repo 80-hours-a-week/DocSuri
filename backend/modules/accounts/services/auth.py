@@ -132,9 +132,16 @@ class AuthenticationService:
         # 권한 상승(ADMIN)은 이메일 접두사 같은 사용자 제어 입력으로 절대 부여하지 않는다.
         # 공개 가입(US-A1)에서 'admin@...' 주소를 등록하면 누구나 관리자가 되는 권한 상승 결함이 되므로,
         # ADMIN은 별도 관리자 프로비저닝 경로(시딩/콘솔)로만 부여한다.
+        # 역할은 DB(account.role)가 단일 출처 — USER 하드코딩 제거(시딩된 ADMIN이 세션으로 전파되게).
+        # 알 수 없는/누락 값은 최소 권한(USER)으로 안전 폴백. MFA는 로그인 시점엔 항상 미통과(False):
+        # ADMIN 제어 평면은 별도 /auth/mfa/verify 2단계 TOTP 승격을 통과해야만 접근 가능하다 (BR-A7).
+        try:
+            account_role = UserRole(account.role)
+        except (ValueError, TypeError):
+            account_role = UserRole.USER
         principal = Principal(
             user_id=account.id,
-            role=UserRole.USER,
+            role=account_role,
             mfa_verified=False
         )
         
