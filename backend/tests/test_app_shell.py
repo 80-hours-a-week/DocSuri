@@ -46,7 +46,7 @@ def test_module_registry_complete_and_disjoint() -> None:
     assert readyz["status"] == "ready"
     mounted, skipped = set(readyz["mounted"]), set(readyz["skipped"])
     assert mounted.isdisjoint(skipped)
-    assert mounted | skipped == {"accounts", "discovery"}
+    assert mounted | skipped == {"accounts", "discovery", "library"}
 
 
 def test_absent_module_skips_gracefully_not_fatal() -> None:
@@ -66,7 +66,11 @@ def test_mount_modules_never_raises_and_records_reasons() -> None:
     result: MountResult = mount_modules(app, _TEST_SETTINGS)
     assert isinstance(result, MountResult)
     # Every attempted module is accounted for as either mounted or skipped (no silent drop).
-    assert {name for name, _ in result.skipped} | set(result.mounted) == {"accounts", "discovery"}
+    assert {name for name, _ in result.skipped} | set(result.mounted) == {
+        "accounts",
+        "discovery",
+        "library",
+    }
 
 
 def test_request_id_is_echoed() -> None:
