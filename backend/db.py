@@ -20,6 +20,19 @@ def make_engine(database_url: str) -> Engine:
     is_sqlite = database_url.startswith("sqlite")
     # check_same_thread=False: FastAPI serves a sync Session dependency across the threadpool.
     connect_args = {"check_same_thread": False} if is_sqlite else {}
+    # NFR Design (U3 logical-components): Postgres connection pool — size 10 + overflow 20
+    # (30 total), 3s acquire wait, recycle every 30 min (drop stale conns). SQLite uses
+    # StaticPool and rejects sizing kwargs, so they are applied only for non-SQLite engines.
+    pool_kwargs = (
+        {}
+        if is_sqlite
+        else {
+            "pool_size": 10,
+            "max_overflow": 20,
+            "pool_timeout": 3.0,
+            "pool_recycle": 1800,
+        }
+    )
     return create_engine(
         database_url,
         future=True,
@@ -27,6 +40,7 @@ def make_engine(database_url: str) -> Engine:
         # harmless for SQLite. SQLite gets no pool sizing (single-file, StaticPool default).
         pool_pre_ping=not is_sqlite,
         connect_args=connect_args,
+        **pool_kwargs,
     )
 
 
