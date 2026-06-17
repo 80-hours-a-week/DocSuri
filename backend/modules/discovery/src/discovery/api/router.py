@@ -13,7 +13,7 @@ import uuid
 
 from docsuri_shared.dtos import SearchRequest, ValidationErrorDTO
 from docsuri_shared.ports import GroundingEnforcementHook
-from fastapi import APIRouter, FastAPI, Header
+from fastapi import APIRouter, FastAPI, Header, Request
 from fastapi.responses import JSONResponse
 
 from ..domain.models import AuthSession, RequestContext
@@ -32,11 +32,16 @@ def build_router(
 
     @router.post("/api/search")
     def search(
-        request: SearchRequest, x_user_id: str = Header(default="dev-user")
+        http_request: Request,
+        request: SearchRequest,
+        x_user_id: str = Header(default="dev-user"),
     ) -> JSONResponse:
-        # Real principal is gateway-injected (SEC-8); dev header stands in for mock-first.
+        # Prefer gateway-injected principal (SEC-8); fall back to dev header for mock-first.
+        principal = getattr(http_request.state, "principal", None)
+        user_id = principal.user_id if principal else x_user_id
+        request_id = getattr(http_request.state, "request_id", None) or uuid.uuid4().hex
         ctx = RequestContext(
-            auth_session=AuthSession(user_id=x_user_id), request_id=uuid.uuid4().hex
+            auth_session=AuthSession(user_id=user_id), request_id=request_id
         )
         response = run_search(orchestrator, grounding_hook, request, ctx)
         status = 400 if isinstance(response.root, ValidationErrorDTO) else 200
