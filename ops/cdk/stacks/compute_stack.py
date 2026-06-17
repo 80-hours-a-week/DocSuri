@@ -91,21 +91,32 @@ class ComputeStack(Stack):
         )
 
         # --- Environment variables for the API container ---
-        # DATABASE_URL is constructed from the RDS secret (username/password) + endpoint.
-        # For initial deploy, use a SQLite fallback so the container boots + passes health
-        # checks even before RDS is reachable (the app-shell gracefully handles this).
-        # Production wiring reads from Secrets Manager at runtime — env var is the bootstrap.
+        # backend/config.py assembles DATABASE_URL from DB_HOST/PORT/NAME/USER + DB_PASSWORD
+        # (the password arrives via Secrets Manager — see `secrets=` below, never plain env).
+        # The app self-migrates the accounts+library schema on startup (RUN_MIGRATIONS_ON_STARTUP
+        # defaults on for Postgres), so a fresh RDS is provisioned on first deploy.
         redis_endpoint = self.redis.attr_primary_end_point_address
         redis_port = self.redis.attr_primary_end_point_port
 
         container_env = {
             "ENV": "production",
-            "DATABASE_URL": "sqlite:///tmp/docsuri-bootstrap.db",
+            "DB_HOST": self.db.db_instance_endpoint_address,
+            "DB_PORT": self.db.db_instance_endpoint_port,
+            "DB_NAME": "docsuri",
+            "DB_USER": "docsuri_admin",  # matches rds.Credentials.from_generated_secret above
             "REDIS_HOST": redis_endpoint,
             "REDIS_PORT": redis_port,
+            "REDIS_TLS": "1",  # ElastiCache transit_encryption_enabled=True → client TLS required
             "OPENSEARCH_ENDPOINT": Fn.join("", [
                 "https://", opensearch_domain.domain_endpoint,
             ]),
+        }
+
+        # DB password injected from the RDS-generated secret (JSON key "password"); CDK grants
+        # the task EXECUTION role read on the secret automatically for this.
+        assert self.db.secret is not None  # from_generated_secret always creates one
+        container_secrets = {
+            "DB_PASSWORD": ecs.Secret.from_secrets_manager(self.db.secret, "password"),
         }
 
         # --- ALB + Fargate service (deploy unit ①: 0.25 vCPU / 512 MB, min 1 max 2) ---
@@ -120,6 +131,7 @@ class ComputeStack(Stack):
                 image=ecs.ContainerImage.from_ecr_repository(self.api_repo, tag="latest"),
                 container_port=8000,
                 environment=container_env,
+                secrets=container_secrets,
             ),
             assign_public_ip=True,  # NAT-free: public subnet + IGW outbound
             public_load_balancer=True,

@@ -132,6 +132,10 @@ def _mount_discovery(app: FastAPI, settings: Settings, result: MountResult) -> N
     log.info("app-shell: discovery mounted (read path = %s)", read_path)
 
 
+def _is_postgres(database_url: str) -> bool:
+    return database_url.startswith(("postgresql://", "postgresql+psycopg://", "postgres://"))
+
+
 def _mount_library(app: FastAPI, settings: Settings, result: MountResult) -> None:
     # library (U4) is `backend.modules.library`. Absent → ModuleNotFoundError → skip.
     from backend.modules.library import controller as library
@@ -141,24 +145,61 @@ def _mount_library(app: FastAPI, settings: Settings, result: MountResult) -> Non
     from backend.modules.library.repository.memory import InMemoryUserDataRepository
     from backend.modules.library.services.history import SearchHistoryService
 
-    # Mock-first (D10): default to the in-memory adapters so U4 mounts + serves with NO live DB.
-    # Production overrides get_user_data_repo with a SqlUserDataRepository (per-request session).
-    repo = InMemoryUserDataRepository()
     gateway = StubSearchGateway()
     audit = InMemoryAuditSink()
 
-    app.dependency_overrides[library.get_user_data_repo] = lambda: repo
+    # Read/request path repo: SQL against the U3-inherited RDS when DATABASE_URL is Postgres
+    # (D10 production adapter), else the in-memory default (tests / local / CI bare checkout).
+    if _is_postgres(settings.database_url):
+        from backend.modules.library.repository.sql import SqlUserDataRepository
+
+        from .db import make_engine, make_session_factory
+
+        # One engine per process — reuse the accounts-built engine (accounts mounts first).
+        engine = getattr(app.state, "db_engine", None) or make_engine(settings.database_url)
+        app.state.db_engine = engine
+        session_factory = make_session_factory(engine)
+
+        def get_user_data_repo():
+            # FastAPI yield-dependency owns the unit of work: the library controller writes
+            # against the in-memory contract (no explicit commit), so we commit here on success
+            # and roll back on any error. Session is per-request (open/close around the handler).
+            session = session_factory()
+            try:
+                yield SqlUserDataRepository(session)
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
+            finally:
+                session.close()
+
+        # The SearchExecuted consumer is a dormant seam in this image — no live EventBridge/SQS
+        # subscriber drives it (see history_consumer.py). It keeps an in-memory repo so the
+        # object graph is intact; the *request-path* history (GET/DELETE /library/history)
+        # persists via the SQL override above. Wire a session-per-event repo here if/when a real
+        # subscriber is added.
+        consumer_repo = InMemoryUserDataRepository()
+        log.info("app-shell: library read path = sql(postgres)")
+    else:
+        repo = InMemoryUserDataRepository()
+
+        def get_user_data_repo():
+            return repo
+
+        consumer_repo = repo
+        log.info("app-shell: library read path = in-memory")
+
+    app.dependency_overrides[library.get_user_data_repo] = get_user_data_repo
     app.dependency_overrides[library.get_search_gateway] = lambda: gateway
     app.dependency_overrides[library.get_audit_sink] = lambda: audit
 
     for router in library.routers:
         app.include_router(router)
 
-    # History write path: the SearchExecuted consumer shares the SAME repo as the read routers,
-    # so an event recorded asynchronously is visible to GET /library/history.
-    app.state.library_repo = repo
+    app.state.library_repo = consumer_repo
     app.state.library_history_consumer = SearchHistoryEventConsumer(
-        SearchHistoryService(repo, gateway, audit)
+        SearchHistoryService(consumer_repo, gateway, audit)
     )
     result.mounted.append("library")
 

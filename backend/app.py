@@ -54,6 +54,7 @@ async def lifespan(app: FastAPI):
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
+    _apply_startup_migrations(settings.database_url)
 
     app = FastAPI(
         title="DocSuri Backend (modular monolith)",
@@ -76,6 +77,38 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.state.mount_result = mount_modules(app, settings)
     return app
+
+
+def _apply_startup_migrations(database_url: str) -> None:
+    """Self-migrate on boot — Postgres only (the DDL is Postgres-specific: SERIAL/TIMESTAMPTZ).
+
+    Idempotent via the runner's ``_migrations`` ledger, so every task re-running it is safe.
+    Only the modules in THIS image (accounts + library); ingestion ships in its own image.
+    Fail-closed: a migration error propagates → the container never serves a half-schema'd DB.
+
+    Ceiling (ponytail): fine for the single-task API. If the API ever fans out to many tasks
+    against a *fresh* DB, move this to a one-off migrate job / add an advisory lock — concurrent
+    first-run CREATEs could otherwise race.
+    """
+    import os
+
+    if os.getenv("RUN_MIGRATIONS_ON_STARTUP", "1").lower() in {"0", "false", "no"}:
+        return
+    if not database_url.startswith(("postgresql://", "postgresql+psycopg://", "postgres://")):
+        return  # sqlite / local — nothing to migrate
+    # The migration runner uses psycopg.connect directly, which wants a libpq DSN — strip the
+    # SQLAlchemy `+psycopg` dialect tag that make_engine relies on.
+    dsn = database_url.replace("postgresql+psycopg://", "postgresql://", 1)
+    from backend.migrations import apply_migrations
+
+    applied = apply_migrations(
+        dsn,
+        [
+            "backend/modules/accounts/migrations",
+            "backend/modules/library/migrations",
+        ],
+    )
+    log.info("startup migrations: applied=%s", applied or "(none pending)")
 
 
 def _build_observability():
@@ -143,19 +176,20 @@ def _build_session_manager(settings: Settings):
 
     Returns None when Redis is unavailable (local dev without Redis) — the gateway
     then skips auth injection and downstream handlers use their own fallbacks.
-    Requires REDIS_URL env var to be set; absent → auth injection off (safe dev default).
+    Requires REDIS_HOST env var to be set; absent → auth injection off (safe dev default).
     """
     import os
 
-    if not os.getenv("REDIS_URL"):
-        log.info("app-shell: REDIS_URL unset — gateway auth injection disabled (mock mode)")
+    if not os.getenv("REDIS_HOST"):
+        log.info("app-shell: REDIS_HOST unset — gateway auth injection disabled (mock mode)")
         return None
     try:
-        from backend.modules.accounts.repository.session import SessionRepository
+        from backend.modules.accounts.controller import get_session_repo
         from backend.modules.accounts.services.session_manager import SessionManager
 
-        repo = SessionRepository()
-        return SessionManager(repo)
+        # Reuse the accounts module's lru_cached, env-configured repo (host/port/TLS) so the
+        # gateway and the /auth routes share one ElastiCache pool — not a second localhost one.
+        return SessionManager(get_session_repo())
     except Exception:
         log.info("app-shell: session manager unavailable — gateway auth injection disabled")
         return None
