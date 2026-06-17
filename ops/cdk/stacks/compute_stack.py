@@ -53,6 +53,9 @@ from aws_cdk import (
 from aws_cdk import (
     aws_ses as ses,
 )
+from aws_cdk import (
+    aws_sns as sns,
+)
 from constructs import Construct
 
 # Public DNS for the API origin (zone docsuri.org lives in this account's Route53). CloudFront
@@ -170,10 +173,37 @@ class ComputeStack(Stack):
         # --- SES: verify the docsuri.org domain so the app can send no-reply@docsuri.org ---
         # public_hosted_zone(zone) auto-writes the DKIM CNAMEs into Route53 → no mailbox needed.
         # NOTE: the account is still in the SES sandbox (delivers only to verified recipients);
-        # arbitrary signup delivery needs production access (separate AWS request).
+        # arbitrary signup delivery needs production access (separate AWS request — strengthened by
+        # the bounce/complaint handling below).
+
+        # Bounce/complaint handling. The config set (1) auto-adds hard-bounced + complained
+        # addresses to the account suppression list so we never re-send to them, and (2) publishes
+        # bounce/complaint/reject events to an SNS topic for ops visibility (subscribe via console).
+        # Set as the identity's DEFAULT config set → every send from docsuri.org uses it, no
+        # per-send code change. This is the automated handling SES production-access review expects.
+        ses_events_topic = sns.Topic(self, "SesEventsTopic", display_name="docsuri-ses-events")
+        email_config_set = ses.ConfigurationSet(
+            self, "EmailConfigSet",
+            suppression_reasons=ses.SuppressionReasons.BOUNCES_AND_COMPLAINTS,
+        )
+        email_config_set.add_event_destination(
+            "ToSns",
+            destination=ses.EventDestination.sns_topic(ses_events_topic),
+            events=[
+                ses.EmailSendingEvent.BOUNCE,
+                ses.EmailSendingEvent.COMPLAINT,
+                ses.EmailSendingEvent.REJECT,
+            ],
+        )
         ses.EmailIdentity(
             self, "DomainIdentity",
             identity=ses.Identity.public_hosted_zone(zone),
+            configuration_set=email_config_set,
+        )
+        CfnOutput(
+            self, "SesEventsTopicArn",
+            value=ses_events_topic.topic_arn,
+            description="SNS topic for SES bounce/complaint/reject events (subscribe ops here)",
         )
 
         # --- ALB + Fargate service (deploy unit ①: 0.25 vCPU / 512 MB, min 1 max 2) ---
