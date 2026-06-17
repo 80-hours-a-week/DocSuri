@@ -7,10 +7,16 @@ from typing import Any
 
 from docsuri_ops.domain.models import GroundingDecision, GroundingViolation
 
-_ARXIV_ID_WITH_VERSION = re.compile(
-    r"^(?P<base>(?:\d{4}\.\d{4,5}|[a-z][a-z.-]+/\d{7}))v\d+$",
-    re.IGNORECASE,
-)
+# arXiv id shapes (lowercased): new-style "YYMM.NNNNN" and old-style "archive(.sub)/NNNNNNN",
+# each optionally suffixed with a version "vN". Provenance equality is version-agnostic, so the
+# version is stripped — but ONLY for these shapes (a non-arXiv id ending in "...v2" is left
+# intact). fullmatch keeps a non-arXiv id with a digit run (e.g. "report-2024.12345") from being
+# mistaken for an arXiv id, and the old-style archive prefix is preserved so "hep-th/0601001"
+# and "astro-ph/0601001" never collide.
+_ARXIV_ID = re.compile(r"(?P<base>\d{4}\.\d{4,5}|[a-z][a-z.-]*/\d{7})(?:v\d+)?")
+# arXiv.org URL / "arxiv:" scheme wrappers are stripped first so a card url normalizes to its id
+# (keeping any old-style archive prefix, unlike a blind split on "/").
+_ARXIV_URL_PREFIX = re.compile(r"^(?:https?://)?(?:www\.)?arxiv\.org/(?:abs|pdf)/")
 
 
 @dataclass(slots=True)
@@ -134,9 +140,9 @@ def _get(value: Any, field: str) -> Any:
 
 def _normalize_identifier(value: str) -> str:
     normalized = value.strip().lower()
-    if "/" in normalized:
-        normalized = normalized.rstrip("/").split("/")[-1]
-    match = _ARXIV_ID_WITH_VERSION.match(normalized)
+    normalized = _ARXIV_URL_PREFIX.sub("", normalized)
+    normalized = normalized.removeprefix("arxiv:").rstrip("/")
+    match = _ARXIV_ID.fullmatch(normalized)
     if match:
         return match.group("base")
     return normalized

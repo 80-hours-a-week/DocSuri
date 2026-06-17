@@ -45,12 +45,24 @@ def run_polling_loop(
     iterations = 0
     while stop_after is None or iterations < stop_after:
         events = tuple(source.receive(max_messages=max_messages))
-        result = run_once(events, suite, publisher)
+        processed = 0
+        published = 0
         for event in events:
-            source.ack(event)
+            processed += 1
+            candidate = suite.evaluate(event)
+            if candidate is None:
+                source.ack(event)  # no incident — handled, safe to ack
+                continue
+            if publisher.publish_candidate(candidate):
+                published += 1
+                source.ack(event)  # incident published (or already recorded) — ack
+            # else: publish failed → leave UN-acked so the source can redeliver, instead of
+            # silently dropping the incident (PR #45 review). NB: the local InMemoryTelemetrySource
+            # does not redeliver; a real source (SQS) plus a publish-before-commit reordering in
+            # IncidentEventPublisher is needed for true at-least-once + dedup (follow-up).
         total = WorkerResult(
-            processed=total.processed + result.processed,
-            published=total.published + result.published,
+            processed=total.processed + processed,
+            published=total.published + published,
         )
         iterations += 1
         if stop_after is None or iterations < stop_after:

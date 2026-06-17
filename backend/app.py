@@ -103,6 +103,7 @@ def _add_middleware(app: FastAPI, settings: Settings) -> None:
         rate_limiter=app.state.rate_limiter,
         production=not settings.is_local,
         trust_proxy_headers=settings.trust_proxy_headers,
+        trusted_proxy_count=settings.trusted_proxy_count,
     )
 
     # CORS added LAST → outermost, so preflight and the gateway's 429/500 responses still carry

@@ -58,6 +58,32 @@ def test_polling_loop_uses_telemetry_source_receive_and_ack_contract() -> None:
     assert source.acked == ["partial-source"]
 
 
+def test_polling_loop_does_not_ack_events_whose_publish_fails() -> None:
+    # PR #45 review: a publish failure must NOT be acked, else the incident is silently lost.
+    store = InMemoryIncidentStore()
+    sink = CapturingAlertPublisher(fail=True)  # publish_incident/alert return False
+    publisher = IncidentEventPublisher(store, sink)
+    event = TelemetryEvent(
+        event_id="partial-fail",
+        kind=SignalKind.PARTIAL_RESULT,
+        request_id="req-fail",
+        payload={"status": "success", "resultCount": 0, "cards": []},
+    )
+    source = InMemoryTelemetrySource()
+    source.queued.append(event)
+
+    result = run_polling_loop(
+        source,
+        AiIncidentDetectorSuite(),
+        publisher,
+        max_messages=1,
+        stop_after=1,
+    )
+
+    assert result.published == 0
+    assert source.acked == []  # left un-acked for redelivery
+
+
 def test_cli_reliability_eval_outputs_json(capsys) -> None:
     assert main(["run-reliability-eval"]) == 0
 

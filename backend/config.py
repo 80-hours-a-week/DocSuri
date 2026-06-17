@@ -30,6 +30,10 @@ class Settings:
     # backend/middleware/gateway.py::_rate_limit_key. Set TRUST_PROXY_HEADERS=1 in deployments
     # that sit behind a trusted reverse proxy / load balancer.
     trust_proxy_headers: bool = False
+    # Number of trusted proxies in front of the app (only consulted when trust_proxy_headers).
+    # The rate-limit key is the X-Forwarded-For hop this many places from the right — i.e. what
+    # your outermost trusted proxy stamped — never the spoofable leftmost hop. 1 = single LB.
+    trusted_proxy_count: int = 1
 
     @property
     def is_local(self) -> bool:
@@ -49,4 +53,5 @@ class Settings:
             cors_origins=origins,
             trust_proxy_headers=os.getenv("TRUST_PROXY_HEADERS", "").strip().lower()
             in {"1", "true", "yes", "on"},
+            trusted_proxy_count=int(os.getenv("TRUSTED_PROXY_COUNT") or "1"),
         )

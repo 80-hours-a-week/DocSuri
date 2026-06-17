@@ -65,7 +65,10 @@ def test_u6_middleware_does_not_trust_forwarded_for_by_default() -> None:
     assert client.get("/limited", headers={"X-Forwarded-For": "203.0.113.2"}).status_code == 429
 
 
-def test_u6_middleware_can_trust_first_forwarded_for_hop_when_configured() -> None:
+def test_u6_middleware_trusts_proxy_stamped_hop_not_spoofable_leftmost() -> None:
+    # PR #45 review fix: with trust_proxy_headers the limiter keys on the hop our proxy stamped
+    # (rightmost by default), NOT the attacker-controllable leftmost. Rotating the leftmost claim
+    # must NOT mint a fresh bucket (no rate-limit evasion); a different trusted hop must.
     app = FastAPI()
     configure_u6_middleware(
         app,
@@ -80,16 +83,14 @@ def test_u6_middleware_can_trust_first_forwarded_for_hop_when_configured() -> No
 
     client = TestClient(app)
 
-    first = client.get("/limited", headers={"X-Forwarded-For": "203.0.113.1, 10.0.0.1"})
-    duplicate_first = client.get(
-        "/limited",
-        headers={"X-Forwarded-For": "203.0.113.1, 10.0.0.2"},
-    )
-    second = client.get("/limited", headers={"X-Forwarded-For": "203.0.113.2, 10.0.0.1"})
+    # Trusted (rightmost) hop 203.0.113.7 fixed; attacker rotates the leftmost claim.
+    first = client.get("/limited", headers={"X-Forwarded-For": "1.1.1.1, 203.0.113.7"})
+    spoofed_leftmost = client.get("/limited", headers={"X-Forwarded-For": "9.9.9.9, 203.0.113.7"})
+    different_trusted = client.get("/limited", headers={"X-Forwarded-For": "1.1.1.1, 203.0.113.8"})
 
     assert first.status_code == 200
-    assert duplicate_first.status_code == 429
-    assert second.status_code == 200
+    assert spoofed_leftmost.status_code == 429  # same trusted hop → same bucket (no evasion)
+    assert different_trusted.status_code == 200  # different trusted hop → different bucket
 
 
 def test_rate_limit_key_handles_missing_client() -> None:
@@ -100,13 +101,29 @@ def test_rate_limit_key_handles_missing_client() -> None:
     assert _rate_limit_key(RequestWithoutClient()) == "unknown-client"
 
 
+def test_rate_limit_key_ignores_non_ip_forwarded_value() -> None:
+    # A garbage/spoofed forwarded hop must not become a key (would let an attacker mint buckets);
+    # fall back to the direct client instead.
+    class _Client:
+        host = "10.9.8.7"
+
+    class Req:
+        headers = {"X-Forwarded-For": "not-an-ip"}
+        client = _Client()
+
+    assert _rate_limit_key(Req(), trust_proxy_headers=True) == "10.9.8.7"
+
+
 def test_in_memory_rate_limiter_compacts_expired_keys() -> None:
     now = 0.0
 
     def clock() -> float:
         return now
 
-    limiter = InMemoryRateLimiter(max_requests=1, window_seconds=1.0, clock=clock)
+    # compact_every=1 forces the full sweep each call so the expiry branch is deterministic.
+    limiter = InMemoryRateLimiter(
+        max_requests=1, window_seconds=1.0, clock=clock, compact_every=1
+    )
 
     assert limiter.allow("old-a")
     assert limiter.allow("old-b")
@@ -114,3 +131,17 @@ def test_in_memory_rate_limiter_compacts_expired_keys() -> None:
     assert limiter.allow("new")
 
     assert set(limiter._events) == {"new"}
+
+
+def test_in_memory_rate_limiter_evicts_lru_over_max_keys() -> None:
+    # max_keys is an exact bound (no off-by-one) and eviction is least-recently-used.
+    limiter = InMemoryRateLimiter(
+        max_requests=5, window_seconds=100.0, clock=lambda: 0.0, max_keys=2
+    )
+
+    assert limiter.allow("a")
+    assert limiter.allow("b")
+    assert limiter.allow("c")  # pushes past the cap → least-recently-used "a" is evicted
+
+    assert set(limiter._events) == {"b", "c"}
+    assert len(limiter._events) == 2
