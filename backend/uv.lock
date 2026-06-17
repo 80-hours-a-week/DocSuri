@@ -195,6 +195,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "argon2-cffi" },
+    { name = "docsuri-discovery" },
     { name = "docsuri-shared" },
     { name = "fastapi" },
     { name = "httpx" },
@@ -215,6 +216,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "argon2-cffi", specifier = ">=23.0" },
+    { name = "docsuri-discovery", editable = "modules/discovery" },
     { name = "docsuri-shared", editable = "../shared/python" },
     { name = "fastapi", specifier = ">=0.110" },
     { name = "httpx", specifier = ">=0.27" },
@@ -229,6 +231,30 @@ dev = [
     { name = "hypothesis", specifier = ">=6.100" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-asyncio", specifier = ">=0.23" },
+    { name = "ruff", specifier = ">=0.6" },
+]
+
+[[package]]
+name = "docsuri-discovery"
+version = "0.1.0"
+source = { editable = "modules/discovery" }
+dependencies = [
+    { name = "docsuri-shared" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "docsuri-shared", editable = "../shared/python" },
+    { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.110" },
+    { name = "pydantic", specifier = ">=2.7,<3" },
+]
+provides-extras = ["api"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "hypothesis", specifier = ">=6.100" },
+    { name = "pytest", specifier = ">=8.0" },
     { name = "ruff", specifier = ">=0.6" },
 ]
 

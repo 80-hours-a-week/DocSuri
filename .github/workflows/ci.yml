@@ -1,0 +1,82 @@
+# First CI for DocSuri — closes the "no automated gate" finding (aidlc-state.md §검증 재기준선).
+# One job per uv project (they are independent packages). Each runs lint + tests; `shared` also
+# runs the schema drift guard so a stale _generated/ fails the PR. The repo-root tests/accounts
+# suite is intentionally NOT wired here yet: it fails collection until backend declares
+# hypothesis + pytest-asyncio (a U3/③ fix) — add an accounts job when that lands.
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+jobs:
+  shared:
+    name: shared (SSOT · drift · pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: shared/python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Schema drift guard (generated bindings match the SSOT)
+        run: uv run python tools/generate.py --check
+      - name: Lint
+        run: uv run ruff check .
+      - name: Tests
+        run: uv run pytest
+
+  ingestion:
+    name: ingestion (U1)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ingestion
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Lint
+        run: uv run ruff check .
+      - name: Tests
+        run: uv run pytest
+
+  discovery:
+    name: discovery (U2)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/modules/discovery
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Lint
+        run: uv run ruff check .
+      - name: Tests (incl. the api router extra)
+        run: uv run --extra api pytest
+
+  backend:
+    name: backend app-shell (mounts U2/U3)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Lint
+        run: uv run ruff check .
+      - name: Tests (asserts discovery actually mounts)
+        run: uv run pytest
