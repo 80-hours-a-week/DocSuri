@@ -1,0 +1,10 @@
+# Build context hygiene for frontend/Dockerfile. node_modules is reinstalled in the deps
+# stage; copying the local pnpm symlink farm over it breaks buildkit ("cannot copy to
+# non-directory"). .next/standalone is produced fresh by `pnpm build` in the image.
+node_modules
+.next
+.git
+.env*
+npm-debug.log*
+*.tsbuildinfo
+.DS_Store

@@ -13,6 +13,12 @@ FROM base AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Real-API mode: NEXT_PUBLIC_* is inlined into the client bundle at build time, so the
+# production image must bake it here (runtime env can't switch it). Default on; the client
+# then routes through the same-origin BFF instead of MockTransport. Override to "" for a
+# mock-only preview image.
+ARG NEXT_PUBLIC_DOCSURI_REAL_API=1
+ENV NEXT_PUBLIC_DOCSURI_REAL_API=$NEXT_PUBLIC_DOCSURI_REAL_API
 RUN pnpm build
 
 FROM base AS runner
