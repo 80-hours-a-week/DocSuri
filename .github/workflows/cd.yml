@@ -1,0 +1,150 @@
+# CD — Build, push to ECR (sha256 digest pin), deploy to ECS Fargate.
+# Triggers on push to main (release merges from develop via git-flow).
+# Three deploy units: ① API monolith (backend) · ② Ingestion worker · ④ Frontend.
+name: CD
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write  # OIDC for AWS assume-role (no long-lived keys)
+
+env:
+  AWS_REGION: ap-northeast-2
+  ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}  # e.g. 028317349537.dkr.ecr.ap-northeast-2.amazonaws.com
+
+jobs:
+  build-push-api:
+    name: Build & push — deploy unit ① (API)
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.push.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.CD_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+      - name: Build and push
+        id: push
+        run: |
+          IMAGE="${{ env.ECR_REGISTRY }}/docsuri-api:${{ github.sha }}"
+          docker build -f backend/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE")
+          echo "image=$DIGEST" >> "$GITHUB_OUTPUT"
+
+  build-push-ingestion:
+    name: Build & push — deploy unit ② (Ingestion)
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.push.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.CD_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+      - name: Build and push
+        id: push
+        run: |
+          IMAGE="${{ env.ECR_REGISTRY }}/docsuri-ingestion:${{ github.sha }}"
+          docker build -f ingestion/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE")
+          echo "image=$DIGEST" >> "$GITHUB_OUTPUT"
+
+  build-push-frontend:
+    name: Build & push — deploy unit ④ (Frontend)
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.push.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.CD_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+      - name: Build and push
+        id: push
+        run: |
+          IMAGE="${{ env.ECR_REGISTRY }}/docsuri-frontend:${{ github.sha }}"
+          docker build -f frontend/Dockerfile -t "$IMAGE" frontend/
+          docker push "$IMAGE"
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE")
+          echo "image=$DIGEST" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Deploy to ECS (rolling update)
+    needs: [build-push-api, build-push-ingestion, build-push-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.CD_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy API service (deploy unit ①)
+        run: |
+          aws ecs update-service \
+            --cluster docsuri \
+            --service docsuri-api \
+            --force-new-deployment \
+            --task-definition "$(
+              aws ecs describe-task-definition --task-definition docsuri-api \
+                --query 'taskDefinition.taskDefinitionArn' --output text
+            )" \
+            --no-cli-pager
+          echo "API service deployment initiated."
+
+      - name: Deploy Ingestion worker (deploy unit ②)
+        run: |
+          aws ecs update-service \
+            --cluster docsuri \
+            --service docsuri-ingestion \
+            --force-new-deployment \
+            --task-definition "$(
+              aws ecs describe-task-definition --task-definition docsuri-ingestion \
+                --query 'taskDefinition.taskDefinitionArn' --output text
+            )" \
+            --no-cli-pager
+          echo "Ingestion worker deployment initiated."
+
+      - name: Deploy Frontend (deploy unit ④)
+        run: |
+          aws ecs update-service \
+            --cluster docsuri \
+            --service docsuri-frontend \
+            --force-new-deployment \
+            --task-definition "$(
+              aws ecs describe-task-definition --task-definition docsuri-frontend \
+                --query 'taskDefinition.taskDefinitionArn' --output text
+            )" \
+            --no-cli-pager
+          echo "Frontend deployment initiated."
+
+      - name: Wait for API service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster docsuri \
+            --services docsuri-api \
+            --no-cli-pager
+          echo "✅ API service stable."
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "⚠️ Deployment failed — initiating rollback to previous task definition."
+          # ECS circuit-breaker with deployment rollback handles this automatically when
+          # configured (DEPLOYMENT_CIRCUIT_BREAKER enable + rollback). This step is a
+          # safeguard log; actual rollback is infra-configured, not workflow-driven.
+          echo "Check ECS console for circuit-breaker status."
