@@ -1,7 +1,7 @@
-from abc import ABC, abstractmethod
 import asyncio
 import logging
 import os
+from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ class MockEmailClient(EmailClientInterface):
     async def send_verification_email(self, email: str, token: str, signup_link: str) -> bool:
         logger.info("================ [MOCK EMAIL DELIVERY] ================")
         logger.info(f"To: {email}")
-        logger.info(f"Subject: DocSuri 이메일 인증 안내")
+        logger.info("Subject: DocSuri 이메일 인증 안내")
         logger.info(f"Verification Token: {token}")
         logger.info(f"Verification Link: {signup_link}?token={token}")
         logger.info("=========================================================")
@@ -102,16 +102,15 @@ class SESEmailClient(EmailClientInterface):
             
             if self._observability_hub:
                 try:
-                    # shared/ports.md의 ObservabilityHub 포트로 실패 메트릭 전송
-                    self._observability_hub.emitMetric(
+                    # docsuri_shared.ports.ObservabilityHub 포트(snake_case)로 실패 신호 전송
+                    self._observability_hub.emit_metric(
                         "EmailDeliveryFailureSignal",
                         1,
-                        {"recipient": email, "error_type": type(e).__name__}
+                        {"error_type": type(e).__name__}
                     )
-                    self._observability_hub.emitLog({
+                    self._observability_hub.emit_log({
                         "event": "EmailDeliveryFailureSignal",
-                        "recipient": email,
-                        "error": str(e),
+                        "error_type": type(e).__name__,
                         "message": "SES email dispatch failed. Account remains PENDING."
                     })
                 except Exception as trace_err:

@@ -47,8 +47,8 @@ def recaptcha_client():
 @pytest.fixture
 def mock_observability():
     hub = MagicMock()
-    hub.emitMetric = MagicMock()
-    hub.emitLog = MagicMock()
+    hub.emit_metric = MagicMock()
+    hub.emit_log = MagicMock()
     return hub
 
 
@@ -187,3 +187,40 @@ async def test_authentication_recaptcha_enforcement(credential_repo, session_man
     
     token = await auth_service.authenticate(email, password, recaptcha_token="good_token")
     assert token == "test_session_token"
+
+
+@pytest.mark.asyncio
+async def test_no_account_lockout_after_many_failures(credential_repo, session_manager, recaptcha_client, db_session):
+    """BR-A4: 반복 로그인 실패가 계정을 LOCKED로 만들지 않는다(타인 정상 계정 DoS 방지).
+    방어는 점진적 backoff + 10회차 CAPTCHA뿐 — 자동 잠금 없음."""
+    auth_service = AuthenticationService(credential_repo, session_manager, recaptcha_client)
+    email = "victim@docsuri.dev"
+    password = "ValidPassword123!"
+    signup_svc = SignupService(credential_repo, MockEmailClient())
+    account_id = await signup_svc.register(email, password, "http://localhost")
+    account = credential_repo.get_by_id(account_id)
+    account.status = AccountStatus.ACTIVE.value
+    credential_repo.update_account(account)
+    db_session.commit()
+
+    # 12회 연속 실패 (recaptcha_client fixture는 True 반환 → 10회차 이후 CAPTCHA 게이트 통과)
+    with patch("asyncio.sleep", new_callable=AsyncMock):
+        for _ in range(12):
+            with pytest.raises(DomainException):
+                await auth_service.authenticate(email, "WrongPassword1!", recaptcha_token="ok")
+
+    account = credential_repo.get_by_id(account_id)
+    assert account.failure_count >= 12
+    # 핵심 단언: 자동 LOCKED 전환 없음 (BR-A4)
+    assert account.status == AccountStatus.ACTIVE.value
+
+
+def test_accounts_dtos_are_shared_ssot_not_forked():
+    """SSOT 포크 제거 회귀 가드: accounts.schemas 는 docsuri_shared DTO를 재노출할 뿐 재정의하지 않는다."""
+    from backend.modules.accounts import schemas
+    from docsuri_shared import dtos as shared_dtos
+
+    assert schemas.SignupRequest is shared_dtos.SignupRequest
+    assert schemas.SignupResult is shared_dtos.SignupResult
+    assert schemas.LoginRequest is shared_dtos.LoginRequest
+    assert schemas.SessionInfo is shared_dtos.SessionInfo

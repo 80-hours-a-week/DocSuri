@@ -1,12 +1,14 @@
 import asyncio
-from datetime import datetime, timedelta
-import secrets
 import logging
+import secrets
+from datetime import UTC, datetime, timedelta
 
-from ..models import DomainException, AccountStatus, EmailAddress
-from ..password import PasswordPolicy, get_password_hasher
-from ..repository.credential import CredentialRepository, AccountTable
+from docsuri_shared.events import AccountCreated
+
 from ..integrations.email import EmailClientInterface
+from ..models import AccountStatus, DomainException, EmailAddress
+from ..password import PasswordPolicy, get_password_hasher
+from ..repository.credential import CredentialRepository
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +46,7 @@ class SignupService:
             # 가입 충돌 신호 수집: SEC-3 PII 최소화 — 이메일 파생 식별자 대신 일반화된 'reason'만 발행한다
             # (shared/events/account-signals.schema.json 의 SignupAbuseSignal 규약).
             if self._observability_hub:
-                self._observability_hub.emitMetric("SignupAbuseSignal", 1, {"reason": "duplicate_email"})
+                self._observability_hub.emit_metric("SignupAbuseSignal", 1, {"reason": "duplicate_email"})
             raise DomainException("이미 등록된 이메일 주소입니다. 다른 이메일을 입력하거나 비밀번호 찾기를 이용해 주세요.")
 
         # 4. PENDING 상태로 계정 생성 (BR-A5)
@@ -68,14 +70,13 @@ class SignupService:
 
         # 7. 관측성 이벤트/감사 로깅 (SEC-BR-1 민감정보 제외)
         if self._observability_hub:
-            # shared/events/account-signals.schema.json 의 AccountCreated 규약대로 userId + timestamp 만 싣는다.
-            self._observability_hub.emitLog({
-                "event": "AccountCreated",
-                "userId": account.id,
-                "timestamp": datetime.utcnow().isoformat(),
-            })
+            # 공유 SSOT 이벤트 모델로 페이로드를 검증해 발행한다(docsuri_shared.events.AccountCreated).
+            account_created = AccountCreated(
+                userId=account.id, timestamp=datetime.now(UTC)
+            )
+            self._observability_hub.emit_log(account_created.model_dump(mode="json"))
             # 운영 메트릭(스키마 이벤트와 별개): 상태/메일 발송 결과는 차원(dimension)으로만 집계
-            self._observability_hub.emitMetric("AccountCreated", 1, {"status": account.status, "email_sent": str(email_sent)})
+            self._observability_hub.emit_metric("AccountCreated", 1, {"status": account.status, "email_sent": str(email_sent)})
 
         return account.id
 
@@ -110,7 +111,7 @@ class SignupService:
         logger.info(f"Account {account.id} successfully activated via email verification.")
         
         if self._observability_hub:
-            self._observability_hub.emitLog({
+            self._observability_hub.emit_log({
                 "event": "AccountActivated",
                 "accountId": account.id
             })

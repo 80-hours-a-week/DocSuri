@@ -90,8 +90,10 @@ jobs:
         with:
           enable-cache: true
       # Root tests/ (accounts U3 + library U4) import backend.modules.* and need the backend
-      # env (now incl. hypothesis + pytest-asyncio, added with U4). Run from the repo root via
-      # the root pytest.ini (pythonpath=. · asyncio_mode=auto). Ruff for the accounts lane is
-      # deferred to ③: the module carries known lint debt excluded from the app-shell lane.
+      # env (incl. hypothesis + pytest-asyncio). Run from the repo root via the root pytest.ini
+      # (pythonpath=. · asyncio_mode=auto). The accounts/library module lanes self-lint with
+      # their own ruff.toml (the app-shell ruff excludes modules/), so gate them here.
+      - name: Lint (accounts + library module lanes)
+        run: uv run --project backend ruff check backend/modules/accounts backend/modules/library
       - name: Tests (accounts + library)
         run: uv run --project backend pytest tests -c pytest.ini

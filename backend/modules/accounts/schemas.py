@@ -1,38 +1,22 @@
-from pydantic import BaseModel, Field
-from datetime import datetime
+"""Accounts request/response DTOs — re-exported from the shared SSOT (docsuri_shared).
 
-class SignupRequest(BaseModel):
-    email: str
-    password: str
+Previously hand-defined here, which forked the contract. They now come from
+``docsuri_shared.dtos`` so U3 and U5 (whose TS types are generated from the SAME schema) agree
+on one contract: camelCase fields (accountId/userId/expiresAt) with ``extra='forbid'``. Do not
+redefine these locally — change the JSON Schema in shared/ and regenerate (§5-B)."""
 
-class SignupResult(BaseModel):
-    account_id: str = Field(..., serialization_alias="accountId")
+from docsuri_shared.dtos import (
+    LoginRequest,
+    SessionInfo,
+    SignupRequest,
+    SignupResult,
+    ValidationErrorDTO,
+)
 
-    class Config:
-        populate_by_name = True
-        json_schema_extra = {
-            "example": {
-                "accountId": "a0000000-0000-0000-0000-000000000000"
-            }
-        }
-
-class LoginRequest(BaseModel):
-    email: str
-    password: str
-
-class SessionInfo(BaseModel):
-    user_id: str = Field(..., serialization_alias="userId")
-    expires_at: datetime = Field(..., serialization_alias="expiresAt")
-
-    class Config:
-        populate_by_name = True
-        json_schema_extra = {
-            "example": {
-                "userId": "a0000000-0000-0000-0000-000000000000",
-                "expiresAt": "2026-07-16T18:00:00Z"
-            }
-        }
-
-class ValidationErrorDTO(BaseModel):
-    field: str | None = None
-    message: str
+__all__ = [
+    "SignupRequest",
+    "SignupResult",
+    "LoginRequest",
+    "SessionInfo",
+    "ValidationErrorDTO",
+]
