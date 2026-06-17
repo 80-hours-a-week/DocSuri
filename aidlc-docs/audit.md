@@ -608,6 +608,62 @@
 
 ---
 
+## CONSTRUCTION — U5 Frontend Functional Design 계획·답변 + 산출물 생성
+**시각**: 2026-06-16T19:40:00+09:00
+**사용자 입력(원문)**: "u5 프론트엔드 시작해줘 (근데 알아서 필요한 파일 읽는거지..?새로 추가된 것도)" · "frontend 내 claude.md 파일과 기존 aidlc 관련 파일 내용 충돌하는건 없는지 확인해줘" · "Q1=슬라이스" · "응 둘 다 반영하고 나머지 질문도 답해줘"
+**AI 응답**: U5 자체 CONSTRUCTION 루프 Functional Design 착수(`feature/u5`, develop 동기화 확인; U5 산출물/코드 0 → FD부터). frontend 개발지침 ↔ aidlc 충돌 점검: (1)룰셋 경로 오타(rules→rule) (2)PWA·오프라인 over-scope(SSR 동기 REST와 불일치) 플래그. 사용자 결정으로 개발지침의 PWA·오프라인 라인 제거(SSR 범위 로딩/실패/빈 상태로 교체), backend/frontend 개발지침에 "산출물 표기"(코드·커밋·문서에 지침 파일명 비언급) 규칙 추가. FD 계획서(`plans/u5-frontend-functional-design-plan.md`) 작성·질문 전수 권장안 확정: 히어로 슬라이스 우선(Q1)·전역스토어 없음(Q2)·기권≠빈결과 구분(Q3)·relevance=U2 표시값 그대로 SEC-9(Q4)·검색 인증 가드(Q5)·accounts.schema 파생 검증(Q6)·목업 의미규칙만(Q7)·라이브러리/이력 커서(Q8)·DTO 파생 mock+transport 스왑(Q9)·XSS/링크/접근성(Q10). 산출물 4종 생성: `construction/u5-frontend/functional-design/`(domain-entities·business-logic-model·business-rules·frontend-components). 미커밋(승인 게이트).
+**맥락**: CONSTRUCTION — U5 Frontend Functional Design 산출물 완료 → 리뷰 게이트.
+
+---
+
+## CONSTRUCTION — U5 Frontend Functional Design 승인 → NFR Requirements 진입
+**시각**: 2026-06-16T19:50:00+09:00
+**사용자 입력(원문)**: "승인, NFR Requirements로 진행해줘"
+**AI 응답**: U5 Functional Design 산출물 4종 **승인**. `aidlc-state.md`에 U5 Frontend FD 완료 기록. U5 NFR Requirements 진입 — 계획서(`plans/u5-frontend-nfr-requirements-plan.md`) 작성: NFR 목표(NFR-U1 폰 우선·NFR-U2 목업·NFR-P1 단일 요청/응답·NFR-R1 에러바운더리·SEC 위임 경계·접근성) + 기술 스택 선정(§5-D: TS/SSR·타입 생성·데이터 페칭·테스트 러너) + §4 명확화 질문(질문 게이트). 답변 게이트 대기(승인 전 산출물 미생성).
+**맥락**: CONSTRUCTION — U5 NFR Requirements 계획 작성 → 답변 게이트 대기.
+
+---
+
+## CONSTRUCTION — U5 NFR Requirements 답변(전부 A) → 산출물 생성
+**시각**: 2026-06-16T20:05:00+09:00
+**사용자 입력(원문)**: "전부 A로 진행"
+**AI 응답**: U5 NFR Requirements 계획서 §B 질문 11개 **전부 권장안 A 확정**(계획서 [Answer] 기입·체크박스 완료). 산출물 2종 생성: `construction/u5-frontend/nfr-requirements/`의 tech-stack-decisions.md(TD-U5-1 Next.js App Router SSR[신규 선택·prior art 비계승]·TD-U5-2 TS+JSON Schema→TS 생성[드리프트 0]·TD-U5-3 ApiClient transport-seam[전역 서버상태 라이브러리 없음]·TD-U5-4 CSS Modules·TD-U5-5 Vitest+Testing Library/Playwright/DTO 계약 테스트·TD-U5-6 SSR httpOnly 쿠키 포워딩·TD-U5-7 pnpm 독립 배포 ④·TD-U5-8 경량 관측·TD-U5-9 공급망)·nfr-requirements.md(NFR-U5 성능/복원력/보안 7항/접근성 WCAG 2.1 AA·한국어 단일/관측/유지보수). 핵심: U5 LLM 직접호출 없음→NFR-C1 비용 기여 0; 오프라인·PWA 제외 확정; 정량 SLO·호스팅 토폴로지·외부 APM은 NFR Design/Infra 위임. 미커밋(승인 게이트).
+**맥락**: CONSTRUCTION — U5 NFR Requirements 완료 → 리뷰 게이트.
+
+---
+
+## CONSTRUCTION — U5 NFR Requirements 승인 → NFR Design 진입
+**시각**: 2026-06-16T20:12:00+09:00
+**사용자 입력(원문)**: "승인할게, NFR Design으로 진행해줘"
+**AI 응답**: U5 NFR Requirements 산출물 2종 **승인**. `aidlc-state.md`에 U5 NFR Requirements 완료 기록. U5 NFR Design 진입 — 계획서(`plans/u5-frontend-nfr-design-plan.md`) 작성: 복원력/성능/보안 패턴 + 논리 컴포넌트(SSR 렌더 경계·ApiClient transport seam·세션 쿠키 포워딩 경계·에러 바운더리·타입 생성 파이프라인) + §B 명확화 질문(질문 게이트). 답변 게이트 대기(승인 전 산출물 미생성).
+**맥락**: CONSTRUCTION — U5 NFR Design 계획 작성 → 답변 게이트 대기.
+
+---
+
+## CONSTRUCTION — U5 NFR Design 답변(전부 A) → 산출물 생성
+**시각**: 2026-06-16T20:25:00+09:00
+**사용자 입력(원문)**: "전부 A로 진행"
+**AI 응답**: U5 NFR Design 계획서 §B 질문 9개 **전부 권장안 A 확정**(계획서 [Answer] 기입·체크박스 완료). 산출물 2종 생성: `construction/u5-frontend/nfr-design/`의 nfr-design-patterns.md(P-R1 차등 재시도[멱등 GET만]·P-R2 SSR 실패=완성 페이지·P-R3 2계층 에러 바운더리·P-R4 저하 흐름·P-P1 서버/클라 경계·P-P3 캐싱[정적 장기/검색·세션 no-store]·P-S1 server-only 호출 경계·P-S2 CSP frame-ancestors self·P-S3 출력 무해화·P-S4 라우트 가드·P-SC1 stateless 수평확장·관측·접근성)·logical-components.md(LC-1 SSR 렌더 경계·LC-2 ApiClient transport seam[server-only]·LC-3 SessionContext·LC-4 RouteGuard·LC-5 2계층 ErrorBoundary·LC-6 StateView·LC-7 TypeGen 빌드 파이프라인·LC-8 SecurityHeaders/CSP·LC-9 ObservabilityHooks + FD 9컴포넌트↔LC 매핑·토폴로지). 미커밋(승인 게이트).
+**맥락**: CONSTRUCTION — U5 NFR Design 완료 → 리뷰 게이트.
+
+---
+
+## CONSTRUCTION — U5 NFR Design 승인 → Code Generation(mock-first) Part 1 계획 진입
+**시각**: 2026-06-16T20:32:00+09:00
+**사용자 입력(원문)**: "승인할게, Code Generation으로 진행해줘"
+**AI 응답**: U5 NFR Design 산출물 2종 **승인**. `aidlc-state.md`에 U5 NFR Design 완료 기록. Code Generation(mock-first) Part 1(계획) 진입 — 계획서(`plans/u5-frontend-code-generation-plan.md`) 작성: 코드 위치=`frontend/`(Next.js App Router), 번호형 생성 단계(프로젝트 구조·TypeGen·ApiClient transport seam·SessionContext/RouteGuard·SearchScreen 상태머신·ResultList/ResultCard·StateView·Signup/LoginForm·HeroLanding·PhoneMockupFrame·에러 바운더리·CSP·테스트·문서), mock-first(MockTransport=DTO 파생 픽스처), data-testid 규약. 승인 게이트 — 승인 전 코드 미생성.
+**맥락**: CONSTRUCTION — U5 Code Generation Part 1(계획) → 승인 게이트.
+
+---
+
+## CONSTRUCTION — U5 Code Generation 계획 승인 → Part 2 생성·검증 완료
+**시각**: 2026-06-16T21:10:00+09:00
+**사용자 입력(원문)**: "승인, 코드 생성 진행해줘"
+**AI 응답**: U5 Code Generation 계획(Part 1) **승인**. Part 2 실행 — `frontend/`에 Next.js(App Router SSR·TS·CSS Modules) 코드 16단계 전부 생성: app 라우트/레이아웃(AppShell·2계층 에러 바운더리)·9 컴포넌트(PhoneMockupFrame·HeroLanding·SearchScreen 상태머신·ResultList·ResultCard[7필드]·StateView·Signup/LoginForm·AppHeader·RouteGuard·SessionContext)·`lib/api`(ApiClient·transport seam·MockTransport[4분기 키워드 분기]·HttpTransport[server-only]·classify·UserFacingError·validate)·observability·mocks(DTO 파생)·types/generated(큐레이트)·middleware(CSP frame-ancestors self)·테스트(Vitest+Testing Library 7파일·DTO 계약)·Playwright E2E·Dockerfile(standalone). **검증: `pnpm install` OK · `tsc --noEmit` 0 errors · `vitest` 32 passed · `next build` 성공(First Load JS ~113kB).** mock-first(백엔드/게이트웨이 없이 검색 4분기+인증 흐름 동작). **⚠️ TypeGen 설계 결정 플래그**: SSOT 스키마가 accounts/library 루트리스($defs만)·relevance 무타입이라 `json-schema-to-typescript` 직접 생성물이 사용 불가 → `types/generated/*.ts`는 노출 계약을 충실히 미러한 **큐레이트 타입**(빌드 소비), `pnpm gen:types`는 원시 생성물을 `types/.schema-raw/`에 덤프해 드리프트 검토용으로 보관(노출 필드 1:1 → 드리프트 0). 계획 체크박스 16개 [x]. 미커밋(푸시/PR 승인 대기). 리뷰 게이트.
+**맥락**: CONSTRUCTION — U5 Code Generation Part 2 완료·검증 → 리뷰 게이트(승인 시 Build and Test 또는 커밋/PR).
+
+---
+
 ## CONSTRUCTION — U4 Library 착수 및 Track 2 레인 완료 (FD→NFR→Infra→Code, 전 단계)
 **시각**: 2026-06-17T10:30:00+09:00
 **사용자 입력(원문)**: "ultracode Start U4 and finish track 2." (선행 로컬 커맨드: /effort ultracode)
