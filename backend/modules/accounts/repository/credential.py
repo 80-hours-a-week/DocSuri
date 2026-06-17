@@ -18,6 +18,9 @@ class AccountTable(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     failure_count = Column(Integer, default=0, nullable=False)
     last_failed_at = Column(DateTime, nullable=True)
+    # BR-A7: 역할 단일 출처는 DB(공개 가입=USER; ADMIN은 시딩만). totp_secret은 MFA 등록 시 채워진다.
+    role = Column(String(20), default="USER", nullable=False)
+    totp_secret = Column(String(64), nullable=True)
 
 
 class VerificationTokenTable(Base):
