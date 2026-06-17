@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import styles from './AuthForm.module.css';
-import { getMockApiClient, UserFacingError } from '@/lib/api';
+import { getApiClient, UserFacingError } from '@/lib/api';
 import { useSession } from './session/SessionContext';
 import { validateEmail, validateRequiredPassword } from '@/lib/api/validate';
 
@@ -38,7 +38,7 @@ export function LoginForm() {
     setFormError(null);
     setSubmitting(true);
     try {
-      await getMockApiClient().login({ email: email.trim(), password });
+      await getApiClient().login({ email: email.trim(), password });
       await refresh();
       router.push(redirectTo);
     } catch (err) {

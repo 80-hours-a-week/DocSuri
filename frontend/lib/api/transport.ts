@@ -17,6 +17,12 @@ export interface TransportRequest {
 export interface TransportResponse {
   status: number;
   body: unknown;
+  /**
+   * Upstream Set-Cookie header values, if any (e.g. the session cookie minted by
+   * POST /auth/login). The server-side BFF forwards these to the browser; the
+   * token itself never enters client JS (SEC-3/12). Absent on most responses.
+   */
+  setCookies?: string[];
 }
 
 export interface Transport {

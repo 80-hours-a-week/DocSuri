@@ -13,6 +13,13 @@ import type {
   SignupResult,
   LoginRequest,
   SessionInfo,
+  SavedSearchCreateDTO,
+  SavedSearchDTO,
+  SavedSearchPageDTO,
+  LibraryItemCreateDTO,
+  LibraryItemDTO,
+  LibraryPageDTO,
+  HistoryPageDTO,
 } from '@/types/generated';
 
 export interface ApiClientOptions {
@@ -20,7 +27,19 @@ export interface ApiClientOptions {
   retryBackoffMs?: number;
 }
 
-const NOT_IMPLEMENTED = 'U5 후속 패스 — 라이브러리/이력 화면은 아직 구현되지 않았습니다.';
+/** Cursor-based pagination input (U4 collections). No offset/total-count (BR-U5). */
+export interface PageQuery {
+  limit?: number;
+  cursor?: string;
+}
+
+const DEFAULT_PAGE_LIMIT = 20;
+
+function pageQuery(params?: PageQuery): string {
+  const sp = new URLSearchParams({ limit: String(params?.limit ?? DEFAULT_PAGE_LIMIT) });
+  if (params?.cursor) sp.set('cursor', params.cursor);
+  return `?${sp.toString()}`;
+}
 
 export class ApiClient {
   private readonly timeoutMs: number;
@@ -40,7 +59,7 @@ export class ApiClient {
   /** Submit a search; returns a classified terminal outcome (FR-11). */
   async search(query: string): Promise<SearchOutcome> {
     const body: SearchRequest = { query };
-    const res = await this.request({ method: 'POST', path: '/search', body, idempotent: true });
+    const res = await this.request({ method: 'POST', path: '/api/search', body, idempotent: true });
     if (res.status === 200 || res.status === 400) {
       return classifySearchResponse(res.body);
     }
@@ -50,7 +69,7 @@ export class ApiClient {
   async signup(req: SignupRequest): Promise<SignupResult> {
     const res = await this.request({
       method: 'POST',
-      path: '/accounts/signup',
+      path: '/auth/signup',
       body: req,
       idempotent: false,
     });
@@ -58,54 +77,146 @@ export class ApiClient {
     throw normalizeHttpError(res.status, pick(res.body, 'message'));
   }
 
-  async login(req: LoginRequest): Promise<SessionInfo> {
+  /**
+   * Authenticate (US-A2). The real backend (POST /auth/login) sets the httpOnly
+   * session cookie and returns only {status, message} — NOT a SessionInfo body;
+   * callers refresh via currentSession() (GET /auth/session) after success.
+   * MFA is an admin-only control (BR-A7) with no login-time challenge, so any
+   * non-success is normalized to a user-facing error (401 → generalized auth).
+   */
+  async login(req: LoginRequest): Promise<void> {
     const res = await this.request({
       method: 'POST',
-      path: '/accounts/login',
+      path: '/auth/login',
       body: req,
       idempotent: false,
     });
-    if (res.status === 200) return res.body as SessionInfo;
+    if (res.status === 200 || res.status === 204) return;
     throw normalizeHttpError(res.status, pick(res.body, 'message'));
   }
 
   async logout(): Promise<void> {
-    await this.request({ method: 'POST', path: '/accounts/logout', idempotent: false });
+    await this.request({ method: 'POST', path: '/auth/logout', idempotent: false });
   }
 
   /** Returns the current session, or null when anonymous (401 is not an error). */
   async currentSession(): Promise<SessionInfo | null> {
-    const res = await this.request({ method: 'GET', path: '/accounts/session', idempotent: true });
+    const res = await this.request({ method: 'GET', path: '/auth/session', idempotent: true });
     if (res.status === 200) return res.body as SessionInfo;
     if (res.status === 401) return null;
     throw normalizeHttpError(res.status);
   }
 
-  // ---- contract-only stubs (US-L*, implemented in a follow-up pass) ----
+  // ---- saved searches (US-L1/FR-8) ------------------------------------
 
-  listSavedSearches(): never {
-    throw new Error(NOT_IMPLEMENTED);
+  /** Page of the user's saved searches (cursor-based, most-recent first). */
+  async listSavedSearches(params?: PageQuery): Promise<SavedSearchPageDTO> {
+    const res = await this.request({
+      method: 'GET',
+      path: `/library/saved-searches${pageQuery(params)}`,
+      idempotent: true,
+    });
+    if (res.status === 200) return res.body as SavedSearchPageDTO;
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
   }
-  saveSearch(): never {
-    throw new Error(NOT_IMPLEMENTED);
+
+  async saveSearch(req: SavedSearchCreateDTO): Promise<SavedSearchDTO> {
+    const res = await this.request({
+      method: 'POST',
+      path: '/library/saved-searches',
+      body: req,
+      idempotent: false,
+    });
+    if (res.status === 200 || res.status === 201) return res.body as SavedSearchDTO;
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
   }
-  deleteSavedSearch(): never {
-    throw new Error(NOT_IMPLEMENTED);
+
+  async deleteSavedSearch(id: string): Promise<void> {
+    const res = await this.request({
+      method: 'DELETE',
+      path: `/library/saved-searches/${encodeURIComponent(id)}`,
+      idempotent: false,
+    });
+    if (res.status === 204 || res.status === 200) return;
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
   }
-  listLibrary(): never {
-    throw new Error(NOT_IMPLEMENTED);
+
+  /** Re-run a saved search through the gateway (U6 -> U2); classified like search. */
+  async rerunSavedSearch(id: string): Promise<SearchOutcome> {
+    return this.rerun(`/library/saved-searches/${encodeURIComponent(id)}/rerun`);
   }
-  addToLibrary(): never {
-    throw new Error(NOT_IMPLEMENTED);
+
+  // ---- library (US-L2/FR-9) -------------------------------------------
+
+  /** Page of the user's library (cursor-based). Renders preserved meta snapshots. */
+  async listLibrary(params?: PageQuery): Promise<LibraryPageDTO> {
+    const res = await this.request({
+      method: 'GET',
+      path: `/library/items${pageQuery(params)}`,
+      idempotent: true,
+    });
+    if (res.status === 200) return res.body as LibraryPageDTO;
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
   }
-  removeFromLibrary(): never {
-    throw new Error(NOT_IMPLEMENTED);
+
+  /** Idempotent add; returns the same item shape whether new or already present. */
+  async addToLibrary(req: LibraryItemCreateDTO): Promise<LibraryItemDTO> {
+    const res = await this.request({
+      method: 'POST',
+      path: '/library/items',
+      body: req,
+      idempotent: false,
+    });
+    if (res.status === 200 || res.status === 201) return res.body as LibraryItemDTO;
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
   }
-  listHistory(): never {
-    throw new Error(NOT_IMPLEMENTED);
+
+  async removeFromLibrary(id: string): Promise<void> {
+    const res = await this.request({
+      method: 'DELETE',
+      path: `/library/items/${encodeURIComponent(id)}`,
+      idempotent: false,
+    });
+    if (res.status === 204 || res.status === 200) return;
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+  }
+
+  // ---- search history (US-L3/FR-10) -----------------------------------
+
+  /** Page of recent search history (cursor-based, most-recent first). */
+  async listHistory(params?: PageQuery): Promise<HistoryPageDTO> {
+    const res = await this.request({
+      method: 'GET',
+      path: `/library/history${pageQuery(params)}`,
+      idempotent: true,
+    });
+    if (res.status === 200) return res.body as HistoryPageDTO;
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+  }
+
+  /** Re-run a history entry through the gateway (U6 -> U2); classified like search. */
+  async rerunHistory(id: string): Promise<SearchOutcome> {
+    return this.rerun(`/library/history/${encodeURIComponent(id)}/rerun`);
+  }
+
+  /** Clear the user's entire search history. */
+  async clearHistory(): Promise<void> {
+    const res = await this.request({ method: 'DELETE', path: '/library/history', idempotent: false });
+    if (res.status === 204 || res.status === 200) return;
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
   }
 
   // ---- internals ------------------------------------------------------
+
+  /** Shared rerun path: POST -> SearchResultSetDTO, classified like a live search. */
+  private async rerun(path: string): Promise<SearchOutcome> {
+    const res = await this.request({ method: 'POST', path, idempotent: false });
+    if (res.status === 200 || res.status === 400) {
+      return classifySearchResponse(res.body);
+    }
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+  }
+
 
   private async request(req: TransportRequest): Promise<TransportResponse> {
     const key = `${req.method} ${req.path} ${JSON.stringify(req.body ?? null)}`;

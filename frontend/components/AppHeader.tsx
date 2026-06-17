@@ -13,14 +13,22 @@ export function AppHeader({ title }: { title: string }) {
         {title}
       </Link>
       {status === 'authenticated' ? (
-        <button
-          type="button"
-          className={styles.signout}
-          onClick={() => void signOut()}
-          data-testid="app-header-signout"
-        >
-          로그아웃
-        </button>
+        <nav className={styles.nav} aria-label="주요 메뉴">
+          <Link href="/search" className={styles.navLink} data-testid="app-header-search">
+            검색
+          </Link>
+          <Link href="/library" className={styles.navLink} data-testid="app-header-library">
+            라이브러리
+          </Link>
+          <button
+            type="button"
+            className={styles.signout}
+            onClick={() => void signOut()}
+            data-testid="app-header-signout"
+          >
+            로그아웃
+          </button>
+        </nav>
       ) : null}
     </header>
   );

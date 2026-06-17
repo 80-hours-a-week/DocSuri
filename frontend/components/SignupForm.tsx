@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './AuthForm.module.css';
-import { getMockApiClient, UserFacingError } from '@/lib/api';
+import { getApiClient, UserFacingError } from '@/lib/api';
 import { validateEmail, validateRequiredPassword } from '@/lib/api/validate';
 
 // SignupForm (LC-1, US-A1, BR-U5-2/13) — client validation mirrors
@@ -33,7 +33,7 @@ export function SignupForm() {
     setFormError(null);
     setSubmitting(true);
     try {
-      await getMockApiClient().signup({ email: email.trim(), password });
+      await getApiClient().signup({ email: email.trim(), password });
       router.push('/login?signup=1');
     } catch (err) {
       setFormError(err instanceof UserFacingError ? err.message : '가입에 실패했습니다. 다시 시도해 주세요.');

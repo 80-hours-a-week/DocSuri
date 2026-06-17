@@ -1,8 +1,16 @@
-# U5 Frontend — Code Summary (mock-first)
+# U5 Frontend — Code Summary
 
-**단계**: CONSTRUCTION → Code Generation (Part 2) · **유닛**: U5 Frontend (Track 3) · **일자**: 2026-06-16
-**코드 위치**: `frontend/` (Next.js App Router SSR) · **배포 단위**: ④ · **스코프**: 히어로 슬라이스
-**계획서(SSOT)**: `construction/plans/u5-frontend-code-generation-plan.md`
+**단계**: CONSTRUCTION → Code Generation · **유닛**: U5 Frontend (Track 3) · **배포 단위**: ④
+**코드 위치**: `frontend/` (Next.js App Router SSR)
+**계획서(SSOT)**: `construction/plans/u5-frontend-code-generation-plan.md`(mock-first) → `…/u5-frontend-production-pass-plan.md`(production 패스)
+
+> **현재 상태(2026-06-17 production 패스 완료)**: 히어로 + 라이브러리/저장검색/이력 전 화면 구현. 실 백엔드 라우트에 계약 정렬, 실 transport(BFF) 배선. 검증: `tsc` 0 · `vitest` **48 passed(9 files)** · `next lint` clean · `next build` 성공(라우트 10개, `/bff/[...path]` 동적). 아래 "production 패스" 절 참조. 그 위 본문은 최초 mock-first 슬라이스(2026-06-16) 기록.
+
+---
+
+## (최초) mock-first 슬라이스 — 2026-06-16
+
+**스코프**: 히어로 슬라이스
 
 ## 검증 결과 (로컬)
 - `pnpm install` → OK · `pnpm exec tsc --noEmit` → **0 errors** · `pnpm test` → **32 passed (7 files)** · `pnpm build` → **성공**(전 라우트 컴파일, First Load JS ~113–116kB)
@@ -55,3 +63,34 @@ frontend/
 1. `lib/api/httpTransport.ts`에 게이트웨이 baseURL/쿠키 주입(서버 액션/route handler 경유).
 2. `lib/api/index.ts`의 `getApiClient`가 서버 경로에서 `HttpTransport` 선택하도록 환경변수(`DOCSURI_GATEWAY_URL`) 분기.
 3. 컴포넌트/상태머신/StateView 변경 없음.
+
+---
+
+## production 패스 — 2026-06-17 (브랜치 `feature/u5-v2`, 리뷰 게이트)
+
+mock-first 슬라이스를 production-ready 앱 코드로 끌어올림. **스코프: 풀 기능(히어로 + 라이브러리/저장검색/이력) ①②③** (인프라/CD ④는 공통 인프라 단계로 분리). 확정 결정: auth 갭=백엔드 트랙 분리 · MFA=범위 밖 · 검증=로컬+계약테스트.
+
+### P1 계약 정렬
+- 프런트 경로를 머지된 실 백엔드에 정렬: 검색 `/search`→**`/api/search`**, 계정 `/accounts/*`→**`/auth/*`**.
+- **login 계약 정정**: 실 `POST /auth/login`은 httpOnly 쿠키만 세팅하고 `{status,message}`만 반환(SessionInfo 미반환). `ApiClient.login()`을 `Promise<void>`로 바꾸고, 화면은 `GET /auth/session`(`currentSession`)으로 세션 동기화(`LoginForm`은 이미 `refresh()` 호출 — 무변경).
+- **MFA**: 실 login엔 MFA-required 분기 없음(관리자 전용 `/auth/mfa/*`). 비-200은 user-facing 에러로 정규화 → graceful.
+- 생성타입 드리프트 갱신: `types/generated/library.ts`에 `SavedSearchPageDTO·LibraryItem*·LibraryItemMeta·*PageDTO·History*·SearchResultSetDTO` 추가(shared 스키마 1:1; 와이어 `arXivId`(대문자 X) vs meta `arxivId`(소문자) 차이 충실 미러).
+
+### P2 실 transport 배선 (BFF 패턴)
+- **`app/bff/[...path]/route.ts`**(신규, 서버): 동일출처 catch-all. `DOCSURI_GATEWAY_URL` 있으면 `HttpTransport`(쿠키 포워딩+Set-Cookie 릴레이)로 게이트웨이 프록시, 없으면 `MockTransport`. 토큰은 서버 hop에만.
+- **`lib/api/routeHandlerTransport.ts`**(신규, 클라이언트): 모든 호출을 `/bff/*`로. 동일출처라 httpOnly 쿠키 자동 첨부.
+- `getApiClient`가 `NEXT_PUBLIC_DOCSURI_REAL_API` 플래그로 mock(인브라우저) vs BFF 선택. `HttpTransport`는 `import 'server-only'` — 클라 번들 미포함(빌드로 확인).
+- 호출처 5곳(`SearchScreen·SessionContext·LoginForm·SignupForm`)을 `getMockApiClient`→`getApiClient`로 교체.
+
+### P3 라이브러리/이력 화면 (US-L1/L2/L3)
+- `ApiClient` stub 7개 제거→실구현 + `rerunSavedSearch·rerunHistory·clearHistory` 신규. 커서 페이지(`?limit&cursor`), rerun은 `classifySearchResponse` 재사용.
+- 화면: `/library`(라이브러리, 담기 해제·더보기), `/library/saved`(저장검색, 삭제·다시검색 인라인), `/library/history`(이력, 다시검색·비우기). 공용 `usePaginatedList` 훅·`OutcomeView`·`LibraryTabs`·`cardFromMeta`(meta→카드, relevance 제거=SEC-9).
+- 진입점: `AppHeader` 검색/라이브러리 내비, `ResultCard` "담기"(`SaveToLibraryButton`, 멱등 add), `SearchScreen` "검색 저장"(`SaveSearchButton`). `ResultCard`에 `action` 슬롯 + 선택필드(year/snippet/url) 가드 추가.
+
+### P4 검증
+- `tsc --noEmit` 0 · `next lint` clean · `next build` 성공. `vitest` **48 passed**(신규 `apiLibrary`·`libraryScreens` + `contract` 라이브러리 DTO 계약 확장). 적대적 자기검토: SEC-9(라이브러리 meta 6필드·relevance 미노출), SEC-8(owner 미노출), 커서 경계, rerun 분기, login 계약 정정, server-only 클라 미유출.
+
+### ⚠️ 의존성 플래그(U5 외부)
+- **게이트웨이 auth 주입 갭**: 조립된 백엔드가 세션쿠키→`request.state.principal`을 안 넣어 `/library/*`·`/api/search`가 실 백엔드에서 401(fail-closed). `backend/` 조율존 + 시스템 인프라 단계. U5 코드는 env 분리로 unblocked, 실 e2e만 이 갭 의존.
+- **reCAPTCHA**: `/auth/login`의 선택 토큰 미전송(사이트키=시크릿/인프라 필요, 실배포 와이어링).
+- **인프라/CD/호스팅·구체 CSP·정량 SLO**: 공통 인프라 단계(④).
