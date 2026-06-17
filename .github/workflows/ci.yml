@@ -80,3 +80,18 @@ jobs:
         run: uv run ruff check .
       - name: Tests (asserts discovery actually mounts)
         run: uv run pytest
+
+  root-suites:
+    name: accounts + library (root tests/ — U3 · U4)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      # Root tests/ (accounts U3 + library U4) import backend.modules.* and need the backend
+      # env (now incl. hypothesis + pytest-asyncio, added with U4). Run from the repo root via
+      # the root pytest.ini (pythonpath=. · asyncio_mode=auto). Ruff for the accounts lane is
+      # deferred to ③: the module carries known lint debt excluded from the app-shell lane.
+      - name: Tests (accounts + library)
+        run: uv run --project backend pytest tests -c pytest.ini
