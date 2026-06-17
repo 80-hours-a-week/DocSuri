@@ -16,15 +16,32 @@ class PostgresControlPlaneStore:
     This enforces BR-14 strictly-newer-vN-wins for both upserts and tombstones.
     """
 
-    def __init__(self, dsn: str) -> None:
+    def __init__(self, dsn: str, *, min_pool_size: int = 2, max_pool_size: int = 5) -> None:
         self._dsn = dsn
+        self._pool: Any = None
+        self._min_pool_size = min_pool_size
+        self._max_pool_size = max_pool_size
+
+    def _get_pool(self) -> Any:
+        if self._pool is None:
+            from psycopg_pool import ConnectionPool
+
+            self._pool = ConnectionPool(
+                self._dsn,
+                min_size=self._min_pool_size,
+                max_size=self._max_pool_size,
+            )
+        return self._pool
 
     @contextmanager
     def _connect(self) -> Iterator[Any]:
-        import psycopg
-
-        with psycopg.connect(self._dsn) as conn:
+        with self._get_pool().connection() as conn:
             yield conn
+
+    def close(self) -> None:
+        if self._pool is not None:
+            self._pool.close()
+            self._pool = None
 
     def get_watermark(self, name: str = "arxiv") -> Watermark:
         with self._connect() as conn:
