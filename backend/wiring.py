@@ -106,6 +106,37 @@ def _mount_discovery(app: FastAPI, settings: Settings, result: MountResult) -> N
     result.mounted.append("discovery")
 
 
+def _mount_library(app: FastAPI, settings: Settings, result: MountResult) -> None:
+    # library (U4) is `backend.modules.library`. Absent → ModuleNotFoundError → skip.
+    from backend.modules.library import controller as library
+    from backend.modules.library.audit import InMemoryAuditSink
+    from backend.modules.library.gateway import StubSearchGateway
+    from backend.modules.library.history_consumer import SearchHistoryEventConsumer
+    from backend.modules.library.repository.memory import InMemoryUserDataRepository
+    from backend.modules.library.services.history import SearchHistoryService
+
+    # Mock-first (D10): default to the in-memory adapters so U4 mounts + serves with NO live DB.
+    # Production overrides get_user_data_repo with a SqlUserDataRepository (per-request session).
+    repo = InMemoryUserDataRepository()
+    gateway = StubSearchGateway()
+    audit = InMemoryAuditSink()
+
+    app.dependency_overrides[library.get_user_data_repo] = lambda: repo
+    app.dependency_overrides[library.get_search_gateway] = lambda: gateway
+    app.dependency_overrides[library.get_audit_sink] = lambda: audit
+
+    for router in library.routers:
+        app.include_router(router)
+
+    # History write path: the SearchExecuted consumer shares the SAME repo as the read routers,
+    # so an event recorded asynchronously is visible to GET /library/history.
+    app.state.library_repo = repo
+    app.state.library_history_consumer = SearchHistoryEventConsumer(
+        SearchHistoryService(repo, gateway, audit)
+    )
+    result.mounted.append("library")
+
+
 # The real registry. Each entry is a `(app, settings, result) -> None` mounter whose name
 # (minus the `_mount_` prefix) labels it in MountResult / `/readyz`.
-_INTEGRATIONS = (_mount_accounts, _mount_discovery)
+_INTEGRATIONS = (_mount_accounts, _mount_discovery, _mount_library)

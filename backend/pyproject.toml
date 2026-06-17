@@ -25,6 +25,10 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "ruff>=0.6",
+    # accounts (U3) + library (U4) ship property-based + async tests: deploy unit ① declares
+    # these so the suite is reproducible (previously installed ad-hoc — rebaseline gap).
+    "hypothesis>=6.100",
+    "pytest-asyncio>=0.23",
 ]
 
 # docsuri-shared comes from the in-repo path (shared/ is on develop). docsuri-discovery is

@@ -576,8 +576,13 @@
 
 ---
 
+## CONSTRUCTION — U4 Library 착수 및 Track 2 레인 완료 (FD→NFR→Infra→Code, 전 단계)
+**시각**: 2026-06-17T10:30:00+09:00
+**사용자 입력(원문)**: "ultracode Start U4 and finish track 2." (선행 로컬 커맨드: /effort ultracode)
+**AI 응답**: Track 2(@revenantonthemission)의 최종 유닛 **U4 Library**(검색 저장·라이브러리·이력)를 CONSTRUCTION 유닛별 루프 전 단계로 진행. ultracode 오케스트레이션: (1) 설계 SSOT 브리프 작성 후 멀티에이전트 워크플로(17 에이전트)로 12개 설계/계획 문서 **병렬 생성 + 5렌즈 적대적 검증**(0 blocking·10 major·8 minor — 전부 문서 정합/추적성 이슈, 코드는 정정안과 일치). (2) 코드는 메인 루프에서 작성·반복 검증. **결정 D1~D12(권장 기본값, 리뷰 게이트 override 가능)**: 저장검색 정규화 dedup+정원 200·라이브러리 `(owner,arxivId)` 멱등+정원 1000+meta 스냅샷·이력 at-least-once `dedupe_key` 멱등+롤링 500·키셋 커서(기본20/최대100)·**rerun=게이트웨이-프런티드(INV-L2 백도어 차단)**·SEC-8 **U3.AuthorizationGuard 위임**→cross-owner 일반화 404(SEC-9). **docsuri_shared DTO SSOT 재사용(포크 금지)**. 산출물: `construction/u4-library/`(FD 3·NFR Req 2·NFR Design 2·Infra 1) + `plans/u4-library-*` 4 + `backend/modules/library/` 코드(models·schemas·validation·ports·repository[memory 기본+sql 스캐폴드]·services×3·gateway 스텁·history_consumer·controller[3 라우터]·audit·`migrations/001`) + `tests/library/`(41) + app-shell **`_mount_library`**(mock-first). **검증: `pytest tests backend/tests` 64 passed·`ruff` clean.** backend dev deps에 hypothesis·pytest-asyncio 선언(재현성). **미커밋(리뷰/사용자 승인 대기 — commit-review-gate 준수)**. ⚠️ `shared/dtos/library.schema.json` PROVISIONAL→정제는 코디네이션 존 변경이라 별도 shared/ PR(Track3 사인오프) 권고로 분리(코드는 로컬 검증으로 무관하게 정상).
+**맥락**: CONSTRUCTION — U4 Library 전 설계 단계 + Code Generation 완료·검증 → **Track 2 레인(U3→U4) 완료**. 리뷰 게이트(승인 시 커밋/PR).
 
-
+---
 
 
 
