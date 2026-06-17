@@ -13,6 +13,7 @@ dependencies = [
     "boto3>=1.34,<2",
     "opensearch-py>=2.6,<3",
     "psycopg[binary]>=3.2,<4",
+    "psycopg-pool>=3.2,<4",
     "structlog>=24.1,<25",
 ]
 

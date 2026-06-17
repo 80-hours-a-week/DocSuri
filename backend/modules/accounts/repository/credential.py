@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import Column, DateTime, Integer, String
@@ -15,7 +15,7 @@ class AccountTable(Base):
     email = Column(String(254), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     status = Column(String(20), default=AccountStatus.PENDING.value, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
     failure_count = Column(Integer, default=0, nullable=False)
     last_failed_at = Column(DateTime, nullable=True)
     # BR-A7: 역할 단일 출처는 DB(공개 가입=USER; ADMIN은 시딩만). totp_secret은 MFA 등록 시 채워진다.
@@ -64,7 +64,7 @@ class CredentialRepository:
             email=email,
             password_hash=password_hash,
             status=AccountStatus.PENDING.value,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
             failure_count=0
         )
         self._session.add(account)

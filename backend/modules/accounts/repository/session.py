@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 
 import redis.asyncio as aioredis
 from redis.exceptions import ConnectionError as RedisConnectionError
@@ -46,7 +46,7 @@ class SessionRepository:
         }
         
         # absolute 만료 일시까지 남은 초 계산 (TTL)
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         ttl = int((session.expires_at - now).total_seconds())
         if ttl <= 0:
             return

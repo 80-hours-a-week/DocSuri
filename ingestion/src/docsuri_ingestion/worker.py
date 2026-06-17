@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
+import signal
 import sys
-import time
+import threading
 
 from .domain.enums import FailureClass, FailureReason, JobKind
 from .domain.errors import IngestionError, PermanentIngestionError
@@ -10,16 +12,35 @@ from .observability import configure_logging
 from .runtime import build_production_runtime
 from .settings import IngestionSettings
 
+log = logging.getLogger("docsuri.ingestion.worker")
+
+_shutdown_event = threading.Event()
+
+
+def _handle_shutdown_signal(signum, _frame):
+    sig_name = signal.Signals(signum).name
+    log.info("received signal %s — draining current batch then exiting", sig_name)
+    _shutdown_event.set()
+
 
 def main(argv: list[str] | None = None) -> int:
     del argv
     configure_logging()
+
+    signal.signal(signal.SIGTERM, _handle_shutdown_signal)
+    signal.signal(signal.SIGINT, _handle_shutdown_signal)
+
     runtime = build_production_runtime(IngestionSettings.from_env())
     queue = runtime.queue
-    while True:
+    log.info("worker started — polling queue")
+    while not _shutdown_event.is_set():
         for message in queue.receive_messages(max_messages=10):
             process_message(runtime, message)
-        time.sleep(1.0)
+            if _shutdown_event.is_set():
+                break
+        _shutdown_event.wait(timeout=1.0)
+    log.info("worker shut down gracefully")
+    return 0
 
 
 def process_message(runtime, message) -> None:

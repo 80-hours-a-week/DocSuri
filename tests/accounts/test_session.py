@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from redis.exceptions import ConnectionError as RedisConnectionError
 
@@ -52,7 +52,7 @@ async def test_session_issue_and_verify_success(mock_session_repo, session_manag
 @pytest.mark.asyncio
 async def test_session_sliding_expiration_expired(mock_session_repo, session_manager):
     """마지막 활성 시각으로부터 2시간 초과 시 세션 즉시 만료 및 파기 검증 (US-A2, BR-A3)"""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     # 2시간 1분 전 활성
     expired_active_at = now - timedelta(hours=2, minutes=1)
     
@@ -78,7 +78,7 @@ async def test_session_sliding_expiration_expired(mock_session_repo, session_man
 @pytest.mark.asyncio
 async def test_session_absolute_expiration_expired(mock_session_repo, session_manager):
     """최초 생성 시각으로부터 30일 초과 시 세션 즉시 만료 및 파기 검증 (US-A2, BR-A3)"""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     # 30일 1초 전 생성
     expired_created_at = now - timedelta(days=30, seconds=1)
     
