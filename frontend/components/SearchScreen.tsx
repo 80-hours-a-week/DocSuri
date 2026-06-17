@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import styles from './SearchScreen.module.css';
 import { StateView, type StateViewKind } from './StateView';
 import { ResultList } from './ResultList';
-import { getMockApiClient, UserFacingError, type SearchOutcome } from '@/lib/api';
+import { getApiClient, UserFacingError, type SearchOutcome } from '@/lib/api';
 import { validateQuery, MAX_QUERY_LENGTH } from '@/lib/api/validate';
 
 // SearchScreen (LC-1/6, US-H1/D1, FR-1/11) — the hero surface. Owns the search
@@ -38,7 +38,7 @@ export function SearchScreen() {
     inFlight.current = true;
     setState({ tag: 'loading' });
     try {
-      const outcome = await getMockApiClient().search(result.value);
+      const outcome = await getApiClient().search(result.value);
       setState({ tag: 'outcome', outcome });
     } catch (err) {
       if (err instanceof UserFacingError && err.isAuth) {

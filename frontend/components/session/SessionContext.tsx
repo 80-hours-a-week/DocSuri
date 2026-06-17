@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { getMockApiClient } from '@/lib/api';
+import { getApiClient } from '@/lib/api';
 import type { SessionInfo } from '@/types/generated';
 
 // SessionContext (LC-3, NFR-U5-S7) — app-wide session state derived from
@@ -25,7 +25,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const session = await getMockApiClient().currentSession();
+      const session = await getApiClient().currentSession();
       setUser(session);
       setStatus(session ? 'authenticated' : 'anonymous');
     } catch {
@@ -36,7 +36,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     try {
-      await getMockApiClient().logout();
+      await getApiClient().logout();
     } finally {
       setUser(null);
       setStatus('anonymous');
