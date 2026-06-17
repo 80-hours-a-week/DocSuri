@@ -65,6 +65,22 @@ jobs:
       - name: Tests (incl. the api router extra)
         run: uv run --extra api pytest
 
+  ops:
+    name: ops (U6 reliability/detection)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ops
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Lint
+        run: uv run ruff check .
+      - name: Tests
+        run: uv run pytest
+
   backend:
     name: backend app-shell (mounts U2/U3)
     runs-on: ubuntu-latest
