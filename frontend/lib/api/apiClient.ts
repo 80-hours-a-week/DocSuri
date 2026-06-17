@@ -38,7 +38,7 @@ export class ApiClient {
   /** Submit a search; returns a classified terminal outcome (FR-11). */
   async search(query: string): Promise<SearchOutcome> {
     const body: SearchRequest = { query };
-    const res = await this.request({ method: 'POST', path: '/search', body, idempotent: true });
+    const res = await this.request({ method: 'POST', path: '/api/search', body, idempotent: true });
     if (res.status === 200 || res.status === 400) {
       return classifySearchResponse(res.body);
     }
@@ -48,7 +48,7 @@ export class ApiClient {
   async signup(req: SignupRequest): Promise<SignupResult> {
     const res = await this.request({
       method: 'POST',
-      path: '/accounts/signup',
+      path: '/auth/signup',
       body: req,
       idempotent: false,
     });
@@ -59,7 +59,7 @@ export class ApiClient {
   async login(req: LoginRequest): Promise<SessionInfo> {
     const res = await this.request({
       method: 'POST',
-      path: '/accounts/login',
+      path: '/auth/login',
       body: req,
       idempotent: false,
     });
@@ -68,12 +68,12 @@ export class ApiClient {
   }
 
   async logout(): Promise<void> {
-    await this.request({ method: 'POST', path: '/accounts/logout', idempotent: false });
+    await this.request({ method: 'POST', path: '/auth/logout', idempotent: false });
   }
 
   /** Returns the current session, or null when anonymous (401 is not an error). */
   async currentSession(): Promise<SessionInfo | null> {
-    const res = await this.request({ method: 'GET', path: '/accounts/session', idempotent: true });
+    const res = await this.request({ method: 'GET', path: '/auth/session', idempotent: true });
     if (res.status === 200) return res.body as SessionInfo;
     if (res.status === 401) return null;
     throw normalizeHttpError(res.status);

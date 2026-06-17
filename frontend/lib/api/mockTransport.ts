@@ -31,7 +31,7 @@ export class MockTransport implements Transport {
     // Small latency so loading states are observable.
     await new Promise((r) => setTimeout(r, 120));
 
-    if (req.path === '/search' && req.method === 'POST') {
+    if (req.path === '/api/search' && req.method === 'POST') {
       const query = String((req.body as { query?: unknown })?.query ?? '');
       if (matches(query, '네트워크', 'fail')) throw new Error('mock network failure');
       if (matches(query, '오류', 'error')) return { status: 500, body: null };
@@ -41,18 +41,18 @@ export class MockTransport implements Transport {
       return { status: 200, body: pageResponse };
     }
 
-    if (req.path === '/accounts/signup' && req.method === 'POST') {
+    if (req.path === '/auth/signup' && req.method === 'POST') {
       return { status: 201, body: mockSignup() };
     }
-    if (req.path === '/accounts/login' && req.method === 'POST') {
+    if (req.path === '/auth/login' && req.method === 'POST') {
       const email = String((req.body as { email?: unknown })?.email ?? 'mock@docsuri.dev');
       return { status: 200, body: mockLogin(email) };
     }
-    if (req.path === '/accounts/logout' && req.method === 'POST') {
+    if (req.path === '/auth/logout' && req.method === 'POST') {
       mockLogout();
       return { status: 204, body: null };
     }
-    if (req.path === '/accounts/session' && req.method === 'GET') {
+    if (req.path === '/auth/session' && req.method === 'GET') {
       const session = mockCurrentSession();
       return session ? { status: 200, body: session } : { status: 401, body: null };
     }
