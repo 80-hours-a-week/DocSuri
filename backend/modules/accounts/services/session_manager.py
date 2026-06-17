@@ -1,6 +1,6 @@
 import logging
 import secrets
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from ..models import (
     Principal,
@@ -27,7 +27,7 @@ class SessionManager:
         # 32바이트의 보안 난수로 유일무이한 세션 핸들 생성 (값 객체화)
         session_handle = secrets.token_hex(32)
         
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         expires_at = now + timedelta(days=self._max_lifetime_days)
         last_active_at = now
         
@@ -65,7 +65,7 @@ class SessionManager:
         if not session:
             raise SessionExpiredException("세션이 유효하지 않거나 만료되었습니다.")
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         # 1. Sliding Expiration 만료 검사 (BR-A3 Idle Timeout)
         if now > session.last_active_at + timedelta(hours=self._idle_timeout_hours):

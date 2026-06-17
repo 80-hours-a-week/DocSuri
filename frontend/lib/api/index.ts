@@ -1,8 +1,10 @@
 // ApiClient factory (BR-U5-19).
 //
-// Selects the transport by configuration. Today: MockTransport (DTO-derived
-// fixtures). When the U6 gateway is deployed, set DOCSURI_GATEWAY_URL and the
-// server path will use HttpTransport — components/ApiClient are untouched.
+// Selects the transport by configuration:
+//   - DOCSURI_GATEWAY_URL set → HttpTransport (server-only, real backend)
+//   - unset / empty           → MockTransport (DTO-derived fixtures)
+//
+// Components call getApiClient() and are transport-agnostic.
 import { ApiClient } from './apiClient';
 import { MockTransport } from './mockTransport';
 import type { Transport } from './transport';
@@ -21,8 +23,26 @@ export function getMockApiClient(): ApiClient {
 }
 
 /**
- * Resolve the active ApiClient. The HttpTransport branch is intentionally
- * loaded lazily and server-side only (it imports `server-only`).
+ * Resolve the active ApiClient based on environment.
+ *
+ * Server-side (DOCSURI_GATEWAY_URL set): lazily imports HttpTransport so the
+ * `server-only` guard fires only on this path. Pass `cookieHeader` from the
+ * inbound request to forward the session cookie.
+ *
+ * Client-side or gateway-undeployed: falls back to MockTransport.
+ */
+export async function getServerApiClient(cookieHeader?: string): Promise<ApiClient> {
+  const gatewayUrl = process.env.DOCSURI_GATEWAY_URL;
+  if (gatewayUrl) {
+    const { HttpTransport } = await import('./httpTransport');
+    return new ApiClient(new HttpTransport({ baseUrl: gatewayUrl, cookieHeader }));
+  }
+  return getMockApiClient();
+}
+
+/**
+ * Synchronous variant — returns mock when gateway is undeployed, or accepts
+ * an explicitly constructed transport (for tests / client components).
  */
 export function getApiClient(transport?: Transport): ApiClient {
   if (transport) return new ApiClient(transport);

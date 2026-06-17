@@ -20,8 +20,6 @@ export interface ApiClientOptions {
   retryBackoffMs?: number;
 }
 
-const NOT_IMPLEMENTED = 'U5 후속 패스 — 라이브러리/이력 화면은 아직 구현되지 않았습니다.';
-
 export class ApiClient {
   private readonly timeoutMs: number;
   private readonly retryBackoffMs: number;
@@ -81,29 +79,16 @@ export class ApiClient {
     throw normalizeHttpError(res.status);
   }
 
-  // ---- contract-only stubs (US-L*, implemented in a follow-up pass) ----
+  // ---- US-L* stubs (graceful no-op until library UI pass) ----
+  // Return empty collections / void so the UI renders "empty state" rather than crashing.
 
-  listSavedSearches(): never {
-    throw new Error(NOT_IMPLEMENTED);
-  }
-  saveSearch(): never {
-    throw new Error(NOT_IMPLEMENTED);
-  }
-  deleteSavedSearch(): never {
-    throw new Error(NOT_IMPLEMENTED);
-  }
-  listLibrary(): never {
-    throw new Error(NOT_IMPLEMENTED);
-  }
-  addToLibrary(): never {
-    throw new Error(NOT_IMPLEMENTED);
-  }
-  removeFromLibrary(): never {
-    throw new Error(NOT_IMPLEMENTED);
-  }
-  listHistory(): never {
-    throw new Error(NOT_IMPLEMENTED);
-  }
+  async listSavedSearches(): Promise<unknown[]> { return []; }
+  async saveSearch(): Promise<void> {}
+  async deleteSavedSearch(): Promise<void> {}
+  async listLibrary(): Promise<unknown[]> { return []; }
+  async addToLibrary(): Promise<void> {}
+  async removeFromLibrary(): Promise<void> {}
+  async listHistory(): Promise<unknown[]> { return []; }
 
   // ---- internals ------------------------------------------------------
 
