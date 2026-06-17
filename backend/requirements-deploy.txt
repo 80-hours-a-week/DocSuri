@@ -11,3 +11,6 @@ pydantic>=2.7,<3
 argon2-cffi>=23.0
 httpx>=0.27
 pyotp>=2.9
+# boto3 → SES (account verification email) + the CloudWatch observability adapter. Without it
+# SESEmailClient/CloudWatchEventStore hit "No module named 'boto3'" and soft-fall-back.
+boto3>=1.34

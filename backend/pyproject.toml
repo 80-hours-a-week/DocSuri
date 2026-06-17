@@ -27,6 +27,8 @@ dependencies = [
     "argon2-cffi>=23.0",
     "httpx>=0.27",
     "pyotp>=2.9",
+    # boto3 → SES (verification email) + CloudWatch observability adapter.
+    "boto3>=1.34",
 ]
 
 [dependency-groups]
