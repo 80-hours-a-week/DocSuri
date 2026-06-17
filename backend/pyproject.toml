@@ -8,6 +8,8 @@ license = "MIT"
 dependencies = [
     # Shared contracts (DTOs/events/vector-spec/ports) — single source of truth, never forked.
     "docsuri-shared",
+    # U2 search domain — mounted by _mount_discovery (was graceful-skipped while undeclared).
+    "docsuri-discovery",
     # CG-1: backend web framework = FastAPI (app-shell decision, owner @revenantonthemission).
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
@@ -25,14 +27,18 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "ruff>=0.6",
+    # accounts (U3) + library (U4) ship property-based + async tests: deploy unit ① declares
+    # these so the suite is reproducible (previously installed ad-hoc — rebaseline gap).
+    "hypothesis>=6.100",
+    "pytest-asyncio>=0.23",
 ]
 
-# docsuri-shared comes from the in-repo path (shared/ is on develop). docsuri-discovery is
-# NOT declared here: discovery isn't on develop yet, and a path source to a missing dir would
-# break `uv sync`. The assembled backend installs docsuri-discovery; until then the app-shell
-# imports `discovery` optionally at runtime (graceful skip). See backend/README.md §Assembly.
+# In-repo path sources. discovery is on develop, so the app-shell installs it directly and
+# `_mount_discovery` resolves instead of graceful-skipping. docsuri-ops (the real U6 grounding
+# hook) is still deferred until feature/track6 (#45) merges — see u6-integration-proposal.md.
 [tool.uv.sources]
 docsuri-shared = { path = "../shared/python", editable = true }
+docsuri-discovery = { path = "modules/discovery", editable = true }
 
 # The backend is an APPLICATION, not a distributed library: its import root is the repo ROOT
 # (accounts is imported as `backend.modules.accounts`), so uv installs only its dependencies
