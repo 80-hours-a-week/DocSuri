@@ -79,18 +79,35 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 
 def _build_observability():
-    """Real U6 ``ObservabilityHub`` over an in-memory event store (local/dev seam).
+    """Build ObservabilityHub with the appropriate event store.
 
-    Degrades to ``(None, None)`` if docsuri-ops is absent so the shell still boots — the
-    gateway simply no-ops error emission then (it treats ``observability=None`` as off).
+    Production (CLOUDWATCH_NAMESPACE set): CloudWatch Logs + Metrics.
+    Dev/test (default): in-memory store (visible via app.state.telemetry_store).
+    Degrades to (None, None) if docsuri-ops is absent.
     """
+    import os
+
     try:
-        from docsuri_ops.adapters.local import InMemoryEventStore
         from docsuri_ops.observability import ObservabilityHub
     except ModuleNotFoundError:
         log.info("app-shell: docsuri-ops absent — U6 gateway runs without observability")
         return None, None
-    store = InMemoryEventStore()
+
+    namespace = os.getenv("CLOUDWATCH_NAMESPACE")
+    if namespace:
+        from docsuri_ops.adapters.cloudwatch import CloudWatchEventStore
+
+        store = CloudWatchEventStore(
+            namespace=namespace,
+            log_group=os.getenv("CLOUDWATCH_LOG_GROUP", "/docsuri/ops"),
+            region_name=os.getenv("AWS_REGION", "ap-northeast-2"),
+        )
+        log.info("app-shell: observability → CloudWatch (namespace=%s)", namespace)
+    else:
+        from docsuri_ops.adapters.local import InMemoryEventStore
+
+        store = InMemoryEventStore()
+
     return ObservabilityHub(store), store
 
 
