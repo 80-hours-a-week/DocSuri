@@ -14,6 +14,10 @@ dependencies = [
 # Thin FastAPI router (QueryIntakeController). The backend web framework is a backend-shared
 # (app-shell) decision pending @ELSAPHABA sign-off — the domain core runs without FastAPI.
 api = ["fastapi>=0.110"]
+# Real read-path adapters (CG-2/MR-4): OpenSearch k-NN/BM25 reader + Bedrock query embedding
+# + EventBridge publisher. The mock-first domain core and its test suite need none of these;
+# the integration test self-skips when opensearch-py / a live cluster is absent.
+real = ["opensearch-py>=2.4", "boto3>=1.34"]
 
 [dependency-groups]
 dev = ["pytest>=8.0", "hypothesis>=6.100", "ruff>=0.6"]
@@ -33,6 +37,9 @@ packages = ["src/discovery"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+    "integration: needs a live local OpenSearch (auto-skips when absent / no `real` extra)",
+]
 # src layout: make `discovery` importable in tests without an install step (docsuri-shared
 # still comes from the path dep via `uv sync`).
 pythonpath = ["src"]

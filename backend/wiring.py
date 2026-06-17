@@ -96,23 +96,40 @@ def _mount_accounts(app: FastAPI, settings: Settings, result: MountResult) -> No
 def _mount_discovery(app: FastAPI, settings: Settings, result: MountResult) -> None:
     # discovery is the top-level ``discovery`` package (docsuri-discovery); the real U6
     # grounding hook lives in docsuri-ops. EITHER absent → ModuleNotFoundError → skip
-    # (fail-closed: serve no /api/search rather than ungrounded results).
+    # (fail-closed: serve no /api/search rather than ungrounded results). The same applies to
+    # the real read path: if it is configured but its `real` extra (opensearch-py/boto3) is not
+    # installed, the import raises ModuleNotFoundError → skip (no silent mock fallback).
+    from discovery.adapters.settings import DiscoverySettings
     from discovery.api.router import build_router
-    from discovery.mocks.wiring import build_mock_orchestrator
     from docsuri_ops.grounding import GroundingEnforcementHook
 
-    # Mock-first (MR-1/4) orchestrator, but the grounding gate is the REAL U6 single authority
-    # (INV-1) — replacing the always-pass StubGroundingHook: enforce() blocks any exposed arXiv
-    # id/url absent from the retrieved records and abstains when there is nothing to ground
-    # against. NB: the mock adapter derives retrieved_records from the same ranked candidates,
-    # so the hook trivially passes here; it becomes load-bearing once the real OpenSearch
-    # adapter supplies an independent retrieved set (U2 real adapters, critical path ⑥).
-    bundle = build_mock_orchestrator()
+    # Read path selection (U2 real adapters, critical path ⑥): when the shared OpenSearch
+    # cluster + Bedrock model are configured (DOCSURI_OPENSEARCH_ENDPOINT + _BEDROCK_MODEL_ID),
+    # wire the REAL OpenSearch/Bedrock read path; otherwise stay mock-first. The cluster itself
+    # is provisioned by the shared infra track (U1 infra + system event bus) — U2 only reads it.
+    discovery_settings = DiscoverySettings.from_env()
+    if discovery_settings.search_enabled:
+        from discovery.real_wiring import build_real_orchestrator
+
+        bundle = build_real_orchestrator(discovery_settings)
+        read_path = "real(opensearch+bedrock)"
+    else:
+        from discovery.mocks.wiring import build_mock_orchestrator
+
+        bundle = build_mock_orchestrator()
+        read_path = "mock"
+
+    # The grounding gate is the REAL U6 single authority (INV-1) in BOTH modes — replacing the
+    # always-pass StubGroundingHook: enforce() blocks any exposed arXiv id/url absent from the
+    # retrieved records and abstains when there is nothing to ground against. With the real
+    # OpenSearch adapter the retrieved set is independent of the ranked candidates, so the hook
+    # is now load-bearing (not trivially passing as it did against the mock adapter).
     grounding_hook = GroundingEnforcementHook()
     app.state.discovery_bundle = bundle
     app.state.grounding_hook = grounding_hook
     app.include_router(build_router(bundle.orchestrator, grounding_hook))
     result.mounted.append("discovery")
+    log.info("app-shell: discovery mounted (read path = %s)", read_path)
 
 
 def _mount_library(app: FastAPI, settings: Settings, result: MountResult) -> None:

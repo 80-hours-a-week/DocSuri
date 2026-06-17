@@ -1,0 +1,104 @@
+"""Seed a local OpenSearch with a deterministic mini-corpus for U2 read-path validation.
+
+Creates the shared index (``docsuri-corpus-v1``) with the k-NN + BM25 mapping the U1 writer
+uses, then bulk-indexes the deterministic fixtures (``mocks.fixtures.RECORDS``) exactly as
+the writer would (``_id = chunkId``). This lets the real OpenSearch adapters be exercised
+end-to-end with NO cloud/Bedrock dependency — the fixtures carry precomputed vectors and the
+integration test embeds queries with the matching offline embedder.
+
+Run (from ``backend/modules/discovery``, with local OpenSearch up):
+
+    export DOCSURI_OPENSEARCH_ENDPOINT=http://localhost:9200
+    export DOCSURI_OPENSEARCH_USE_SSL=0 DOCSURI_OPENSEARCH_VERIFY_CERTS=0
+    uv run --extra real python -m discovery.scripts.seed_local_opensearch
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from collections.abc import Iterable
+from typing import Any
+
+from docsuri_shared.vector_spec import DIMENSIONS, IndexRecord
+
+from ..adapters.opensearch_index import OpenSearchClientFactory
+from ..adapters.settings import DiscoverySettings
+from ..mocks import fixtures
+
+# Mirrors the U1 writer's index shape (vector-spec §2/§3): k-NN cosine vector + BM25 text.
+INDEX_BODY: dict[str, Any] = {
+    "settings": {"index": {"knn": True}},
+    "mappings": {
+        "properties": {
+            "chunkId": {"type": "keyword"},
+            "paperId": {"type": "keyword"},
+            "version": {"type": "integer"},
+            "vector": {
+                "type": "knn_vector",
+                "dimension": DIMENSIONS,
+                "method": {
+                    "name": "hnsw",
+                    "space_type": "cosinesimil",
+                    "engine": "lucene",
+                },
+            },
+            "section": {"type": "keyword"},
+            "lexicalTerms": {"type": "text"},
+            "title": {"type": "text"},
+            "authors": {"type": "keyword"},
+            "year": {"type": "integer"},
+            "arxivId": {"type": "keyword"},
+            "abstract": {"type": "text"},
+            "abstractSnippet": {"type": "text"},
+            "arxivUrl": {"type": "keyword"},
+            "categories": {"type": "keyword"},
+        }
+    },
+}
+
+
+def create_index(client: Any, index_name: str, *, recreate: bool = True) -> None:
+    if recreate and client.indices.exists(index=index_name):
+        client.indices.delete(index=index_name)
+    if not client.indices.exists(index=index_name):
+        client.indices.create(index=index_name, body=INDEX_BODY)
+
+
+def bulk_index(client: Any, index_name: str, records: Iterable[IndexRecord]) -> int:
+    lines: list[str] = []
+    count = 0
+    for record in records:
+        lines.append(json.dumps({"index": {"_index": index_name, "_id": record.chunkId}}))
+        lines.append(json.dumps(record.model_dump(mode="json")))
+        count += 1
+    if not lines:
+        return 0
+    client.bulk(body="\n".join(lines) + "\n", refresh=True)
+    return count
+
+
+def seed(settings: DiscoverySettings | None = None) -> int:
+    settings = settings or DiscoverySettings.from_env()
+    if not settings.opensearch_endpoint:
+        raise SystemExit("DOCSURI_OPENSEARCH_ENDPOINT is required to seed")
+    client = OpenSearchClientFactory.build(
+        endpoint=settings.opensearch_endpoint,
+        username=settings.opensearch_username,
+        password=settings.opensearch_password,
+        use_ssl=settings.opensearch_use_ssl,
+        verify_certs=settings.opensearch_verify_certs,
+    )
+    create_index(client, settings.opensearch_index)
+    n = bulk_index(client, settings.opensearch_index, fixtures.RECORDS)
+    return n
+
+
+def main() -> int:
+    n = seed()
+    print(f"seeded {n} chunk record(s) into the local OpenSearch index")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

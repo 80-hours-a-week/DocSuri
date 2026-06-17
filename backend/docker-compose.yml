@@ -1,9 +1,16 @@
 # Full-local backend dependencies (deploy unit ① support services).
 # Optional: the app-shell boots without these (SQLite, no Redis). Bring them up when you
-# need the accounts (U3) module's real persistence + session store.
+# need the accounts (U3) module's real persistence + session store, or the discovery (U2)
+# real search read path (OpenSearch).
 #
 #   docker compose -f backend/docker-compose.yml up -d
 #   export DATABASE_URL=postgresql+psycopg://docsuri:docsuri@localhost:5432/docsuri
+#
+# discovery (U2) real read path — point the reader at local OpenSearch + seed a mini-corpus:
+#   export DOCSURI_OPENSEARCH_ENDPOINT=http://localhost:9200
+#   export DOCSURI_OPENSEARCH_USE_SSL=0 DOCSURI_OPENSEARCH_VERIFY_CERTS=0
+#   uv run --extra real python -m discovery.scripts.seed_local_opensearch   # from modules/discovery
+#   uv run --extra real --extra dev pytest -m integration
 
 services:
   postgres:
@@ -34,5 +41,30 @@ services:
       timeout: 3s
       retries: 10
 
+  # discovery (U2) read path. Single-node, security plugin OFF for local dev → plain HTTP on
+  # 9200 (set DOCSURI_OPENSEARCH_USE_SSL=0). k-NN (cosine, 1024-dim) is bundled. The U1 writer
+  # and U2 reader share ONE index (docsuri-corpus-v1, vector-spec §4).
+  opensearch:
+    image: opensearchproject/opensearch:2.13.0
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+      bootstrap.memory_lock: "true"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - "9200:9200"
+    volumes:
+      - docsuri-osdata:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
 volumes:
   docsuri-pgdata:
+  docsuri-osdata:
