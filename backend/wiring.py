@@ -10,7 +10,8 @@ Per-module integration idioms differ (see each ``_mount_*``):
   • accounts (U3) exposes a ready ``router`` + a ``get_db_session`` seam to override, and a
     Redis ``SessionRepository`` singleton to close on shutdown.
   • discovery (U2) exposes *factories* (``build_mock_orchestrator`` + ``build_router``) that
-    need dependency injection — mock-first until the real adapters/U6 hook exist.
+    need dependency injection — the mock orchestrator is wired with the REAL U6 grounding hook
+    (docsuri-ops); only the OpenSearch/Bedrock data adapters remain mock-first.
 
 The shell owns this file (CODEOWNERS ``/backend/``); module owners change only their lane.
 """
@@ -93,16 +94,24 @@ def _mount_accounts(app: FastAPI, settings: Settings, result: MountResult) -> No
 
 
 def _mount_discovery(app: FastAPI, settings: Settings, result: MountResult) -> None:
-    # discovery is the top-level ``discovery`` package (docsuri-discovery), not
-    # backend.modules.discovery. Absent → ModuleNotFoundError → skip.
+    # discovery is the top-level ``discovery`` package (docsuri-discovery); the real U6
+    # grounding hook lives in docsuri-ops. EITHER absent → ModuleNotFoundError → skip
+    # (fail-closed: serve no /api/search rather than ungrounded results).
     from discovery.api.router import build_router
     from discovery.mocks.wiring import build_mock_orchestrator
+    from docsuri_ops.grounding import GroundingEnforcementHook
 
-    # Mock-first (MR-1/4): real OpenSearch/Bedrock adapters and the U6 grounding hook swap in
-    # later via the same constructor args without touching the contract.
+    # Mock-first (MR-1/4) orchestrator, but the grounding gate is the REAL U6 single authority
+    # (INV-1) — replacing the always-pass StubGroundingHook: enforce() blocks any exposed arXiv
+    # id/url absent from the retrieved records and abstains when there is nothing to ground
+    # against. NB: the mock adapter derives retrieved_records from the same ranked candidates,
+    # so the hook trivially passes here; it becomes load-bearing once the real OpenSearch
+    # adapter supplies an independent retrieved set (U2 real adapters, critical path ⑥).
     bundle = build_mock_orchestrator()
+    grounding_hook = GroundingEnforcementHook()
     app.state.discovery_bundle = bundle
-    app.include_router(build_router(bundle.orchestrator, bundle.grounding_hook))
+    app.state.grounding_hook = grounding_hook
+    app.include_router(build_router(bundle.orchestrator, grounding_hook))
     result.mounted.append("discovery")
 
 
