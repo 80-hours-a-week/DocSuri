@@ -1,8 +1,8 @@
-# U2 Discovery — Code Generation 요약 (mock-first)
+# U2 Discovery — Code Generation 요약 (mock-first + real 어댑터)
 
-**단계**: CONSTRUCTION → Code Generation (Part 2 완료) · **유닛**: U2 Discovery · **트랙**: Track 3(@kyjness) · **일자**: 2026-06-16
+**단계**: CONSTRUCTION → Code Generation · **유닛**: U2 Discovery · **트랙**: Track 3(@kyjness)
 **근거**: `construction/plans/u2-discovery-code-generation-plan.md`(승인) · FD/NFR Req/NFR Design 산출물
-**상태**: ✅ 생성 완료 · **테스트 27 passed · ruff clean**
+**상태**: ✅ mock-first 생성 완료(2026-06-16) + ✅ **real 어댑터(OpenSearch/Bedrock) 추가·로컬 검증(2026-06-17, 브랜치 `feature/u2-v2`, 크리티컬 패스 ⑥)** · **테스트 43 passed(+1 skip) · 라이브 OpenSearch 통합 3 passed · ruff clean**
 
 > 본 문서는 산출 코드의 **요약(마크다운)**이다. 애플리케이션 코드는 `backend/modules/discovery/`에 있다(aidlc-docs/ 아님).
 
@@ -31,6 +31,13 @@
 | API | `api/router.py` | thin FastAPI 라우터·fail-closed 핸들러 | SEC-15·⏳FastAPI |
 | mock | `mocks/{fixtures,adapters,port_stubs,wiring}.py` | KO↔EN cross-lingual+QT-2 픽스처·mock 어댑터·U6 스텁·빌더 | MR-1~4·TD-3 |
 | 테스트 | `tests/test_*` | PBT-02/03/07/09·종단 상태·degrade·RES-12 폴트 인젝션 | QT-3/4 |
+| **real 어댑터** | `adapters/bedrock_embedding.py` | 질의 임베딩(reader=search_query·dim 검증·실패→EmbeddingUnavailable) | CG-2·MR-4·vector-spec §1 |
+| **real 어댑터** | `adapters/opensearch_index.py` | k-NN(cosine)+BM25 리더(IndexRecord 역직렬화·실패→IndexUnavailable fail-closed) | CG-2·MR-4·INV-3·FR-2 |
+| **real 어댑터** | `adapters/event_publisher.py` | EventBridge SearchExecuted(논블로킹) | CG-2·BR-14·FR-10 |
+| **real 어댑터** | `adapters/settings.py` | env 설정(U1 writer와 동일 env명 → 동일 인덱스/공간) | CG-2·vector-spec §4 |
+| **real wiring** | `real_wiring.py` | `build_real_orchestrator`(mock과 동일 시그니처·실 어댑터 주입) | MR-4 |
+| **스크립트** | `scripts/seed_local_opensearch.py` | 로컬 OpenSearch 인덱스 매핑+미니코퍼스 시드(검증) | — |
+| **real 테스트** | `tests/test_{bedrock_embedding,opensearch_adapter,event_publisher,opensearch_integration}.py` | 어댑터 단위(가짜 클라)+라이브 OpenSearch 통합(auto-skip) | CG-2 |
 
 ## 핵심 설계 준수
 - **INV-1(단일 근거화 게이트)**: orchestrator(도메인 코어)는 `enforce`를 호출하지 않는다. `api/gateway_seam.run_search`(U6 게이트웨이 대역)가 `plan_and_retrieve`와 `finalize` 사이에서 주입된 후크로 단일 호출.
@@ -47,11 +54,18 @@
 
 ## 검증
 ```
-cd backend/modules/discovery && uv run pytest          # 27 passed
+cd backend/modules/discovery
+uv run pytest                                            # 43 passed (+1 skip; 통합 auto-skip)
 uv run ruff check src tests                              # All checks passed
+# 라이브 OpenSearch(로컬 docker) 통합:
+docker compose -f ../../docker-compose.yml up -d opensearch
+export DOCSURI_OPENSEARCH_ENDPOINT=http://localhost:9200 DOCSURI_OPENSEARCH_USE_SSL=0 DOCSURI_OPENSEARCH_VERIFY_CERTS=0
+uv run --extra real python -m discovery.scripts.seed_local_opensearch
+uv run --extra real pytest tests/test_opensearch_integration.py   # 3 passed (k-NN·BM25·하이브리드)
 ```
 
-## mock → real 전환 (후속)
-- `ports/search_ports.py` 인터페이스 뒤 mock(`mocks/adapters.py`)을 real(OpenSearch opensearch-py·Bedrock boto3)로 교체. 계약(`SearchResponse`)·도메인 로직 불변(MR-4).
-- U6 포트 스텁(`mocks/port_stubs.py`)은 U6 실구현으로 교체(근거화·비용·관측성 단일 권위).
-- FastAPI/배포·캐시 스토어·수치는 app-shell 합의·Infra Design.
+## mock → real 전환 (✅ 완료, 2026-06-17)
+- `ports/search_ports.py` 인터페이스 뒤 mock을 real로 교체 완료: OpenSearch(opensearch-py k-NN/BM25)·Bedrock(boto3, Cohere v3 search_query)·EventBridge 발행. 계약(`SearchResponse`)·도메인 로직 불변(MR-4). 전환은 `real_wiring.build_real_orchestrator` ↔ `mocks.wiring.build_mock_orchestrator` 선택(어댑터만 교체).
+- **app-shell 마운트 토글**: `backend/wiring.py::_mount_discovery`가 env(`DOCSURI_OPENSEARCH_ENDPOINT`+`DOCSURI_BEDROCK_MODEL_ID`)로 real/mock 선택. 실 근거화 hook은 양 모드 공통(INV-1). ⚠️ 조율존 변경 — app-shell 소유자 사인오프 필요.
+- U6 포트 스텁(`mocks/port_stubs.py`) 중 **근거화 hook은 실 U6로 교체됨**(PR #51). 비용·관측성은 잠정 스텁(U6 프로세스 싱글턴 노출 시 교체; U2는 advisory read-only).
+- **⏳ 잔여(후속/Infra)**: 실 OpenSearch 클러스터·Bedrock 접근·이벤트 버스 프로비저닝(공유 인프라 = U1 보류 인프라 + 시스템 횡단), 캐시 스토어(분산), 정량 수치. env로 분리되어 코드는 비차단.
