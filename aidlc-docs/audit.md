@@ -700,3 +700,10 @@
 
 
 
+## U2 Discovery 실 어댑터(real adapters) 구현 — 크리티컬 패스 ⑥
+**Timestamp**: 2026-06-17T00:00:00Z
+**User Input**: "진행해줘 브랜치명은 feature/u2-v2 로"
+**AI Response**: "U2 mock-first 읽기 경로에 실 어댑터를 추가함(Track3 소유 `backend/modules/discovery/`). `adapters/`에 BedrockCohereQueryEmbedder(search_query·dim 검증·실패 시 EmbeddingUnavailable), OpenSearchVectorStoreAdapter(k-NN cosine)·OpenSearchLexicalIndexAdapter(BM25)(IndexRecord 역직렬화·실패 시 IndexUnavailable fail-closed), EventBridgeEventPublisher(논블로킹 SearchExecuted→U4), DiscoverySettings(env, U1 writer와 동일 env명 재사용) 구현. `real_wiring.build_real_orchestrator`(MR-4 계약 불변 스왑), `scripts/seed_local_opensearch`(인덱스 매핑+미니코퍼스 시드) 추가. pyproject에 `real` extra(opensearch-py/boto3, lazy import). 검증: `uv run pytest` 43 passed(신규 단위 11: bedrock5·opensearch4·event2)+1 skip(api extra)·ruff clean. **로컬 라이브 검증**: docker OpenSearch(green) 시드 후 통합테스트 3 passed(k-NN·BM25·하이브리드 PaperId 디덥). app-shell 엔드투엔드 스모크: env 설정 시 RealBundle 마운트·`/api/search` 200·라이브 OpenSearch에서 실 카드 반환(Bedrock creds 부재 시 lexical-only graceful degrade). **로컬 검증이 버그 1건 포착**: `@dataclass(slots=True)`에서 `cls.<field>` 기본값 참조가 slot 디스크립터를 반환하던 문제 → 모듈 상수로 수정. **조율존(app-shell) 변경**: `backend/wiring.py::_mount_discovery`에 read-path 토글(env 있으면 real, 없으면 mock) 추가 — @ELSAPHABA 사인오프 필요. app-shell 테스트 13 passed 무회귀."
+**Context**: CONSTRUCTION — U2 Discovery real 어댑터(OpenSearch/Bedrock/EventBridge) Code Generation. 브랜치 `feature/u2-v2`. 의존성 플래그: 프로덕션 실행은 공유 인프라(OpenSearch 클러스터·Bedrock 접근·이벤트 버스 — U1 보류 인프라 + 시스템 횡단) 필요, env로 분리됨.
+
+---

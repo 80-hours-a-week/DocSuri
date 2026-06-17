@@ -1,0 +1,87 @@
+"""Real-adapter wiring — the production counterpart of ``mocks.wiring`` (MR-4).
+
+``build_real_orchestrator`` assembles the SAME U2 pipeline as ``build_mock_orchestrator``
+but injects the real OpenSearch/Bedrock adapters. Same constructor seam, same contract —
+the only difference is which adapters are plugged in (a wiring decision, not a contract
+change). The grounding gate is NOT wired here: it is U6's single authority (INV-1), injected
+by the app-shell alongside the returned orchestrator (as it already is for the mock bundle).
+
+Cost/observability hooks remain the local stubs until U6 exposes process-wide singletons;
+they are advisory-read-only from U2's side (BR-12), so this does not change behavior.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from .adapters.bedrock_embedding import BedrockCohereQueryEmbedder
+from .adapters.event_publisher import EventBridgeEventPublisher
+from .adapters.opensearch_index import (
+    OpenSearchClientFactory,
+    OpenSearchLexicalIndexAdapter,
+    OpenSearchVectorStoreAdapter,
+)
+from .adapters.settings import DiscoverySettings
+from .cache.embedding_cache import EmbeddingCache
+from .domain.assembler import ResultAssembler
+from .domain.expander import QueryUnderstandingExpander
+from .domain.grounding_adapter import GroundingAdapter
+from .domain.ranker import RelevanceRanker
+from .domain.retriever import HybridRetriever
+from .domain.validator import QueryValidator
+from .mocks.port_stubs import InMemoryEventPublisher, NoopObservabilityHub, StubCostGuard
+from .ports.search_ports import EventPublisher
+from .service.orchestrator import SearchOrchestrationService
+
+
+@dataclass(frozen=True, slots=True)
+class RealBundle:
+    orchestrator: SearchOrchestrationService
+    event_publisher: EventPublisher
+
+
+def build_real_orchestrator(settings: DiscoverySettings) -> RealBundle:
+    """Wire the U2 pipeline against real OpenSearch + Bedrock (production read path)."""
+    if not settings.opensearch_endpoint or not settings.bedrock_model_id:
+        raise ValueError(
+            "build_real_orchestrator requires DOCSURI_OPENSEARCH_ENDPOINT + "
+            "DOCSURI_BEDROCK_MODEL_ID (use build_mock_orchestrator otherwise)"
+        )
+
+    client = OpenSearchClientFactory.build(
+        endpoint=settings.opensearch_endpoint,
+        username=settings.opensearch_username,
+        password=settings.opensearch_password,
+        use_ssl=settings.opensearch_use_ssl,
+        verify_certs=settings.opensearch_verify_certs,
+    )
+    embedding = BedrockCohereQueryEmbedder(
+        model_id=settings.bedrock_model_id, region_name=settings.aws_region
+    )
+    cache = EmbeddingCache(embedding, ttl_seconds=settings.embedding_cache_ttl_seconds)
+
+    # The bus is shared infra (system/U6 EventBridge). Until provisioned, keep events
+    # in-memory so search still serves — history is best-effort (BR-14).
+    publisher: EventPublisher
+    if settings.search_event_bus:
+        publisher = EventBridgeEventPublisher(
+            event_bus_name=settings.search_event_bus, region_name=settings.aws_region
+        )
+    else:
+        publisher = InMemoryEventPublisher()
+
+    orchestrator = SearchOrchestrationService(
+        validator=QueryValidator(),
+        expander=QueryUnderstandingExpander(cache),
+        retriever=HybridRetriever(
+            OpenSearchVectorStoreAdapter(client, settings.opensearch_index),
+            OpenSearchLexicalIndexAdapter(client, settings.opensearch_index),
+        ),
+        ranker=RelevanceRanker(),
+        grounding_adapter=GroundingAdapter(),
+        assembler=ResultAssembler(),
+        cost_guard=StubCostGuard(),
+        observability=NoopObservabilityHub(),
+        event_publisher=publisher,
+    )
+    return RealBundle(orchestrator=orchestrator, event_publisher=publisher)
