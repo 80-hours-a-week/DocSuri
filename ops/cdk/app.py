@@ -10,6 +10,7 @@ Stacks are split by lifecycle/blast-radius so a network change doesn't redeploy 
 
 import aws_cdk as cdk
 from stacks.compute_stack import ComputeStack
+from stacks.frontend_stack import FrontendStack
 from stacks.ingestion_stack import IngestionStack
 from stacks.network_stack import NetworkStack
 from stacks.search_stack import SearchStack
@@ -30,6 +31,14 @@ ingestion = IngestionStack(
     app, "Docsuri-Ingestion",
     vpc=network.vpc,
     opensearch_domain=search.domain,
+    env=env,
+)
+# Deploy unit ④ — U5 frontend. The BFF (server-side) calls the backend gateway over its
+# CloudFront HTTPS URL (which injects the origin-auth secret on the way to the backend ALB).
+frontend = FrontendStack(
+    app, "Docsuri-Frontend",
+    vpc=network.vpc,
+    gateway_url=f"https://{compute.cdn.distribution_domain_name}",
     env=env,
 )
 
