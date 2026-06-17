@@ -3,6 +3,9 @@
 fastapi>=0.110
 uvicorn[standard]>=0.29
 sqlalchemy>=2.0,<3
+# psycopg 3 (binary wheel — no build toolchain in the slim image). Used by BOTH the
+# SQLAlchemy Postgres engine (db.py) and the migration runner (backend/migrations).
+psycopg[binary]>=3.1
 redis>=5.0
 pydantic>=2.7,<3
 argon2-cffi>=23.0

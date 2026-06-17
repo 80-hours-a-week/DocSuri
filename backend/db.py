@@ -17,6 +17,11 @@ from sqlalchemy.orm import Session, sessionmaker
 
 def make_engine(database_url: str) -> Engine:
     """Create the process-wide engine. Lazy connect — no server contact until first use."""
+    # Bare `postgresql://` makes SQLAlchemy reach for psycopg2 (not installed). We ship
+    # psycopg 3, so pin the dialect explicitly. Leaves `postgresql+<driver>://` and sqlite
+    # untouched.
+    if database_url.startswith("postgresql://"):
+        database_url = "postgresql+psycopg://" + database_url[len("postgresql://") :]
     is_sqlite = database_url.startswith("sqlite")
     # check_same_thread=False: FastAPI serves a sync Session dependency across the threadpool.
     connect_args = {"check_same_thread": False} if is_sqlite else {}

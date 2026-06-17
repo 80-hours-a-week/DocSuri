@@ -43,7 +43,13 @@ def get_credential_repo(db: Session = Depends(get_db_session)) -> CredentialRepo
 # 풀 teardown은 App shell의 shutdown 이벤트에서 SessionRepository.close()로 1회 수행한다.
 @lru_cache(maxsize=1)
 def get_session_repo() -> SessionRepository:
-    return SessionRepository()
+    # REDIS_HOST 미설정 → localhost(로컬/테스트). 프로덕션은 App shell이 ElastiCache
+    # 엔드포인트를 주입한다. REDIS_TLS: ElastiCache transit_encryption 클러스터는 TLS 필수.
+    return SessionRepository(
+        redis_host=os.getenv("REDIS_HOST", "localhost"),
+        redis_port=int(os.getenv("REDIS_PORT") or "6379"),
+        use_tls=os.getenv("REDIS_TLS", "").strip().lower() in {"1", "true", "yes", "on"},
+    )
 
 def get_recaptcha_client() -> RecaptchaClient:
     secret_key = os.getenv("RECAPTCHA_SECRET_KEY", "")

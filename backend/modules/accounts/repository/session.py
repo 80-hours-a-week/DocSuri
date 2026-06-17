@@ -14,18 +14,29 @@ class SessionRepository:
     피드백 ② 반영: Redis Connection Pool (최대 50 커넥션, 타임아웃 1초) 명시적 제어 및 Fail-Closed 예외 래핑
     """
     
-    def __init__(self, redis_host: str = "localhost", redis_port: int = 6379, redis_db: int = 0):
+    def __init__(
+        self,
+        redis_host: str = "localhost",
+        redis_port: int = 6379,
+        redis_db: int = 0,
+        use_tls: bool = False,
+    ):
         # 피드백 ② 반영: max_connections=50 전용 풀. NFR Design(logical-components)에 맞춰
         # socket_timeout/connect 1.0s로 빠른 Fail-Closed (기존 2.0 → 1.0).
-        self._pool = aioredis.ConnectionPool(
-            host=redis_host,
-            port=redis_port,
-            db=redis_db,
-            max_connections=50,
-            socket_timeout=1.0,
-            socket_connect_timeout=1.0,
-            decode_responses=True # 결과를 string으로 자동 디코딩
-        )
+        # use_tls: ElastiCache transit_encryption_enabled=True 클러스터는 TLS 필수 →
+        # SSLConnection 사용(Amazon CA 기본 검증). 평문 풀로는 핸드셰이크 실패.
+        pool_kwargs = {
+            "host": redis_host,
+            "port": redis_port,
+            "db": redis_db,
+            "max_connections": 50,
+            "socket_timeout": 1.0,
+            "socket_connect_timeout": 1.0,
+            "decode_responses": True,  # 결과를 string으로 자동 디코딩
+        }
+        if use_tls:
+            pool_kwargs["connection_class"] = aioredis.SSLConnection
+        self._pool = aioredis.ConnectionPool(**pool_kwargs)
         self._redis = aioredis.Redis(connection_pool=self._pool)
 
     def _wrap_exception(self, e: Exception) -> SessionStoreUnavailableException:

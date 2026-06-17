@@ -9,6 +9,29 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from urllib.parse import quote
+
+
+def _resolve_database_url(default: str) -> str:
+    """Resolve the DB DSN. Precedence:
+
+    1. ``DATABASE_URL`` if set (full DSN — local/compose, tests).
+    2. Assembled from ``DB_HOST``/``DB_PORT``/``DB_NAME``/``DB_USER`` + ``DB_PASSWORD`` —
+       the ECS shape, where the password arrives as a Secrets Manager-injected env var and
+       the rest are plain env. Keeps the password out of any single committed/visible URL.
+    3. The SQLite default (bare checkout / CI).
+    """
+    explicit = os.getenv("DATABASE_URL")
+    if explicit:
+        return explicit
+    host = os.getenv("DB_HOST")
+    if host:
+        user = quote(os.getenv("DB_USER", "docsuri_admin"), safe="")
+        pw = quote(os.getenv("DB_PASSWORD", ""), safe="")
+        port = os.getenv("DB_PORT", "5432")
+        name = os.getenv("DB_NAME", "docsuri")
+        return f"postgresql+psycopg://{user}:{pw}@{host}:{port}/{name}"
+    return default
 
 # Sensible dev defaults for the SSR phone frontend (U5) origins. CORS must be an explicit
 # allow-list (not "*") because accounts/auth uses credentialed cookies (SEC-12) and the
@@ -49,7 +72,7 @@ class Settings:
         )
         return cls(
             env=os.getenv("ENV", "local"),
-            database_url=os.getenv("DATABASE_URL", cls.database_url),
+            database_url=_resolve_database_url(cls.database_url),
             cors_origins=origins,
             trust_proxy_headers=os.getenv("TRUST_PROXY_HEADERS", "").strip().lower()
             in {"1", "true", "yes", "on"},
