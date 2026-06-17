@@ -15,10 +15,13 @@ def install_gateway_middleware(
     *,
     observability=None,
     rate_limiter=None,
+    session_manager=None,
     production: bool = True,
     trust_proxy_headers: bool = False,
     trusted_proxy_count: int = 1,
 ) -> None:
+    from .auth import inject_principal
+
     @app.middleware("http")
     async def _u6_gateway(request: Request, call_next):
         request_id = request.headers.get("X-Request-ID") or uuid4().hex
@@ -39,6 +42,17 @@ def install_gateway_middleware(
                 response.headers["X-Request-ID"] = request_id
                 apply_security_headers(response)
                 return response
+
+        # Auth injection: resolve session cookie → Principal on request.state.
+        # When session_manager is None (dev/test without Redis), skip auth injection
+        # and let downstream handlers use their own fallback (e.g. X-User-Id header).
+        if session_manager is not None:
+            auth_response = await inject_principal(
+                request, call_next, session_manager=session_manager
+            )
+            auth_response.headers["X-Request-ID"] = request_id
+            apply_security_headers(auth_response)
+            return auth_response
 
         try:
             response = await call_next(request)

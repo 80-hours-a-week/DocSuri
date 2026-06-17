@@ -96,11 +96,14 @@ def _build_observability():
 
 def _add_middleware(app: FastAPI, settings: Settings) -> None:
     # U6 gateway (backend/middleware/): per-request context + id, security headers, in-process
-    # rate limiting, and production error mapping. Supersedes the old inline request-id shim.
+    # rate limiting, auth injection, and production error mapping.
+    session_manager = _build_session_manager(settings)
+    app.state.session_manager = session_manager
     configure_u6_middleware(
         app,
         observability=app.state.observability,
         rate_limiter=app.state.rate_limiter,
+        session_manager=session_manager,
         production=not settings.is_local,
         trust_proxy_headers=settings.trust_proxy_headers,
         trusted_proxy_count=settings.trusted_proxy_count,
@@ -116,3 +119,26 @@ def _add_middleware(app: FastAPI, settings: Settings) -> None:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+
+def _build_session_manager(settings: Settings):
+    """Build SessionManager for gateway auth injection.
+
+    Returns None when Redis is unavailable (local dev without Redis) — the gateway
+    then skips auth injection and downstream handlers use their own fallbacks.
+    Requires REDIS_URL env var to be set; absent → auth injection off (safe dev default).
+    """
+    import os
+
+    if not os.getenv("REDIS_URL"):
+        log.info("app-shell: REDIS_URL unset — gateway auth injection disabled (mock mode)")
+        return None
+    try:
+        from backend.modules.accounts.repository.session import SessionRepository
+        from backend.modules.accounts.services.session_manager import SessionManager
+
+        repo = SessionRepository()
+        return SessionManager(repo)
+    except Exception:
+        log.info("app-shell: session manager unavailable — gateway auth injection disabled")
+        return None

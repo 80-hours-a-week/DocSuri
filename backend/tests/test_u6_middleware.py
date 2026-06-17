@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 from backend.middleware import InMemoryRateLimiter, configure_u6_middleware
@@ -145,3 +145,116 @@ def test_in_memory_rate_limiter_evicts_lru_over_max_keys() -> None:
 
     assert set(limiter._events) == {"b", "c"}
     assert len(limiter._events) == 2
+
+
+# ── Auth injection middleware tests ──
+
+
+class _FakeSessionManager:
+    """Minimal SessionManager stub for auth injection tests."""
+
+    def __init__(self, principals: dict[str, object] | None = None, *, fail: bool = False):
+        self._principals = principals or {}
+        self._fail = fail
+
+    async def verify(self, session_id: str):
+        if self._fail:
+            raise RuntimeError("Redis unavailable")
+        principal = self._principals.get(session_id)
+        if principal is None:
+            from backend.modules.accounts.models import UnauthorizedException
+
+            raise UnauthorizedException("invalid session")
+        return principal
+
+
+def test_auth_injection_sets_principal_on_request_state() -> None:
+    from backend.modules.accounts.models import Principal, UserRole
+
+    principal = Principal(
+        user_id="00000000-0000-4000-8000-000000000042", role=UserRole.USER, mfa_verified=False
+    )
+    mgr = _FakeSessionManager(principals={"valid-session": principal})
+
+    app = FastAPI()
+    configure_u6_middleware(app, session_manager=mgr, production=True)
+
+    captured = {}
+
+    @app.get("/protected")
+    def protected(request: Request) -> dict:
+        captured["principal"] = request.state.principal
+        return {"ok": True}
+
+    client = TestClient(app)
+    response = client.get("/protected", cookies={"session_id": "valid-session"})
+
+    assert response.status_code == 200
+    assert captured["principal"].user_id == "00000000-0000-4000-8000-000000000042"
+
+
+def test_auth_injection_rejects_unauthenticated_protected_route() -> None:
+    mgr = _FakeSessionManager()
+
+    app = FastAPI()
+    configure_u6_middleware(app, session_manager=mgr, production=True)
+
+    @app.get("/protected")
+    def protected() -> dict:
+        return {"ok": True}
+
+    client = TestClient(app)
+    response = client.get("/protected")
+
+    assert response.status_code == 401
+    assert "authentication required" in response.json()["message"]
+
+
+def test_auth_injection_skips_public_paths() -> None:
+    mgr = _FakeSessionManager()
+
+    app = FastAPI()
+    configure_u6_middleware(app, session_manager=mgr, production=True)
+
+    @app.get("/health")
+    def health() -> dict:
+        return {"status": "ok"}
+
+    client = TestClient(app)
+    response = client.get("/health")
+
+    assert response.status_code == 200
+
+
+def test_auth_injection_optional_for_search_without_cookie() -> None:
+    mgr = _FakeSessionManager()
+
+    app = FastAPI()
+    configure_u6_middleware(app, session_manager=mgr, production=True)
+
+    @app.post("/api/search")
+    def search(request: Request) -> dict:
+        return {"principal": getattr(request.state, "principal", None)}
+
+    client = TestClient(app)
+    response = client.post("/api/search")
+
+    assert response.status_code == 200
+    assert response.json()["principal"] is None
+
+
+def test_auth_injection_fail_closed_on_session_store_failure() -> None:
+    mgr = _FakeSessionManager(fail=True)
+
+    app = FastAPI()
+    configure_u6_middleware(app, session_manager=mgr, production=True)
+
+    @app.get("/protected")
+    def protected() -> dict:
+        return {"ok": True}
+
+    client = TestClient(app)
+    response = client.get("/protected", cookies={"session_id": "any-session"})
+
+    assert response.status_code == 401
+    assert "expired or invalid" in response.json()["message"]
