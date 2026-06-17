@@ -10,6 +10,9 @@ dependencies = [
     "docsuri-shared",
     # U2 search domain — mounted by _mount_discovery (was graceful-skipped while undeclared).
     "docsuri-discovery",
+    # U6 reliability/ops — the real GroundingEnforcementHook (INV-1 single authority) injected
+    # into discovery + the ObservabilityHub the gateway emits error logs to. Replaces the stub.
+    "docsuri-ops",
     # CG-1: backend web framework = FastAPI (app-shell decision, owner @revenantonthemission).
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
@@ -33,12 +36,13 @@ dev = [
     "pytest-asyncio>=0.23",
 ]
 
-# In-repo path sources. discovery is on develop, so the app-shell installs it directly and
-# `_mount_discovery` resolves instead of graceful-skipping. docsuri-ops (the real U6 grounding
-# hook) is still deferred until feature/track6 (#45) merges — see u6-integration-proposal.md.
+# In-repo path sources. discovery + ops are on develop (PRs #48, #45), so the app-shell
+# installs them directly: `_mount_discovery` resolves and injects the real U6 grounding hook
+# instead of graceful-skipping / using StubGroundingHook — see u6-integration-proposal.md.
 [tool.uv.sources]
 docsuri-shared = { path = "../shared/python", editable = true }
 docsuri-discovery = { path = "modules/discovery", editable = true }
+docsuri-ops = { path = "../ops", editable = true }
 
 # The backend is an APPLICATION, not a distributed library: its import root is the repo ROOT
 # (accounts is imported as `backend.modules.accounts`), so uv installs only its dependencies

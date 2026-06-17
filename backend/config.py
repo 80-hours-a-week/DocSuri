@@ -25,6 +25,11 @@ class Settings:
     # Postgres in prod — set DATABASE_URL to the Postgres DSN there.
     database_url: str = "sqlite:///./docsuri-dev.db"
     cors_origins: tuple[str, ...] = _DEFAULT_CORS_ORIGINS
+    # U6 gateway rate-limit keying: trust X-Forwarded-For only behind a controlled proxy.
+    # Default off → key on the direct client (request.client.host). See
+    # backend/middleware/gateway.py::_rate_limit_key. Set TRUST_PROXY_HEADERS=1 in deployments
+    # that sit behind a trusted reverse proxy / load balancer.
+    trust_proxy_headers: bool = False
 
     @property
     def is_local(self) -> bool:
@@ -42,4 +47,6 @@ class Settings:
             env=os.getenv("ENV", "local"),
             database_url=os.getenv("DATABASE_URL", cls.database_url),
             cors_origins=origins,
+            trust_proxy_headers=os.getenv("TRUST_PROXY_HEADERS", "").strip().lower()
+            in {"1", "true", "yes", "on"},
         )

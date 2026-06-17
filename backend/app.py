@@ -1,8 +1,12 @@
 """App-shell factory — assembles the modular-monolith FastAPI app (deploy unit ①).
 
-Order of assembly: middleware (CORS + request id) → fail-closed error handlers → health
+Order of assembly: middleware (U6 gateway + CORS) → fail-closed error handlers → health
 router → optional module mount. Modules are mounted at construction (so routes + DI exist
 for OpenAPI and routing); the lifespan only releases resources on shutdown.
+
+The U6 gateway (backend/middleware/) is now installed here (critical path ④): per-request
+context + id, security headers, in-process rate limiting, and production error mapping. The
+real grounding hook is injected at the discovery seam (see backend/wiring._mount_discovery).
 
 ⚙️ CG-1 RESOLVED: the backend web framework is **FastAPI**, decided by the app-shell owner
 (@revenantonthemission) now that app-shell ownership moved to Track 2 (PR #42). The
@@ -13,15 +17,15 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
-from uuid import uuid4
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import __version__
 from .config import Settings
 from .errors import register_error_handlers
 from .health import router as health_router
+from .middleware import InMemoryRateLimiter, configure_u6_middleware
 from .wiring import mount_modules
 
 log = logging.getLogger("docsuri.backend")
@@ -59,6 +63,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
 
+    # U6 observability + rate limiter (process-local seams; a real telemetry sink / Redis swap
+    # in for production). Held on app.state so the gateway and tests can reach them.
+    observability, telemetry_store = _build_observability()
+    app.state.observability = observability
+    app.state.telemetry_store = telemetry_store
+    app.state.rate_limiter = InMemoryRateLimiter()
+
     _add_middleware(app, settings)
     register_error_handlers(app)
     app.include_router(health_router)
@@ -67,9 +78,36 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     return app
 
 
+def _build_observability():
+    """Real U6 ``ObservabilityHub`` over an in-memory event store (local/dev seam).
+
+    Degrades to ``(None, None)`` if docsuri-ops is absent so the shell still boots — the
+    gateway simply no-ops error emission then (it treats ``observability=None`` as off).
+    """
+    try:
+        from docsuri_ops.adapters.local import InMemoryEventStore
+        from docsuri_ops.observability import ObservabilityHub
+    except ModuleNotFoundError:
+        log.info("app-shell: docsuri-ops absent — U6 gateway runs without observability")
+        return None, None
+    store = InMemoryEventStore()
+    return ObservabilityHub(store), store
+
+
 def _add_middleware(app: FastAPI, settings: Settings) -> None:
-    # Explicit origin allow-list + credentials (cookie sessions). U6's authn/authz/rate-limit
-    # and the grounding post-handler are layered in later via backend/middleware/ (Track 1).
+    # U6 gateway (backend/middleware/): per-request context + id, security headers, in-process
+    # rate limiting, and production error mapping. Supersedes the old inline request-id shim.
+    configure_u6_middleware(
+        app,
+        observability=app.state.observability,
+        rate_limiter=app.state.rate_limiter,
+        production=not settings.is_local,
+        trust_proxy_headers=settings.trust_proxy_headers,
+    )
+
+    # CORS added LAST → outermost, so preflight and the gateway's 429/500 responses still carry
+    # CORS headers. Explicit origin allow-list + credentials (cookie sessions; SEC-12) — the
+    # CORS spec forbids wildcard origin together with allow_credentials.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.cors_origins),
@@ -77,11 +115,3 @@ def _add_middleware(app: FastAPI, settings: Settings) -> None:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
-    @app.middleware("http")
-    async def _request_id(request: Request, call_next):
-        request_id = request.headers.get("X-Request-ID") or uuid4().hex
-        request.state.request_id = request_id
-        response = await call_next(request)
-        response.headers["X-Request-ID"] = request_id
-        return response
