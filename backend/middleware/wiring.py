@@ -13,6 +13,7 @@ def configure_u6_middleware(
     rate_limiter: InMemoryRateLimiter | None = None,
     production: bool = True,
     trust_proxy_headers: bool = False,
+    trusted_proxy_count: int = 1,
 ) -> None:
     install_gateway_middleware(
         app,
@@ -20,4 +21,5 @@ def configure_u6_middleware(
         rate_limiter=rate_limiter,
         production=production,
         trust_proxy_headers=trust_proxy_headers,
+        trusted_proxy_count=trusted_proxy_count,
     )

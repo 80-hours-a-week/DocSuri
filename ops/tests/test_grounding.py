@@ -63,6 +63,33 @@ def test_grounding_does_not_strip_version_suffix_from_non_arxiv_ids() -> None:
     assert decision.verdict == "block"
 
 
+def test_grounding_strips_version_for_old_style_arxiv_ids() -> None:
+    # Regression (PR #45 review): old-style ids (archive/NNNNNNN) must be version-normalized too.
+    # Previously the version was not stripped, so the same paper at different versions falsely
+    # blocked. cs.AI/0601001v2 (candidate) must match cs.AI/0601001 (retrieved).
+    hook = GroundingEnforcementHook()
+
+    decision = hook.enforce(
+        {"cards": [{"arxivId": "cs.AI/0601001v2"}]},
+        [{"arxivId": "cs.AI/0601001"}],
+    )
+
+    assert decision.verdict == "pass"
+
+
+def test_grounding_keeps_old_style_archive_prefix_so_cross_archive_is_blocked() -> None:
+    # The archive prefix is part of the id: hep-th/0601001 != astro-ph/0601001 (no collision),
+    # so a fabricated cross-archive reference is still blocked (no version-strip false negative).
+    hook = GroundingEnforcementHook()
+
+    decision = hook.enforce(
+        {"cards": [{"arxivId": "hep-th/0601001"}]},
+        [{"arxivId": "astro-ph/0601001"}],
+    )
+
+    assert decision.verdict == "block"
+
+
 def test_grounding_blocks_fabricated_arxiv_id() -> None:
     hook = GroundingEnforcementHook()
 

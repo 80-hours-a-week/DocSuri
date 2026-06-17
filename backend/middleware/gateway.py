@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -16,6 +17,7 @@ def install_gateway_middleware(
     rate_limiter=None,
     production: bool = True,
     trust_proxy_headers: bool = False,
+    trusted_proxy_count: int = 1,
 ) -> None:
     @app.middleware("http")
     async def _u6_gateway(request: Request, call_next):
@@ -24,7 +26,11 @@ def install_gateway_middleware(
         request.state.context = RequestContext(request_id=request_id)
 
         if rate_limiter is not None:
-            key = _rate_limit_key(request, trust_proxy_headers=trust_proxy_headers)
+            key = _rate_limit_key(
+                request,
+                trust_proxy_headers=trust_proxy_headers,
+                trusted_proxy_count=trusted_proxy_count,
+            )
             if not rate_limiter.allow(str(key)):
                 response = JSONResponse(
                     status_code=429,
@@ -53,16 +59,44 @@ def install_gateway_middleware(
         return response
 
 
-def _rate_limit_key(request: Request, *, trust_proxy_headers: bool = False) -> str:
-    forwarded_for = request.headers.get("X-Forwarded-For")
-    if trust_proxy_headers and forwarded_for:
-        first_hop = forwarded_for.split(",", maxsplit=1)[0].strip()
-        if first_hop:
-            return first_hop
+def _rate_limit_key(
+    request: Request,
+    *,
+    trust_proxy_headers: bool = False,
+    trusted_proxy_count: int = 1,
+) -> str:
+    if trust_proxy_headers:
+        forwarded = _forwarded_client(request, trusted_proxy_count)
+        if forwarded is not None:
+            return forwarded
 
     client = getattr(request, "client", None)
     host = getattr(client, "host", None)
     return str(host or "unknown-client")
+
+
+def _forwarded_client(request: Request, trusted_proxy_count: int) -> str | None:
+    raw = request.headers.get("X-Forwarded-For")
+    if not raw:
+        return None
+    hops = [hop.strip() for hop in raw.split(",") if hop.strip()]
+    # The LEFTMOST entry is fully client-controlled (spoofable) — keying on it lets an attacker
+    # rotate it to evade per-IP limits. Trust only what our own proxies stamped: count
+    # `trusted_proxy_count` from the right and take the hop our outermost trusted proxy recorded.
+    # Require a valid IP so a spoofed/garbage value can't mint unlimited rate-limit buckets.
+    idx = len(hops) - max(trusted_proxy_count, 1)
+    if idx < 0:
+        return None  # fewer hops than trusted proxies → header is not trustworthy
+    candidate = hops[idx]
+    return candidate if _is_ip(candidate) else None
+
+
+def _is_ip(value: str) -> bool:
+    try:
+        ipaddress.ip_address(value)
+    except ValueError:
+        return False
+    return True
 
 
 def _emit_error(observability, request_id: str, exc: Exception) -> None:
