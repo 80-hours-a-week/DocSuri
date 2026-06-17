@@ -115,7 +115,7 @@ jobs:
         run: uv run --project backend pytest tests -c pytest.ini
 
   frontend:
-    name: frontend (U5 · tsc + vitest + type drift)
+    name: frontend (U5 · tsc + vitest + type drift + build)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -137,3 +137,8 @@ jobs:
         run: npm run lint
       - name: Tests
         run: npx vitest run
+      # tsc + vitest don't webpack-compile the routes, so a build-only break (e.g. a
+      # server-only module leaking into the client graph via the /bff route) passes both
+      # yet fails `next build`. This step is the guard that actually compiles every route.
+      - name: Build
+        run: npx next build
