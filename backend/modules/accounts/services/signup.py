@@ -54,7 +54,8 @@ class SignupService:
 
         # 5. 이메일 인증 링크용 보안 토큰 생성 (24시간 유효) (BR-A5)
         token = secrets.token_urlsafe(32)
-        expires_at = datetime.utcnow() + timedelta(hours=24)
+        # naive UTC — matches SQLAlchemy DateTime(timezone=False) column storage.
+        expires_at = datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=24)
         self._repo.create_verification_token(email_vo.value, token, expires_at)
 
         # 6. 이메일 발송 (SES 소프트 폴백 적용)
@@ -90,7 +91,7 @@ class SignupService:
             raise DomainException("인증 토큰이 존재하지 않거나 만료되었습니다.")
 
         # 토큰 유효 기간 검증 (24시간)
-        if datetime.utcnow() > token_record.expires_at:
+        if datetime.now(UTC).replace(tzinfo=None) > token_record.expires_at:
             self._repo.delete_verification_token(token)
             raise DomainException("인증 링크 유효 기간(24시간)이 만료되었습니다. 다시 가입해 주십시오.")
 

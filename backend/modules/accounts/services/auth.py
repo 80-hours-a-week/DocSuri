@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from argon2.exceptions import InvalidHash, VerificationError
 
@@ -74,7 +74,7 @@ class AuthenticationService:
             delay_seconds = 0
             if account:
                 account.failure_count += 1
-                account.last_failed_at = datetime.utcnow()
+                account.last_failed_at = datetime.now(UTC)
                 # BR-A4: 계정을 자동으로 잠그지 않는다 — 자동 LOCKED 전환은 타인의 정상 계정을 겨냥한
                 # DoS를 유발하므로 금지(점진적 backoff + 10회차 CAPTCHA로 방어). LOCKED는 관리자 수동
                 # 잠금 경로에서만 설정될 수 있다.
