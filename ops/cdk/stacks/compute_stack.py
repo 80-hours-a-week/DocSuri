@@ -51,6 +51,9 @@ from aws_cdk import (
     aws_iam as iam,
 )
 from aws_cdk import (
+    aws_logs as logs,
+)
+from aws_cdk import (
     aws_opensearchservice as opensearch,
 )
 from aws_cdk import (
@@ -318,6 +321,34 @@ class ComputeStack(Stack):
                         service="ses", resource="identity", resource_name=_ZONE_NAME,
                     )
                 ],
+            )
+        )
+
+        # Observability (G3): the app ships METRIC events + structured logs via CLOUDWATCH_NAMESPACE
+        # (container_env). Without these grants every shipment silently fails — the adapter swallows
+        # AccessDenied. Pre-create the log group so retention is bounded (an app-created group never
+        # expires → cost creep).
+        ops_log_group = logs.LogGroup(
+            self, "OpsLogGroup",
+            log_group_name="/docsuri/ops",
+            retention=logs.RetentionDays.ONE_MONTH,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+        ops_log_group.grant_write(self.service.task_definition.task_role)
+        self.service.task_definition.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                # PutMetricData has no resource-level scoping; restrict by namespace instead.
+                actions=["cloudwatch:PutMetricData"],
+                resources=["*"],
+                conditions={"StringEquals": {"cloudwatch:namespace": "DocSuri/Production"}},
+            )
+        )
+        self.service.task_definition.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                # The adapter calls create_log_group on startup; AlreadyExists against the
+                # pre-created group above is harmless.
+                actions=["logs:CreateLogGroup"],
+                resources=[ops_log_group.log_group_arn],
             )
         )
 
