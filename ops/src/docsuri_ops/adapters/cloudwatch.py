@@ -7,6 +7,8 @@ CloudWatch Logs (PutLogEvents).
 ``append`` is NON-BLOCKING: it enqueues the event and a single background daemon thread does
 the boto3 calls. This matters because the U6 gateway emits per-request from the async event
 loop — a synchronous PutMetricData there would block the loop and serialize all requests.
+The worker drains a burst of queued events and ships metrics **batched** (one PutMetricData
+call per ~100 datums) so per-request latency/throughput don't cost one API call each.
 Shipping on one worker also means ``_seen`` / ``_sequence_token`` are mutated by exactly one
 thread, so concurrent producers (gateway loop thread + FastAPI sync-route worker threads)
 don't race. retry is boto3's; loss is bounded to whatever is queued at an abrupt exit. (US-R4)
@@ -38,6 +40,11 @@ log = logging.getLogger("docsuri.ops.cloudwatch")
 _MAX_SEEN = 100_000
 # Cap the in-flight buffer; drop on backpressure rather than block a producer (best-effort).
 _MAX_QUEUE = 10_000
+# Drain up to this many queued events per worker iteration, then ship them together so a burst
+# of per-request metrics collapses into few PutMetricData calls instead of one per metric.
+_DRAIN_MAX = 1_000
+# MetricData entries per PutMetricData call — well under the API's 1000-metric / 1MB ceiling.
+_METRIC_BATCH = 100
 _SENTINEL: Any = object()  # close() signal for the worker loop
 
 
@@ -77,28 +84,55 @@ class CloudWatchEventStore:
 
     def _run(self) -> None:
         while True:
-            event = self._queue.get()
-            try:
-                if event is _SENTINEL:
-                    return
-                self._ship(event)
-            finally:
+            first = self._queue.get()  # block for at least one
+            gets, stop = 1, False
+            if first is _SENTINEL:
                 self._queue.task_done()
+                return
+            batch = [first]
+            while len(batch) < _DRAIN_MAX:  # then drain whatever else is already queued
+                try:
+                    nxt = self._queue.get_nowait()
+                except queue.Empty:
+                    break
+                gets += 1
+                if nxt is _SENTINEL:
+                    stop = True
+                    break
+                batch.append(nxt)
+            try:
+                self._ship_batch(batch)
+            finally:
+                for _ in range(gets):  # one task_done per get()/get_nowait() so flush() unblocks
+                    self._queue.task_done()
+            if stop:
+                return
 
-    def _ship(self, event: TelemetryEvent) -> None:
+    def _ship_batch(self, events: list[TelemetryEvent]) -> None:
         # Worker-thread-only: dedup state is single-writer here, so no lock is needed.
-        if event.dedup_key in self._seen:
-            return
-        self._seen[event.dedup_key] = None
-        if len(self._seen) > _MAX_SEEN:
-            self._seen.popitem(last=False)  # evict oldest — bound the dedup window (US-R4)
-        try:
+        fresh: list[TelemetryEvent] = []
+        for event in events:
+            if event.dedup_key in self._seen:
+                continue
+            self._seen[event.dedup_key] = None
+            if len(self._seen) > _MAX_SEEN:
+                self._seen.popitem(last=False)  # evict oldest — bound the dedup window (US-R4)
+            fresh.append(event)
+
+        metrics = [e for e in fresh if e.kind is SignalKind.METRIC]
+        if metrics:
+            try:
+                self._put_metrics(metrics)
+            except Exception:
+                log.warning("cloudwatch: failed to ship %d metrics", len(metrics), exc_info=True)
+        # Logs/audits stay one-by-one — lower volume, and PutLogEvents carries sequence-token state.
+        for event in fresh:
             if event.kind is SignalKind.METRIC:
-                self._put_metric(event)
-            else:
+                continue
+            try:
                 self._put_log(event)
-        except Exception:
-            log.warning("cloudwatch: failed to ship event %s", event.event_id, exc_info=True)
+            except Exception:
+                log.warning("cloudwatch: failed to ship event %s", event.event_id, exc_info=True)
 
     def flush(self) -> None:
         """Block until all queued events have been shipped (graceful shutdown / tests)."""
@@ -139,21 +173,23 @@ class CloudWatchEventStore:
     def list_events(self) -> list[TelemetryEvent]:
         return []
 
-    def _put_metric(self, event: TelemetryEvent) -> None:
-        dimensions = [
-            {"Name": k, "Value": v} for k, v in (event.tags or {}).items()
-        ][:10]
-        self._get_cw().put_metric_data(
-            Namespace=self.namespace,
-            MetricData=[
-                {
-                    "MetricName": event.name or "unnamed",
-                    "Value": event.value if event.value is not None else 1.0,
-                    "Unit": "Count",
-                    "Dimensions": dimensions,
-                }
-            ],
-        )
+    def _metric_datum(self, event: TelemetryEvent) -> dict[str, Any]:
+        dimensions = [{"Name": k, "Value": v} for k, v in (event.tags or {}).items()][:10]
+        return {
+            "MetricName": event.name or "unnamed",
+            "Value": event.value if event.value is not None else 1.0,
+            "Unit": "Count",
+            "Dimensions": dimensions,
+        }
+
+    def _put_metrics(self, events: list[TelemetryEvent]) -> None:
+        # One PutMetricData call per chunk (same namespace) instead of one call per metric.
+        client = self._get_cw()
+        for i in range(0, len(events), _METRIC_BATCH):
+            client.put_metric_data(
+                Namespace=self.namespace,
+                MetricData=[self._metric_datum(e) for e in events[i : i + _METRIC_BATCH]],
+            )
 
     def _put_log(self, event: TelemetryEvent) -> None:
         message = json.dumps(

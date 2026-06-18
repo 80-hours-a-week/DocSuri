@@ -68,21 +68,49 @@ def test_dedup_window_is_bounded_lru(monkeypatch) -> None:
     assert store.append(ev("a")) is True  # oldest was evicted → re-accepted (bounded, not a leak)
 
 
+class _FakeCw:
+    """Records put_metric_data calls — each call's MetricData list is one batch."""
+
+    def __init__(self) -> None:
+        self.calls: list[list[dict]] = []
+
+    def put_metric_data(self, *, Namespace, MetricData) -> None:  # noqa: N803 (boto3 kwarg names)
+        self.calls.append(MetricData)
+
+
 def test_cloudwatch_append_is_nonblocking_and_flush_ships(monkeypatch) -> None:
     """append() enqueues (no boto3 in the caller's thread) and the background worker ships on
     flush() — so the async gateway never blocks the event loop on PutMetricData. (US-R4)"""
     from docsuri_ops.adapters.cloudwatch import CloudWatchEventStore
 
-    shipped: list[str] = []
-    monkeypatch.setattr(
-        CloudWatchEventStore, "_put_metric", lambda self, event: shipped.append(event.name or "")
-    )
+    fake = _FakeCw()
+    monkeypatch.setattr(CloudWatchEventStore, "_get_cw", lambda self: fake)
     store = CloudWatchEventStore(namespace="Test")
     try:
         assert store.append(
             TelemetryEvent(event_id="m1", kind=SignalKind.METRIC, name="x", value=1.0)
         ) is True
         store.flush()  # block until the worker drains the queue
-        assert shipped == ["x"]
+        assert [d["MetricName"] for md in fake.calls for d in md] == ["x"]
+    finally:
+        store.close()
+
+
+def test_cloudwatch_batches_metric_data(monkeypatch) -> None:
+    """A burst of metric events ships as ONE PutMetricData call with many MetricData entries,
+    not one call per metric — cuts the per-request API/cost multiplier. (US-R4)"""
+    from docsuri_ops.adapters.cloudwatch import CloudWatchEventStore
+
+    fake = _FakeCw()
+    monkeypatch.setattr(CloudWatchEventStore, "_get_cw", lambda self: fake)
+    store = CloudWatchEventStore(namespace="Test")
+    try:
+        events = [
+            TelemetryEvent(event_id=f"m{i}", kind=SignalKind.METRIC, name="x", value=1.0)
+            for i in range(5)
+        ]
+        store._ship_batch(events)  # exercise batching directly (deterministic, no queue race)
+        assert len(fake.calls) == 1  # 5 metrics → ONE PutMetricData call
+        assert len(fake.calls[0]) == 5  # carrying 5 MetricData entries
     finally:
         store.close()
