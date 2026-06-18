@@ -1,0 +1,244 @@
+"""U7 domain entities (domain-entities.md).
+
+Internal pipeline shapes are frozen dataclasses; the external response union
+(``SummaryResponse``) exposes only SEC-9-safe fields via ``to_dict`` (INV-3). The
+``shared/dtos/summarization`` contract is PROVISIONAL — these module-local shapes stand
+in until it is promoted (U4 library precedent).
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from enum import StrEnum
+
+
+class Task(StrEnum):
+    SUMMARY = "summary"
+    TRANSLATE = "translate"
+
+
+class Persona(StrEnum):
+    EXPERT = "expert"
+    BEGINNER = "beginner"
+
+
+class TargetLang(StrEnum):
+    KO = "ko"
+
+
+class SourceKind(StrEnum):
+    FULL_TEXT = "full_text"
+    ABSTRACT = "abstract"
+
+
+class AnchorTarget(StrEnum):
+    SECTION = "section"
+    TABLE = "table"
+    FIGURE = "figure"
+
+
+# --- Request / context -------------------------------------------------------
+@dataclass(frozen=True, slots=True)
+class AuthSession:
+    """Authenticated principal injected by the U6 gateway (SEC-8). U7 trusts it."""
+
+    user_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class RequestContext:
+    auth_session: AuthSession
+    request_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class SummaryRequest:
+    """Result-card on-demand action (FR-12/13). ``persona`` applies to summary only;
+    ``view`` is a client render hint and is NOT part of cache identity (Q9)."""
+
+    paper_id: str
+    version: int
+    task: Task
+    target_lang: TargetLang = TargetLang.KO
+    persona: Persona = Persona.EXPERT
+    abstract: str | None = None  # carried for translate / full-text fallback (Q1)
+
+
+# --- Cache key (immutable, §11 / BR-S1) --------------------------------------
+@dataclass(frozen=True, slots=True)
+class SummaryCacheKey:
+    paper_id: str
+    version: int
+    task: Task
+    target_lang: TargetLang
+    persona: Persona
+    glossary_ver: int
+    model_ver: str
+    prompt_ver: str
+
+    def object_path(self) -> str:
+        """S3 object path (infrastructure-design §2.1). Immutable → permanent (INV-5)."""
+        return (
+            f"summaries/{self.paper_id}/v{self.version}/"
+            f"{self.task}_{self.target_lang}_{self.persona}_{self.model_ver}_{self.prompt_ver}.json"
+        )
+
+    def redis_key(self) -> str:
+        """Hot-cache key in the ``sum:`` keyspace (infrastructure-design §2.2)."""
+        return "sum:" + self.object_path()
+
+
+# --- Source / refinement (§4 / BR-S3) ----------------------------------------
+@dataclass(frozen=True, slots=True)
+class SourceText:
+    kind: SourceKind
+    raw: str
+    fallback_reason: str | None = None  # set when summary fell back to abstract (Q1/NFR-R2)
+
+
+@dataclass(frozen=True, slots=True)
+class Section:
+    label: str  # "" when only a span could be derived (Q6 span-only degrade)
+    start: int
+    end: int
+
+
+@dataclass(frozen=True, slots=True)
+class RefinedSource:
+    body: str
+    sections: tuple[Section, ...] = ()
+    captions: tuple[str, ...] = ()  # Table/Figure captions — preserved (Q2)
+    formulas: tuple[str, ...] = ()  # LaTeX — preserved, never translated
+    token_count: int = 0
+
+
+# --- Glossary (§9.1 / BR-S4) -------------------------------------------------
+@dataclass(frozen=True, slots=True)
+class TermMapping:
+    term_from: str
+    term_to: str
+    prompt_enforced: bool = True  # False → deterministic post-substitution (simple noun)
+
+
+@dataclass(frozen=True, slots=True)
+class Glossary:
+    seed_mappings: tuple[TermMapping, ...] = ()
+    keep_as_is: tuple[str, ...] = ()
+    user_overrides: tuple[TermMapping, ...] = ()
+
+
+# --- Generation output (§3) --------------------------------------------------
+@dataclass(frozen=True, slots=True)
+class Anchor:
+    field_name: str
+    target: AnchorTarget
+    span: str
+    label: str = ""  # "" when section derivation failed → span-only (Q6)
+
+
+@dataclass(frozen=True, slots=True)
+class SummaryDraft:
+    tldr: str
+    contributions: tuple[str, ...]
+    method: str
+    results: str
+    limitations: str
+    reproducibility: dict[str, str]  # {"code": ..., "data": ...}
+    anchors: tuple[Anchor, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class TranslationDraft:
+    korean_text: str
+    kept_terms: tuple[str, ...] = ()
+
+
+# --- Grounding (Q4 — U7-owned deterministic gate) ----------------------------
+@dataclass(frozen=True, slots=True)
+class GroundingInput:
+    draft: SummaryDraft
+    refined: RefinedSource
+
+
+@dataclass(frozen=True, slots=True)
+class Violation:
+    kind: str  # anchor_missing | numeric_mismatch | schema_incomplete | truncated | empty
+    field_name: str
+
+
+@dataclass(frozen=True, slots=True)
+class AnchorVerdict:
+    ok: bool
+    violations: tuple[Violation, ...] = ()
+    outcome: str = "pass"  # pass | abstain
+
+
+# --- Terminal response union (BR-S9 / Q5) ------------------------------------
+@dataclass(frozen=True, slots=True)
+class SummaryResultDTO:
+    task: Task
+    summary: SummaryDraft | None = None
+    translation: TranslationDraft | None = None
+    meta: dict[str, str] = field(default_factory=dict)
+    cached: bool = False
+
+    def to_dict(self) -> dict:
+        """SEC-9 whitelist — only user-facing fields (no tokens/cost/cache-key/model id)."""
+        out: dict = {
+            "status": "ok",
+            "task": str(self.task),
+            "meta": self.meta,
+            "cached": self.cached,
+        }
+        if self.summary is not None:
+            s = self.summary
+            out["summary"] = {
+                "tldr": s.tldr,
+                "contributions": list(s.contributions),
+                "method": s.method,
+                "results": s.results,
+                "limitations": s.limitations,
+                "reproducibility": s.reproducibility,
+                "anchors": [
+                    {
+                        "field": a.field_name,
+                        "target": str(a.target),
+                        "span": a.span,
+                        "label": a.label,
+                    }
+                    for a in s.anchors
+                ],
+            }
+        if self.translation is not None:
+            out["translation"] = {
+                "koreanText": self.translation.korean_text,
+                "keptTerms": list(self.translation.kept_terms),
+            }
+        return out
+
+
+@dataclass(frozen=True, slots=True)
+class AbstainDTO:
+    reason: str
+
+    def to_dict(self) -> dict:
+        return {"status": "abstain", "reason": self.reason}
+
+
+@dataclass(frozen=True, slots=True)
+class CostDegradedDTO:
+    message: str = "AI 요약 일시 중단"
+
+    def to_dict(self) -> dict:
+        return {"status": "cost_degraded", "message": self.message}
+
+
+@dataclass(frozen=True, slots=True)
+class SourceUnavailableDTO:
+    reason: str
+
+    def to_dict(self) -> dict:
+        return {"status": "source_unavailable", "reason": self.reason}
+
+
+SummaryResponse = SummaryResultDTO | AbstainDTO | CostDegradedDTO | SourceUnavailableDTO

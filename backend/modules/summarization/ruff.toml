@@ -1,0 +1,8 @@
+line-length = 100
+target-version = "py311"
+
+[lint]
+select = ["E", "F", "I", "UP", "B", "S", "ARG"]
+# S101 (assert) is fine in tests; ARG is relaxed in tests (Protocol stubs).
+[lint.per-file-ignores]
+"tests/**" = ["S101", "ARG001", "ARG002"]

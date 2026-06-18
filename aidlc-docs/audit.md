@@ -796,3 +796,67 @@
 
 ---
 
+## U7 CONSTRUCTION 진입 — Functional Design 계획·질문 게이트 작성
+**Timestamp**: 2026-06-18T00:00:00Z
+**User Input(원문)**: "U7(요약/번역) 기능의 CONSTRUCTION을 이어서 진행 … 1~8 읽고 현재 상태 요약 + 다음 한 걸음" → (이후) "진행해줘" / "develop 브랜치로 pr 올려줘" / "확정안이더라도 다 올려줘"
+**AI Response**: INCEPTION(U7) 종료(PR #108 머지 확인) → CONSTRUCTION per-unit 루프 첫 단계 Functional Design 진입. 브랜치 `feature/u7-v2`(develop HEAD 분기, 레포 `-v2` 관례). `construction/plans/u7-summarization-functional-design-plan.md` 작성: §1 유닛 컨텍스트(신규 유닛 — component-methods 미선잠금 → 도메인 컴포넌트 9개 최초 정의)·§2 FD 실행 계획(domain-entities·business-logic-model·business-rules + PBT + 추적성 + 설계입력 §2~§12 흡수 맵)·§4 명확화 질문 **17개**(A~D 코드대조 13문 + E 설계입력 §12 확정안 재개 Q14~Q17, 모두 `[Answer]:`·`X) 기타`)·§5 불변식 5개. **핵심 결정**: Q4(frozen `enforce` 검색형상의 요약 재사용 가부 — QT-5 검증, 권장 U7 고유 결정적 게이트)·Q6(`split_sections` 코드 부재 → U7 섹션 도출)·Q12(스트리밍 TTFB↔날조0 → 버퍼-검증-스트리밍). **코드/FD 산출물 미생성(리뷰 게이트)**. PR #115(`feature/u7-v2`→develop) 생성. 요구사항 수준 합의(INCEPTION Q1~Q7)는 재개하지 않음.
+**Context**: CONSTRUCTION — U7 Summarization Functional Design Step 1~4(계획+질문). 리뷰/답변 대기. 다음(답변 확정 후): `u7-summarization/functional-design/` 산출물 생성 → 리뷰 게이트 → U7 NFR Requirements.
+
+---
+
+## U7 진행 정합성 자가검증 (업스트림 AI-DLC 규칙 대조)
+**Timestamp**: 2026-06-18T00:00:00Z
+**User Input(원문)**: "상위 레포 중에 aidlc 레포 클론한거랑 레포내 aidlc 폴더 안에 필요한 문서들을 읽은 후에 잘못 진행하고 있는건 없는지 확인도 한 번 해줘"
+**AI Response**: 업스트림 클론(`/home/kyjness/projects/github/aidlc-workflows/aidlc-rules/aws-aidlc-rule-details`)과 레포 내 `.aidlc-rule-details` 대조. **결과: construction 6개 규칙 파일 바이트 동일(드리프트 0)**. 진행 정합 확인 — CONSTRUCTION per-unit 루프 순서(FD→NFR Req→NFR Design→Infra→Code Gen→Build&Test) 준수, FD가 첫 단계로 올바름; 계획서 위치(`construction/plans/`) 정확; 질문 `[Answer]:` 태그·MC 형식·Other 옵션 마지막 규칙 부합; 리뷰 게이트(승인 전 산출물 미생성) 준수; 기술/수치(Sonnet/Haiku·토큰캡)를 NFR로 이연한 기술무관 원칙 준수. **정정한 갭 3건**: ① `question-format-guide` 표준 + 사용자 지시에 맞춰 Other 옵션을 순차문자(C/D)→`X) 기타`로 통일; ② 본 audit.md 누락 항목 append(session-continuity #7 — 세션 재개·작업 로깅 의무); ③ `aidlc-state.md`에 U7 Construction FD IN-PROGRESS 마커 추가(현재 단계 라인 stale 갱신). **남은 경미 사항(정정 안 함, 보고만)**: question-format-guide의 "옵션 간 빈 줄" 권고는 본 계획서가 타이트 리스트(기존 U1~U6 계획서 전부 동일 관례)라 미적용 — 렌더 미관 한정, 회귀 아님. **주의 환기**: "MC 질문을 채팅에 인라인 금지" 규칙상 정식 답변은 계획서 `[Answer]:` 태그(또는 PR 리뷰)에 기록함이 원칙 — 채팅의 표 요약은 포인터일 뿐.
+**Context**: CONSTRUCTION — U7 FD 진행 정합성 검증(업스트림 규칙 대조) + 정합성 갭 3건 정정. 산출물·코드 무변경.
+
+---
+
+## U7 Functional Design — 답변 확정·산출물 생성·승인
+**Timestamp**: 2026-06-18T00:00:00Z
+**User Input(원문)**: (답변) "Q2는 B로 가되 … 추가 노이즈 제거는 Header/Footer·페이지번호·저작권·저자정보에 한정 … Table/Figure Caption·Appendix·Supplementary Results는 제거하지 않는 … Q8은 … 핵심 용어 보존은 프롬프트 강제, 후치환은 사용자 선호 단순 명사 … Q10/Q11은 포트 유지하되 첫 구현부터 실 Bedrock/S3+Redis, mock 미구현 … mock-first 명시 제거, 모두 실배포 기준 … 나머지 A" → (승인) "둘 다 진행해줘" → "승인할게 NFR Requirements로 진행"
+**AI Response**: FD 17문 전수 답변 기록(A 14·B 1[Q2]·X 2[Q10/Q11]). **real-first 전환**: LLM·스토어 어댑터 포트 유지 + 첫 구현부터 실 Bedrock/S3+Redis, mock/인메모리 대역 미구현 — `mock-first` 표기 전부 제거(계획서·aidlc-state·unit-of-work). Q2=B(노이즈 제거 범위 한정·실험정보 콘텐츠 보존), Q8 표현 재작성, Q4=U7 고유 결정적 근거화 게이트(frozen `enforce` 미재사용·"단일 권위=U6"는 검색 한정 해석), Q6=섹션 도출+span, Q12=버퍼-검증-스트리밍. 산출물 `construction/u7-summarization/functional-design/`(domain-entities·business-logic-model·business-rules — 9 컴포넌트 파이프라인·BR-S1~S14·PBT-S1~S5·추적성 미커버 0·설계입력 §2~§12 흡수 맵) 생성. 커밋 `2d5f9b4`·PR #115. **사용자 "승인할게" → FD 승인 게이트 통과.** Other 옵션 X) 표기·정합성 갭 정정은 커밋 `d763c17`.
+**Context**: CONSTRUCTION — U7 Functional Design 완료·승인. 다음 단계: U7 NFR Requirements(모델 바인딩 Sonnet/Haiku·Bedrock 스트리밍·S3/Redis·개인 용어집 영속화·토큰 캡·TTFB·real-first 테스트 전략 등). 브랜치 feature/u7-v2, PR #115.
+
+---
+
+## U7 NFR Requirements — 답변 확정·산출물 생성·승인
+**Timestamp**: 2026-06-19T00:00:00Z
+**User Input(원문)**: "전부 A" → (Q14 명확화) "Q14에서 Production Mock Adapter는 구현하지 않는다. 다만 단위 테스트에서는 테스트 전용 Fixture/Stub 사용을 허용한다. 나머진 전부 A" → "커밋하고 push해줘 그다음 NFR Design 진행해줘"
+**AI Response**: NFR Req 15문 전수 A 기록(Q14는 A+명시: Production Mock Adapter 미구현·단위 테스트 Fixture/Stub 허용·통합은 실 의존성). 산출물 `construction/u7-summarization/nfr-requirements/`(nfr-requirements·tech-stack-decisions, TD-S1~S12). **바인딩**: 모델 Sonnet 4.6 요약/Haiku 4.5 번역(TD-S3)·Bedrock 스트리밍(TD-S4)·스토어 S3+Redis(TD-S5)·개인 용어집 RDS PostgreSQL(TD-S6)·섹션 도출 정규식·휴리스틱(TD-S7)·비동기 잡 fast-follow[v1 동기+토큰 캡](TD-S9)·재현성 정규식+LLM(TD-S10)·real-first 테스트(TD-S12). [전역 계승] Python·FastAPI·Bedrock·RDS·Redis·S3·NFR-C1·Hypothesis. **사용자 "NFR Design 진행해줘" → NFR Requirements 승인 게이트 통과.** 커밋·push 후 NFR Design 단계 진입.
+**Context**: CONSTRUCTION — U7 NFR Requirements 완료·승인. 다음 단계: U7 NFR Design(스트리밍/근거화/캐시/저하 복원력 패턴·논리 컴포넌트·구체 서킷 수치·CI). 브랜치 feature/u7-v2, PR #115.
+
+---
+
+## U7 NFR Design — 답변 확정·산출물 생성·승인
+**Timestamp**: 2026-06-19T00:00:00Z
+**User Input(원문)**: "전부 A" → "커밋하고 push해줘 그다음 Infrastructure Design 진행해줘"
+**AI Response**: NFR Design 10문 전수 A 기록. 산출물 `construction/u7-summarization/nfr-design/`(nfr-design-patterns·logical-components). **패턴**: Bedrock 격리(타임아웃+1재시도+서킷→기권)·근거화 1회 재시도(LLM 장애 재시도와 분리)·**저하 3계층 구분**(비용 degradeMode≠의존성 서킷≠소스 폴백)·캐시 우선 read/write-through·**생성-버퍼-검증-점진렌더**(구조화 JSON은 완성 후 근거화·FR-5 날조0 우선)·stateless+공유 외부 상태·Bedrock 쿼터(async)·보안 방어심층(본문격리 인젝션·SEC-9 필터·전역 fail-closed·개인 용어집 owner 격리)·CI real-first(단위 Fixture/Stub 항상+통합 실 의존성 별도 게이트)·RES-12 폴트 인젝션. 논리 컴포넌트 11개 토폴로지(FD 9↔논리 매핑·기존 인프라 재사용·신규 관리형 0). **사용자 "Infrastructure Design 진행해줘" → NFR Design 승인 게이트 통과.** 커밋·push 후 Infra Design 진입.
+**Context**: CONSTRUCTION — U7 NFR Design 완료·승인. 다음 단계: U7 Infrastructure Design(기존 인프라 재사용 — S3 prefix·Redis 키스페이스/TTL·RDS 용어집 테이블·Bedrock IAM·CI 자격증명·비용 라인; 신규 관리형 0이라 경량 예상). 브랜치 feature/u7-v2, PR #115.
+
+---
+
+## U7 Infrastructure Design — 답변 확정·산출물 생성·승인
+**Timestamp**: 2026-06-19T00:00:00Z
+**User Input(원문)**: "전부 A" → "응 커밋.push하고 code generation 진행해줘"
+**AI Response**: Infra Design 9문 전수 A 기록. 산출물 `construction/u7-summarization/infrastructure-design/`(infrastructure-design·deployment-architecture). **신규 관리형 서비스 0**(전부 기존 자산 재사용): 컴퓨트=기존 ECS Fargate 모듈(신규 0)·S3 `summaries/` 프리픽스(IAM 스코프·영구)·Redis `sum:` 키스페이스+TTL·RDS `user_glossary` 테이블(기존 마이그레이션 러너)·Bedrock IAM(Sonnet/Haiku 모델 ARN 스코프, 기존 task role)·CloudWatch/Budget 비용 라인·CI 통합 게이트 레인. 비동기 잡 v1 미프로비저닝(TD-S9). 증분 비용≈Bedrock 토큰(가변, NFR-C1 여유). 조율 존(task role·CI·IaC·마운트)=@ELSAPHABA/Infra. **사용자 "code generation 진행해줘" → Infrastructure Design 승인 게이트 통과.** 커밋·push 후 Code Generation 진입.
+**Context**: CONSTRUCTION — U7 Infrastructure Design 완료·승인. 다음 단계: U7 Code Generation(Part 1 계획 → Part 2 생성, real-first 실 구현 — backend/modules/summarization/). 브랜치 feature/u7-v2, PR #115.
+
+---
+
+## U7 Code Generation — Part 1 계획 승인 + Part 2 생성·검증
+**Timestamp**: 2026-06-19T00:00:00Z
+**User Input(원문)**: "Part2 생성까지 마친 뒤 커밋" → (이어서) "continue"
+**AI Response**: Code Generation Part 1 계획(`u7-summarization-code-generation-plan.md`, 18단계) 작성 → 사용자 승인("Part2 생성까지") → **Part 2 전체 생성**. 코드 `backend/modules/summarization/`(src-layout, real-first): pyproject/ruff·도메인 9컴포넌트(models·refiner·source_selector·cache_key·length_router·glossary·grounding·assembler·orchestrator)·ports·실 어댑터 단일본(bedrock_llm 스트리밍 Sonnet/Haiku·s3_redis_store·s3_full_text·rds_glossary)·api(router `/api/summarize`·gateway_seam)·prompts(본문 격리·persona·용어집·grounding)·real_wiring·`migrations/001_create_user_glossary.sql`·테스트(stubs·domain·orchestrator·PBT·integration self-skip). **검증: `pytest` 29 passed + 1 skip·`ruff check` clean**(discovery venv 사용). 설계 반영: Q4 U7 고유 결정적 근거화(검색용 enforce 미사용)·Q5 생성-버퍼-검증-점진렌더(FR-5)·저하 3계층(비용≠장애≠소스)·Q8 후치환 한국어 조사 안전(좌측 경계 매칭)·real-first(Production Mock Adapter 없음, 테스트 Fixture/Stub). **⚠️ 조율 존**: `backend/wiring.py` 미변경 — 처음 `_mount_summarization` 추가했으나 `test_app_shell.py`의 모듈 집합 단언(`{accounts,discovery,library,ops}`·`skipped==[]`) 위반 + 쉘 소유라 **revert**, mounter 스니펫을 `code/README.md`에 사인오프-레디로 제시. 18단계·US-S1~S6 전수 [x]. 코드 검증 완료 — 리뷰 게이트.
+**Context**: CONSTRUCTION — U7 Code Generation 완료·검증(리뷰 게이트). 다음: Build & Test(U7 CONSTRUCTION 마무리). 미해결 last-mile: app-shell 마운트(@ELSAPHABA 사인오프)·인프라 증분(IAM·마이그레이션·CI=@Infra)·shared/dtos/summarization 승격. 브랜치 feature/u7-v2, PR #115.
+
+---
+
+## U7 Code Generation 승인 + Build & Test 완료
+**Timestamp**: 2026-06-19T00:00:00Z
+**User Input(원문)**: "승인할게 Build & Test 진행해줘"
+**AI Response**: Code Generation 승인 게이트 통과 → Build & Test 단계 진행. 유닛 스코프 산출물 `construction/u7-summarization/build-and-test/`(build-instructions·unit-test-instructions·integration-test-instructions·security-test-instructions·build-and-test-summary). **실측 검증**: `pytest` **29 passed + 1 skipped**(통합 self-skip)·per-file(refiner3·glossary4·grounding4·source/cache/length6·orchestrator7·pbt5·integration1skip)·`ruff check src tests` **All checks passed**·임포트 스모크 OK. 통합 5 시나리오(Bedrock·S3+Redis·전문read/폴백·RDS owner격리·비용게이트) 정의=게이트 레인 전용(real-first). 성능=N/A(NFR-P2 온디맨드). 보안 체크리스트(인젝션 본문격리·근거화·SEC-9 라운드트립·owner격리·fail-closed). **U7 CONSTRUCTION 종료(설계루프+코드+빌드/테스트).** Operations 전 last-mile(프레임워크 밖): app-shell 마운트(@ELSAPHABA)·인프라 증분(@Infra)·shared/dtos/summarization 승격·비동기 잡 fast-follow.
+**Context**: CONSTRUCTION — U7 Build & Test 완료. **U7(요약/번역) CONSTRUCTION 전 단계 종료(FD→NFRReq→NFRDes→Infra→CodeGen→Build&Test).** AI-DLC 프레임워크는 Build & Test에서 종료. 브랜치 feature/u7-v2, PR #115 — 머지·라이브 배포는 사용자/팀 결정.
+
+---
+

@@ -1,0 +1,176 @@
+# U7 Summarization — 도메인 엔티티 (Domain Entities)
+
+**단계**: CONSTRUCTION → Functional Design · **유닛**: U7 Summarization · **일자**: 2026-06-18
+**원칙**: **기술 무관(technology-agnostic)**. 본 문서의 엔티티는 비즈니스 의미만 정의하며, 구체 기술(Bedrock·S3·Redis·직렬화/와이어 형식)은 **NFR/Infra**에서 바인딩한다. 어댑터 결정(real-first, mock 대역 없음)은 구현 전략이며 도메인 타입에는 기술명을 박지 않는다.
+**근거**: `../../../inception/requirements/summarization-translation-pipeline.md` §3·§5·§6·§9·§11 · 계획서 §1·§4 답변(Q1~Q17) · `construction/shared/{ports,dtos}.md`.
+
+---
+
+## 0. 엔티티 관계 한눈에 보기
+
+```
+ SummaryRequest ──(+RequestContext)──▶ SummaryCacheKey ──▶ CacheLookup
+       │                                                      │ miss
+       ▼                                                      ▼
+   SourceText ──▶ RefinedSource ──(+Glossary)──▶ [LLM] ──▶ SummaryDraft / TranslationDraft
+                       │                                        │ (anchors[])
+                       └────────────────────────┐               ▼
+                                                 └──▶ GroundingInput ──▶ AnchorVerdict
+                                                                              │
+                                                            ┌─────────────────┴───────────────┐
+                                                         (pass)                            (fail/abstain)
+                                                            ▼                                  ▼
+                                                  SummaryResponse =  SummaryResultDTO | AbstainDTO | CostDegradedDTO | SourceUnavailableDTO
+```
+
+- **소유(생산) 타입**: U7이 정의·생산하는 도메인/DTO. **신규 `shared/dtos/summarization` 계약**(현재 부재 — U4 library PROVISIONAL 패턴으로 신설).
+- **소비(참조) 타입**: `shared/ports`의 U6 소유 타입(`BudgetState`, `GroundingDecision` 등) — U7은 참조만, 재정의(포크) 금지.
+
+---
+
+## 1. 입력 · 컨텍스트
+
+### `SummaryRequest` (요청, 소유)
+| 필드 | 타입 | 의미 | 근거 |
+|---|---|---|---|
+| `paperId` | `PaperId` | 대상 논문(버전 없는 식별자) | §6 |
+| `version` | `Version` | 코퍼스 논문 버전(앵커·캐시 신원 일부) | §11 |
+| `task` | `enum{summary, translate}` | 요약 또는 번역 | §5 |
+| `targetLang` | `enum{ko}` | 번역 대상 언어(v1 한국어 단일, Q7=A) | FR-13 |
+| `persona` | `enum{expert, beginner}?` | 요약 수준(생성 변형, 논문당 최대 2벌) | FR-14, Q9 |
+| `view` | `enum{full, tldr, results, method, reviewer}?` | 표시 프리셋(생성 무관·클라이언트 렌더 힌트) | §9.2, Q9 |
+
+> `view`는 **생성 신원이 아니다**(캐시 키 미포함). 같은 §3 출력의 클라이언트 렌더 변형(재생성 0). 서버는 풍부한 전체 출력을 생산하고 `view` 적용은 U5.
+
+### `RequestContext` (실행 컨텍스트, 소유)
+| 필드 | 타입 | 의미 |
+|---|---|---|
+| `authSession` | `AuthSession` | 인증 주체(게이트웨이/U3 위임 — SEC-8). U7은 신뢰만 |
+| `budgetSignal` | `BudgetState`(참조) | 비용 게이트 입력(U6 `get_budget_state()` 산출) |
+| `requestId` | `RequestId` | 추적·텔레메트리 상관키 |
+
+---
+
+## 2. 캐시 키 · 조회 (immutable, §11 / Q7)
+
+### `SummaryCacheKey` (캐시 신원, 소유 — immutable)
+| 필드 | 의미 |
+|---|---|
+| `paperId` · `version` | 논문·버전 |
+| `task` · `targetLang` | 작업·언어 |
+| `persona` | 생성 변형(요약만; 번역은 무관) |
+| `glossaryVer` | 용어집 버전 — **사용자 개인 오버라이드가 개인화 분기를 흡수**(공유 기본=0, 개인=N). 별도 `userId` 불필요(Q7=A) |
+| `modelVer` · `promptVer` | 모델·프롬프트 버전(업그레이드 시 키 변경 = 자동 무효화) |
+
+> **불변식(INV-5)**: 같은 키 = 항상 같은 산출물. 무효화는 키(경로) 변경에 의한 신규 객체 생성 — 수동 flush 없음.
+
+### `CacheLookup` (조회 결과, 소유)
+`{ hit: bool, payload: SummaryResultDTO? }` — read-through(핫→영구) 결과.
+
+---
+
+## 3. 소스 · 정제 (§4·§6 / Q1·Q2·Q6)
+
+### `SourceText` (원문, 소유)
+| 필드 | 의미 |
+|---|---|
+| `kind` | `enum{full_text, abstract}` — 요약=전문(`stored_full_text_ref` read), 번역=초록 |
+| `raw` | 원문 텍스트(전문은 U1 정제 보관본; PDF 재파싱 없음) |
+| `fallbackReason?` | 전문 부재/라이선스X로 초록 폴백 시 사유(Q1=A·NFR-R2) |
+
+### `RefinedSource` (정제 결과, 소유)
+| 필드 | 의미 | 근거 |
+|---|---|---|
+| `body` | 정제 본문(노이즈 제거 후) | Q2=B |
+| `sections[]` | `Section{label, span}` — **U7이 헤딩 패턴으로 도출**(U1 미영속), 실패 시 빈 라벨+span-only | Q6=A |
+| `captions[]` | 표/그림 캡션(**보존** — 결과 수치 원천) | Q2=B |
+| `formulas[]` | LaTeX 수식(**보존·번역 금지**) | §4 |
+| `preserved[]` | Appendix·Supplementary Results 등 실험 정보 콘텐츠(**제거 금지**) | Q2=B |
+
+> Q2=B 정제 경계: **제거** = Header/Footer·페이지번호·저작권·저자정보·참고문헌. **보존** = 캡션·Appendix·Supplementary·수식·섹션 구조.
+
+### `SanitizedInput` (LLM 입력, 소유)
+`{ text, tokenCount }` — 제어문자 제거·본문 격리(injection 대비)·토큰 카운트(길이 분기 입력). 토큰 캡 수치는 NFR.
+
+---
+
+## 4. 용어집 (§9.1 / Q8)
+
+### `Glossary` (용어집, 소유)
+| 필드 | 의미 | 성격 |
+|---|---|---|
+| `seedTerms[]` | `TermMapping[]` — AI/ML 표준 핵심 매핑(공유, 고정) | P1 공유 |
+| `keepAsIs[]` | 미번역 보존 용어(Transformer·BERT·LoRA·RAG…) | P1 공유 |
+| `userOverrides[]` | `TermMapping[]` — 사용자 선호 단순 명사 교정 | P2 개인 |
+
+### `TermMapping`
+`{ from, to, kind: enum{prompt_enforced, post_substitution} }`
+- `prompt_enforced`: 핵심 용어 보존·매핑 = **프롬프트 강제**(생성 시 일관·문맥 처리).
+- `post_substitution`: 사용자 선호 **단순 명사** = 캐시 번역에 **결정적 후치환**(조사 안전한 단순 명사 한정, LLM 재호출 0).
+
+---
+
+## 5. 생성 드래프트 · 앵커 (§3 / Q6)
+
+### `SummaryDraft` (요약 산출물, 소유 — §3 JSON 계약)
+| 필드 | 의미 |
+|---|---|
+| `tldr` | 문제 + 핵심 주장(1~2문장) |
+| `contributions[]` | 저자 주장 기여 |
+| `method` | 접근법 한 단락 |
+| `results` | 핵심 수치·벤치마크·SOTA 여부(초록 밖 디테일) |
+| `limitations` | 한계·가정(재현성·일반화 경계) |
+| `reproducibility` | `{ code, data }` 공개 여부·링크(정규식+LLM 병행 추출, Q16) |
+| `anchors[]` | `Anchor[]` — 항목별 원문 근거 |
+
+### `Anchor` (근거 앵커, 소유 — Q6)
+`{ field, target: enum{section, table, figure}, label?, span }`
+- `span`(문자 offset)은 **필수 보증**; `label`은 도출 성공 시 부여(실패 시 span-only로 저하). 라벨·span 모두 없으면 해당 주장 **기권**.
+
+### `TranslationDraft` (번역 산출물, 소유)
+`{ koreanText, keptTerms[] }` — 초록 한국어 번역 + 미번역 유지 용어 목록.
+
+---
+
+## 6. 근거화 · 종단 상태 (Q4·Q5)
+
+### `GroundingInput` (근거화 입력, 소유)
+`{ draft, refinedSource }` — **U7 고유 결정적 검증 입력**(검색용 `enforce(candidate, retrieved)`와 형상 다름; Q4=A). 단일 논문 정제 소스 대비 앵커/수치/스키마 검증.
+
+### `AnchorVerdict` (근거화 판정, 소유 — Q4=A)
+| 필드 | 의미 |
+|---|---|
+| `ok` | 통과 여부 |
+| `violations[]` | `{ kind: enum{anchor_missing, numeric_mismatch, schema_incomplete, truncated, empty}, field }` |
+| `outcome` | `enum{pass, abstain}` — abstain = 코퍼스밖 정당 기권 또는 재시도 후 실패 |
+
+> U6 `GroundingDecision`(검색 근거화, 참조 타입)과 **별개**. U7 `AnchorVerdict`는 *문서-충실도* 검증(LLM-judge 미사용, Q15=A).
+
+### `SummaryResponse` (종단 union, 소유 DTO — Q5=A)
+| 변형 | 조건 | 필드 |
+|---|---|---|
+| `SummaryResultDTO` | 근거화 통과·산출물 완전 | `{ draft\|translation, anchors[], meta }` |
+| `AbstainDTO` | 근거화 실패(재시도 후)·코퍼스밖 | `{ reason }` |
+| `CostDegradedDTO` | 비용 게이트 OPEN/저하 | `{ message: "AI 요약 일시 중단" }`(FR-11) |
+| `SourceUnavailableDTO` | 전문·초록 모두 부재 | `{ reason }` |
+
+> **빈 성공 금지**: 근거 없는 빈 산출물을 성공으로 표기하지 않음. 비용저하·소스부재와 무관하게 근거화 실패면 **기권 우선**(INV-4).
+
+---
+
+## 7. 값 타입 (shared 횡단 정합)
+
+- `PaperId`(버전 없는) · `Version` · `ArxivId`(표시용) · `RequestId` · `AuthSession` — `shared/` 규약과 정합.
+- `BudgetState` · `GroundingDecision` — **U6 소유(참조)**. U7 재정의 금지.
+
+---
+
+## 8. 공유 계약 정합 (드리프트 0)
+
+| 타입 | 소유 | 정합 |
+|---|---|---|
+| `SummaryRequest`/`SummaryResponse`·`Anchor` 등 | **U7 신규 생산** | **신규 `shared/dtos/summarization.schema.json`** 신설(현재 부재). SEC-9: 내부 필드(토큰·비용·캐시키·모델/프롬프트 식별자) 외부 DTO 비노출 |
+| `BudgetState`·`GroundingDecision`·`CandidateResponse` | U6 (`shared/ports`) | 참조만 — U7 비용/관측 재구현 없음(INV-2) |
+| `PaperId`·`Version`·`stored_full_text_ref` | U1/shared | read capability(코드 의존 아님) |
+
+> **신규 DTO 계약(`shared/dtos/summarization`)은 PROVISIONAL** — 정제 스펙은 별도 shared PR(Track 사인오프)로 승격. 본 FD 코드 검증과는 무관하게 진행 가능(U4 library 선례).

@@ -58,6 +58,6 @@
 * **[트랙 1] 데이터 파이프라인**: **U1 Ingestion** (인제스천 워커) ──> **U6 Reliability/Ops** (비동기 탐지 워커)
 * **[트랙 2] 인증 및 사용자 데이터**: **U3 Accounts** (가입/로그인) ──> **U4 Library** (저장/라이브러리)
 * **[트랙 3] 사용자 검색 및 UI**: **U2 Discovery** (Mock API 기반 선행 개발) ──> **U5 Frontend** (UI 화면 및 인터랙션)
-* **[확장 / 2026-06-18] 요약·번역**: **U7 Summarization** — 코어(U1~U6) 빌드·배포 완료 후 편입되는 신규 유닛. **선행 의존**: U1(전문 원본 S3)·U6(근거화 후크·CostGuard)·shared(DTO·ports) = 이미 가용. 결과 카드 표면은 U2/U5와 연결. 단일 트랙으로 CONSTRUCTION 유닛 루프 진행(mock-first 권장 — LLM 어댑터 seam).
+* **[확장 / 2026-06-18] 요약·번역**: **U7 Summarization** — 코어(U1~U6) 빌드·배포 완료 후 편입되는 신규 유닛. **선행 의존**: U1(전문 원본 S3)·U6(근거화 후크·CostGuard)·shared(DTO·ports) = 이미 가용. 결과 카드 표면은 U2/U5와 연결. 단일 트랙으로 CONSTRUCTION 유닛 루프 진행(**실배포 기준 real-first 구현** — LLM·스토어 어댑터는 포트 뒤 실 구현 단일본[Bedrock·S3·Redis], mock/인메모리 대역 없음. _2026-06-18 U7 FD 답변 Q10/Q11로 확정._).
 
 > 각 유닛은 CONSTRUCTION의 유닛별 루프(Functional/NFR/Infra Design → Code Generation)로 진행한다.
