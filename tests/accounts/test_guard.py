@@ -1,4 +1,3 @@
-import pytest
 from backend.modules.accounts.models import Principal, UserRole, Action, AccountId
 from backend.modules.accounts.guard import AuthorizationGuard, Decision
 
