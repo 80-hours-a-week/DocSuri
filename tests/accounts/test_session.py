@@ -1,7 +1,6 @@
 import pytest
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
-from redis.exceptions import ConnectionError as RedisConnectionError
+from unittest.mock import AsyncMock, MagicMock
 
 from backend.modules.accounts.models import (
     SessionRecord, Principal, UserRole, SessionExpiredException, 

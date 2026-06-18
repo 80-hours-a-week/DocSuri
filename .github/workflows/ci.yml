@@ -1,8 +1,8 @@
 # First CI for DocSuri — closes the "no automated gate" finding (aidlc-state.md §검증 재기준선).
 # One job per uv project (they are independent packages). Each runs lint + tests; `shared` also
-# runs the schema drift guard so a stale _generated/ fails the PR. The repo-root tests/accounts
-# suite is intentionally NOT wired here yet: it fails collection until backend declares
-# hypothesis + pytest-asyncio (a U3/③ fix) — add an accounts job when that lands.
+# runs the schema drift guard so a stale _generated/ fails the PR. The repo-root tests/ suite
+# (accounts U3 + library U4) runs in the `root-suites` job below; that job's lint step also gates
+# the tests/ tree so unused-import (F401) debt can't reappear invisibly.
 name: CI
 
 on:
@@ -108,9 +108,10 @@ jobs:
       # Root tests/ (accounts U3 + library U4) import backend.modules.* and need the backend
       # env (incl. hypothesis + pytest-asyncio). Run from the repo root via the root pytest.ini
       # (pythonpath=. · asyncio_mode=auto). The accounts/library module lanes self-lint with
-      # their own ruff.toml (the app-shell ruff excludes modules/), so gate them here.
-      - name: Lint (accounts + library module lanes)
-        run: uv run --project backend ruff check backend/modules/accounts backend/modules/library
+      # their own ruff.toml (the app-shell ruff excludes modules/), so gate them here — plus the
+      # root tests/ tree itself, which no other lane covered (ruff defaults catch F401 there).
+      - name: Lint (accounts + library modules + root tests/)
+        run: uv run --project backend ruff check backend/modules/accounts backend/modules/library tests
       - name: Tests (accounts + library)
         run: uv run --project backend pytest tests -c pytest.ini
 

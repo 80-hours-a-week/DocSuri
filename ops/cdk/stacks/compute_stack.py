@@ -39,6 +39,9 @@ from aws_cdk import (
     aws_elasticloadbalancingv2 as elbv2,
 )
 from aws_cdk import (
+    aws_iam as iam,
+)
+from aws_cdk import (
     aws_opensearchservice as opensearch,
 )
 from aws_cdk import (
@@ -46,6 +49,12 @@ from aws_cdk import (
 )
 from aws_cdk import (
     aws_route53 as route53,
+)
+from aws_cdk import (
+    aws_ses as ses,
+)
+from aws_cdk import (
+    aws_sns as sns,
 )
 from constructs import Construct
 
@@ -138,6 +147,7 @@ class ComputeStack(Stack):
             "REDIS_HOST": redis_endpoint,
             "REDIS_PORT": redis_port,
             "REDIS_TLS": "1",  # ElastiCache transit_encryption_enabled=True → client TLS required
+            "SES_SENDER_EMAIL": "no-reply@docsuri.org",  # via the SES domain identity below
             "OPENSEARCH_ENDPOINT": Fn.join("", [
                 "https://", opensearch_domain.domain_endpoint,
             ]),
@@ -158,6 +168,42 @@ class ComputeStack(Stack):
             self, "OriginCert",
             domain_name=_ORIGIN_DOMAIN,
             validation=acm.CertificateValidation.from_dns(zone),  # auto CNAME in the zone
+        )
+
+        # --- SES: verify the docsuri.org domain so the app can send no-reply@docsuri.org ---
+        # public_hosted_zone(zone) auto-writes the DKIM CNAMEs into Route53 → no mailbox needed.
+        # NOTE: the account is still in the SES sandbox (delivers only to verified recipients);
+        # arbitrary signup delivery needs production access (separate AWS request — strengthened by
+        # the bounce/complaint handling below).
+
+        # Bounce/complaint handling. The config set (1) auto-adds hard-bounced + complained
+        # addresses to the account suppression list so we never re-send to them, and (2) publishes
+        # bounce/complaint/reject events to an SNS topic for ops visibility (subscribe via console).
+        # Set as the identity's DEFAULT config set → every send from docsuri.org uses it, no
+        # per-send code change. This is the automated handling SES production-access review expects.
+        ses_events_topic = sns.Topic(self, "SesEventsTopic", display_name="docsuri-ses-events")
+        email_config_set = ses.ConfigurationSet(
+            self, "EmailConfigSet",
+            suppression_reasons=ses.SuppressionReasons.BOUNCES_AND_COMPLAINTS,
+        )
+        email_config_set.add_event_destination(
+            "ToSns",
+            destination=ses.EventDestination.sns_topic(ses_events_topic),
+            events=[
+                ses.EmailSendingEvent.BOUNCE,
+                ses.EmailSendingEvent.COMPLAINT,
+                ses.EmailSendingEvent.REJECT,
+            ],
+        )
+        ses.EmailIdentity(
+            self, "DomainIdentity",
+            identity=ses.Identity.public_hosted_zone(zone),
+            configuration_set=email_config_set,
+        )
+        CfnOutput(
+            self, "SesEventsTopicArn",
+            value=ses_events_topic.topic_arn,
+            description="SNS topic for SES bounce/complaint/reject events (subscribe ops here)",
         )
 
         # --- ALB + Fargate service (deploy unit ①: 0.25 vCPU / 512 MB, min 1 max 2) ---
@@ -236,6 +282,18 @@ class ComputeStack(Stack):
         # Grant the task role permission to read the RDS secret (for runtime DB connection)
         if self.db.secret:
             self.db.secret.grant_read(self.service.task_definition.task_role)
+
+        # Allow the task to send verification email via SES, scoped to the docsuri.org identity.
+        self.service.task_definition.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["ses:SendEmail", "ses:SendRawEmail"],
+                resources=[
+                    Stack.of(self).format_arn(
+                        service="ses", resource="identity", resource_name=_ZONE_NAME,
+                    )
+                ],
+            )
+        )
 
         # Autoscaling: min 1 — max 2 (U3 spec)
         scaling = self.service.service.auto_scale_task_count(min_capacity=1, max_capacity=2)

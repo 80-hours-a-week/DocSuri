@@ -82,6 +82,7 @@
 - D) 설정 가능(기본 A, 추후 C로 승급).
 - **권장**: A — 본문 전문 추출/대량 청킹을 데모에서 제거하면 ArxivSourceClient.fetchFullText·전문 파싱·**OA 전문 보관(SEC-9 오브젝트 스토리지)이 부재**가 되어 단순화된다. **부수 효과(의식적 수용 필요)**: 전문 보관이 없으면 RES-2 **재구축이 arXiv 재취득에 의존**(저장 원천 재사용 불가). **이 답에 따라 Chunker·FetchParseProcessor·ArxivSourceClient의 데모 범위가 크게 달라짐.**
 - **[Answer]**: A
+- **[2026-06-18 프로덕션 확정]**: A 유지 — 데모 한정 결정이 아니라 **프로덕션 범위에서도 본문 검색 미도입**(팀 확정). 현 코드 이미 abstract-only(인덱스 저장필드에 본문 없음, lexicalTerms=title+abstract). ⚠️ `shared/vector-spec.md`(🔒 FROZEN)는 `section`(초록/본문)·멀티청크 `chunkId`로 본문 청킹을 *허용*하나 **의도적 미사용** — specVersion 변경(전체 재임베딩) 비용 때문에 스펙은 그대로 둠. U1 writer 구현 시 논문당 ordinal=0 / `section="abstract"` 청크 1개만 방출하도록 강제(인베리언트 테스트 1개). 본문 검색 도입 시 "전문 임베딩 비싸다" 비판 재적용 → 비용 재산정 선행.
 
 ### B. 도메인 모델
 

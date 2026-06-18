@@ -1,12 +1,10 @@
 import pytest
-import asyncio
-from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from backend.modules.accounts.repository.credential import Base, CredentialRepository, AccountTable, VerificationTokenTable
-from backend.modules.accounts.models import DomainException, AccountStatus, UserRole, Principal
+from backend.modules.accounts.repository.credential import Base, CredentialRepository, VerificationTokenTable
+from backend.modules.accounts.models import DomainException, AccountStatus
 from backend.modules.accounts.services.signup import SignupService
 from backend.modules.accounts.services.auth import AuthenticationService
 from backend.modules.accounts.services.session_manager import SessionManager

@@ -61,8 +61,14 @@ def get_session_manager(repo: SessionRepository = Depends(get_session_repo)) -> 
 def get_signup_service(
     repo: CredentialRepository = Depends(get_credential_repo),
 ) -> SignupService:
-    # 메인 App Shell 또는 DI 컨테이너에서 설정 주입. default는 로컬 모킹 클라이언트
-    email_client = get_email_client(env=os.getenv("ENV", "local"))
+    # 메인 App Shell 또는 DI 컨테이너에서 설정 주입. default는 로컬 모킹 클라이언트.
+    # 프로덕션(ENV!=local·SES_MOCK!=true)은 SES — 발신자(SES_SENDER_EMAIL)·리전을 주입한다.
+    # 발신자 미설정 시 SES Source가 비어 발송 실패하므로 검증된 도메인 주소를 기본값으로 둔다.
+    email_client = get_email_client(
+        env=os.getenv("ENV", "local"),
+        sender_email=os.getenv("SES_SENDER_EMAIL", "no-reply@docsuri.org"),
+        region=os.getenv("SES_REGION", "ap-northeast-2"),
+    )
     return SignupService(repo, email_client)
 
 def get_auth_service(

@@ -716,3 +716,11 @@
 **Context**: CONSTRUCTION — U5 Frontend production 패스 Code Generation. 브랜치 `feature/u5-v2`. **의존성 플래그(U5 외부)**: ① 게이트웨이가 세션쿠키→`request.state.principal` 미주입 → `/library/*`·`/api/search`가 실 백엔드에서 401(fail-closed) = `backend/` 조율존 + 시스템 인프라 단계; ② reCAPTCHA 토큰 미전송(사이트키=시크릿/인프라 필요); ③ 인프라/CD/호스팅·구체 CSP·정량 SLO = 공통 인프라 단계(④). 미커밋(푸시/PR 승인 대기).
 
 ---
+
+## 레저 재기준선 #2 (Ledger Re-baseline) — 크리티컬 패스 ①~⑦ 종결 반영
+**Timestamp**: 2026-06-18T01:01:31Z
+**User Input(원문)**: "Re-baseline the ledger"
+**AI Response**: 사이클 리뷰(코드/깃 이력 대조 — 3개 병렬 검증) 결과, 2026-06-16 검증 재기준선이 지정한 후속 크리티컬 패스 ①~⑦가 전부 랜딩됐으나 `aidlc-state.md`/`audit.md`가 이를 미반영(언더레코딩)함을 확인. 본 재기준선으로 `aidlc-state.md` 갱신: (a) 헤더에 종결 포인터, (b) **§크리티컬 패스 종결 (Critical Path Closure) — 2026-06-18 신설**(원 2026-06-16 재기준선 텍스트는 시점 사실로 보존, 본 절이 현재 단일 진실), (c) U3 Code Generation `[~]→[x]`(③ 정정), (d) U5 production 패스 머지·HTTPS 배포 반영, (e) U6 ④ 라이브 와이어링 반영, (f) 공통 후속 Infrastructure Design·Code Generation `[ ]→[x]`, (g) 비고 브랜치 라인 갱신. 반영 근거 커밋(86404d1 이후 미기록분 포함): ① 마운트 `ae58e0f`·`404c1a7`; ② GHA CI `f9a7e8a`·`7edd316`·`30a0773`·`bd8817b`; ③ U3 `bbac74f`·`f835a26`·`9b390b9`; ④ U6 `ba4a62e`·`b6bb92d`·`568677c`; ⑤ U5 `86404d1`(PR#63)·`d1740b0`·`344172e`; ⑥ U2 `b87348d`·`a25d8ed`; ⑦ 시스템 인프라(Infra Design `ac21ae2`·CDK `ddf8858`·CD `db1b187`·프로덕션 DB `01fd553`·`5f7acce`·API HTTPS `504cb64`·`28ed940`·CloudWatch EventStore `8b54b62`·SQL 마이그레이션 러너 `5de4348`·SES 발송 `50da0d5`·SES 바운스/불만 `0437b40`)·U4 `b70f2ee`. 라이브 배포(계정 028317349537/서울·API ALB healthy, 팀 보고 2026-06-17)는 런타임 사실로 리포지토리 대조 불가로 명기. 잔여(미해소): 루트 `tests/` 린트 사각(F401 9건·CI 미노출)·`ci.yml` 헤더 주석 stale·Operations 런북 미수립.
+**Context**: 레저 재기준선 — CONSTRUCTION 종결 상태를 문서에 동기화. 추가 전용(append-only) 규칙 준수(기존 항목 무변경). 과거 세션(인프라/SES 등)의 verbatim 사용자 입력은 당시 기록 부재로 재구성하지 않고 커밋 SHA로 추적. 작업 위치: 워크트리 `worktree-ledger-rebaseline`(HEAD `0437b40`에서 분기).
+
+---
