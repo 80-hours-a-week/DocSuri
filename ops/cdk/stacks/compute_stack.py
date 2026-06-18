@@ -96,10 +96,12 @@ class ComputeStack(Stack):
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        # Ops alert recipient — pass at deploy: `cdk deploy -c ops_alert_email=ops@docsuri.org`
-        # (or add to cdk.json context). Unset → topic/alarms/budget still synthesize, just with no
-        # email subscription. Use a TEAM alias, not a personal inbox (vacation = missed page).
-        ops_alert_email = self.node.try_get_context("ops_alert_email")
+        # Ops alert recipients — comma-separated so adding teammates later is a deploy-arg change,
+        # not a code change: `cdk deploy -c ops_alert_email=a@x.com,b@y.com` (or cdk.json context).
+        # Empty → topic/alarms still synthesize, just with no email subscription/budget. A team
+        # alias beats individual inboxes (vacation = missed page), but a list works without one.
+        _raw_alert_emails = self.node.try_get_context("ops_alert_email") or ""
+        ops_alert_emails = [e.strip() for e in _raw_alert_emails.split(",") if e.strip()]
 
         # --- ECR repository (already created manually; import by name) ---
         self.api_repo = ecr.Repository.from_repository_name(self, "ApiRepo", "docsuri-api")
@@ -229,8 +231,8 @@ class ComputeStack(Stack):
             description="SNS topic for SES bounce/complaint/reject events (subscribe ops here)",
         )
         # Close the SES "no subscriber" gap — wire the ops alias to bounce/complaint events.
-        if ops_alert_email:
-            ses_events_topic.add_subscription(subs.EmailSubscription(ops_alert_email))
+        for email in ops_alert_emails:
+            ses_events_topic.add_subscription(subs.EmailSubscription(email))
 
         # --- ALB + Fargate service (deploy unit ①: 0.25 vCPU / 512 MB, min 1 max 2) ---
         # HTTPS :443 terminated on the ALB with the ACM cert + a Route53 alias (origin.docsuri.org
@@ -379,12 +381,12 @@ class ComputeStack(Stack):
         # through the guard), and the in-app guard already degrades/rejects on its own. Add a
         # per-incident SNS publisher only if you need finer paging than these 3 alarms give.
         ops_alerts = sns.Topic(self, "OpsAlerts", display_name="docsuri-ops-alerts")
-        if ops_alert_email:
-            ops_alerts.add_subscription(subs.EmailSubscription(ops_alert_email))
-        else:
+        for email in ops_alert_emails:
+            ops_alerts.add_subscription(subs.EmailSubscription(email))
+        if not ops_alert_emails:
             CfnOutput(
                 self, "OpsAlertEmailMissing",
-                value="set -c ops_alert_email=<addr> so alarms + budget actually page a human",
+                value="set -c ops_alert_email=<addr>[,<addr>...] so alarms + budget page a human",
             )
 
         # SLO 1 — API availability: backend 5xx. Native ALB metric, no app instrumentation needed.
@@ -420,7 +422,7 @@ class ComputeStack(Stack):
         # 80% warning ratio ($1280 — cost_guard.warning_ratio). Budget emails the ops alias directly
         # (no SNS/topic policy needed). Account 028317349537 is dedicated to DocSuri → account
         # spend ≈ app spend.
-        if ops_alert_email:
+        if ops_alert_emails:
             budgets.CfnBudget(
                 self, "MonthlyCostBudget",
                 budget=budgets.CfnBudget.BudgetDataProperty(
@@ -435,10 +437,12 @@ class ComputeStack(Stack):
                             comparison_operator="GREATER_THAN",
                             threshold=80,  # percent of $1600 = $1280
                         ),
+                        # AWS Budgets allows up to 10 email subscribers per notification.
                         subscribers=[
                             budgets.CfnBudget.SubscriberProperty(
-                                subscription_type="EMAIL", address=ops_alert_email,
+                                subscription_type="EMAIL", address=email,
                             )
+                            for email in ops_alert_emails
                         ],
                     ),
                 ],
