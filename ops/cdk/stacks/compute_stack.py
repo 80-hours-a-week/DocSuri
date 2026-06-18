@@ -12,6 +12,9 @@ from aws_cdk import (
     Stack,
 )
 from aws_cdk import (
+    aws_budgets as budgets,
+)
+from aws_cdk import (
     aws_certificatemanager as acm,
 )
 from aws_cdk import (
@@ -19,6 +22,12 @@ from aws_cdk import (
 )
 from aws_cdk import (
     aws_cloudfront_origins as origins,
+)
+from aws_cdk import (
+    aws_cloudwatch as cloudwatch,
+)
+from aws_cdk import (
+    aws_cloudwatch_actions as cw_actions,
 )
 from aws_cdk import (
     aws_ec2 as ec2,
@@ -56,6 +65,9 @@ from aws_cdk import (
 from aws_cdk import (
     aws_sns as sns,
 )
+from aws_cdk import (
+    aws_sns_subscriptions as subs,
+)
 from constructs import Construct
 
 # Public DNS for the API origin (zone docsuri.org lives in this account's Route53). CloudFront
@@ -83,6 +95,11 @@ class ComputeStack(Stack):
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
+
+        # Ops alert recipient — pass at deploy: `cdk deploy -c ops_alert_email=ops@docsuri.org`
+        # (or add to cdk.json context). Unset → topic/alarms/budget still synthesize, just with no
+        # email subscription. Use a TEAM alias, not a personal inbox (vacation = missed page).
+        ops_alert_email = self.node.try_get_context("ops_alert_email")
 
         # --- ECR repository (already created manually; import by name) ---
         self.api_repo = ecr.Repository.from_repository_name(self, "ApiRepo", "docsuri-api")
@@ -140,6 +157,12 @@ class ComputeStack(Stack):
 
         container_env = {
             "ENV": "production",
+            # Activate CloudWatch observability. backend/app.py _build_observability() ships metrics
+            # to CloudWatch only when CLOUDWATCH_NAMESPACE is set — without it the app silently uses
+            # the in-memory store and NO prod metrics flow. This one line is what gives the SLO
+            # alarms below data to alarm on.
+            "CLOUDWATCH_NAMESPACE": "DocSuri/Production",
+            "CLOUDWATCH_LOG_GROUP": "/docsuri/ops",
             "DB_HOST": self.db.db_instance_endpoint_address,
             "DB_PORT": self.db.db_instance_endpoint_port,
             "DB_NAME": "docsuri",
@@ -205,6 +228,9 @@ class ComputeStack(Stack):
             value=ses_events_topic.topic_arn,
             description="SNS topic for SES bounce/complaint/reject events (subscribe ops here)",
         )
+        # Close the SES "no subscriber" gap — wire the ops alias to bounce/complaint events.
+        if ops_alert_email:
+            ses_events_topic.add_subscription(subs.EmailSubscription(ops_alert_email))
 
         # --- ALB + Fargate service (deploy unit ①: 0.25 vCPU / 512 MB, min 1 max 2) ---
         # HTTPS :443 terminated on the ALB with the ACM cert + a Route53 alias (origin.docsuri.org
@@ -346,3 +372,74 @@ class ComputeStack(Stack):
             value=f"https://{self.cdn.distribution_domain_name}",
             description="Browser-trusted HTTPS endpoint for the API (set DOCSURI_GATEWAY_URL here)",
         )
+
+        # --- Ops alerting: the alarm→human "last mile" (runbook §4 G2/G4 + the 3 SLOs §7) ---
+        # ponytail: NOT wiring the in-app cost guard's AlertPublisher to SNS. The AWS Budget below
+        # catches cost at the billing level (more robust — sees ALL spend, not just what flows
+        # through the guard), and the in-app guard already degrades/rejects on its own. Add a
+        # per-incident SNS publisher only if you need finer paging than these 3 alarms give.
+        ops_alerts = sns.Topic(self, "OpsAlerts", display_name="docsuri-ops-alerts")
+        if ops_alert_email:
+            ops_alerts.add_subscription(subs.EmailSubscription(ops_alert_email))
+        else:
+            CfnOutput(
+                self, "OpsAlertEmailMissing",
+                value="set -c ops_alert_email=<addr> so alarms + budget actually page a human",
+            )
+
+        # SLO 1 — API availability: backend 5xx. Native ALB metric, no app instrumentation needed.
+        api_5xx_alarm = self.service.target_group.metrics.http_code_target(
+            elbv2.HttpCodeTarget.TARGET_5XX_COUNT,
+            period=Duration.minutes(5),
+            statistic="Sum",
+        ).create_alarm(
+            self, "Api5xxAlarm",
+            threshold=10,  # tune: >10 backend 5xx in 5 min
+            evaluation_periods=1,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+            alarm_description="DocSuri API target 5xx > 10 / 5min",
+        )
+        api_5xx_alarm.add_alarm_action(cw_actions.SnsAction(ops_alerts))
+
+        # SLO 2 — search latency: ALB target p95 response time. Native metric.
+        api_latency_alarm = self.service.target_group.metrics.target_response_time(
+            period=Duration.minutes(5),
+            statistic="p95",
+        ).create_alarm(
+            self, "ApiLatencyP95Alarm",
+            threshold=2,  # seconds; tune to the search SLO
+            evaluation_periods=3,  # 3×5min sustained → avoid paging on a single slow window
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+            alarm_description="DocSuri API p95 latency > 2s sustained 15min",
+        )
+        api_latency_alarm.add_alarm_action(cw_actions.SnsAction(ops_alerts))
+
+        # SLO 3 — cost burn: account budget mirroring the in-app cap ($1600), notifying at the same
+        # 80% warning ratio ($1280 — cost_guard.warning_ratio). Budget emails the ops alias directly
+        # (no SNS/topic policy needed). Account 028317349537 is dedicated to DocSuri → account
+        # spend ≈ app spend.
+        if ops_alert_email:
+            budgets.CfnBudget(
+                self, "MonthlyCostBudget",
+                budget=budgets.CfnBudget.BudgetDataProperty(
+                    budget_type="COST",
+                    time_unit="MONTHLY",
+                    budget_limit=budgets.CfnBudget.SpendProperty(amount=1600, unit="USD"),
+                ),
+                notifications_with_subscribers=[
+                    budgets.CfnBudget.NotificationWithSubscribersProperty(
+                        notification=budgets.CfnBudget.NotificationProperty(
+                            notification_type="ACTUAL",
+                            comparison_operator="GREATER_THAN",
+                            threshold=80,  # percent of $1600 = $1280
+                        ),
+                        subscribers=[
+                            budgets.CfnBudget.SubscriberProperty(
+                                subscription_type="EMAIL", address=ops_alert_email,
+                            )
+                        ],
+                    ),
+                ],
+            )
