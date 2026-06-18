@@ -724,3 +724,11 @@
 **Context**: 레저 재기준선 — CONSTRUCTION 종결 상태를 문서에 동기화. 추가 전용(append-only) 규칙 준수(기존 항목 무변경). 과거 세션(인프라/SES 등)의 verbatim 사용자 입력은 당시 기록 부재로 재구성하지 않고 커밋 SHA로 추적. 작업 위치: 워크트리 `worktree-ledger-rebaseline`(HEAD `0437b40`에서 분기).
 
 ---
+
+## 신규 기능 U7(요약/번역) — Requirements Analysis 재진입
+**Timestamp**: 2026-06-18T00:00:00Z
+**User Input(원문)**: "지금 보면 aidlc 공식 레포도 clone해놨고 DOCSURI 레포가 내가 실제로 aidlc 방법론으로 작업하고 있는 프로젝트인데 이제 DOCSURI 레포에 기능 하나씩 추가하려고 하는데 어떻게 해야해..? 뭐 문서만들고 해야할 거 같은데.." (후속 선택: "요구사항 등재부터 같이")
+**AI Response**: 기존 프로젝트(U1~U6 빌드·배포 완료)에 신규 기능을 추가하는 정석으로 INCEPTION 상단(Requirements Analysis)으로 재진입함을 안내. 신규 기능 = 요약/번역 파이프라인(레포 루트 `summarization-translation-pipeline.md`에 설계 초안 선작성, 가칭 U7 Summarization). 해당 초안은 §1·§12에서 "U1~U6에 없는 새 책임 → 신규 유닛 등재 + 요구사항 정식 등재 선행 필요(frozen 범위 밖·승인 절차)"를 명시. 요구사항 수준의 열린 결정만 추려 `requirement-verification-questions-u7.md` 생성, 게이트에서 대기. (설계 초안이 모델/캐시/용어집 등 HOW는 대부분 선해소 → Construction 단계로 이월. 본 단계는 WHAT/WHY = 범위 편입 여부·FR/NFR 골격·NFR-C1 비용 영향만 확정.)
+**Context**: INCEPTION 재진입 — 신규 유닛 U7(요약/번역) Requirements Analysis. 현재 `requirements.md` §12가 "근거 합성 Q&A·AI 생성 글쓰기"를 v1 범위 제외로 명시 → 요약/번역 편입은 범위 변경 승인 게이트 필수. 다음 FR 번호 = FR-12.
+
+---
