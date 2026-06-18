@@ -124,6 +124,11 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 
 ### 🟡 OPERATIONS 단계
 - [~] Operations — **placeholder 확인 완료 (2026-06-16)**. `operations/operations-placeholder.md` 생성. 현재 룰셋상 배포·모니터링·운영 런북 실행은 future scope이며, 워크플로우는 Build and Test 이후 종료.
+- [~] **Operations 하드닝 패스 (2026-06-18, `feat/ops-hardening`)** — CONSTRUCTION 종료 후 프로덕션 운영 첫 단계. 산출:
+  - [x] **운영 런북** `operations/runbook.md` — 시스템 맵·함정(RETAIN 3종·ALB `/healthz` 서킷브레이커·SSO)·비용가드 강등표·복구절차·SLO 3개.
+  - [x] **알림 마지막 1마일** (코드에 존재하나 사람에게 미연결이던 갭): G3 `CLOUDWATCH_NAMESPACE` env로 prod 관측 활성·G2 SES 토픽 ops 구독·G4 CloudWatch 알람(5xx·p95)+G1 AWS Budget($1280) → `OpsAlerts` 토픽/ops 메일. 전부 `compute_stack.py` (synth 검증).
+  - [ ] **검증(라이브)**: `cdk deploy -c ops_alert_email=…` · 테스트 알람 1회 수신 확인 · RDS 스냅샷 복원 테스트 1회. (runbook §8)
+  - 천장(의도적 미구현): 앱 내부 cost guard의 per-incident SNS publisher — Budget가 빌링 레벨에서 대체.
 
 ## 비고
 - 이번 사이클은 클린 재시작이다. 폐기된 사이클 1(U1·U2·U4 데모)은 AWS Bedrock(Claude Haiku), Amazon Comprehend, S3 Vectors 기반 Bedrock Knowledge Base, Amplify 호스팅, Python 백엔드, Next.js 프런트엔드를 사용했다. 그중 어느 선택도 기본 계승하지 않으며 선행 사례(prior art)로만 참조한다.
