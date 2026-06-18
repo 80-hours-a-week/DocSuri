@@ -740,3 +740,11 @@
 **Context**: INCEPTION — U7 Requirements Analysis 명확화 게이트 답변 수신·분석. 결정 보류 상태(팀 상의 우선). 브랜치 feature/u7, PR #108.
 
 ---
+
+## U7 팀 합의 확인 → requirements.md FR-12~ 정식 등재
+**Timestamp**: 2026-06-18T00:00:00Z
+**User Input(원문)**: "아 아니 팀원들과 합의 하에 전부 권장안인 A로 하기로 한거야"
+**AI Response**: 직전 "팀 상의 후" = 보류로 해석한 것을 정정 — 팀이 **이미 전부 A로 합의**했음을 확인. 승인 게이트 통과로 보고 `requirements.md` 갱신: 헤더 개정 노트 + **FR-12(AI 요약: 단일 논문 전문 구조화 요약·근거 앵커·전문/입문 수준·근거 없으면 기권)·FR-13(한국어 번역: 초록·용어집 미번역 리스트)·FR-14(개인화: persona 2벌·뷰 프리셋·용어집 P1/P2)** 추가; **NFR-P2(온디맨드, 검색 SLA NFR-P1 비대상)·QT-5(요약/번역 근거화·QT-1 평가셋 확장)·NFR-C1 보강(U7 Sonnet 비용 라인·CostGuard 게이트)·C-2 추출 경계 명시·§12 U7 제외(P3 커뮤니티 용어집·자유입력 per-user)** 등재; §13 추적성 6행 추가. `aidlc-state.md` INCEPTION에 U7 개정 항목 추가. 리뷰 게이트 제시(승인 시 User Stories(U7)로 진행).
+**Context**: INCEPTION — U7 Requirements Analysis 완료(팀 합의 기반 FR-12~14 등재). 브랜치 feature/u7, PR #108. 다음 단계: User Stories(U7) → Units Generation(U7·U1/U6 의존) → Construction 유닛 루프. requirements.md/aidlc-state.md 갱신 후 리뷰 대기.
+
+---

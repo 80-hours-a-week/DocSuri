@@ -68,6 +68,7 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - [x] 워크스페이스 탐지(Workspace Detection) — Greenfield (2026-06-15)
 - [~] 리버스 엔지니어링 — N/A (Greenfield, 건너뜀)
 - [x] 요구사항 분석(Requirements Analysis) — 완료·승인 (2026-06-15); `requirements.md`. 명확화 2라운드; 모순 전건 해소; 확장 전부 활성
+- [x] **요구사항 개정 — 신규 유닛 U7(요약/번역) 편입 (2026-06-18, 팀 합의·브랜치 `feature/u7`·PR #108)**: U1~U6 빌드·배포 완료 후 Requirements Analysis 재진입. 명확화 `requirement-verification-questions-u7.md` Q1~Q7 전부 A(초안 권장안) → `requirements.md`에 **FR-12(AI 요약·구조화·앵커)·FR-13(한국어 번역·용어집)·FR-14(개인화: persona/뷰/용어집)·NFR-P2(온디맨드 비-SLA)·QT-5(요약/번역 근거화)·NFR-C1 U7 Sonnet 비용 라인 보강·C-2 추출 경계·§12 제외(P3·자유입력)** 등재. 설계 입력 `summarization-translation-pipeline.md`(레포 루트 — 정식 편입 시 `aidlc-docs/` 재배치 필요). **다음: User Stories(U7) → Units Generation(U7 등재·U1/U6 의존) → Construction 유닛 루프.** 리뷰 게이트 대기.
 - [x] 사용자 스토리(User Stories) — 계획 승인(PQ1–5=A); Part 2에서 `stories.md`(스토리 **21개**, 6 에픽: Hero 1 + Discovery 7 + Accounts 2 + Library 3 + Ingestion 3 + Reliability 5) + `personas.md`(P1 박지훈, P2, OP) 생성; FR-1..11 전부 커버; **승인 완료**. **적대적 비평 패스 완료(2026-06-15, 7/7 critic)** → requirements/stories 보정 반영.
 - [x] Workflow Planning — `execution-plan.md` **승인 완료**. 판정: 리버스 엔지니어링만 SKIP, 그 외 전 단계 EXECUTE.
 - [x] Application Design — 완료(리뷰 게이트). `application-design/` 5문서(components·component-methods·services·component-dependency·application-design); 6 유닛(U1~U6); 적대적 3 critic→blocking/major 보정 반영(근거화 단일 권위, SearchExecuted 생산자, SEC-8 단일 결정점, QT-3 소유자, 백도어 차단)
