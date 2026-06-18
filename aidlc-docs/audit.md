@@ -836,3 +836,11 @@
 
 ---
 
+## U7 Infrastructure Design — 답변 확정·산출물 생성·승인
+**Timestamp**: 2026-06-19T00:00:00Z
+**User Input(원문)**: "전부 A" → "응 커밋.push하고 code generation 진행해줘"
+**AI Response**: Infra Design 9문 전수 A 기록. 산출물 `construction/u7-summarization/infrastructure-design/`(infrastructure-design·deployment-architecture). **신규 관리형 서비스 0**(전부 기존 자산 재사용): 컴퓨트=기존 ECS Fargate 모듈(신규 0)·S3 `summaries/` 프리픽스(IAM 스코프·영구)·Redis `sum:` 키스페이스+TTL·RDS `user_glossary` 테이블(기존 마이그레이션 러너)·Bedrock IAM(Sonnet/Haiku 모델 ARN 스코프, 기존 task role)·CloudWatch/Budget 비용 라인·CI 통합 게이트 레인. 비동기 잡 v1 미프로비저닝(TD-S9). 증분 비용≈Bedrock 토큰(가변, NFR-C1 여유). 조율 존(task role·CI·IaC·마운트)=@ELSAPHABA/Infra. **사용자 "code generation 진행해줘" → Infrastructure Design 승인 게이트 통과.** 커밋·push 후 Code Generation 진입.
+**Context**: CONSTRUCTION — U7 Infrastructure Design 완료·승인. 다음 단계: U7 Code Generation(Part 1 계획 → Part 2 생성, real-first 실 구현 — backend/modules/summarization/). 브랜치 feature/u7-v2, PR #115.
+
+---
+
