@@ -1,5 +1,7 @@
 # 요약 / 번역 파이프라인 설계 (Summarization & Translation)
 
+> **상태 (2026-06-18)**: 본 문서는 U7(요약/번역)의 **설계 입력(SSOT)** 이다. 레포 루트 → `aidlc-docs/inception/requirements/`로 재배치 완료. INCEPTION 등재 완료(`requirements.md` **FR-12~14·NFR-P2·QT-5**, `stories.md` 에픽 6 US-S1~S6, `unit-of-work.md` **U7**). 본 문서 §2~§12의 **HOW**(모델·스키마·정제·근거화·용어집·캐시·확정 결정)는 **CONSTRUCTION(U7 Functional/NFR Design)** 의 원천이다. 아래 "DRAFT 제안" 표기는 작성 시점 기록으로 보존.
+
 **상태**: 🟡 DRAFT 제안 · **범위**: 신규 유닛(U7) — 현 frozen 범위 밖, 요구사항 등재 필요 · **일자**: 2026-06-18
 **전제**: 검색 인덱스는 **(A) 초록 임베딩(논문당 1벡터)** 으로 단순화한 뒤의 설계.
 **SSOT 근거**: `aidlc-docs/inception/.../unit-of-work.md`(유닛 U1~U6) · `aidlc-docs/construction/shared/ports.md`(U6 근거화·비용·관측 단일 권위) · `aidlc-docs/inception/requirements/requirements.md`(FR-5·C-2·NFR-C1·SEC-11) · `vector-spec.md`(전문 원본 S3 보관)

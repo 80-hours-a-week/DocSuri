@@ -2,7 +2,7 @@
 
 **단계**: INCEPTION → Requirements Analysis 재진입 (신규 기능) · **일자**: 2026-06-18
 **대상 기능**: 요약/번역 파이프라인 (가칭 **U7 Summarization**) · **다음 FR 번호**: FR-12~
-**설계 입력**: 레포 루트 `summarization-translation-pipeline.md`(상세 설계 초안 — HOW 대부분 선해소; 본 단계는 WHAT/WHY만 확정)
+**설계 입력**: `summarization-translation-pipeline.md`(동일 디렉터리; 2026-06-18 레포 루트→`aidlc-docs/inception/requirements/` 재배치)(상세 설계 초안 — HOW 대부분 선해소; 본 단계는 WHAT/WHY만 확정)
 **근거 SSOT**: `requirements.md`(FR-5·C-2·§12·NFR-C1·QT-1) · `aidlc-state.md`
 **답변 상태**: ✅ 1차 답변 완료 (2026-06-18, **전부 A = 설계 초안 권장안**) — 팀 상의(PR #108) 대기 중. 팀 합의 후 `requirements.md` FR-12~ 등재.
 

@@ -764,3 +764,11 @@
 **Context**: INCEPTION — U7 Units Generation 완료(7 유닛 등재, 코드 DAG 비순환). 브랜치 feature/u7, PR #108. INCEPTION(U7) 종료 → 다음은 CONSTRUCTION U7 유닛 루프: Functional Design → NFR Requirements → NFR Design → Infrastructure Design → Code Generation. 리뷰 대기.
 
 ---
+
+## U7 설계 입력 문서 재배치 (레포 루트 → aidlc-docs)
+**Timestamp**: 2026-06-18T00:00:00Z
+**User Input(원문)**: "근데 @summarization-translation-pipeline.md 파일은 내 개인적인 요약/번역 기능 설계서?인데 이걸 계속 두는 게 맞나? 없애도 될까?" (후속 선택: "aidlc-docs로 이사 (권장)")
+**AI Response**: 삭제는 비권장 안내 — 해당 파일은 이미 U7 **설계 입력(SSOT)** 으로 5곳(requirements.md×2·stories.md·questions-u7·aidlc-state)에서 참조 중이고, §2~§12의 HOW(모델·스키마·정제·근거화·용어집·캐시·확정결정)는 아직 어느 Construction 문서에도 미수록 → 삭제 시 깨진 참조 + 설계 원천 소실. 대신 **재배치**: `git mv summarization-translation-pipeline.md aidlc-docs/inception/requirements/`(이력 보존, `aidlc-docs/` 문서 전용 컨벤션 준수). 문서 상단에 상태 배너 추가(설계 입력·등재 완료·HOW=Construction 원천). 참조 갱신: questions-u7("레포 루트"→동일 디렉터리), stories.md(`../requirements/...` 상대경로), aidlc-state(재배치 완료 표기). requirements.md는 동일 디렉터리라 bare 파일명 참조 유효(무변경). PR #108 리뷰 포인트 ③(위치) 해소.
+**Context**: INCEPTION — U7 설계 입력 문서 재배치(컨벤션 정합). 브랜치 feature/u7, PR #108. 삭제 아님(설계 원천 보존). audit는 append-only로 과거 "레포 루트" 기록은 시점 사실로 보존.
+
+---
