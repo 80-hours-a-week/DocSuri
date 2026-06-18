@@ -30,6 +30,12 @@
 | **US-R3** 비용 상한+비용 폭발 탐지 | U6 | — |
 | **US-R4** 관측성+AI 인시던트 경보 | U6 | (전 유닛 신호원) |
 | **US-R5** 헬스 체크 | U6 | — |
+| **US-S1** AI 구조화 요약 | U7 | U1(전문 원본), U2/U5(결과 카드) |
+| **US-S2** 한국어 번역 | U7 | U1(초록 원본), U5(표시) |
+| **US-S3** 출처 보기 + 기권 | U7 | U6(근거화 후크), U5(하이라이트 UI) |
+| **US-S4** 요약/번역 개인화 | U7 | U5(수준/뷰 전환 UI) |
+| **US-S5** 온디맨드 즉시/스트리밍 | U7 | U5(점진 렌더) |
+| **US-S6** 요약 비용 게이트 + 근거화 운영 | U6 | U7(요약 경로), (관측 신호원) |
 
 ## 유닛별 스토리 묶음
 - **U1 Ingestion** — US-I1, US-I2, US-I3 (+US-H1/US-D2 인덱스 백킹)
@@ -37,9 +43,11 @@
 - **U3 Accounts** — US-A1, US-A2 (+US-H1 가입)
 - **U4 Library** — US-L1, US-L2, US-L3
 - **U5 Frontend** — US-H1(주), US-D7(주) (+US-D1/D4/A1/A2/L1/L2/L3 UI 기여)
-- **U6 Reliability/Ops** — US-D5(주), US-R1, US-R2, US-R3, US-R4, US-R5 (+US-A1 레이트리밋, US-I2/I3 관측)
+- **U6 Reliability/Ops** — US-D5(주), US-R1, US-R2, US-R3, US-R4, US-R5, US-S6 (+US-A1 레이트리밋, US-I2/I3 관측)
+- **U7 Summarization** — US-S1, US-S2, US-S3, US-S4, US-S5 (+US-S6 요약 경로 기여)
 
 ## 전수 할당 검증
-- 스토리 21개 = US-H1 + US-D1..D7(7) + US-A1..A2(2) + US-L1..L3(3) + US-I1..I3(3) + US-R1..R5(5) → **전부 Owner 배정 완료(미할당 0)**.
+- 스토리 **27개** = US-H1 + US-D1..D7(7) + US-A1..A2(2) + US-L1..L3(3) + US-I1..I3(3) + US-R1..R5(5) + **US-S1..S6(6)** → **전부 Owner 배정 완료(미할당 0)**.
 - 횡단 스토리(US-D5 근거화)는 Owner=U6(단일 권위 후크), 기여=U2(어댑터) — Application Design 단일-소유자 규칙과 일치.
 - US-H1(히어로)은 통합 슬라이스 — Owner=U5(프런트 표면), 다수 유닛 백킹(US-D*/US-A1으로 실현).
+- **U7 추가(2026-06-18)**: US-S1..S5 Owner=U7(요약/번역 신규 책임), US-S6은 비용게이트·근거화 운영이라 Owner=U6(단일 권위) 기여=U7 — 단일-소유자 규칙 일치. U7은 U1(전문)·U6(근거화/비용)에 의존하나 코드 의존 그래프는 비순환 유지(`unit-of-work-dependency.md` §비순환 검증).

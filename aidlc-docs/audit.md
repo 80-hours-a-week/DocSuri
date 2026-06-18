@@ -756,3 +756,11 @@
 **Context**: INCEPTION — U7 User Stories 완료. 브랜치 feature/u7, PR #108. 다음: Units Generation(U7 unit-of-work 등재·U1 전문원본/U6 근거화·비용게이트 의존) → Construction 유닛 루프(Functional Design부터). 리뷰 대기.
 
 ---
+
+## U7 Units Generation — 유닛 정식 등재
+**Timestamp**: 2026-06-18T00:00:00Z
+**User Input(원문)**: "승인할게"
+**AI Response**: User Stories 승인 게이트 통과 → Units Generation 진행. **U7 Summarization 유닛 정식 등재**: `unit-of-work.md`(유닛 정의 행+U7 주석·배포 단위 ① API 모듈[+③ 초장문 비동기 잡 옵션]·코드트리 `backend/modules/summarization/`·확장 트랙 빌드순서)·`unit-of-work-dependency.md`(매트릭스 U7 행/열 추가: U7→U1 전문 S3 capability read[코드 의존 아님]·U7→U6 근거화/비용 후크 `shared/ports` lib + 관측/비용 event·U5→U7 sync[게이트웨이 경유]·U6→U7 sync[게이트웨이 핸들러], **코드 DAG 비순환 유지 검증 — U2와 동형**, 온디맨드 요약/번역 ASCII 흐름 추가)·`unit-of-work-story-map.md`(US-S1..S5 Owner=U7·US-S6 Owner=U6 기여=U7·유닛별 묶음·전수 27 스토리 검증). 총 **7 유닛·4 배포 단위**. `aidlc-state.md` INCEPTION에 Units Generation 개정 항목. 리뷰 게이트 제시(승인 시 U7 Construction 유닛 루프 Functional Design으로 진행).
+**Context**: INCEPTION — U7 Units Generation 완료(7 유닛 등재, 코드 DAG 비순환). 브랜치 feature/u7, PR #108. INCEPTION(U7) 종료 → 다음은 CONSTRUCTION U7 유닛 루프: Functional Design → NFR Requirements → NFR Design → Infrastructure Design → Code Generation. 리뷰 대기.
+
+---
