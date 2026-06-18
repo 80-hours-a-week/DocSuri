@@ -131,3 +131,7 @@ class OpsDashboardView:
     alert_count: int
     cost_state: BudgetState | None
     health: HealthStatus | None
+    latency_p95: float | None = None
+    error_rate: float | None = None
+    throughput: float | None = None
+    grounding_health: dict[str, int] | None = None

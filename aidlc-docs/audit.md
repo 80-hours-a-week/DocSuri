@@ -724,3 +724,28 @@
 **Context**: 레저 재기준선 — CONSTRUCTION 종결 상태를 문서에 동기화. 추가 전용(append-only) 규칙 준수(기존 항목 무변경). 과거 세션(인프라/SES 등)의 verbatim 사용자 입력은 당시 기록 부재로 재구성하지 않고 커밋 SHA로 추적. 작업 위치: 워크트리 `worktree-ledger-rebaseline`(HEAD `0437b40`에서 분기).
 
 ---
+
+## Inception — Workspace Detection & Session Resumption
+**Timestamp**: 2026-06-18T15:14:21+09:00
+**User Input**: "Implement US-R4 (Issues #104)."
+**AI Response**: "Displayed the welcome message, completed Workspace Detection, and resumed the session. Proceeding to Requirements Analysis."
+**Context**: Inception phase start for US-R4 implementation.
+
+---
+
+## Construction — US-R4 Observability Wiring
+**Timestamp**: 2026-06-18T15:20:00+09:00
+**User Input**: "work on worktree-us-r4-observability-wiring."
+**AI Response**: "Implemented the US-R4 grounding health metric emission in discovery's finalize path and wired it to backend app-shell's process-wide ObservabilityHub. Staged changes and verified unit tests pass."
+**Context**: CONSTRUCTION — US-R4 Observability Wiring Implementation.
+
+---
+
+## Construction — US-R4 Observability Verification & Endpoints Unit Testing
+**Timestamp**: 2026-06-18T15:24:00+09:00
+**User Input**: "work on worktree-us-r4-observability-wiring."
+**AI Response**: "Created unit and integration tests under `backend/tests/test_ops_endpoints.py` to assert endpoints auth/admin/MFA guards and metric/incident querying. Fixed lint issues in `backend/app.py` and test code. Confirmed all repository, backend, and ops tests are passing, and style check is green."
+**Context**: CONSTRUCTION — US-R4 Observability Wiring and Ops Endpoints Verification.
+
+---
+

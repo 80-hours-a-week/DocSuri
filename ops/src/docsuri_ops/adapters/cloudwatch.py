@@ -16,17 +16,27 @@ from __future__ import annotations
 import json
 import logging
 import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, ClassVar
 
 from docsuri_ops.domain.enums import SignalKind
 from docsuri_ops.domain.models import TelemetryEvent
 
 log = logging.getLogger("docsuri.ops.cloudwatch")
 
+# Bounded dedup window (LRU): preserves idempotency for redelivered events while capping memory.
+# Per-request metric emission carries random event_ids, so an unbounded set would grow for the
+# whole process lifetime — a production memory leak. (US-R4)
+_MAX_SEEN = 100_000
+
 
 @dataclass(slots=True)
 class CloudWatchEventStore:
+    # Write-only store: append() ships to CloudWatch but list_events() can't read it back
+    # (returns []). Signals the dashboard to report None — not fabricated zeros — for
+    # event-derived metrics; read those from the CloudWatch console / GetMetricData. (US-R4)
+    supports_readback: ClassVar[bool] = False
     namespace: str = "DocSuri/Production"
     log_group: str = "/docsuri/ops"
     log_stream: str = "telemetry"
@@ -34,7 +44,7 @@ class CloudWatchEventStore:
     _cw_client: Any = field(default=None, repr=False)
     _logs_client: Any = field(default=None, repr=False)
     _sequence_token: str | None = field(default=None, repr=False)
-    _seen: set[str] = field(default_factory=set)
+    _seen: OrderedDict[str, None] = field(default_factory=OrderedDict, repr=False)
 
     def _get_cw(self):
         if self._cw_client is None:
@@ -66,7 +76,9 @@ class CloudWatchEventStore:
     def append(self, event: TelemetryEvent) -> bool:
         if event.dedup_key in self._seen:
             return False
-        self._seen.add(event.dedup_key)
+        self._seen[event.dedup_key] = None
+        if len(self._seen) > _MAX_SEEN:
+            self._seen.popitem(last=False)  # evict oldest — bound the dedup window (US-R4)
 
         try:
             if event.kind is SignalKind.METRIC:

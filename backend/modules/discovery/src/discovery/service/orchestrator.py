@@ -143,7 +143,10 @@ class SearchOrchestrationService:
             raise SearchUnavailable("search index unavailable") from exc
 
         if not candidates.candidates:
+            # No-match is an abstain too (nothing to ground against) — emit so the dashboard
+            # abstain rate isn't blind to zero-result queries, which never reach finalize. (US-R4)
             response = self._assembler.assemble(AbstainResult(reason=_NO_MATCH), degrade_mode)
+            self._emit_grounding_health("abstain")
             self._publish(ctx.auth_session.user_id, request.query, 0)
             return SearchOutcome(response=response)
 
@@ -166,8 +169,26 @@ class SearchOrchestrationService:
         """Map verdict → assemble → publish. ``decision`` came from the gateway's enforce."""
         result = self._grounding_adapter.map_decision(decision, pending.ranked)
         response = self._assembler.assemble(result, pending.degrade_mode)
+        self._emit_grounding_health(getattr(decision, "verdict", "unknown"))
         self._publish(pending.user_id, pending.query, result_count(response))
         return response
+
+    def _emit_grounding_health(self, verdict: str) -> None:
+        """Emit the grounding-health signal — the 'hallucination' AI-incident class (US-R4).
+
+        ``verdict`` is one of "pass" | "block" | "abstain" (docsuri_shared.ports): a ``block``
+        means the grounding gate caught a fabricated arXiv reference; ``abstain`` means nothing
+        grounded — including the no-match path, which returns before the gate runs (so the
+        dashboard abstain rate stays complete). One metric tagged by verdict so a CloudWatch
+        alarm can route the block/abstain rate to the IR process.
+        Must NOT raise — observability is advisory and off the response-correctness path.
+        """
+        try:
+            self._observability.emit_metric(
+                "discovery.search.grounding", 1.0, {"verdict": verdict}
+            )
+        except Exception:  # noqa: BLE001
+            pass
 
     def _publish(self, user_id: str, query: str, count: int) -> None:
         """Fire-and-forget SearchExecuted (BR-14). Failure MUST NOT affect the response."""

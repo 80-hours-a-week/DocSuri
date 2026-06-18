@@ -4,7 +4,7 @@
 - **프로젝트명**: DocSuri (연구 지원 애플리케이션)
 - **프로젝트 유형**: Greenfield(그린필드)
 - **시작일**: 2026-06-15T04:36:30Z
-- **현재 단계**: CONSTRUCTION 진행(3 트랙 병렬, 유닛별 루프). **develop 통합 머지(2026-06-16)**: U1 Ingestion(Code Generation·Build and Test 완료·승인)·U2 Discovery(mock-first Code Generation)·U3 Accounts(Code Generation) + backend app-shell(**accounts만 실제 마운트; discovery는 매 부팅 graceful-skip — §검증 재기준선 참조**). shared/ 공용 규약 완료. **U6 Reliability/Ops 데이터 및 탐지 파이프라인 Code Generation 완료(2026-06-16·`feature/track6` 머지) — 단 라이브 경로 미연결(게이트웨이 미설치·discovery는 StubGroundingHook 주입; §검증 재기준선 참조)**. U1 OPERATIONS는 placeholder 확인(현 AI-DLC 룰셋은 Build and Test 이후 실제 Operations 실행 절차 미제공). **U1 프로덕션 배포 미표시**: AWS 토폴로지·IAM/KMS/network·OpenSearch/SQS/control-plane 배포·CI/CD·롤백·운영 런북은 후속 Infrastructure Design/Operations 확장 필요. 다음: 각 유닛 후속 루프(U4·U5·U2 real 어댑터·**U6 통합 last-mile[게이트웨이 설치+실 hook 주입] 및 클라우드 어댑터/IaC**). **[2026-06-18 갱신: 크리티컬 패스 ①~⑦ 전부 종결·AWS 프로덕션 배포 완료 — 아래 §크리티컬 패스 종결이 현재 상태의 단일 진실.]**
+- **현재 단계**: CONSTRUCTION - US-R4 구현 완료. **[2026-06-18: U6 관측성 텔레메트리 연동(US-R4) 피처 구현, 대시보드 및 인시던트 API 엔드포인트 구현, 단위 및 통합 테스트 검증 및 린트 통과 완료]**
 - **문서 언어**: 한국어(`aidlc-docs/` 산출물). 업스트림 룰셋(`AGENTS.md`, `.aidlc-rule-details/`)은 영어 유지.
 
 ## ⚠️ 검증 재기준선 (Verification Re-baseline) — 2026-06-16

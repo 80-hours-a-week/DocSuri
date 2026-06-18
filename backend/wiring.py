@@ -107,16 +107,22 @@ def _mount_discovery(app: FastAPI, settings: Settings, result: MountResult) -> N
     # cluster + Bedrock model are configured (DOCSURI_OPENSEARCH_ENDPOINT + _BEDROCK_MODEL_ID),
     # wire the REAL OpenSearch/Bedrock read path; otherwise stay mock-first. The cluster itself
     # is provisioned by the shared infra track (U1 infra + system event bus) — U2 only reads it.
+    # The process-wide U6 hub the app-shell built (CloudWatch-backed when CLOUDWATCH_NAMESPACE
+    # is set, else in-memory). Injecting it here is what routes U2's app metrics to CloudWatch
+    # (US-R4): the factories default to NoopObservabilityHub, so without this discovery's
+    # emit_metric calls were silently dropped even though the real hub existed on app.state.
+    observability = getattr(app.state, "observability", None)
+
     discovery_settings = DiscoverySettings.from_env()
     if discovery_settings.search_enabled:
         from discovery.real_wiring import build_real_orchestrator
 
-        bundle = build_real_orchestrator(discovery_settings)
+        bundle = build_real_orchestrator(discovery_settings, observability=observability)
         read_path = "real(opensearch+bedrock)"
     else:
         from discovery.mocks.wiring import build_mock_orchestrator
 
-        bundle = build_mock_orchestrator()
+        bundle = build_mock_orchestrator(observability=observability)
         read_path = "mock"
 
     # The grounding gate is the REAL U6 single authority (INV-1) in BOTH modes — replacing the
@@ -204,6 +210,17 @@ def _mount_library(app: FastAPI, settings: Settings, result: MountResult) -> Non
     result.mounted.append("library")
 
 
+def _mount_ops(app: FastAPI, settings: Settings, result: MountResult) -> None:
+    # ops (U6 dashboard/incidents) is `backend.modules.ops`. Its docsuri-ops imports are lazy
+    # (inside the endpoints), so the router mounts even when docsuri-ops is absent — the
+    # endpoints then return 503 via get_dashboard_service. Absent module → ModuleNotFoundError
+    # → skip (handled by mount_modules), same as the other mounters.
+    from backend.modules.ops import controller as ops
+
+    app.include_router(ops.router)
+    result.mounted.append("ops")
+
+
 # The real registry. Each entry is a `(app, settings, result) -> None` mounter whose name
 # (minus the `_mount_` prefix) labels it in MountResult / `/readyz`.
-_INTEGRATIONS = (_mount_accounts, _mount_discovery, _mount_library)
+_INTEGRATIONS = (_mount_accounts, _mount_discovery, _mount_library, _mount_ops)
