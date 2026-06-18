@@ -50,6 +50,15 @@ async def lifespan(app: FastAPI):
     engine = getattr(app.state, "db_engine", None)
     if engine is not None:
         engine.dispose()
+    # Flush buffered telemetry (the CloudWatch store ships on a background worker) so the last
+    # metrics aren't lost on a graceful restart. No-op for the in-memory store. (US-R4)
+    telemetry_store = getattr(app.state, "telemetry_store", None)
+    close = getattr(telemetry_store, "close", None)
+    if close is not None:
+        try:
+            close()
+        except Exception as exc:  # shutdown must not raise
+            log.warning("app-shell: telemetry flush error: %r", exc)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

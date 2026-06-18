@@ -48,3 +48,41 @@ def test_duplicate_event_id_is_idempotent() -> None:
     assert store.append(event)
     assert not store.append(event)
     assert len(store.events) == 1
+
+
+def test_dedup_window_is_bounded_lru(monkeypatch) -> None:
+    """_seen is a bounded LRU — it never exceeds the window and only the OLDEST keys are evicted,
+    so recent duplicates still dedup. Guards the per-request-metric memory leak. (US-R4)"""
+    import docsuri_ops.adapters.local as local
+
+    monkeypatch.setattr(local, "_MAX_SEEN", 3)
+    store = InMemoryEventStore()
+
+    def ev(eid: str) -> TelemetryEvent:
+        return TelemetryEvent(event_id=eid, kind=SignalKind.METRIC, name="m", value=1.0)
+
+    for eid in ["a", "b", "c", "d", "e"]:  # 5 unique ids > window of 3
+        assert store.append(ev(eid)) is True
+    assert len(store._seen) <= 3  # bounded — does NOT grow with unique events
+    assert store.append(ev("e")) is False  # recent → still deduped
+    assert store.append(ev("a")) is True  # oldest was evicted → re-accepted (bounded, not a leak)
+
+
+def test_cloudwatch_append_is_nonblocking_and_flush_ships(monkeypatch) -> None:
+    """append() enqueues (no boto3 in the caller's thread) and the background worker ships on
+    flush() — so the async gateway never blocks the event loop on PutMetricData. (US-R4)"""
+    from docsuri_ops.adapters.cloudwatch import CloudWatchEventStore
+
+    shipped: list[str] = []
+    monkeypatch.setattr(
+        CloudWatchEventStore, "_put_metric", lambda self, event: shipped.append(event.name or "")
+    )
+    store = CloudWatchEventStore(namespace="Test")
+    try:
+        assert store.append(
+            TelemetryEvent(event_id="m1", kind=SignalKind.METRIC, name="x", value=1.0)
+        ) is True
+        store.flush()  # block until the worker drains the queue
+        assert shipped == ["x"]
+    finally:
+        store.close()

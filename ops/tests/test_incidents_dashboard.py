@@ -102,3 +102,25 @@ def test_dashboard_aggregates_windowed_incidents_and_alerts() -> None:
     assert view.incident_count == 1
     assert view.alert_count == 1
     assert dashboard.summarize_by_class(view.window) == {"a": 0, "b": 1, "c": 0}
+
+
+def test_dashboard_metrics_none_for_write_only_store() -> None:
+    """A write-only event store (supports_readback=False, e.g. CloudWatch) can't be read back,
+    so the dashboard reports None for event-derived metrics rather than fabricating zeros that
+    read as 'healthy/quiet'. (US-R4)"""
+
+    class _WriteOnly:
+        supports_readback = False
+
+        def list_events(self):
+            return []
+
+    now = utc_now()
+    view = OpsDashboardService(InMemoryIncidentStore(), event_store=_WriteOnly()).get_dashboard(
+        DashboardWindow(now - timedelta(hours=1), now)
+    )
+
+    assert view.latency_p95 is None
+    assert view.error_rate is None
+    assert view.throughput is None
+    assert view.grounding_health is None
