@@ -748,3 +748,11 @@
 **Context**: INCEPTION — U7 Requirements Analysis 완료(팀 합의 기반 FR-12~14 등재). 브랜치 feature/u7, PR #108. 다음 단계: User Stories(U7) → Units Generation(U7·U1/U6 의존) → Construction 유닛 루프. requirements.md/aidlc-state.md 갱신 후 리뷰 대기.
 
 ---
+
+## U7 User Stories — 에픽 6(요약/번역) 추가
+**Timestamp**: 2026-06-18T00:00:00Z
+**User Input(원문)**: "응 진행해줘"
+**AI Response**: 요구사항 승인 게이트 통과 → User Stories 단계 진행. `stories.md`에 **에픽 6 — 요약/번역(U7)** 6 스토리 추가: US-S1(AI 구조화 요약·전문 기반·페르소나 4질문)·US-S2(한국어 번역·용어집 미번역 리스트)·US-S3(출처 보기 근거 앵커 + 근거 부족 시 기권)·US-S4(개인화: 수준 전문/입문·뷰 프리셋 재생성 0·용어 선호 저장)·US-S5(온디맨드 즉시[캐시]/스트리밍 응답)·US-S6(OP: 요약 비용 게이트 일시 기권 + 요약/번역 근거화 운영 모니터링). 총 27 스토리/7 에픽. 페르소나→스토리 맵(P1 US-S1..S5·OP US-S6) + FR→스토리 커버리지(FR-12..14·NFR-P2·QT-5·NFR-C1) 갱신. 페르소나 무변경(기존 P1·OP가 U7 커버; P1에 이미 재현성 페인 기술). `aidlc-state.md` 갱신. 리뷰 게이트 제시(승인 시 Units Generation으로 U7 정식 등재).
+**Context**: INCEPTION — U7 User Stories 완료. 브랜치 feature/u7, PR #108. 다음: Units Generation(U7 unit-of-work 등재·U1 전문원본/U6 근거화·비용게이트 의존) → Construction 유닛 루프(Functional Design부터). 리뷰 대기.
+
+---
