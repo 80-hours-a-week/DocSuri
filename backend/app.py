@@ -50,6 +50,15 @@ async def lifespan(app: FastAPI):
     engine = getattr(app.state, "db_engine", None)
     if engine is not None:
         engine.dispose()
+    # Flush buffered telemetry (the CloudWatch store ships on a background worker) so the last
+    # metrics aren't lost on a graceful restart. No-op for the in-memory store. (US-R4)
+    telemetry_store = getattr(app.state, "telemetry_store", None)
+    close = getattr(telemetry_store, "close", None)
+    if close is not None:
+        try:
+            close()
+        except Exception as exc:  # shutdown must not raise
+            log.warning("app-shell: telemetry flush error: %r", exc)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -70,6 +79,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.observability = observability
     app.state.telemetry_store = telemetry_store
     app.state.rate_limiter = InMemoryRateLimiter()
+
+    (
+        incident_store,
+        cost_guard,
+        health_service,
+        dashboard_service,
+    ) = _build_ops_dashboard_service(telemetry_store)
+    app.state.incident_store = incident_store
+    app.state.cost_guard = cost_guard
+    app.state.health_service = health_service
+    app.state.dashboard_service = dashboard_service
 
     _add_middleware(app, settings)
     register_error_handlers(app)
@@ -193,3 +213,29 @@ def _build_session_manager(settings: Settings):
     except Exception:
         log.info("app-shell: session manager unavailable — gateway auth injection disabled")
         return None
+
+
+def _build_ops_dashboard_service(telemetry_store):
+    """Build U6 dashboard components if docsuri-ops is present."""
+    try:
+        from docsuri_ops.adapters.local import InMemoryIncidentStore
+        from docsuri_ops.cost_guard import CostGuardCircuitBreaker
+        from docsuri_ops.dashboard import OpsDashboardService
+        from docsuri_ops.health import HealthCheckService
+
+        incident_store = InMemoryIncidentStore()
+        cost_guard = CostGuardCircuitBreaker()
+        health_service = HealthCheckService()
+
+        dashboard_service = OpsDashboardService(
+            incident_store=incident_store,
+            cost_guard=cost_guard,
+            health_service=health_service,
+            event_store=telemetry_store,
+        )
+        return incident_store, cost_guard, health_service, dashboard_service
+    except ImportError:
+        # ImportError (parent of ModuleNotFoundError) also covers a missing/renamed symbol in
+        # an otherwise-present docsuri_ops — degrade to the 503 path rather than crash the whole
+        # app-shell at startup (taking accounts/discovery/library down with it). (US-R4)
+        return None, None, None, None
