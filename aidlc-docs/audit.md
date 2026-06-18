@@ -852,3 +852,11 @@
 
 ---
 
+## U7 Code Generation 승인 + Build & Test 완료
+**Timestamp**: 2026-06-19T00:00:00Z
+**User Input(원문)**: "승인할게 Build & Test 진행해줘"
+**AI Response**: Code Generation 승인 게이트 통과 → Build & Test 단계 진행. 유닛 스코프 산출물 `construction/u7-summarization/build-and-test/`(build-instructions·unit-test-instructions·integration-test-instructions·security-test-instructions·build-and-test-summary). **실측 검증**: `pytest` **29 passed + 1 skipped**(통합 self-skip)·per-file(refiner3·glossary4·grounding4·source/cache/length6·orchestrator7·pbt5·integration1skip)·`ruff check src tests` **All checks passed**·임포트 스모크 OK. 통합 5 시나리오(Bedrock·S3+Redis·전문read/폴백·RDS owner격리·비용게이트) 정의=게이트 레인 전용(real-first). 성능=N/A(NFR-P2 온디맨드). 보안 체크리스트(인젝션 본문격리·근거화·SEC-9 라운드트립·owner격리·fail-closed). **U7 CONSTRUCTION 종료(설계루프+코드+빌드/테스트).** Operations 전 last-mile(프레임워크 밖): app-shell 마운트(@ELSAPHABA)·인프라 증분(@Infra)·shared/dtos/summarization 승격·비동기 잡 fast-follow.
+**Context**: CONSTRUCTION — U7 Build & Test 완료. **U7(요약/번역) CONSTRUCTION 전 단계 종료(FD→NFRReq→NFRDes→Infra→CodeGen→Build&Test).** AI-DLC 프레임워크는 Build & Test에서 종료. 브랜치 feature/u7-v2, PR #115 — 머지·라이브 배포는 사용자/팀 결정.
+
+---
+
