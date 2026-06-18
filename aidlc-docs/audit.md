@@ -796,3 +796,19 @@
 
 ---
 
+## U7 CONSTRUCTION 진입 — Functional Design 계획·질문 게이트 작성
+**Timestamp**: 2026-06-18T00:00:00Z
+**User Input(원문)**: "U7(요약/번역) 기능의 CONSTRUCTION을 이어서 진행 … 1~8 읽고 현재 상태 요약 + 다음 한 걸음" → (이후) "진행해줘" / "develop 브랜치로 pr 올려줘" / "확정안이더라도 다 올려줘"
+**AI Response**: INCEPTION(U7) 종료(PR #108 머지 확인) → CONSTRUCTION per-unit 루프 첫 단계 Functional Design 진입. 브랜치 `feature/u7-v2`(develop HEAD 분기, 레포 `-v2` 관례). `construction/plans/u7-summarization-functional-design-plan.md` 작성: §1 유닛 컨텍스트(신규 유닛 — component-methods 미선잠금 → 도메인 컴포넌트 9개 최초 정의)·§2 FD 실행 계획(domain-entities·business-logic-model·business-rules + PBT + 추적성 + 설계입력 §2~§12 흡수 맵)·§4 명확화 질문 **17개**(A~D 코드대조 13문 + E 설계입력 §12 확정안 재개 Q14~Q17, 모두 `[Answer]:`·`X) 기타`)·§5 불변식 5개. **핵심 결정**: Q4(frozen `enforce` 검색형상의 요약 재사용 가부 — QT-5 검증, 권장 U7 고유 결정적 게이트)·Q6(`split_sections` 코드 부재 → U7 섹션 도출)·Q12(스트리밍 TTFB↔날조0 → 버퍼-검증-스트리밍). **코드/FD 산출물 미생성(리뷰 게이트)**. PR #115(`feature/u7-v2`→develop) 생성. 요구사항 수준 합의(INCEPTION Q1~Q7)는 재개하지 않음.
+**Context**: CONSTRUCTION — U7 Summarization Functional Design Step 1~4(계획+질문). 리뷰/답변 대기. 다음(답변 확정 후): `u7-summarization/functional-design/` 산출물 생성 → 리뷰 게이트 → U7 NFR Requirements.
+
+---
+
+## U7 진행 정합성 자가검증 (업스트림 AI-DLC 규칙 대조)
+**Timestamp**: 2026-06-18T00:00:00Z
+**User Input(원문)**: "상위 레포 중에 aidlc 레포 클론한거랑 레포내 aidlc 폴더 안에 필요한 문서들을 읽은 후에 잘못 진행하고 있는건 없는지 확인도 한 번 해줘"
+**AI Response**: 업스트림 클론(`/home/kyjness/projects/github/aidlc-workflows/aidlc-rules/aws-aidlc-rule-details`)과 레포 내 `.aidlc-rule-details` 대조. **결과: construction 6개 규칙 파일 바이트 동일(드리프트 0)**. 진행 정합 확인 — CONSTRUCTION per-unit 루프 순서(FD→NFR Req→NFR Design→Infra→Code Gen→Build&Test) 준수, FD가 첫 단계로 올바름; 계획서 위치(`construction/plans/`) 정확; 질문 `[Answer]:` 태그·MC 형식·Other 옵션 마지막 규칙 부합; 리뷰 게이트(승인 전 산출물 미생성) 준수; 기술/수치(Sonnet/Haiku·토큰캡)를 NFR로 이연한 기술무관 원칙 준수. **정정한 갭 3건**: ① `question-format-guide` 표준 + 사용자 지시에 맞춰 Other 옵션을 순차문자(C/D)→`X) 기타`로 통일; ② 본 audit.md 누락 항목 append(session-continuity #7 — 세션 재개·작업 로깅 의무); ③ `aidlc-state.md`에 U7 Construction FD IN-PROGRESS 마커 추가(현재 단계 라인 stale 갱신). **남은 경미 사항(정정 안 함, 보고만)**: question-format-guide의 "옵션 간 빈 줄" 권고는 본 계획서가 타이트 리스트(기존 U1~U6 계획서 전부 동일 관례)라 미적용 — 렌더 미관 한정, 회귀 아님. **주의 환기**: "MC 질문을 채팅에 인라인 금지" 규칙상 정식 답변은 계획서 `[Answer]:` 태그(또는 PR 리뷰)에 기록함이 원칙 — 채팅의 표 요약은 포인터일 뿐.
+**Context**: CONSTRUCTION — U7 FD 진행 정합성 검증(업스트림 규칙 대조) + 정합성 갭 3건 정정. 산출물·코드 무변경.
+
+---
+

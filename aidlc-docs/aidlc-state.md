@@ -4,7 +4,7 @@
 - **프로젝트명**: DocSuri (연구 지원 애플리케이션)
 - **프로젝트 유형**: Greenfield(그린필드)
 - **시작일**: 2026-06-15T04:36:30Z
-- **현재 단계**: CONSTRUCTION - US-R4 구현 완료. **[2026-06-18: U6 관측성 텔레메트리 연동(US-R4) 피처 구현, 대시보드 및 인시던트 API 엔드포인트 구현, 단위 및 통합 테스트 검증 및 린트 통과 완료]**
+- **현재 단계**: CONSTRUCTION - US-R4 구현 완료. **[2026-06-18: U6 관측성 텔레메트리 연동(US-R4) 피처 구현, 대시보드 및 인시던트 API 엔드포인트 구현, 단위 및 통합 테스트 검증 및 린트 통과 완료]** **[2026-06-18: U7(요약/번역) CONSTRUCTION 진입 — Functional Design 계획·질문 게이트(17문) 작성, 브랜치 `feature/u7-v2`·PR #115, 리뷰/답변 대기. 산출물·코드 미생성.]**
 - **문서 언어**: 한국어(`aidlc-docs/` 산출물). 업스트림 룰셋(`AGENTS.md`, `.aidlc-rule-details/`)은 영어 유지.
 
 ## ⚠️ 검증 재기준선 (Verification Re-baseline) — 2026-06-16
@@ -116,6 +116,9 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 
 **U6 Reliability/Ops** (데이터 및 탐지 파이프라인 우선):
 - [x] Code Generation — **완료 (2026-06-16)**. `construction/plans/u6-reliability-ops-code-generation-plan.md` 25단계 전부 완료. `ops/` 패키지와 `backend/middleware/` seam 생성. 구현 범위: ObservabilityHub, CostGuardCircuitBreaker, GroundingEnforcementHook, RES-11 a/b/c 탐지기, IncidentEventPublisher, OpsDashboardService, HealthCheckService, ReliabilityEvalProbe, CLI/worker. 검증: `ops/.venv`에서 U6 범위 `pytest ops\tests backend\tests\test_u6_middleware.py` 31 passed, U6 범위 `ruff check ops backend\middleware backend\tests\test_u6_middleware.py` passed, shared contract import 및 CLI smoke passed. 명시 통합 테스트 `pytest ops\tests backend\tests\test_u6_middleware.py tests`는 46 passed. 루트 기본 `pytest`는 기존 `tests/accounts` 15 passed. 루트 `ruff check .`는 기존 `tests/accounts` unused import 9건(F401)으로 실패하여 U6 외 잔여 정리 필요. **[2026-06-17 갱신(④): `create_app` 게이트웨이 설치 + discovery 시임 실 `GroundingEnforcementHook` 주입으로 라이브 경로 연결(`ba4a62e`); PR#45 크로스리뷰 반영(`b6bb92d`); ops CI 레인(`7edd316`); CloudWatch EventStore 어댑터·프로덕션 자동 선택(`8b54b62`). F401 9건은 §크리티컬 패스 종결 잔여 항목으로 추적.]**
+
+**U7 Summarization** (요약/번역 — 코어 U1~U6 완료 후 편입 유닛, 단일 트랙·mock-first 권장):
+- [~] Functional Design — **진행 중·리뷰 게이트 (2026-06-18, 브랜치 `feature/u7-v2`·PR #115)**. `construction/plans/u7-summarization-functional-design-plan.md`(계획 + 명확화 질문 **17문**: A~D 코드대조 13문 + E 설계입력 §12 확정안 재개 Q14~Q17). 신규 유닛(component-methods 미선잠금) → 도메인 컴포넌트 9개 최초 정의. **핵심 결정**: Q4(frozen `enforce` 검색형상의 요약 재사용 가부 — QT-5 검증)·Q6(`split_sections` 부재→U7 섹션 도출)·Q12(스트리밍↔날조0). **산출물·코드 미생성 — 답변 확정 후 `u7-summarization/functional-design/` 생성 예정.** 설계 입력 HOW(`summarization-translation-pipeline.md` §2~§12)를 FD/NFR로 흡수하는 단계.
 
 **공통 후속 단계** (per-unit 또는 횡단):
 - [x] 병렬 개발 조율 (2026-06-16 반영) — `shared/` 공용 규약 선행 작성 및 3개 독립 트랙 병렬 진행 확정
