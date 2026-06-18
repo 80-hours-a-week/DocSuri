@@ -68,11 +68,14 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - [x] 워크스페이스 탐지(Workspace Detection) — Greenfield (2026-06-15)
 - [~] 리버스 엔지니어링 — N/A (Greenfield, 건너뜀)
 - [x] 요구사항 분석(Requirements Analysis) — 완료·승인 (2026-06-15); `requirements.md`. 명확화 2라운드; 모순 전건 해소; 확장 전부 활성
+- [x] **요구사항 개정 — 신규 유닛 U7(요약/번역) 편입 (2026-06-18, 팀 합의·브랜치 `feature/u7`·PR #108)**: U1~U6 빌드·배포 완료 후 Requirements Analysis 재진입. 명확화 `requirement-verification-questions-u7.md` Q1~Q7 전부 A(초안 권장안) → `requirements.md`에 **FR-12(AI 요약·구조화·앵커)·FR-13(한국어 번역·용어집)·FR-14(개인화: persona/뷰/용어집)·NFR-P2(온디맨드 비-SLA)·QT-5(요약/번역 근거화)·NFR-C1 U7 Sonnet 비용 라인 보강·C-2 추출 경계·§12 제외(P3·자유입력)** 등재. 설계 입력 `aidlc-docs/inception/requirements/summarization-translation-pipeline.md`(2026-06-18 레포 루트→aidlc-docs 재배치 완료). **다음: User Stories(U7) → Units Generation(U7 등재·U1/U6 의존) → Construction 유닛 루프.** 리뷰 게이트 대기.
 - [x] 사용자 스토리(User Stories) — 계획 승인(PQ1–5=A); Part 2에서 `stories.md`(스토리 **21개**, 6 에픽: Hero 1 + Discovery 7 + Accounts 2 + Library 3 + Ingestion 3 + Reliability 5) + `personas.md`(P1 박지훈, P2, OP) 생성; FR-1..11 전부 커버; **승인 완료**. **적대적 비평 패스 완료(2026-06-15, 7/7 critic)** → requirements/stories 보정 반영.
 - [x] Workflow Planning — `execution-plan.md` **승인 완료**. 판정: 리버스 엔지니어링만 SKIP, 그 외 전 단계 EXECUTE.
 - [x] Application Design — 완료(리뷰 게이트). `application-design/` 5문서(components·component-methods·services·component-dependency·application-design); 6 유닛(U1~U6); 적대적 3 critic→blocking/major 보정 반영(근거화 단일 권위, SearchExecuted 생산자, SEC-8 단일 결정점, QT-3 소유자, 백도어 차단)
 - [x] Units Generation — 완료(리뷰 게이트). `unit-of-work.md`·`unit-of-work-dependency.md`·`unit-of-work-story-map.md`; 6 유닛·4 배포 단위·모노레포·데모 우선 순서; 스토리 21개 전수 매핑·코드 의존 DAG(adversarial 검증 solid)
 - [ ] Units Generation — **EXECUTE** (예비 유닛: U1 인제스천, U2 디스커버리 API, U3 계정/인증, U4 검색저장/라이브러리, U5 모바일 웹, U6 신뢰성/운영)
+- [x] **사용자 스토리 개정 — U7(요약/번역) 에픽 추가 (2026-06-18, 팀 합의·`feature/u7`·PR #108)**: `stories.md`에 **에픽 6 — 요약/번역**(US-S1 구조화 요약·US-S2 한국어 번역·US-S3 출처보기+기권·US-S4 개인화·US-S5 온디맨드 응답·US-S6 비용게이트+근거화 운영) 6 스토리 추가 → 총 27 스토리/7 에픽. P1(US-S1..S5)·OP(US-S6) 매핑, FR-12..14·NFR-P2·QT-5 전수 커버. 페르소나 무변경(P1·OP가 U7 커버).
+- [x] **Units Generation 개정 — U7 정식 등재 (2026-06-18, 팀 합의·`feature/u7`·PR #108)**: `unit-of-work.md`(U7 Summarization 유닛 정의·배포 단위 ①+③옵션·코드트리 `backend/modules/summarization/`·확장 트랙)·`unit-of-work-dependency.md`(U7 행/열 추가, U7→U1 capability read·U7→U6 `shared/ports` lib·U5→U7/U6→U7 sync, **코드 DAG 비순환 유지 검증**, 온디맨드 요약 ASCII 흐름)·`unit-of-work-story-map.md`(US-S1..S5 Owner=U7·US-S6 Owner=U6 기여=U7, 전수 27 스토리 검증) 갱신. **7 유닛·4 배포 단위(U7=API 모듈, 초장문만 비동기 잡 옵션).** 리뷰 게이트 대기. **다음: U7 Construction 유닛 루프(Functional Design부터).**
 
 ### 🟢 CONSTRUCTION 단계 (유닛별 루프)
 

@@ -725,6 +725,53 @@
 
 ---
 
+## 신규 기능 U7(요약/번역) — Requirements Analysis 재진입
+**Timestamp**: 2026-06-18T00:00:00Z
+**User Input(원문)**: "지금 보면 aidlc 공식 레포도 clone해놨고 DOCSURI 레포가 내가 실제로 aidlc 방법론으로 작업하고 있는 프로젝트인데 이제 DOCSURI 레포에 기능 하나씩 추가하려고 하는데 어떻게 해야해?" (후속 선택: "요구사항 등재부터 같이")
+**AI Response**: 기존 프로젝트(U1~U6 빌드·배포 완료)에 신규 기능을 추가하는 정석으로 INCEPTION 상단(Requirements Analysis)으로 재진입함을 안내. 신규 기능 = 요약/번역 파이프라인(레포 루트 `summarization-translation-pipeline.md`에 설계 초안 선작성, 가칭 U7 Summarization). 해당 초안은 §1·§12에서 "U1~U6에 없는 새 책임 → 신규 유닛 등재 + 요구사항 정식 등재 선행 필요(frozen 범위 밖·승인 절차)"를 명시. 요구사항 수준의 열린 결정만 추려 `requirement-verification-questions-u7.md` 생성, 게이트에서 대기. (설계 초안이 모델/캐시/용어집 등 HOW는 대부분 선해소 → Construction 단계로 이월. 본 단계는 WHAT/WHY = 범위 편입 여부·FR/NFR 골격·NFR-C1 비용 영향만 확정.)
+**Context**: INCEPTION 재진입 — 신규 유닛 U7(요약/번역) Requirements Analysis. 현재 `requirements.md` §12가 "근거 합성 Q&A·AI 생성 글쓰기"를 v1 범위 제외로 명시 → 요약/번역 편입은 범위 변경 승인 게이트 필수. 다음 FR 번호 = FR-12.
+
+---
+
+## U7 명확화 질문 1차 답변 — 전부 A(초안 권장)
+**Timestamp**: 2026-06-18T00:00:00Z
+**User Input(원문)**: "권장안인 전부 A로 할게"
+**AI Response**: `requirement-verification-questions-u7.md`의 Q1~Q7을 전부 A(설계 초안 권장안)로 기록. 답변 분석 결과 내적 정합·추가 모호성 없음, FR-12 등재 시 반영 메모 작성(Q1+Q5 추출경계+근거화 정합·Q3 온디맨드 NFR 신규·Q4 NFR-C1 U7 비용라인 보강·Q6 §12 제외목록 추가). **단, 사용자가 앞서 "팀원들과 상의 후에 할거야"로 명시 → FR-12 정식 등재는 보류**, 답변만 기록해 PR #108에 반영(팀 합의 신호 대기). 다음(합의 후): requirements.md FR-12~ 등재 → User Stories → Units Generation(U7) → Construction.
+**Context**: INCEPTION — U7 Requirements Analysis 명확화 게이트 답변 수신·분석. 결정 보류 상태(팀 상의 우선). 브랜치 feature/u7, PR #108.
+
+---
+
+## U7 팀 합의 확인 → requirements.md FR-12~ 정식 등재
+**Timestamp**: 2026-06-18T00:00:00Z
+**User Input(원문)**: "아 아니 팀원들과 합의 하에 전부 권장안인 A로 하기로 한거야"
+**AI Response**: 직전 "팀 상의 후" = 보류로 해석한 것을 정정 — 팀이 **이미 전부 A로 합의**했음을 확인. 승인 게이트 통과로 보고 `requirements.md` 갱신: 헤더 개정 노트 + **FR-12(AI 요약: 단일 논문 전문 구조화 요약·근거 앵커·전문/입문 수준·근거 없으면 기권)·FR-13(한국어 번역: 초록·용어집 미번역 리스트)·FR-14(개인화: persona 2벌·뷰 프리셋·용어집 P1/P2)** 추가; **NFR-P2(온디맨드, 검색 SLA NFR-P1 비대상)·QT-5(요약/번역 근거화·QT-1 평가셋 확장)·NFR-C1 보강(U7 Sonnet 비용 라인·CostGuard 게이트)·C-2 추출 경계 명시·§12 U7 제외(P3 커뮤니티 용어집·자유입력 per-user)** 등재; §13 추적성 6행 추가. `aidlc-state.md` INCEPTION에 U7 개정 항목 추가. 리뷰 게이트 제시(승인 시 User Stories(U7)로 진행).
+**Context**: INCEPTION — U7 Requirements Analysis 완료(팀 합의 기반 FR-12~14 등재). 브랜치 feature/u7, PR #108. 다음 단계: User Stories(U7) → Units Generation(U7·U1/U6 의존) → Construction 유닛 루프. requirements.md/aidlc-state.md 갱신 후 리뷰 대기.
+
+---
+
+## U7 User Stories — 에픽 6(요약/번역) 추가
+**Timestamp**: 2026-06-18T00:00:00Z
+**User Input(원문)**: "응 진행해줘"
+**AI Response**: 요구사항 승인 게이트 통과 → User Stories 단계 진행. `stories.md`에 **에픽 6 — 요약/번역(U7)** 6 스토리 추가: US-S1(AI 구조화 요약·전문 기반·페르소나 4질문)·US-S2(한국어 번역·용어집 미번역 리스트)·US-S3(출처 보기 근거 앵커 + 근거 부족 시 기권)·US-S4(개인화: 수준 전문/입문·뷰 프리셋 재생성 0·용어 선호 저장)·US-S5(온디맨드 즉시[캐시]/스트리밍 응답)·US-S6(OP: 요약 비용 게이트 일시 기권 + 요약/번역 근거화 운영 모니터링). 총 27 스토리/7 에픽. 페르소나→스토리 맵(P1 US-S1..S5·OP US-S6) + FR→스토리 커버리지(FR-12..14·NFR-P2·QT-5·NFR-C1) 갱신. 페르소나 무변경(기존 P1·OP가 U7 커버; P1에 이미 재현성 페인 기술). `aidlc-state.md` 갱신. 리뷰 게이트 제시(승인 시 Units Generation으로 U7 정식 등재).
+**Context**: INCEPTION — U7 User Stories 완료. 브랜치 feature/u7, PR #108. 다음: Units Generation(U7 unit-of-work 등재·U1 전문원본/U6 근거화·비용게이트 의존) → Construction 유닛 루프(Functional Design부터). 리뷰 대기.
+
+---
+
+## U7 Units Generation — 유닛 정식 등재
+**Timestamp**: 2026-06-18T00:00:00Z
+**User Input(원문)**: "승인할게"
+**AI Response**: User Stories 승인 게이트 통과 → Units Generation 진행. **U7 Summarization 유닛 정식 등재**: `unit-of-work.md`(유닛 정의 행+U7 주석·배포 단위 ① API 모듈[+③ 초장문 비동기 잡 옵션]·코드트리 `backend/modules/summarization/`·확장 트랙 빌드순서)·`unit-of-work-dependency.md`(매트릭스 U7 행/열 추가: U7→U1 전문 S3 capability read[코드 의존 아님]·U7→U6 근거화/비용 후크 `shared/ports` lib + 관측/비용 event·U5→U7 sync[게이트웨이 경유]·U6→U7 sync[게이트웨이 핸들러], **코드 DAG 비순환 유지 검증 — U2와 동형**, 온디맨드 요약/번역 ASCII 흐름 추가)·`unit-of-work-story-map.md`(US-S1..S5 Owner=U7·US-S6 Owner=U6 기여=U7·유닛별 묶음·전수 27 스토리 검증). 총 **7 유닛·4 배포 단위**. `aidlc-state.md` INCEPTION에 Units Generation 개정 항목. 리뷰 게이트 제시(승인 시 U7 Construction 유닛 루프 Functional Design으로 진행).
+**Context**: INCEPTION — U7 Units Generation 완료(7 유닛 등재, 코드 DAG 비순환). 브랜치 feature/u7, PR #108. INCEPTION(U7) 종료 → 다음은 CONSTRUCTION U7 유닛 루프: Functional Design → NFR Requirements → NFR Design → Infrastructure Design → Code Generation. 리뷰 대기.
+
+---
+
+## U7 설계 입력 문서 재배치 (레포 루트 → aidlc-docs)
+**Timestamp**: 2026-06-18T00:00:00Z
+**User Input(원문)**: "근데 @summarization-translation-pipeline.md 파일은 내 개인적인 요약/번역 기능 설계서?인데 이걸 계속 두는 게 맞나? 없애도 될까?" (후속 선택: "aidlc-docs로 이사 (권장)")
+**AI Response**: 삭제는 비권장 안내 — 해당 파일은 이미 U7 **설계 입력(SSOT)** 으로 5곳(requirements.md×2·stories.md·questions-u7·aidlc-state)에서 참조 중이고, §2~§12의 HOW(모델·스키마·정제·근거화·용어집·캐시·확정결정)는 아직 어느 Construction 문서에도 미수록 → 삭제 시 깨진 참조 + 설계 원천 소실. 대신 **재배치**: `git mv summarization-translation-pipeline.md aidlc-docs/inception/requirements/`(이력 보존, `aidlc-docs/` 문서 전용 컨벤션 준수). 문서 상단에 상태 배너 추가(설계 입력·등재 완료·HOW=Construction 원천). 참조 갱신: questions-u7("레포 루트"→동일 디렉터리), stories.md(`../requirements/...` 상대경로), aidlc-state(재배치 완료 표기). requirements.md는 동일 디렉터리라 bare 파일명 참조 유효(무변경). PR #108 리뷰 포인트 ③(위치) 해소.
+**Context**: INCEPTION — U7 설계 입력 문서 재배치(컨벤션 정합). 브랜치 feature/u7, PR #108. 삭제 아님(설계 원천 보존). audit는 append-only로 과거 "레포 루트" 기록은 시점 사실로 보존.
+
+---
 ## Inception — Workspace Detection & Session Resumption
 **Timestamp**: 2026-06-18T15:14:21+09:00
 **User Input**: "Implement US-R4 (Issues #104)."
