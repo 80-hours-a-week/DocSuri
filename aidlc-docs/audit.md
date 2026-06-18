@@ -828,3 +828,11 @@
 
 ---
 
+## U7 NFR Design — 답변 확정·산출물 생성·승인
+**Timestamp**: 2026-06-19T00:00:00Z
+**User Input(원문)**: "전부 A" → "커밋하고 push해줘 그다음 Infrastructure Design 진행해줘"
+**AI Response**: NFR Design 10문 전수 A 기록. 산출물 `construction/u7-summarization/nfr-design/`(nfr-design-patterns·logical-components). **패턴**: Bedrock 격리(타임아웃+1재시도+서킷→기권)·근거화 1회 재시도(LLM 장애 재시도와 분리)·**저하 3계층 구분**(비용 degradeMode≠의존성 서킷≠소스 폴백)·캐시 우선 read/write-through·**생성-버퍼-검증-점진렌더**(구조화 JSON은 완성 후 근거화·FR-5 날조0 우선)·stateless+공유 외부 상태·Bedrock 쿼터(async)·보안 방어심층(본문격리 인젝션·SEC-9 필터·전역 fail-closed·개인 용어집 owner 격리)·CI real-first(단위 Fixture/Stub 항상+통합 실 의존성 별도 게이트)·RES-12 폴트 인젝션. 논리 컴포넌트 11개 토폴로지(FD 9↔논리 매핑·기존 인프라 재사용·신규 관리형 0). **사용자 "Infrastructure Design 진행해줘" → NFR Design 승인 게이트 통과.** 커밋·push 후 Infra Design 진입.
+**Context**: CONSTRUCTION — U7 NFR Design 완료·승인. 다음 단계: U7 Infrastructure Design(기존 인프라 재사용 — S3 prefix·Redis 키스페이스/TTL·RDS 용어집 테이블·Bedrock IAM·CI 자격증명·비용 라인; 신규 관리형 0이라 경량 예상). 브랜치 feature/u7-v2, PR #115.
+
+---
+
