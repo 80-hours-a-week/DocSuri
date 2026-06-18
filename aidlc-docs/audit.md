@@ -844,3 +844,11 @@
 
 ---
 
+## U7 Code Generation — Part 1 계획 승인 + Part 2 생성·검증
+**Timestamp**: 2026-06-19T00:00:00Z
+**User Input(원문)**: "Part2 생성까지 마친 뒤 커밋" → (이어서) "continue"
+**AI Response**: Code Generation Part 1 계획(`u7-summarization-code-generation-plan.md`, 18단계) 작성 → 사용자 승인("Part2 생성까지") → **Part 2 전체 생성**. 코드 `backend/modules/summarization/`(src-layout, real-first): pyproject/ruff·도메인 9컴포넌트(models·refiner·source_selector·cache_key·length_router·glossary·grounding·assembler·orchestrator)·ports·실 어댑터 단일본(bedrock_llm 스트리밍 Sonnet/Haiku·s3_redis_store·s3_full_text·rds_glossary)·api(router `/api/summarize`·gateway_seam)·prompts(본문 격리·persona·용어집·grounding)·real_wiring·`migrations/001_create_user_glossary.sql`·테스트(stubs·domain·orchestrator·PBT·integration self-skip). **검증: `pytest` 29 passed + 1 skip·`ruff check` clean**(discovery venv 사용). 설계 반영: Q4 U7 고유 결정적 근거화(검색용 enforce 미사용)·Q5 생성-버퍼-검증-점진렌더(FR-5)·저하 3계층(비용≠장애≠소스)·Q8 후치환 한국어 조사 안전(좌측 경계 매칭)·real-first(Production Mock Adapter 없음, 테스트 Fixture/Stub). **⚠️ 조율 존**: `backend/wiring.py` 미변경 — 처음 `_mount_summarization` 추가했으나 `test_app_shell.py`의 모듈 집합 단언(`{accounts,discovery,library,ops}`·`skipped==[]`) 위반 + 쉘 소유라 **revert**, mounter 스니펫을 `code/README.md`에 사인오프-레디로 제시. 18단계·US-S1~S6 전수 [x]. 코드 검증 완료 — 리뷰 게이트.
+**Context**: CONSTRUCTION — U7 Code Generation 완료·검증(리뷰 게이트). 다음: Build & Test(U7 CONSTRUCTION 마무리). 미해결 last-mile: app-shell 마운트(@ELSAPHABA 사인오프)·인프라 증분(IAM·마이그레이션·CI=@Infra)·shared/dtos/summarization 승격. 브랜치 feature/u7-v2, PR #115.
+
+---
+
