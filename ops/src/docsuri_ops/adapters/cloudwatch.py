@@ -102,6 +102,10 @@ class CloudWatchEventStore:
                 batch.append(nxt)
             try:
                 self._ship_batch(batch)
+            except Exception:
+                # The worker must NEVER die: a dead daemon silently loses all further telemetry
+                # and would hang flush()/close() (queue.join never completes). Log and continue.
+                log.warning("cloudwatch: telemetry worker error — continuing", exc_info=True)
             finally:
                 for _ in range(gets):  # one task_done per get()/get_nowait() so flush() unblocks
                     self._queue.task_done()
@@ -138,10 +142,16 @@ class CloudWatchEventStore:
         """Block until all queued events have been shipped (graceful shutdown / tests)."""
         self._queue.join()
 
-    def close(self) -> None:
-        """Stop the worker after draining the queue (graceful shutdown)."""
-        self._queue.put(_SENTINEL)
-        self._queue.join()
+    def close(self, timeout: float = 5.0) -> None:
+        """Signal the worker to stop after the current batch, then join with a BOUNDED wait so a
+        slow/blocked boto3 call can't hang graceful shutdown (the thread is a daemon — it dies at
+        process exit regardless). (US-R4)"""
+        try:
+            self._queue.put_nowait(_SENTINEL)
+        except queue.Full:
+            pass  # saturated; the daemon worker is reaped at process exit anyway
+        if self._worker is not None:
+            self._worker.join(timeout)
 
     def _get_cw(self):
         if self._cw_client is None:

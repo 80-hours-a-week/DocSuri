@@ -114,3 +114,50 @@ def test_cloudwatch_batches_metric_data(monkeypatch) -> None:
         assert len(fake.calls[0]) == 5  # carrying 5 MetricData entries
     finally:
         store.close()
+
+
+def test_put_metrics_chunks_at_batch_size(monkeypatch) -> None:
+    """More than _METRIC_BATCH metrics split into multiple PutMetricData calls (stay under the
+    API's per-call ceiling) without dropping any. (US-R4)"""
+    import docsuri_ops.adapters.cloudwatch as cw
+
+    monkeypatch.setattr(cw, "_METRIC_BATCH", 2)
+    fake = _FakeCw()
+    monkeypatch.setattr(cw.CloudWatchEventStore, "_get_cw", lambda self: fake)
+    store = cw.CloudWatchEventStore(namespace="Test")
+    try:
+        events = [
+            TelemetryEvent(event_id=f"m{i}", kind=SignalKind.METRIC, name="x", value=1.0)
+            for i in range(5)
+        ]
+        store._ship_batch(events)
+        assert len(fake.calls) == 3  # ceil(5 / 2) chunks
+        assert sum(len(md) for md in fake.calls) == 5  # nothing dropped
+    finally:
+        store.close()
+
+
+def test_worker_survives_ship_error(monkeypatch) -> None:
+    """An unexpected error in _ship_batch must NOT kill the worker — a dead daemon would lose all
+    later telemetry and hang flush()/close(). The next event must still be processed. (US-R4)"""
+    from docsuri_ops.adapters.cloudwatch import CloudWatchEventStore
+
+    shipped: list[str] = []
+    calls = {"n": 0}
+
+    def flaky(self, events) -> None:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("boom")  # unexpected worker error on the first batch
+        shipped.extend(e.event_id for e in events)
+
+    monkeypatch.setattr(CloudWatchEventStore, "_ship_batch", flaky)
+    store = CloudWatchEventStore(namespace="Test")
+    try:
+        store.append(TelemetryEvent(event_id="a", kind=SignalKind.METRIC, name="x", value=1.0))
+        store.flush()  # first batch raised — worker must survive (flush still returns)
+        store.append(TelemetryEvent(event_id="b", kind=SignalKind.METRIC, name="x", value=1.0))
+        store.flush()
+        assert "b" in shipped  # worker processed a later event → it stayed alive
+    finally:
+        store.close()
