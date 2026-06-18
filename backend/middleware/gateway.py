@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
+import time
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -8,6 +9,23 @@ from fastapi.responses import JSONResponse
 
 from .request_context import RequestContext
 from .security_headers import apply_security_headers
+
+
+def _route_label(request: Request) -> str:
+    """Bounded path label for metric dimensions — the matched route template, not the raw URL.
+
+    ``request.url.path`` embeds ids/slugs → unbounded CloudWatch dimension cardinality (every
+    distinct id becomes a separate custom metric: cost blowout against the $1600 cap, and too
+    fragmented to alarm on). The route template (e.g. ``/library/history/{id}``) is bounded;
+    unmatched requests (404s, scanners) collapse to a single ``unmatched`` label.
+
+    Pre-routing short-circuits (429 rate-limit, 401 auth) also land as ``unmatched`` because no
+    route is matched before they return — that's intentional: routing-before-rate-limit would
+    invert the gateway order. Those abuse signals are alarmed on via the ``status`` dimension
+    (429/401 are distinct from 404), not per-route.
+    """
+    route = request.scope.get("route")
+    return getattr(route, "path", None) or "unmatched"
 
 
 def install_gateway_middleware(
@@ -24,38 +42,50 @@ def install_gateway_middleware(
 
     @app.middleware("http")
     async def _u6_gateway(request: Request, call_next):
+        start_time = time.perf_counter()
         request_id = request.headers.get("X-Request-ID") or uuid4().hex
         request.state.request_id = request_id
         request.state.context = RequestContext(request_id=request_id)
 
-        if rate_limiter is not None:
-            key = _rate_limit_key(
-                request,
-                trust_proxy_headers=trust_proxy_headers,
-                trusted_proxy_count=trusted_proxy_count,
-            )
-            if not rate_limiter.allow(str(key)):
-                response = JSONResponse(
-                    status_code=429,
-                    content={"message": "Too many requests.", "requestId": request_id},
+        async def _run_gateway():
+            if rate_limiter is not None:
+                key = _rate_limit_key(
+                    request,
+                    trust_proxy_headers=trust_proxy_headers,
+                    trusted_proxy_count=trusted_proxy_count,
                 )
-                response.headers["X-Request-ID"] = request_id
-                apply_security_headers(response)
-                return response
+                if not rate_limiter.allow(str(key)):
+                    response = JSONResponse(
+                        status_code=429,
+                        content={"message": "Too many requests.", "requestId": request_id},
+                    )
+                    response.headers["X-Request-ID"] = request_id
+                    apply_security_headers(response)
+                    return response
 
-        # Auth injection: resolve session cookie → Principal on request.state.
-        # When session_manager is None (dev/test without Redis), skip auth injection
-        # and let downstream handlers use their own fallback (e.g. X-User-Id header).
-        if session_manager is not None:
-            auth_response = await inject_principal(
-                request, call_next, session_manager=session_manager
-            )
-            auth_response.headers["X-Request-ID"] = request_id
-            apply_security_headers(auth_response)
-            return auth_response
+            # Auth injection: resolve session cookie → Principal on request.state.
+            # When session_manager is None (dev/test without Redis), skip auth injection
+            # and let downstream handlers use their own fallback (e.g. X-User-Id header).
+            if session_manager is not None:
+                auth_response = await inject_principal(
+                    request, call_next, session_manager=session_manager
+                )
+                auth_response.headers["X-Request-ID"] = request_id
+                apply_security_headers(auth_response)
+                return auth_response
 
-        try:
+            # call_next may raise — handled by the SINGLE outer handler below so both the auth
+            # and no-auth branches share one error path (US-R4: previously only this branch
+            # caught, so production exceptions emitted no error metric or latency).
             response = await call_next(request)
+            response.headers["X-Request-ID"] = request_id
+            apply_security_headers(response)
+            return response
+
+        response = None
+        try:
+            response = await _run_gateway()
+            return response
         except Exception as exc:
             _emit_error(observability, request_id, exc)
             if not production:
@@ -67,10 +97,27 @@ def install_gateway_middleware(
                     "requestId": request_id,
                 },
             )
-
-        response.headers["X-Request-ID"] = request_id
-        apply_security_headers(response)
-        return response
+            response.headers["X-Request-ID"] = request_id
+            apply_security_headers(response)
+            return response
+        finally:
+            # Emit exactly once per request, on EVERY path including exceptions (status="500"
+            # when an exception propagated without a response). Errors are derived downstream
+            # from the 5xx status tag — NOT from a separate error-log count — so a single
+            # failure isn't double-counted. (US-R4)
+            if observability is not None:
+                try:
+                    duration = time.perf_counter() - start_time
+                    status = str(response.status_code) if response is not None else "500"
+                    dims = {
+                        "method": request.method,
+                        "path": _route_label(request),
+                        "status": status,
+                    }
+                    observability.emit_metric("gateway.request.latency", duration, dims)
+                    observability.emit_metric("gateway.request.throughput", 1.0, dims)
+                except Exception:
+                    pass
 
 
 def _rate_limit_key(

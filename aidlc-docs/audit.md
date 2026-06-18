@@ -772,3 +772,27 @@
 **Context**: INCEPTION — U7 설계 입력 문서 재배치(컨벤션 정합). 브랜치 feature/u7, PR #108. 삭제 아님(설계 원천 보존). audit는 append-only로 과거 "레포 루트" 기록은 시점 사실로 보존.
 
 ---
+## Inception — Workspace Detection & Session Resumption
+**Timestamp**: 2026-06-18T15:14:21+09:00
+**User Input**: "Implement US-R4 (Issues #104)."
+**AI Response**: "Displayed the welcome message, completed Workspace Detection, and resumed the session. Proceeding to Requirements Analysis."
+**Context**: Inception phase start for US-R4 implementation.
+
+---
+
+## Construction — US-R4 Observability Wiring
+**Timestamp**: 2026-06-18T15:20:00+09:00
+**User Input**: "work on worktree-us-r4-observability-wiring."
+**AI Response**: "Implemented the US-R4 grounding health metric emission in discovery's finalize path and wired it to backend app-shell's process-wide ObservabilityHub. Staged changes and verified unit tests pass."
+**Context**: CONSTRUCTION — US-R4 Observability Wiring Implementation.
+
+---
+
+## Construction — US-R4 Observability Verification & Endpoints Unit Testing
+**Timestamp**: 2026-06-18T15:24:00+09:00
+**User Input**: "work on worktree-us-r4-observability-wiring."
+**AI Response**: "Created unit and integration tests under `backend/tests/test_ops_endpoints.py` to assert endpoints auth/admin/MFA guards and metric/incident querying. Fixed lint issues in `backend/app.py` and test code. Confirmed all repository, backend, and ops tests are passing, and style check is green."
+**Context**: CONSTRUCTION — US-R4 Observability Wiring and Ops Endpoints Verification.
+
+---
+

@@ -6,13 +6,17 @@ the only difference is which adapters are plugged in (a wiring decision, not a c
 change). The grounding gate is NOT wired here: it is U6's single authority (INV-1), injected
 by the app-shell alongside the returned orchestrator (as it already is for the mock bundle).
 
-Cost/observability hooks remain the local stubs until U6 exposes process-wide singletons;
-they are advisory-read-only from U2's side (BR-12), so this does not change behavior.
+The cost hook remains a local stub (advisory-read-only from U2's side, BR-12). The
+observability hook is now injectable: the app-shell passes its process-wide U6 hub
+(CloudWatch-backed in prod) so U2 app metrics actually leave the process; absent that, it
+falls back to the no-op stub (US-R4).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from docsuri_shared.ports import ObservabilityHub
 
 from .adapters.bedrock_embedding import BedrockCohereQueryEmbedder
 from .adapters.event_publisher import EventBridgeEventPublisher
@@ -40,8 +44,15 @@ class RealBundle:
     event_publisher: EventPublisher
 
 
-def build_real_orchestrator(settings: DiscoverySettings) -> RealBundle:
-    """Wire the U2 pipeline against real OpenSearch + Bedrock (production read path)."""
+def build_real_orchestrator(
+    settings: DiscoverySettings, observability: ObservabilityHub | None = None
+) -> RealBundle:
+    """Wire the U2 pipeline against real OpenSearch + Bedrock (production read path).
+
+    ``observability`` is the app-shell's process-wide U6 hub (CloudWatch-backed in prod);
+    omitted (standalone/tests) → the no-op stub. This is the seam that routes U2 app metrics
+    to CloudWatch — without it (the old default) the orchestrator emitted into the void.
+    """
     if not settings.opensearch_endpoint or not settings.bedrock_model_id:
         raise ValueError(
             "build_real_orchestrator requires DOCSURI_OPENSEARCH_ENDPOINT + "
@@ -81,7 +92,7 @@ def build_real_orchestrator(settings: DiscoverySettings) -> RealBundle:
         grounding_adapter=GroundingAdapter(),
         assembler=ResultAssembler(),
         cost_guard=StubCostGuard(),
-        observability=NoopObservabilityHub(),
+        observability=observability or NoopObservabilityHub(),
         event_publisher=publisher,
     )
     return RealBundle(orchestrator=orchestrator, event_publisher=publisher)

@@ -1,23 +1,33 @@
 from __future__ import annotations
 
-from collections import deque
+from collections import OrderedDict, deque
 from dataclasses import dataclass, field
 
 from docsuri_shared.events import ClassifiedIncident, OpsAlert
 
 from docsuri_ops.domain.models import AlertRecord, ClassifiedIncidentRecord, TelemetryEvent
 
+# Cap the in-memory event buffer so a long-running non-CloudWatch process (dev/staging) can't
+# grow it without bound; the dashboard only aggregates a recent window, so dropping the oldest
+# events is harmless. ponytail: bump if a wider dashboard window is ever needed. (US-R4)
+_MAX_EVENTS = 50_000
+# Bounded dedup window (LRU): preserves idempotency for redelivered events while capping memory
+# — per-request metric emission carries random event_ids that would otherwise grow _seen forever.
+_MAX_SEEN = 100_000
+
 
 @dataclass(slots=True)
 class InMemoryEventStore:
-    events: list[TelemetryEvent] = field(default_factory=list)
+    events: deque[TelemetryEvent] = field(default_factory=lambda: deque(maxlen=_MAX_EVENTS))
     audit_events: list[dict] = field(default_factory=list)
-    _seen: set[str] = field(default_factory=set)
+    _seen: OrderedDict[str, None] = field(default_factory=OrderedDict)
 
     def append(self, event: TelemetryEvent) -> bool:
         if event.dedup_key in self._seen:
             return False
-        self._seen.add(event.dedup_key)
+        self._seen[event.dedup_key] = None
+        if len(self._seen) > _MAX_SEEN:
+            self._seen.popitem(last=False)  # evict oldest — bound the dedup window (US-R4)
         self.events.append(event)
         return True
 

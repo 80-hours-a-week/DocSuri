@@ -258,3 +258,52 @@ def test_auth_injection_fail_closed_on_session_store_failure() -> None:
 
     assert response.status_code == 401
     assert "expired or invalid" in response.json()["message"]
+
+
+class _RecordingHub:
+    def __init__(self) -> None:
+        self.metrics: list[tuple[str, str | None]] = []
+        self.logs: list[str | None] = []
+
+    def emit_metric(self, name, value, tags) -> None:
+        self.metrics.append((name, tags.get("status")))
+
+    def emit_log(self, entry) -> None:
+        self.logs.append(entry.get("level"))
+
+    def start_span(self, name, context):
+        return None
+
+    def audit_append(self, event) -> None: ...
+
+
+def test_gateway_emits_telemetry_for_production_exception() -> None:
+    """Production auth path (session_manager set): an unhandled route exception must STILL emit
+    the error log + latency/throughput tagged status=500. Previously this path propagated past
+    the emit block and recorded nothing. (US-R4)"""
+    from backend.modules.accounts.models import Principal, UserRole
+
+    principal = Principal(
+        user_id="00000000-0000-4000-8000-000000000099", role=UserRole.USER, mfa_verified=False
+    )
+    hub = _RecordingHub()
+    app = FastAPI()
+    configure_u6_middleware(
+        app,
+        observability=hub,
+        session_manager=_FakeSessionManager(principals={"x": principal}),
+        production=True,
+    )
+
+    @app.get("/boom")
+    def boom() -> None:
+        raise RuntimeError("kaboom")
+
+    resp = TestClient(app, raise_server_exceptions=False).get(
+        "/boom", cookies={"session_id": "x"}
+    )
+
+    assert resp.status_code == 500
+    assert ("gateway.request.latency", "500") in hub.metrics
+    assert ("gateway.request.throughput", "500") in hub.metrics
+    assert "error" in hub.logs  # _emit_error fired on the prod auth path
