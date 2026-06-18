@@ -812,3 +812,19 @@
 
 ---
 
+## U7 Functional Design — 답변 확정·산출물 생성·승인
+**Timestamp**: 2026-06-18T00:00:00Z
+**User Input(원문)**: (답변) "Q2는 B로 가되 … 추가 노이즈 제거는 Header/Footer·페이지번호·저작권·저자정보에 한정 … Table/Figure Caption·Appendix·Supplementary Results는 제거하지 않는 … Q8은 … 핵심 용어 보존은 프롬프트 강제, 후치환은 사용자 선호 단순 명사 … Q10/Q11은 포트 유지하되 첫 구현부터 실 Bedrock/S3+Redis, mock 미구현 … mock-first 명시 제거, 모두 실배포 기준 … 나머지 A" → (승인) "둘 다 진행해줘" → "승인할게 NFR Requirements로 진행"
+**AI Response**: FD 17문 전수 답변 기록(A 14·B 1[Q2]·X 2[Q10/Q11]). **real-first 전환**: LLM·스토어 어댑터 포트 유지 + 첫 구현부터 실 Bedrock/S3+Redis, mock/인메모리 대역 미구현 — `mock-first` 표기 전부 제거(계획서·aidlc-state·unit-of-work). Q2=B(노이즈 제거 범위 한정·실험정보 콘텐츠 보존), Q8 표현 재작성, Q4=U7 고유 결정적 근거화 게이트(frozen `enforce` 미재사용·"단일 권위=U6"는 검색 한정 해석), Q6=섹션 도출+span, Q12=버퍼-검증-스트리밍. 산출물 `construction/u7-summarization/functional-design/`(domain-entities·business-logic-model·business-rules — 9 컴포넌트 파이프라인·BR-S1~S14·PBT-S1~S5·추적성 미커버 0·설계입력 §2~§12 흡수 맵) 생성. 커밋 `2d5f9b4`·PR #115. **사용자 "승인할게" → FD 승인 게이트 통과.** Other 옵션 X) 표기·정합성 갭 정정은 커밋 `d763c17`.
+**Context**: CONSTRUCTION — U7 Functional Design 완료·승인. 다음 단계: U7 NFR Requirements(모델 바인딩 Sonnet/Haiku·Bedrock 스트리밍·S3/Redis·개인 용어집 영속화·토큰 캡·TTFB·real-first 테스트 전략 등). 브랜치 feature/u7-v2, PR #115.
+
+---
+
+## U7 NFR Requirements — 답변 확정·산출물 생성·승인
+**Timestamp**: 2026-06-19T00:00:00Z
+**User Input(원문)**: "전부 A" → (Q14 명확화) "Q14에서 Production Mock Adapter는 구현하지 않는다. 다만 단위 테스트에서는 테스트 전용 Fixture/Stub 사용을 허용한다. 나머진 전부 A" → "커밋하고 push해줘 그다음 NFR Design 진행해줘"
+**AI Response**: NFR Req 15문 전수 A 기록(Q14는 A+명시: Production Mock Adapter 미구현·단위 테스트 Fixture/Stub 허용·통합은 실 의존성). 산출물 `construction/u7-summarization/nfr-requirements/`(nfr-requirements·tech-stack-decisions, TD-S1~S12). **바인딩**: 모델 Sonnet 4.6 요약/Haiku 4.5 번역(TD-S3)·Bedrock 스트리밍(TD-S4)·스토어 S3+Redis(TD-S5)·개인 용어집 RDS PostgreSQL(TD-S6)·섹션 도출 정규식·휴리스틱(TD-S7)·비동기 잡 fast-follow[v1 동기+토큰 캡](TD-S9)·재현성 정규식+LLM(TD-S10)·real-first 테스트(TD-S12). [전역 계승] Python·FastAPI·Bedrock·RDS·Redis·S3·NFR-C1·Hypothesis. **사용자 "NFR Design 진행해줘" → NFR Requirements 승인 게이트 통과.** 커밋·push 후 NFR Design 단계 진입.
+**Context**: CONSTRUCTION — U7 NFR Requirements 완료·승인. 다음 단계: U7 NFR Design(스트리밍/근거화/캐시/저하 복원력 패턴·논리 컴포넌트·구체 서킷 수치·CI). 브랜치 feature/u7-v2, PR #115.
+
+---
+
