@@ -124,10 +124,12 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 
 ### 🟡 OPERATIONS 단계
 - [~] Operations — **placeholder 확인 완료 (2026-06-16)**. `operations/operations-placeholder.md` 생성. 현재 룰셋상 배포·모니터링·운영 런북 실행은 future scope이며, 워크플로우는 Build and Test 이후 종료.
-- [~] **Operations 하드닝 패스 (2026-06-18, `feat/ops-hardening`)** — CONSTRUCTION 종료 후 프로덕션 운영 첫 단계. 산출:
+- [x] **Operations 하드닝 패스 (2026-06-18, PR #79·#84 → develop, 라이브 배포·검증 완료)** — CONSTRUCTION 종료 후 프로덕션 운영 첫 단계. 산출:
   - [x] **운영 런북** `operations/runbook.md` — 시스템 맵·함정(RETAIN 3종·ALB `/healthz` 서킷브레이커·SSO)·비용가드 강등표·복구절차·SLO 3개.
   - [x] **알림 마지막 1마일** (코드에 존재하나 사람에게 미연결이던 갭): G3 `CLOUDWATCH_NAMESPACE` env로 prod 관측 활성·G2 SES 토픽 ops 구독·G4 CloudWatch 알람(5xx·p95)+G1 AWS Budget($1280) → `OpsAlerts` 토픽/ops 메일. 전부 `compute_stack.py` (synth 검증).
-  - [ ] **검증(라이브)**: `cdk deploy -c ops_alert_email=…` · 테스트 알람 1회 수신 확인 · RDS 스냅샷 복원 테스트 1회. (runbook §8)
+  - [x] **검증(라이브, 2026-06-18, 계정 028317349537)**: `cdk deploy Docsuri-Compute -c ops_alert_email=corpseonthemission@icloud.com` → API 롤링 생존(/healthz 200) · SNS 구독 2개 confirm · **테스트 알람(set-alarm-state ALARM)→이메일 수신 확인** · **RDS 스냅샷→`docsuri-restore-test` 복원 available(DBName=docsuri·pg16.13)→폐기**. Budget는 직접 이메일 구독이라 구성 완료(실 발화는 $1280 도달 시).
+  - [x] **G3 IAM 보강** (PR #84): task role에 `cloudwatch:PutMetricData`(namespace 스코프)+`logs:*` + `/docsuri/ops` 로그그룹 retention 30일 선생성. `CLOUDWATCH_NAMESPACE` env만으론 부족(권한 부재→AccessDenied 무성 실패)했던 것 보강.
+  - [ ] **G3 잔여(U6 후속)**: 모듈 서비스가 `NoopObservabilityHub`에 emit(`discovery/real_wiring.py:84`·`mocks/wiring.py:56`, "until U6 exposes process-wide singletons") → 정상 트래픽 앱 메트릭이 진짜 hub(→CloudWatch)에 미도달. 게이트웨이 에러 경로만 진짜 hub. 수정=`backend/wiring.py`+모듈 팩토리에 `app.state.observability` 주입(ops 범위 밖). **알림/페이징은 네이티브 ALB 메트릭이라 무관하게 작동.**
   - 천장(의도적 미구현): 앱 내부 cost guard의 per-incident SNS publisher — Budget가 빌링 레벨에서 대체.
 
 ## 비고
