@@ -884,3 +884,19 @@
 
 ---
 
+## U8 Functional Design — 답변 확정·산출물 생성
+**Timestamp**: 2026-06-19T00:00:00Z
+**User Input(원문)**: "전부 권장으로 진행하겠습니다."
+**AI Response**: U8 Functional Design 계획서 Q1~Q12 전부 권장안(A)으로 기록하고 계획 체크박스 3개를 완료 처리. 산출물 `aidlc-docs/construction/u8-citation-graph/functional-design/` 3문서 생성: `domain-entities.md`(요청/응답 union, root/node/edge/unresolved/snapshot/policy/error, PBT 속성), `business-logic-model.md`(조회, 2-hop lazy-load, 수동 refresh, U4 save gateway, failure model), `business-rules.md`(BR-CG1~14, QT-6 PBT-CG1~6, 보안/복원력/PBT compliance, traceability). 앱 코드·FE·기술 스택 결정은 생성하지 않음. 기술 스택 질문은 Functional Design 승인 후 NFR Requirements에서 진행.
+**Context**: CONSTRUCTION — U8 Functional Design 산출물 생성 완료. 리뷰/승인 대기. 다음(승인 후): U8 NFR Requirements.
+
+---
+
+## U8 NFR Requirements 진입 — 계획·질문 게이트 작성
+**Timestamp**: 2026-06-19T00:00:00Z
+**User Input(원문)**: "제 개입이 필요한 단계 전까지 쭉 진행해 주세요!"
+**AI Response**: 사용자 진행 요청을 U8 Functional Design 승인 및 다음 단계 진행으로 처리. CONSTRUCTION per-unit 루프의 U8 NFR Requirements에 진입하여 `aidlc-docs/construction/plans/u8-citation-graph-nfr-requirements-plan.md` 작성. 질문 Q1~Q12는 citation provider, provider credential, Redis snapshot TTL, NFR-P3 응답 목표, timeout/retry, U6 rate/quota, backend FastAPI app-shell 통합, shared DTO 승격 시점, U6 관측, U4 저장 계약, 실 provider 테스트 경계, Hypothesis PBT 계승을 다룸. AI-DLC NFR Requirements 규칙상 `[Answer]:`가 모두 확정되기 전에는 `nfr-requirements.md`와 `tech-stack-decisions.md`를 생성하지 않음. 앱 코드·FE 미생성.
+**Context**: CONSTRUCTION — U8 NFR Requirements Step 1~4(계획+질문). 답변 대기. 다음(답변 확정 후): `aidlc-docs/construction/u8-citation-graph/nfr-requirements/` 산출물 생성 → 리뷰 게이트 → U8 NFR Design.
+
+---
+

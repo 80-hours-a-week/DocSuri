@@ -32,7 +32,7 @@
 
 답변 확정 후 아래 산출물을 `aidlc-docs/construction/u8-citation-graph/functional-design/`에 작성한다.
 
-- [ ] **domain-entities.md**
+- [x] **domain-entities.md**
   - `CitationGraphRequest`
   - `CitationGraphResponse`
   - `CitationRoot`
@@ -42,12 +42,12 @@
   - `CitationSnapshot`
   - `CitationTreePolicy`
   - `CitationGraphError`
-- [ ] **business-logic-model.md**
+- [x] **business-logic-model.md**
   - `getCitationTree(paperId, depth, cursor?)`
   - snapshot cache lookup → provider fetch → ID resolution → tree build → unresolved split → telemetry
   - node save → U4 Library save gateway
   - failure path: cached snapshot first, no cache then explicit unavailable state
-- [ ] **business-rules.md**
+- [x] **business-rules.md**
   - backward-only invariant
   - max depth / max nodes
   - resolved vs unresolved rules
@@ -81,7 +81,7 @@ B) Success / Error 2분기.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q2 — unresolved 항목 노출 수준
 ID 해소 실패 항목을 사용자에게 어떻게 보여줄까요?
@@ -94,7 +94,7 @@ C) 사용자에게 표시하지 않고 telemetry만 남긴다.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q3 — 중복/순환 처리
 동일 논문이 여러 경로에서 나오거나 순환이 생기면?
@@ -105,7 +105,7 @@ B) 모든 경로에 중복 노드를 표시한다.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q4 — 2-hop 확장 방식
 최대 2-hop을 어떻게 로딩할까요?
@@ -116,7 +116,7 @@ B) 최초 요청에서 2-hop 전체를 미리 가져온다.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q5 — 화면당 50노드 상한 적용
 50노드 상한 초과 시?
@@ -129,7 +129,7 @@ C) 무한 스크롤로 계속 제공한다.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q6 — 노드 정렬 기준
 references 노드는 기본적으로 어떻게 정렬할까요?
@@ -142,7 +142,7 @@ C) 연도 오름차순.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q7 — 수동 새로고침 의미
 7일 snapshot TTL이 있을 때 사용자의 수동 새로고침은?
@@ -155,7 +155,7 @@ C) 항상 캐시 삭제 후 재조회, 실패하면 빈 상태.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q8 — 라이브러리 저장 메타 매핑
 U8 노드를 U4 `LibraryItemMeta`로 저장할 때, U8이 가진 최소 필드(제목·연도·인용수)와 U4가 기대하는 카드 메타 차이를 어떻게 처리할까요?
@@ -168,7 +168,7 @@ C) U8에서는 저장 기능을 제거한다.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q9 — source identifier 우선순위
 확정 노드 ID는 어떤 우선순위로 둡니까?
@@ -181,7 +181,7 @@ C) 제목+연도 해시를 사용한다.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q10 — 관측 이벤트 필드
 U8이 U6로 보내는 관측 이벤트 최소 필드는?
@@ -192,7 +192,7 @@ B) latency/error만.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q11 — QT-6 PBT 범위
 Functional Design에서 어떤 속성을 QT-6 후보로 고정할까요?
@@ -203,7 +203,7 @@ B) depth/node 상한만.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q12 — Construction 구현 전략
 U8 구현은 어떤 방식으로 시작할까요?
@@ -216,7 +216,7 @@ C) mock-only 데모 구현.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ---
 
@@ -230,8 +230,8 @@ X) 기타.
 
 ---
 
-## 6. 다음 절차
+## 6. 현재 상태와 다음 절차
 
-1. Q1~Q12의 `[Answer]:`를 채운다.
-2. 모호 답변이 없으면 `u8-citation-graph/functional-design/` 산출물 3개를 생성한다.
+1. Q1~Q12는 전부 권장안(A)으로 확정했다.
+2. `u8-citation-graph/functional-design/` 산출물 3개를 생성했다.
 3. Functional Design 승인 후 **NFR Requirements**에서 기술 스택 질문(Semantic Scholar/OpenAlex, 캐시/스토어, TTL 수치, API runtime, CI 통합 테스트)을 진행한다.

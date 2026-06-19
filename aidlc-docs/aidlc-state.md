@@ -4,7 +4,7 @@
 - **프로젝트명**: DocSuri (연구 지원 애플리케이션)
 - **프로젝트 유형**: Greenfield(그린필드)
 - **시작일**: 2026-06-15T04:36:30Z
-- **현재 단계**: CONSTRUCTION - U8 Citation Graph Functional Design 계획·질문 게이트 작성 완료, 답변 대기. **[2026-06-19: U8 Citation Graph 편입 — 질문지 22문 답변 반영(Q3/Q10=X, Q4/Q14=B, 나머지 권장안), FR-15~16·NFR-P3·QT-6·US-CG1..CG6·U8 유닛 등재. Functional Design 계획서 `construction/plans/u8-citation-graph-functional-design-plan.md` Q1~Q12 답변 대기.]**
+- **현재 단계**: CONSTRUCTION - U8 Citation Graph NFR Requirements 계획·질문 게이트 작성 완료, 답변 대기. **[2026-06-19: Functional Design 승인 처리 후 `construction/plans/u8-citation-graph-nfr-requirements-plan.md` Q1~Q12 답변 대기.]**
 - **문서 언어**: 한국어(`aidlc-docs/` 산출물). 업스트림 룰셋(`AGENTS.md`, `.aidlc-rule-details/`)은 영어 유지.
 
 ## ⚠️ 검증 재기준선 (Verification Re-baseline) — 2026-06-16
@@ -129,7 +129,8 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - [x] Build & Test — **완료 (2026-06-19)**. 산출물 `construction/u7-summarization/build-and-test/`(build-instructions·unit-test·integration-test·security-test·build-and-test-summary). **검증: `pytest` 29 passed + 1 skip(통합 게이트 self-skip)·`ruff` clean·임포트 스모크 OK.** 통합 5 시나리오 정의(게이트 레인 전용·real-first). 성능=N/A(NFR-P2 온디맨드). **U7 CONSTRUCTION 종료.** Operations 전 last-mile(프레임워크 밖): app-shell 마운트(@ELSAPHABA)·인프라 증분(@Infra)·`shared/dtos/summarization` 승격·비동기 잡 fast-follow.
 
 **U8 Citation Graph** (인용 그래프/각주 트리 — 2026-06-19 편입 유닛, FE 구현 제외 API 모듈):
-- [~] Functional Design — **계획·질문 게이트 작성 완료, 답변 대기 (2026-06-19)**. 계획서 `construction/plans/u8-citation-graph-functional-design-plan.md` 작성. Q1~Q12는 API 응답 union, unresolved 노출, 중복/순환 folding, 2-hop lazy-load, 50노드 truncation, 정렬, 수동 새로고침, U4 저장 메타 adapter, canonical id 우선순위, U6 관측 이벤트, QT-6 PBT 범위, 구현 전략을 다룸. **FD 산출물·앱 코드·FE 미생성.** 기술 스택(Semantic Scholar/OpenAlex, 캐시/스토어, TTL 수치, API runtime, CI 통합 테스트)은 Functional Design 승인 후 NFR Requirements에서 질문.
+- [x] Functional Design — **완료·승인 (2026-06-19)**. 계획서 `construction/plans/u8-citation-graph-functional-design-plan.md` Q1~Q12 전부 권장안(A) 반영 및 체크박스 완료. 산출물 `construction/u8-citation-graph/functional-design/` 3문서(`domain-entities.md`, `business-logic-model.md`, `business-rules.md`) 생성. **앱 코드·FE 미생성.**
+- [~] NFR Requirements — **계획·질문 게이트 작성 완료, 답변 대기 (2026-06-19)**. 계획서 `construction/plans/u8-citation-graph-nfr-requirements-plan.md` 작성. Q1~Q12는 citation provider, provider credential, Redis snapshot TTL, NFR-P3 응답 목표, timeout/retry, U6 rate/quota, FastAPI app-shell 통합, DTO 승격, U6 관측, U4 저장 계약, 실 provider 테스트 경계, Hypothesis PBT 계승을 다룸. **NFR 산출물·앱 코드·FE 미생성.**
 
 **공통 후속 단계** (per-unit 또는 횡단):
 - [x] 병렬 개발 조율 (2026-06-16 반영) — `shared/` 공용 규약 선행 작성 및 3개 독립 트랙 병렬 진행 확정
