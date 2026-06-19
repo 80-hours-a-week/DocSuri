@@ -876,3 +876,11 @@
 
 ---
 
+## U8 CONSTRUCTION 진입 — Functional Design 계획·질문 게이트 작성
+**Timestamp**: 2026-06-19T00:00:00Z
+**User Input(원문)**: "제 개입이 필요한 단계 전까지 쭉 진행해 주세요."
+**AI Response**: U8 인용 그래프/각주 트리 유닛의 CONSTRUCTION per-unit 루프 첫 단계인 Functional Design에 진입. `aidlc-docs/construction/plans/u8-citation-graph-functional-design-plan.md` 작성: 유닛 컨텍스트, FD 산출물 계획(`domain-entities.md`, `business-logic-model.md`, `business-rules.md`), 가정, 명확화 질문 Q1~Q12, 불변식 INV-U8-1~5, 다음 절차를 포함. 질문은 API 응답 union, unresolved 노출, 중복/순환 처리, 2-hop lazy-load, 50노드 상한, 정렬, 수동 새로고침, U4 저장 메타 adapter, canonical id 우선순위, 관측 이벤트, QT-6 PBT 범위, 구현 전략을 다룸. 질문지는 `question-format-guide.md`에 맞춰 `A)`, `B)`, `X)`와 옵션 간 빈 줄 형식으로 정규화. AI-DLC Functional Design 규칙상 `[Answer]:`가 모두 확정되기 전에는 FD 산출물·앱 코드·FE를 생성하지 않음. 기술 스택 질문은 Functional Design 승인 후 NFR Requirements에서 진행하도록 이연.
+**Context**: CONSTRUCTION — U8 Citation Graph Functional Design Step 1~4(계획+질문). 답변 대기. 다음(답변 확정 후): `aidlc-docs/construction/u8-citation-graph/functional-design/` 산출물 생성 → 리뷰 게이트 → U8 NFR Requirements.
+
+---
+

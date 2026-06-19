@@ -4,7 +4,7 @@
 - **프로젝트명**: DocSuri (연구 지원 애플리케이션)
 - **프로젝트 유형**: Greenfield(그린필드)
 - **시작일**: 2026-06-15T04:36:30Z
-- **현재 단계**: INCEPTION 재진입 - U8 인용 그래프/각주 트리 요구사항·스토리·유닛 등재 완료. **[2026-06-19: U8 Citation Graph 편입 — 질문지 22문 답변 반영(Q3/Q10=X, Q4/Q14=B, 나머지 권장안), FR-15~16·NFR-P3·QT-6·US-CG1..CG6·U8 유닛 등재. Construction은 별도 승인 대기.]**
+- **현재 단계**: CONSTRUCTION - U8 Citation Graph Functional Design 계획·질문 게이트 작성 완료, 답변 대기. **[2026-06-19: U8 Citation Graph 편입 — 질문지 22문 답변 반영(Q3/Q10=X, Q4/Q14=B, 나머지 권장안), FR-15~16·NFR-P3·QT-6·US-CG1..CG6·U8 유닛 등재. Functional Design 계획서 `construction/plans/u8-citation-graph-functional-design-plan.md` Q1~Q12 답변 대기.]**
 - **문서 언어**: 한국어(`aidlc-docs/` 산출물). 업스트림 룰셋(`AGENTS.md`, `.aidlc-rule-details/`)은 영어 유지.
 
 ## ⚠️ 검증 재기준선 (Verification Re-baseline) — 2026-06-16
@@ -78,7 +78,7 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - [x] **Units Generation 개정 — U7 정식 등재 (2026-06-18, 팀 합의·`feature/u7`·PR #108)**: `unit-of-work.md`(U7 Summarization 유닛 정의·배포 단위 ①+③옵션·코드트리 `backend/modules/summarization/`·확장 트랙)·`unit-of-work-dependency.md`(U7 행/열 추가, U7→U1 capability read·U7→U6 `shared/ports` lib·U5→U7/U6→U7 sync, **코드 DAG 비순환 유지 검증**, 온디맨드 요약 ASCII 흐름)·`unit-of-work-story-map.md`(US-S1..S5 Owner=U7·US-S6 Owner=U6 기여=U7, 전수 27 스토리 검증) 갱신. **7 유닛·4 배포 단위(U7=API 모듈, 초장문만 비동기 잡 옵션).** 리뷰 게이트 대기. **다음: U7 Construction 유닛 루프(Functional Design부터).**
 - [x] **요구사항 개정 — 신규 유닛 U8(인용 그래프/각주 트리) 편입 (2026-06-19)**: 명확화 `requirement-verification-questions-citation-graph.md` 22문 답변 확정(Q3/Q10=X, Q4/Q14=B, 나머지 권장안) → `requirements.md`에 **FR-15(각주 트리/backward references)·FR-16(노드 저장/연동)·NFR-P3(온디맨드 비-SLA)·QT-6(인용 엣지 정확도+그래프 불변식)·§12 카브아웃** 등재. v1은 논문 상세보기 페이지의 backward references 각주 트리로 한정, FE 구현·forward citations·3-hop 이상은 제외.
 - [x] **사용자 스토리 개정 — U8 에픽 추가 (2026-06-19)**: `stories.md`에 **에픽 7 — 인용 그래프 / 각주 트리**(US-CG1 상세보기 각주 트리·US-CG2 깊이/노드 메타·US-CG3 unresolved 분리·US-CG4 라이브러리 저장·US-CG5 실패/쿼터 저하·US-CG6 운영 관측성) 6 스토리 추가 → 총 33 스토리/8 에픽. P1(US-CG1..CG5)·OP(US-CG6) 매핑, FR-15..16·NFR-P3·QT-6 커버.
-- [x] **Units Generation 개정 — U8 정식 등재 (2026-06-19)**: `unit-of-work.md`(U8 Citation Graph 유닛 정의·배포 단위 ① API 모듈·코드트리 `backend/modules/citation_graph/`)·`unit-of-work-dependency.md`(U8 행/열 추가, U8→U3/U6 로그인·게이트웨이, U8→U4 저장 계약, U7→U8 출처 연동, 코드 DAG 비순환 검증, 각주 트리 ASCII 흐름)·`unit-of-work-story-map.md`(US-CG1..CG5 Owner=U8·US-CG6 Owner=U6 기여=U8, 전수 33 스토리 검증) 갱신. **8 유닛·4 배포 단위(U8=API 모듈).** **다음: U8 Construction Functional Design은 별도 승인 후 진행.**
+- [x] **Units Generation 개정 — U8 정식 등재 (2026-06-19)**: `unit-of-work.md`(U8 Citation Graph 유닛 정의·배포 단위 ① API 모듈·코드트리 `backend/modules/citation_graph/`)·`unit-of-work-dependency.md`(U8 행/열 추가, U8→U3/U6 로그인·게이트웨이, U8→U4 저장 계약, U7→U8 출처 연동, 코드 DAG 비순환 검증, 각주 트리 ASCII 흐름)·`unit-of-work-story-map.md`(US-CG1..CG5 Owner=U8·US-CG6 Owner=U6 기여=U8, 전수 33 스토리 검증) 갱신. **8 유닛·4 배포 단위(U8=API 모듈).** **후속: U8 Construction Functional Design 질문 게이트 진입 완료, 답변 대기.**
 
 ### 🟢 CONSTRUCTION 단계 (유닛별 루프)
 
@@ -127,6 +127,9 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - [x] Infrastructure Design — **완료·승인 (2026-06-19)**. 계획서 9문 전수 A. 산출물 `construction/u7-summarization/infrastructure-design/`(infrastructure-design·deployment-architecture). **신규 관리형 서비스 0**(전부 기존 자산 재사용): 컴퓨트=기존 ECS Fargate 모듈·S3 `summaries/` 프리픽스·Redis `sum:` 키스페이스+TTL·RDS `user_glossary` 테이블(마이그레이션)·Bedrock IAM(모델 ARN 스코프)·CloudWatch/Budget 비용 라인·CI 통합 게이트 레인. 비동기 잡 v1 미프로비저닝. 증분 비용≈Bedrock 토큰(가변). **조율 존**(task role·CI·IaC·마운트)=@ELSAPHABA/Infra. 앱 코드 미생성. _승인 완료(2026-06-19)._
 - [x] Code Generation — **Part 1·2 완료·검증 (2026-06-19, 브랜치 `feature/u7-v2`·PR #115)**. 계획서 18단계 전부 [x]. 코드 `backend/modules/summarization/`(src-layout, real-first): 도메인 9컴포넌트(models·refiner·source_selector·cache_key·length_router·glossary·grounding·assembler·orchestrator)·실 어댑터 단일본(bedrock_llm 스트리밍·s3_redis_store·s3_full_text·rds_glossary)·api(router `/api/summarize`·gateway_seam)·prompts(본문 격리)·real_wiring·`migrations/001_create_user_glossary.sql`. **검증: `pytest` 29 passed + 1 skip(통합 self-skip)·`ruff` clean.** Q4 U7 고유 결정적 근거화·Q5 버퍼-검증·저하 3계층·Q8 후치환(한국어 조사 안전)·real-first(Production Mock Adapter 없음·테스트 Fixture/Stub). **⚠️ 마운트=조율 존**: `backend/wiring.py` 미변경(쉘 테스트 보호) — mounter 스니펫을 `code/README.md`에 사인오프-레디로 제시. 인프라 증분(IAM·마이그레이션·CI)=@Infra. _승인 완료(2026-06-19)._
 - [x] Build & Test — **완료 (2026-06-19)**. 산출물 `construction/u7-summarization/build-and-test/`(build-instructions·unit-test·integration-test·security-test·build-and-test-summary). **검증: `pytest` 29 passed + 1 skip(통합 게이트 self-skip)·`ruff` clean·임포트 스모크 OK.** 통합 5 시나리오 정의(게이트 레인 전용·real-first). 성능=N/A(NFR-P2 온디맨드). **U7 CONSTRUCTION 종료.** Operations 전 last-mile(프레임워크 밖): app-shell 마운트(@ELSAPHABA)·인프라 증분(@Infra)·`shared/dtos/summarization` 승격·비동기 잡 fast-follow.
+
+**U8 Citation Graph** (인용 그래프/각주 트리 — 2026-06-19 편입 유닛, FE 구현 제외 API 모듈):
+- [~] Functional Design — **계획·질문 게이트 작성 완료, 답변 대기 (2026-06-19)**. 계획서 `construction/plans/u8-citation-graph-functional-design-plan.md` 작성. Q1~Q12는 API 응답 union, unresolved 노출, 중복/순환 folding, 2-hop lazy-load, 50노드 truncation, 정렬, 수동 새로고침, U4 저장 메타 adapter, canonical id 우선순위, U6 관측 이벤트, QT-6 PBT 범위, 구현 전략을 다룸. **FD 산출물·앱 코드·FE 미생성.** 기술 스택(Semantic Scholar/OpenAlex, 캐시/스토어, TTL 수치, API runtime, CI 통합 테스트)은 Functional Design 승인 후 NFR Requirements에서 질문.
 
 **공통 후속 단계** (per-unit 또는 횡단):
 - [x] 병렬 개발 조율 (2026-06-16 반영) — `shared/` 공용 규약 선행 작성 및 3개 독립 트랙 병렬 진행 확정
