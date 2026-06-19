@@ -860,3 +860,19 @@
 
 ---
 
+## U8 인용 그래프/각주 트리 — Requirements Analysis 질문지 생성
+**Timestamp**: 2026-06-19T00:00:00Z
+**User Input(원문)**: "각주 트리를 보여주기 위하여 인용 그래프 기능을 추가하려고 하는데, AI-DLC 방법론을 기반으로 구현하려고 합니다. 이를 위하여 상세 질문지를 만들어 md 파일로 만들어 주세요. aidlc-docs 의 내용을 참고해 주세요."
+**AI Response**: 현재 `requirements.md` §12에서 인용 그래프/"trace" 내비게이션이 v1 제외임을 확인하고, 바로 설계/코드로 진입하지 않고 Requirements Analysis 재진입 질문지 `aidlc-docs/inception/requirements/requirement-verification-questions-citation-graph.md`를 생성. 질문 22개: 범위 편입·U8 유닛 경계·논문 상세보기 진입점·backward/forward 방향·depth/노드 상한·트리 표현·Semantic Scholar/OpenAlex/arXiv 데이터 소스·온디맨드+캐시·7일 TTL·표시 메타데이터·unresolved 분리·필터/정렬·U4 라이브러리 연동·로그인 요구·NFR-P3·U6 쿼터/비용 신호·실패 UX·모바일 인터랙션·U7 출처 연결·QT-6·운영 관측성·후속 산출물 범위를 포함. 코드/인프라 미생성.
+**Context**: INCEPTION 재진입 — U8 Citation Graph 후보 기능의 요구사항 명확화 게이트 작성. 답변 대기.
+
+---
+
+## U8 요구사항 답변 확정 + FR-15~ 등재
+**Timestamp**: 2026-06-19T00:00:00Z
+**User Input(원문)**: "Q3: 논문 상세보기 페이지에서, 요약, 초록 번역, 전문 번역, 각주 트리 4개 버튼을 배치하면 될 것 같습니다. 논문 상세보기 페이지는 타 분기에서 생성중이므로 FE를 구현할 필요 없습니다. \nQ4: B가 나을 것 같습니다. Q10은 제목, 연도, 인용수까지 나오면 좋을 것 같습니다.\nQ14: 검색 기능 자체가 로그인이 필요하므로 모든 기능을 로그인 필수로 하면 될 것 같습니다.\n\n나머지는 다 권장안으로 진행하겠습니다."
+**AI Response**: 질문지에 답변 반영 — Q3=X(논문 상세보기 페이지 4버튼·FE 구현 제외), Q4=B(backward references만), Q10=X(제목·연도·인용수), Q14=B(전체 로그인 필수), Q22=B(User Stories+Units Generation까지 진행), 나머지 A. 이후 Q22에 따라 `requirements.md` 갱신: **FR-15(논문 상세보기의 backward references 각주 트리, 기본 1-hop/최대 2-hop/50노드, 노드=제목·연도·인용수)·FR-16(인용 노드 라이브러리 저장/로그인 필수/실패 UX)·NFR-P3(검색 SLA 제외 온디맨드)·QT-6(인용 엣지 정확도+그래프 불변식)** 추가, §12에서 인용 그래프 제외를 일부 해제하는 U8 카브아웃 추가. `stories.md`에 **에픽 7 — 인용 그래프/각주 트리**와 US-CG1..CG6 추가. `unit-of-work.md`에 **U8 Citation Graph** API 모듈(`backend/modules/citation_graph/`) 등재, `unit-of-work-dependency.md`에 U8 행/열과 상세보기 각주 트리 흐름 추가, `unit-of-work-story-map.md`에 전수 33 스토리 매핑 반영. `aidlc-state.md` 갱신. Construction/코드/FE 미생성.
+**Context**: INCEPTION — U8 Citation Graph 요구사항·User Stories·Units Generation 완료. 다음 단계는 별도 승인 후 U8 Construction Functional Design.
+
+---
+
