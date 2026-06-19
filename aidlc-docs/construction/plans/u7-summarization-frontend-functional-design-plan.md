@@ -43,18 +43,18 @@
 
 > 산출물은 `aidlc-docs/construction/u7-summarization-frontend/functional-design/` 에 생성한다. **§4 답변 확정 전에는 생성하지 않는다.**
 
-- [ ] **frontend-components.md** — 컴포넌트 계층·props/state·인터랙션·폼/상태 규칙·API 통합점(U5 FD 형식 미러):
+- [x] **frontend-components.md** ✅ 생성(2026-06-19) — 컴포넌트 계층·props/state·인터랙션·폼/상태 규칙·API 통합점(U5 FD 형식 미러):
   - 컴포넌트 트리(진입 액션 → 요약 표면 → §3 섹션 렌더 → 앵커 → 상태 뷰), 각 컴포넌트 props/state 의미 계약.
   - 인터랙션 흐름: 요약 요청 → 로딩/캐시즉시 → 렌더 / 번역 전환 / persona 전환 / 출처 보기 / 기권·비용저하·소스부재 상태.
   - 응답 union → `screenState` 매핑 표(ok·abstain·cost_degraded·source_unavailable·loading·error).
   - API 통합점: `ApiClient.summarize(SummarizeRequest) → SummarizeResponse` union(기존 `search()` union 패턴 미러).
   - 보안 표면: 외부 텍스트 React 이스케이프(XSS)·앵커 span 안전 렌더·토큰 비노출.
-- [ ] **business-rules.md** — 클라이언트 결정·검증 규칙:
+- [x] **business-rules.md** ✅ 생성(2026-06-19) — 클라이언트 결정·검증 규칙:
   - 요청 구성 규칙(task/persona/targetLang 기본값·식별자 매핑 = Q8) · 중복요청 디듀프 · 캐시(`cached:true`) 표기.
   - 상태 우선순위(기권/소스부재 > 부분 렌더; 날조 금지 표면) · 빈/에러/오프라인 UX(무한 로딩 금지) · 재시도 경로.
   - persona 전환 규칙(논문당 ≤2벌, 전환=재요청·캐시히트 즉시 = Q4) · 번역 뷰 전환 규칙(Q6) · 앵커 표시 규칙(Q5).
-- [ ] **domain-entities.md** (경량) — 클라이언트 뷰모델: `SummarizeRequest`/`SummarizeResponse`(union) VM, `SummaryVM`(§3 6필드+anchors), `TranslationVM`, `AnchorVM`, `screenState` enum. 백엔드 DTO와 1:1 정합(드리프트 0) 명시.
-- [ ] **상호작용/접근성 노트** — 모바일 터치 타깃·키보드/스크린리더·로딩/빈/실패 상태 동반 설계(`frontend/CLAUDE.md` Part 2-C).
+- [x] **domain-entities.md** (경량) ✅ 생성(2026-06-19) — 클라이언트 뷰모델: `SummarizeRequest`/`SummarizeResponse`(union) VM, `SummaryVM`(§3 6필드+anchors), `TranslationVM`, `AnchorVM`, `FullTextVM`, `screenState` enum. 백엔드 DTO와 1:1 정합(드리프트 0) 명시.
+- [x] **상호작용/접근성 노트** ✅ frontend-components.md §4에 포함(2026-06-19) — 모바일 터치 타깃·키보드/스크린리더·로딩/빈/실패 상태 동반 설계(`frontend/CLAUDE.md` Part 2-C).
 
 ---
 
