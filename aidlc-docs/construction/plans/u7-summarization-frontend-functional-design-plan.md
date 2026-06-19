@@ -180,16 +180,19 @@ X) 기타 (please describe after [Answer]: tag below)
 
 > 본 FD/SSOT는 **설계 확정**까지. 실제 `backend/modules/summarization/` 코드 수정은 FD 산출물 생성 후 **Code Generation** 단계에서 한다. 아래는 그때 처리할 백엔드 델타.
 
-**전문 번역(scope=full) — 확정:**
-- [ ] `domain/source_selector.py` — translate + `scope=full` → 전문 fetch(현재 `translate → abstract`만)
-- [ ] `domain/cache_key.py` — 키에 `scope` 추가(persona는 기존 유지)
-- [ ] `api/router.py` + 요청 DTO — `scope` 파라미터 수용
-- [ ] `domain/length_router.py`/`prompts` — 긴 한국어 전문 번역(초장문 map-reduce)
-- [ ] 라이선스 게이트 — 전문 번역은 OA 허용 논문만(기존 소스 라이선스 체크 재사용)
+**전문 번역(scope=full) — ✅ 구현(2026-06-19):**
+- [x] `domain/models.py` — `Scope`(abstract|full) enum + `SummaryRequest.scope` + `SummaryCacheKey.scope`
+- [x] `domain/source_selector.py` — translate + `scope=full` → 전문 fetch(전문 부재 시 초록 폴백)
+- [x] `domain/cache_key.py` — 키에 `scope` 추가(요약=full 고정·번역=scope), object_path 반영
+- [x] `api/router.py` + 요청 파싱 — `scope` 파라미터 수용
+- [x] `domain/assembler.py` — 번역 meta source = 실제 소스(abstract|full_text)
+- [x] 길이/라이선스 — 전문 번역도 기존 refine→length route 경유(초장문 over-cap→기권), 전문 부재/라이선스 불가는 초록 폴백(NFR-R2)
 
-**Q5=C 전문 뷰어 — 확정:**
-- [ ] 신규 엔드포인트 — 프론트에 **전문 텍스트 반환 API**(현재 S3 전문 private·미반환)
-- [ ] OA 라이선스 게이트 — 그 엔드포인트도 허용 논문만
-- [ ] 정규화 텍스트 가독성 — 참고문헌·저자 제거된 텍스트의 뷰어 표시 처리
+**Q5=C 전문 뷰어 — ✅ 구현(2026-06-19, 안전 기본):**
+- [x] 신규 엔드포인트 `GET /api/papers/{id}/full-text` — `orchestrator.full_text()` 경유
+- [x] **OA 라이선스 게이트 = 기본 OFF**(`DOCSURI_FULLTEXT_VIEWER_ENABLED`) — ⚠️ 라이선스 메타데이터 신호가 코드베이스에 없어, **기본은 `license_unavailable` 반환(arXiv 링크아웃)**. 라이선스 신호 배선 후 활성 — 무방비 전문 노출 차단.
+- [x] 정규화 텍스트 가독성 — 프론트 FullTextViewer가 정규화본 안내(BR-SF-12) 표시
 
-**persona(요약 한정) — 변경 거의 없음:** persona 코드 기존 유지. 번역 경로가 persona를 무시(단일)하는지만 확인.
+**persona(요약 한정) — 변경 없음 확인:** persona 코드 기존 유지, 번역은 scope만 사용.
+
+> 검증: `pytest` **32 passed, 1 skipped** · `ruff` clean. app-shell 마운트는 `build_router(orchestrator, fulltext_enabled=settings.fulltext_viewer_enabled)`로 게이트 전달(조율 존 @ELSAPHABA).

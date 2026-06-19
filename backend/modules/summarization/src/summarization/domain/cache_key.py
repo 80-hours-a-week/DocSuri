@@ -7,7 +7,7 @@ so no separate ``userId`` is needed. Same key ⇒ same artifact, forever.
 
 from __future__ import annotations
 
-from .models import SummaryCacheKey, SummaryRequest, Task
+from .models import Scope, SummaryCacheKey, SummaryRequest, Task
 
 # Prompt template version — bump to invalidate all derived objects (key changes).
 PROMPT_VER = "p1"
@@ -16,14 +16,16 @@ PROMPT_VER = "p1"
 def build_cache_key(
     request: SummaryRequest, *, glossary_ver: int, model_ver: str
 ) -> SummaryCacheKey:
-    # persona is part of identity for summary (2 variants); translate is persona-agnostic.
-    persona = request.persona
+    # Identity dimensions (§11): summary varies by persona (2 variants), scope fixed to
+    # full; translate varies by scope (abstract|full), persona-agnostic (single).
+    scope = Scope.FULL if request.task == Task.SUMMARY else request.scope
     return SummaryCacheKey(
         paper_id=request.paper_id,
         version=request.version,
         task=request.task,
         target_lang=request.target_lang,
-        persona=persona if request.task == Task.SUMMARY else request.persona,
+        scope=scope,
+        persona=request.persona,
         glossary_ver=glossary_ver,
         model_ver=model_ver,
         prompt_ver=PROMPT_VER,
