@@ -10,6 +10,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from fastapi import APIRouter, Body, Request
+from fastapi.responses import JSONResponse
+
 from ..api.gateway_seam import run_summarization
 from ..domain.models import (
     AuthSession,
@@ -26,9 +29,6 @@ from ..service.orchestrator import SummarizationOrchestrationService
 def build_router(
     orchestrator: SummarizationOrchestrationService, *, fulltext_enabled: bool = False
 ) -> Any:
-    from fastapi import APIRouter, Body, Request
-    from fastapi.responses import JSONResponse
-
     router = APIRouter()
 
     @router.post("/api/summarize")

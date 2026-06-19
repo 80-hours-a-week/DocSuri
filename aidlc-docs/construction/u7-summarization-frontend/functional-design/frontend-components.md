@@ -16,7 +16,8 @@
 - **모달(`SummaryModal`)** 은 액션 바에서 **선택된 한 가지 모드만** 렌더(모달 내부에 모드 전환 탭 없음). 제목 + 닫기(✕)만 두고, `PersonaToggle`(전문가용/입문자용)은 **요약 모달에서만** 표시.
 - **앵커 클릭**(요약 내 출처 칩) → 모달 닫힘 + 본문 `FullTextViewer`에서 해당 span 하이라이트(Q5=C 유지).
 - **카드 [요약]은 FD §2.2/2.3대로 유지** — TL;DR(전문가용 persona 고정) 인라인 펼침(모달 아님). 무거운 액션·번역·persona 전환은 상세에서(BR-SF-1).
-- `PaperHeader` 메타데이터는 **잠정(PROVISIONAL) 논문 메타데이터 엔드포인트**로 채운다: `PaperMetaVM` + `ApiClient.getPaperMeta` (`GET /api/papers/{id}`). 백엔드 미존재 — dev는 mock, 실연동은 후속(domain-entities 미반영, 확정 시 1:1 재정합). FD §2.5의 "검색 VM 보유분 전달" 대신 직접 진입에서도 헤더를 채우기 위함.
+- `PaperHeader` 메타데이터는 **discovery(U2) 논문 메타데이터 엔드포인트**로 채운다: `PaperMetaVM` + `ApiClient.getPaperMeta` (`GET /api/papers/{id}`). 제목·저자·초록은 코퍼스/검색 인덱스 데이터라 U7이 아닌 **discovery(U2) 소관**으로 구현(OpenSearch 단건-read → `PaperMetadataService` → `PaperMetaDTO`). dev는 mock, 실연동은 discovery 엔드포인트. FD §2.5의 "검색 VM 보유분 전달" 대신 직접 진입에서도 헤더를 채우기 위함.
+  - **재정합(2026-06-19)**: 프론트 `PaperMetaVM`은 discovery `PaperMetaDTO`(`{arxivId,title,authors,year,abstract,arxivUrl}`)를 1:1 미러. 현재 손수 작성 타입 — shared 스키마 승격(codegen) 시 생성 타입으로 교체 예정(잔여 작업).
 - **전문 본문 자동 로드**: `FullTextViewer`는 상세 진입 시 자동 로드(BR-SF-1 탭 트리거의 예외 — business-rules.md BR-SF-1 편차 참조). 라이선스 게이트(OA)는 그대로 적용 — 전문 표시 가능 여부는 백엔드 게이트가 결정.
 - **`TranslationView` 표시 변경**: scope 라벨(초록/전문) 중복 표기를 제거(모달 제목이 대체). 데이터 모델 `TranslationVM.scope`는 유지 — 표시만 생략.
 

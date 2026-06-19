@@ -1,9 +1,9 @@
 'use client';
 
 // usePaperMeta — loads paper header metadata (title/authors/abstract) for the
-// detail route via the ApiClient seam (mock in dev, real BFF when configured).
-// PROVISIONAL backend contract (see ApiClient.getPaperMeta). Failure normalizes to
-// `null` so the detail page still renders the arXiv id + link-out (no hard error).
+// detail route via the ApiClient seam (mock in dev, real discovery U2 endpoint when
+// configured — see ApiClient.getPaperMeta). Failure normalizes to `null` so the detail
+// page still renders the arXiv id + link-out (no hard error).
 import { useCallback, useEffect, useState } from 'react';
 import { getApiClient } from '@/lib/api';
 import type { PaperMetaVM } from '@/types/paperMeta';

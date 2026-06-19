@@ -1,9 +1,10 @@
 // PaperMetaVM — hand-authored view model for paper header metadata
 // (title/authors/year/abstract) shown on the detail route.
 //
-// NOT a generated DTO: there is no backend paper-metadata endpoint yet, so this is
-// PROVISIONAL (same status as the full-text contract). When the backend lands a
-// metadata endpoint with a shared schema, replace this with the generated type.
+// Hand-authored, NOT codegen'd (yet): the backend endpoint exists — discovery (U2)
+// GET /api/papers/{id} — and this mirrors its PaperMetaDTO 1:1. It stays hand-authored until
+// the contract is promoted to a shared schema (shared/dtos) and regenerated; at that point
+// replace this with the generated type.
 export interface PaperMetaVM {
   arxivId: string;
   title: string;

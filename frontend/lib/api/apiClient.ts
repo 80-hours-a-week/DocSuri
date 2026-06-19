@@ -92,9 +92,11 @@ export class ApiClient {
     throw normalizeHttpError(res.status, pick(res.body, 'message'));
   }
 
-  /** Paper header metadata (title/authors/abstract) for the detail route. PROVISIONAL
-   * contract — there is no backend metadata endpoint yet; returns null on 404 so the
-   * detail page degrades to the arXiv id + link-out. */
+  /** Paper header metadata (title/authors/abstract) for the detail route. Backed by the
+   * discovery (U2) endpoint GET /api/papers/{id} (corpus data — title/authors/abstract are not
+   * U7's). Returns null on 404 so the detail page degrades to the arXiv id + link-out. The
+   * PaperMetaVM type is still hand-authored (mirrors discovery's PaperMetaDTO) pending shared-
+   * schema promotion + codegen. */
   async getPaperMeta(arxivId: string): Promise<PaperMetaVM | null> {
     const res = await this.request({
       method: 'GET',

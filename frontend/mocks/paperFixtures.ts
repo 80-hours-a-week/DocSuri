@@ -1,7 +1,7 @@
 // Dev-only paper-metadata fixtures (mock transport layer, same status as
-// summarizeFixtures). Production is real-first — these are never shipped; they let
-// the detail route render title/authors/abstract while the backend metadata
-// endpoint is still PROVISIONAL (NEXT_PUBLIC_DOCSURI_REAL_API unset).
+// summarizeFixtures). Production is real-first — these are never shipped; they stand in for
+// the real discovery (U2) GET /api/papers/{id} endpoint when NEXT_PUBLIC_DOCSURI_REAL_API is
+// unset, so the detail route renders title/authors/abstract in dev.
 import type { PaperMetaVM } from '@/types/paperMeta';
 
 const META: Record<string, PaperMetaVM> = {
