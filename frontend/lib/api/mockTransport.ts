@@ -15,6 +15,13 @@ import {
   degradedResponse,
 } from '@/mocks/searchFixtures';
 import {
+  summaryResponse,
+  beginnerSummaryResponse,
+  abstractTranslationResponse,
+  fullTranslationResponse,
+  fullTextResponse,
+} from '@/mocks/summarizeFixtures';
+import {
   mockSignup,
   mockLogin,
   mockLogout,
@@ -63,6 +70,24 @@ export class MockTransport implements Transport {
       if (matches(query, '기권', 'abstain')) return { status: 200, body: abstainResponse };
       if (matches(query, '저하', 'degraded')) return { status: 200, body: degradedResponse };
       return { status: 200, body: pageResponse };
+    }
+
+    // U7 summarize/translate (dev preview only) ------------------------------
+    if (req.path === '/api/summarize' && req.method === 'POST') {
+      const body = (req.body ?? {}) as { task?: string; scope?: string; persona?: string };
+      if (body.task === 'translate') {
+        return {
+          status: 200,
+          body: body.scope === 'full' ? fullTranslationResponse : abstractTranslationResponse,
+        };
+      }
+      return {
+        status: 200,
+        body: body.persona === 'beginner' ? beginnerSummaryResponse : summaryResponse,
+      };
+    }
+    if (/^\/api\/papers\/[^/]+\/full-text$/.test(path) && req.method === 'GET') {
+      return { status: 200, body: fullTextResponse };
     }
 
     if (req.path === '/auth/signup' && req.method === 'POST') {

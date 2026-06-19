@@ -8,6 +8,17 @@
   background: var(--color-surface);
 }
 
+.titleLink,
+.snippetLink {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+.titleLink:hover .title {
+  text-decoration: underline;
+}
+
 .title {
   margin: 0;
   font-size: 16px;

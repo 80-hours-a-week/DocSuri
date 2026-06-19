@@ -4,6 +4,31 @@
   gap: 1rem;
 }
 
+/* Sticky action bar — keeps 요약/초록번역/전문번역 + persona pinned while scrolling. */
+.actionsBar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0.625rem 0;
+  background: var(--color-surface, #fff);
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.personaSection {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.personaLabel {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #6b7280;
+}
+
 .result {
   min-height: 6rem;
 }

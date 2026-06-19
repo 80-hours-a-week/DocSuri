@@ -1,10 +1,9 @@
 'use client';
 
 // SummaryAction (Q1·Q2, card inline) — the card's [요약] action. Tapping requests a
-// summary and shows the tldr (3-line) inline; "상세히 보기" links to the full detail
-// route. real-first: real BFF transport, no mock. Heavy/full actions live on the
-// detail page, not the card (BR-SF-1). External text escaped by React (BR-SF-9).
-import Link from 'next/link';
+// summary and shows the tldr (3-line) inline (a quick peek without navigating; the
+// card title links to the full detail route). Heavy/full actions live on the detail
+// page, not the card (BR-SF-1). External text escaped by React (BR-SF-9).
 import { useSummarize } from '@/lib/useSummarize';
 import styles from './SummaryAction.module.css';
 
@@ -15,7 +14,6 @@ interface SummaryActionProps {
 
 export function SummaryAction({ paperId, version = 1 }: SummaryActionProps) {
   const { state, run } = useSummarize();
-  const detailHref = `/paper/${encodeURIComponent(paperId)}`;
 
   const onSummarize = () => void run({ task: 'summary', paperId, version, persona: 'expert' });
 
@@ -51,10 +49,6 @@ export function SummaryAction({ paperId, version = 1 }: SummaryActionProps) {
           )}
         </span>
       ) : null}
-
-      <Link className={styles.detail} href={detailHref} data-testid="card-detail-link">
-        상세히 보기
-      </Link>
     </span>
   );
 }

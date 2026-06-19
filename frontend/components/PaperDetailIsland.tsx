@@ -84,8 +84,15 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
 
   return (
     <div className={styles.root}>
-      <SummaryActions active={view} onSelect={setView} />
-      {view === 'summary' ? <PersonaToggle value={persona} onChange={setPersona} /> : null}
+      <div className={styles.actionsBar}>
+        <SummaryActions active={view} onSelect={setView} />
+        {view === 'summary' ? (
+          <section className={styles.personaSection} aria-label="요약 수준">
+            <span className={styles.personaLabel}>요약 수준</span>
+            <PersonaToggle value={persona} onChange={setPersona} />
+          </section>
+        ) : null}
+      </div>
 
       <div className={styles.result} data-testid="detail-result">
         {renderResult()}
