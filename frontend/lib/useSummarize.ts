@@ -17,11 +17,15 @@ export function useSummarize() {
   const [state, setState] = useState<SummarizeState>({ status: 'idle' });
   // Identifies the latest request; completions for any other key are stale (P5).
   const activeKey = useRef<string | null>(null);
+  // Key of the in-flight request, for dedup. Refs (not state) keep `run` stable so
+  // effects that depend on it don't re-fire on every status change (no request loop).
+  const inFlightKey = useRef<string | null>(null);
 
   const run = useCallback(async (req: SummarizeRequest) => {
     const key = JSON.stringify(req);
-    if (activeKey.current === key && state.status === 'loading') return; // dedup (BR-SF-4)
+    if (inFlightKey.current === key) return; // dedup the same in-flight request (BR-SF-4)
     activeKey.current = key;
+    inFlightKey.current = key;
     setState({ status: 'loading' });
     try {
       const outcome = await getApiClient().summarize(req);
@@ -30,11 +34,14 @@ export function useSummarize() {
     } catch {
       if (activeKey.current !== key) return;
       setState({ status: 'done', outcome: { kind: 'error', message: '문제가 발생했어요.' } });
+    } finally {
+      if (inFlightKey.current === key) inFlightKey.current = null;
     }
-  }, [state.status]);
+  }, []);
 
   const reset = useCallback(() => {
     activeKey.current = null;
+    inFlightKey.current = null;
     setState({ status: 'idle' });
   }, []);
 

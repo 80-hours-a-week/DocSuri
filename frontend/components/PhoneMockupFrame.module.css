@@ -22,12 +22,22 @@
   }
 
   .frame {
-    width: 390px;
-    min-height: 780px;
+    /* Galaxy logical width (S20 Ultra / A-series, ≈412×915 CSS px) — wider than iPhone's 390. */
+    width: 412px;
+    min-height: 880px;
     max-height: 90dvh;
     border-radius: 28px;
     border: 1px solid var(--color-border);
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
     overflow-y: auto;
+    /* Keep scrolling but hide the scrollbar chrome (mobile-mockup look). */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .frame::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
   }
 }

@@ -33,13 +33,16 @@ export const summaryResponse: SummaryOkDTO = {
   },
 };
 
+// 입문자용(beginner) = SSOT §9.2 정책에 부합: "전문용어 첫 등장 시 괄호 설명 · 약어 첫 등장 시
+// 원문 전개 · 이후 등장은 원어 유지". 핵심은 용어를 한글로 음차/치환하지 않고 **영문 원어로 두고**
+// 첫 등장 때만 한국어로 괄호 풀이 → 원문·타 자료와 용어 연속성 유지.
 export const beginnerSummaryResponse: SummaryOkDTO = {
   ...summaryResponse,
   summary: {
     ...summaryResponse.summary,
-    tldr: '기존 번역 AI는 문장을 앞에서부터 차례로 읽어야 해서 느렸어요. 이 논문의 트랜스포머(Transformer)는 문장 전체를 한 번에 보는 “어텐션(attention, 집중)” 방식만으로 더 빠르고 정확하게 번역합니다.',
+    tldr: '기존의 RNN·CNN(recurrent·convolutional neural network, 데이터를 순서대로/지역적으로 처리하던 신경망) 없이, attention(문장에서 단어들 사이의 관련성에 “집중”해 가중치를 매기는 계산)만으로 sequence transduction(한 문장을 다른 문장으로 바꾸는 작업 — 예: 번역)을 수행하는 Transformer를 제안한다. recurrence·convolution을 없애 병렬화가 쉬워 학습이 빠르고, 번역 품질도 당시 최고 수준이다.',
     method:
-      '문장을 숫자로 바꾼 뒤, 각 단어가 다른 단어와 얼마나 관련 있는지 “어텐션”으로 계산합니다. 순서를 모델이 알 수 있도록 위치 정보(위치 인코딩)를 더해 줍니다.',
+      'encoder(입력 문장을 이해해 내부 표현으로 바꾸는 부분)와 decoder(그 표현으로 출력 문장을 만드는 부분)를 각각 6개 층으로 쌓는다. 각 층은 multi-head self-attention(여러 관점에서 동시에 단어 간 관련성을 보는 attention)과 position-wise feed-forward network(각 단어를 개별적으로 변환하는 작은 신경망)로 구성된다. 순서 정보는 positional encoding(단어의 위치를 sine·cosine 패턴으로 표시)으로 더한다.',
   },
 };
 

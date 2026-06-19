@@ -1,27 +1,24 @@
-import type { TranslationVM, SummarizeScope } from '@/types/generated';
+import type { TranslationVM } from '@/types/generated';
 import styles from './TranslationView.module.css';
 
 // TranslationView (US-S2, BR-SF-9) — Korean translation (abstract or full per
 // scope) + kept-terms badges (untranslated terms kept as-is). External text is
-// escaped by React. No anchors (translation is grounding-free).
+// escaped by React. No anchors (translation is grounding-free). The scope label is
+// not repeated here — the modal heading already names 초록/전문 번역.
 
 interface TranslationViewProps {
   translation: TranslationVM;
-  scope: SummarizeScope;
   cached?: boolean;
 }
 
-export function TranslationView({ translation, scope, cached }: TranslationViewProps) {
+export function TranslationView({ translation, cached }: TranslationViewProps) {
   return (
     <div className={styles.root} data-testid="translation-view">
-      <div className={styles.meta}>
-        <span className={styles.scope}>{scope === 'full' ? '전문 번역' : '초록 번역'}</span>
-        {cached ? (
-          <span className={styles.cached} data-testid="translation-cached">
-            저장된 결과
-          </span>
-        ) : null}
-      </div>
+      {cached ? (
+        <span className={styles.cached} data-testid="translation-cached">
+          저장된 결과
+        </span>
+      ) : null}
 
       {translation.keptTerms.length > 0 ? (
         <div className={styles.terms}>

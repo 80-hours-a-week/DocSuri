@@ -7,6 +7,24 @@
 
 ---
 
+## 0. 설계 편차 — 본문 중심 상세 + 요약 모달 (2026-06-19, 제품 방향 반영)
+
+초기 FD(§2.4/2.5)는 상세 페이지를 **요약 우선**(진입 시 요약 자동 표시, persona 토글 인라인)으로, 전문은 앵커 클릭 시 `FullTextViewer`로 여는 구조였다. 제품 방향에 따라 상세 표면을 다음과 같이 **본문 중심**으로 재구성한다:
+
+- **DocSuri 헤더 바로 아래** = 스티키 액션 바 `[요약]`·`[초록 번역]`·`[전문 번역]` 3버튼. 각 버튼 → 해당 탭으로 **모달 오버레이(`SummaryModal`)** 를 연다.
+- **상세 본문** = `PaperHeader`(제목·저자·초록·arXiv 링크) + **정규화 S3 전문(`FullTextViewer`)을 본문으로 직접 표시**(앵커 없이 로드).
+- **모달(`SummaryModal`)** 은 액션 바에서 **선택된 한 가지 모드만** 렌더(모달 내부에 모드 전환 탭 없음). 제목 + 닫기(✕)만 두고, `PersonaToggle`(전문가용/입문자용)은 **요약 모달에서만** 표시.
+- **앵커 클릭**(요약 내 출처 칩) → 모달 닫힘 + 본문 `FullTextViewer`에서 해당 span 하이라이트(Q5=C 유지).
+- **카드 [요약]은 FD §2.2/2.3대로 유지** — TL;DR(전문가용 persona 고정) 인라인 펼침(모달 아님). 무거운 액션·번역·persona 전환은 상세에서(BR-SF-1).
+- `PaperHeader` 메타데이터는 **잠정(PROVISIONAL) 논문 메타데이터 엔드포인트**로 채운다: `PaperMetaVM` + `ApiClient.getPaperMeta` (`GET /api/papers/{id}`). 백엔드 미존재 — dev는 mock, 실연동은 후속(domain-entities 미반영, 확정 시 1:1 재정합). FD §2.5의 "검색 VM 보유분 전달" 대신 직접 진입에서도 헤더를 채우기 위함.
+- **전문 본문 자동 로드**: `FullTextViewer`는 상세 진입 시 자동 로드(BR-SF-1 탭 트리거의 예외 — business-rules.md BR-SF-1 편차 참조). 라이선스 게이트(OA)는 그대로 적용 — 전문 표시 가능 여부는 백엔드 게이트가 결정.
+- **`TranslationView` 표시 변경**: scope 라벨(초록/전문) 중복 표기를 제거(모달 제목이 대체). 데이터 모델 `TranslationVM.scope`는 유지 — 표시만 생략.
+
+> 아래 §2.4(PaperDetailScreen)·§2.5(PaperHeader)의 "요약 우선/전문 비표시" 서술은 본 §0으로 갱신됨. 컴포넌트 단위 계약(props/state/규칙)은 유효.
+> 비고: 액션 바 3버튼은 별도 컴포넌트(FD §2.6 `SummaryActions`)를 재사용하지 않고 상세 island 내부에 인라인 구현됨(모달 내부 탭이 사라져 탭 컨테이너 불요). `SummaryActions` 컴포넌트는 제거했고, `DetailView` 타입은 `SummaryModal`로 이전함.
+
+---
+
 ## 1. 컴포넌트 계층
 
 ```

@@ -21,6 +21,7 @@ import {
   fullTranslationResponse,
   fullTextResponse,
 } from '@/mocks/summarizeFixtures';
+import { mockPaperMeta } from '@/mocks/paperFixtures';
 import {
   mockSignup,
   mockLogin,
@@ -88,6 +89,10 @@ export class MockTransport implements Transport {
     }
     if (/^\/api\/papers\/[^/]+\/full-text$/.test(path) && req.method === 'GET') {
       return { status: 200, body: fullTextResponse };
+    }
+    const metaMatch = path.match(/^\/api\/papers\/([^/]+)$/);
+    if (metaMatch && req.method === 'GET') {
+      return { status: 200, body: mockPaperMeta(decodeURIComponent(metaMatch[1])) };
     }
 
     if (req.path === '/auth/signup' && req.method === 'POST') {

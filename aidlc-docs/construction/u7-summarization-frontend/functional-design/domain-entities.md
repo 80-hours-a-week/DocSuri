@@ -30,8 +30,8 @@ FullTextRequest {              // Q5=C 신규
 
 ```
 SummarizeOutcome =
-  | { kind: "summary";          summary: SummaryVM;     meta: ResultMeta; cached: boolean }
-  | { kind: "translation";      translation: TranslationVM; meta: ResultMeta; cached: boolean }
+  | { kind: "summary";          summary: SummaryVM;     meta: SummaryMeta; cached: boolean }
+  | { kind: "translation";      translation: TranslationVM; meta: SummaryMeta; cached: boolean }
   | { kind: "abstain";          reason: unknown }
   | { kind: "degraded";         message: string }          // cost_degraded
   | { kind: "sourceUnavailable"; reason: unknown }
@@ -39,7 +39,7 @@ SummarizeOutcome =
   | { kind: "error";            message: string }                    // 네트워크/5xx
 
 FullTextOutcome =              // Q5=C
-  | { kind: "page";              fullText: FullTextVM }
+  | { kind: "page";              text: string }            // 정규화 전문 (FullTextOkDTO.text 평탄화)
   | { kind: "licenseUnavailable" }                          // OA 미허용 → arXiv 안내
   | { kind: "sourceUnavailable" }
   | { kind: "error";             message: string }
@@ -73,10 +73,8 @@ TranslationVM {                // ok + translation (초록·전문 공용)
   scope:      "abstract" | "full"          // 표시 컨텍스트(요청 echo)
 }
 
-FullTextVM {                   // Q5=C 전문뷰어
-  text:        string                      // 정규화 전문(참고문헌·저자 제거 — 안내 표기)
-  // 앵커 하이라이트는 AnchorVM.target/span을 text 내에서 매칭
-}
+// 전문(Q5=C)은 별도 VM 래퍼 없이 FullTextOkDTO.text(string)로 직접 옴 — FullTextOutcome.page.text.
+// 정규화 전문(참고문헌·저자 제거 — 안내 표기). 앵커 하이라이트는 AnchorVM.target/span을 text 내에서 매칭.
 ```
 
 ## 4. 화면 상태 enum
@@ -95,4 +93,5 @@ screenState =
 
 - `SummaryVM`/`AnchorVM`/`TranslationVM` 필드명·타입은 백엔드 `models.py`(SummaryDraft·Anchor·TranslationDraft, SEC-9 `to_dict` 화이트리스트)와 **정확히 일치**시킨다.
 - `meta`/`cached`는 백엔드 응답 그대로. 토큰·비용·캐시키·모델ID는 VM에 싣지 않는다(BR-SF-16).
-- ⚠️ `FullTextVM` + `getFullText`는 **백엔드 신규 계약**(Q5=C) — 프론트 VM은 제안형이며, 백엔드 전문 반환 API 확정 시 1:1 재정합 필요(계획서 §6).
+- ⚠️ 전문(`text`) + `getFullText`는 **백엔드 신규 계약**(Q5=C) — 제안형이며, 백엔드 전문 반환 API 확정 시 1:1 재정합 필요(계획서 §6).
+- **재정합(2026-06-19)**: 응답 `meta`는 생성 타입 `SummaryMeta`(`{ source?, fallback? }`)다(문서의 `ResultMeta` 표기를 정정). `FullTextOutcome.page`는 `FullTextOkDTO.text`를 그대로 실어 `text: string`이다(별도 `FullTextVM` 래퍼 없음). 둘 다 `shared/dtos` 파생 코드(SSOT)에 맞춤.

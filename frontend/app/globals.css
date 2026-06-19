@@ -40,6 +40,9 @@ body {
   padding: 0;
   background: var(--color-bg);
   color: var(--color-text);
+  /* Scroll stays; hide the scrollbar chrome app-wide (phone-first). */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   font-family:
     system-ui,
     -apple-system,
@@ -58,4 +61,11 @@ a {
 :focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }

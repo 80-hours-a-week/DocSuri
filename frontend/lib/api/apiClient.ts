@@ -29,6 +29,7 @@ import type {
   LibraryPageDTO,
   HistoryPageDTO,
 } from '@/types/generated';
+import type { PaperMetaVM } from '@/types/paperMeta';
 
 export interface ApiClientOptions {
   timeoutMs?: number;
@@ -88,6 +89,20 @@ export class ApiClient {
     if (res.status === 200 || res.status === 400) {
       return classifySummarizeResponse(res.body);
     }
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+  }
+
+  /** Paper header metadata (title/authors/abstract) for the detail route. PROVISIONAL
+   * contract — there is no backend metadata endpoint yet; returns null on 404 so the
+   * detail page degrades to the arXiv id + link-out. */
+  async getPaperMeta(arxivId: string): Promise<PaperMetaVM | null> {
+    const res = await this.request({
+      method: 'GET',
+      path: `/api/papers/${encodeURIComponent(arxivId)}`,
+      idempotent: true,
+    });
+    if (res.status === 200) return res.body as PaperMetaVM;
+    if (res.status === 404) return null;
     throw normalizeHttpError(res.status, pick(res.body, 'message'));
   }
 

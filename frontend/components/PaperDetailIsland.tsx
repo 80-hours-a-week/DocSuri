@@ -1,18 +1,16 @@
 'use client';
 
 // PaperDetailIsland (P3·P5) — the client island inside the SSR /paper/[id] shell.
-// Owns activeView/persona/anchor, runs useSummarize, maps the outcome union to the
-// rendered surface (BR-SF-14, no infinite loading). Anchor click opens the
-// full-text viewer + highlight (Q5=C). real-first: real BFF transport, no mock.
-import { useEffect, useState } from 'react';
-import type { AnchorVM, Persona, SummarizeRequest, SummarizeScope } from '@/types/generated';
-import { useSummarize } from '@/lib/useSummarize';
-import { SummaryActions, type DetailView } from './SummaryActions';
-import { PersonaToggle } from './PersonaToggle';
-import { SummaryView } from './SummaryView';
-import { TranslationView } from './TranslationView';
+// Owns everything under the DocSuri header: a sticky 요약/초록번역/전문번역 action bar
+// (each opens SummaryModal at the matching tab), the paper metadata (title/authors/
+// abstract), and the normalized S3 full-text body. Choosing a summary anchor closes
+// the modal and highlights the span in the on-page body (Q5=C). real-first: real BFF
+// transport, mock in dev (NEXT_PUBLIC_… unset).
+import { useState } from 'react';
+import type { AnchorVM } from '@/types/generated';
+import { usePaperMeta } from '@/lib/usePaperMeta';
 import { FullTextViewer } from './FullTextViewer';
-import { StateView } from './StateView';
+import { SummaryModal, type DetailView } from './SummaryModal';
 import styles from './PaperDetailIsland.module.css';
 
 interface PaperDetailIslandProps {
@@ -21,88 +19,76 @@ interface PaperDetailIslandProps {
   arxivUrl?: string;
 }
 
-function buildRequest(
-  view: DetailView,
-  persona: Persona,
-  paperId: string,
-  version: number,
-): SummarizeRequest {
-  if (view === 'summary') return { task: 'summary', paperId, version, persona };
-  const scope: SummarizeScope = view === 'fullTrans' ? 'full' : 'abstract';
-  return { task: 'translate', paperId, version, scope };
-}
-
-const LOADING_TITLE: Record<DetailView, string> = {
-  summary: '요약 생성 중…',
-  abstractTrans: '초록 번역 중…',
-  fullTrans: '전문 번역 중… (시간이 걸릴 수 있어요)',
-};
+const ACTIONS: { view: DetailView; label: string }[] = [
+  { view: 'summary', label: '요약' },
+  { view: 'abstractTrans', label: '초록 번역' },
+  { view: 'fullTrans', label: '전문 번역' },
+];
 
 export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIslandProps) {
-  const [view, setView] = useState<DetailView>('summary');
-  const [persona, setPersona] = useState<Persona>('expert');
   const [anchor, setAnchor] = useState<AnchorVM | null>(null);
-  const { state, run } = useSummarize();
-
-  // Re-request on view/persona change; the backend cache returns cached results
-  // instantly (BR-SF-5/6), so switching is cheap.
-  useEffect(() => {
-    setAnchor(null);
-    void run(buildRequest(view, persona, paperId, version));
-  }, [view, persona, paperId, version, run]);
-
-  const retry = () => void run(buildRequest(view, persona, paperId, version));
-
-  function renderResult() {
-    if (state.status === 'idle' || state.status === 'loading') {
-      return <StateView kind="loading" title={LOADING_TITLE[view]} message="잠시만 기다려 주세요." />;
-    }
-    const { outcome } = state;
-    switch (outcome.kind) {
-      case 'summary':
-        return <SummaryView summary={outcome.summary} cached={outcome.cached} onAnchor={setAnchor} />;
-      case 'translation':
-        return (
-          <TranslationView
-            translation={outcome.translation}
-            scope={view === 'fullTrans' ? 'full' : 'abstract'}
-            cached={outcome.cached}
-          />
-        );
-      case 'abstain':
-        return <StateView kind="abstain" message="근거가 부족해 요약/번역을 보류했어요." />;
-      case 'degraded':
-        return <StateView kind="degraded" message={outcome.message} onRetry={retry} />;
-      case 'sourceUnavailable':
-        return <StateView kind="sourceUnavailable" />;
-      case 'invalid':
-        return <StateView kind="invalid" message={outcome.message} />;
-      case 'error':
-        return <StateView kind="error" message={outcome.message} onRetry={retry} />;
-    }
-  }
+  const [modalView, setModalView] = useState<DetailView | null>(null);
+  const meta = usePaperMeta(paperId);
 
   return (
     <div className={styles.root}>
-      <div className={styles.actionsBar}>
-        <SummaryActions active={view} onSelect={setView} />
-        {view === 'summary' ? (
-          <section className={styles.personaSection} aria-label="요약 수준">
-            <span className={styles.personaLabel}>요약 수준</span>
-            <PersonaToggle value={persona} onChange={setPersona} />
-          </section>
-        ) : null}
+      {/* Sticky action bar directly under the DocSuri header — each button opens the
+          summary/translation modal at its tab. */}
+      <div className={styles.actionsBar} role="group" aria-label="요약/번역 액션">
+        {ACTIONS.map((a) => (
+          <button
+            key={a.view}
+            type="button"
+            className={styles.action}
+            onClick={() => setModalView(a.view)}
+            data-testid={`open-${a.view}`}
+          >
+            {a.label}
+          </button>
+        ))}
       </div>
 
-      <div className={styles.result} data-testid="detail-result">
-        {renderResult()}
-      </div>
+      {meta.status === 'done' && meta.meta ? (
+        <header className={styles.meta} data-testid="paper-meta">
+          <h1 className={styles.title} data-testid="paper-title">
+            {meta.meta.title}
+          </h1>
+          <p className={styles.authors} data-testid="paper-authors">
+            {meta.meta.authors.join(', ')}
+            {meta.meta.year ? <span className={styles.year}> · {meta.meta.year}</span> : null}
+          </p>
+          <p className={styles.abstract} data-testid="paper-abstract">
+            {meta.meta.abstract}
+          </p>
+          <p className={styles.idline}>
+            <span>arXiv:{paperId}</span>
+            {arxivUrl ? (
+              <a className={styles.link} href={arxivUrl} target="_blank" rel="noopener noreferrer">
+                arXiv에서 원문 보기
+              </a>
+            ) : null}
+          </p>
+        </header>
+      ) : meta.status === 'loading' ? (
+        <p className={styles.metaLoading} data-testid="paper-meta-loading">
+          논문 정보를 불러오는 중…
+        </p>
+      ) : null}
 
-      {anchor ? (
-        <section className={styles.viewer} aria-label="원문 출처 보기">
-          <h3 className={styles.viewerTitle}>출처: {anchor.label}</h3>
-          <FullTextViewer paperId={paperId} version={version} anchor={anchor} arxivUrl={arxivUrl} />
-        </section>
+      {/* Body-first: the normalized S3 full text, with anchor highlight when set. */}
+      <section className={styles.bodySection} aria-label="원문 전문">
+        <h2 className={styles.bodyHeading}>원문 전문</h2>
+        <FullTextViewer paperId={paperId} version={version} anchor={anchor} arxivUrl={arxivUrl} />
+      </section>
+
+      {modalView ? (
+        <SummaryModal
+          paperId={paperId}
+          version={version}
+          view={modalView}
+          onClose={() => setModalView(null)}
+          onAnchor={setAnchor}
+        />
       ) : null}
     </div>
   );

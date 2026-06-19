@@ -10,15 +10,15 @@
   padding: 0 0.75rem;
   font-size: 0.8125rem;
   border-radius: 0.375rem;
-  border: 1px solid #2563eb;
-  background: #2563eb;
-  color: #fff;
+  border: 1px solid var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
   cursor: pointer;
 }
 
 .loading {
   font-size: 0.8125rem;
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .result {
@@ -32,18 +32,10 @@
   overflow: hidden;
   font-size: 0.875rem;
   line-height: 1.55;
-  color: #111827;
+  color: var(--color-text);
 }
 
 .note {
   font-size: 0.8125rem;
-  color: #6b7280;
-}
-
-.detail {
-  font-size: 0.8125rem;
-  color: #2563eb;
-  min-height: 2.25rem;
-  display: inline-flex;
-  align-items: center;
+  color: var(--color-text-muted);
 }

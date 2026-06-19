@@ -1,9 +1,10 @@
 'use client';
 
-// SummaryAction (Q1·Q2, card inline) — the card's [요약] action. Tapping requests a
-// summary and shows the tldr (3-line) inline (a quick peek without navigating; the
-// card title links to the full detail route). Heavy/full actions live on the detail
-// page, not the card (BR-SF-1). External text escaped by React (BR-SF-9).
+// SummaryAction (Q1·Q2, card inline) — the card's [요약] action. Tapping requests an
+// expert summary and shows the tldr (3-line) inline (a quick peek without navigating;
+// the card title links to the full detail route). Heavy/full actions (translation,
+// full text, persona switch) live on the detail page, not the card (BR-SF-1).
+// External text escaped by React (BR-SF-9).
 import { useSummarize } from '@/lib/useSummarize';
 import styles from './SummaryAction.module.css';
 
