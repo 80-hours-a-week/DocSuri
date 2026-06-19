@@ -1,0 +1,81 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.cached {
+  align-self: flex-start;
+  margin: 0;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  color: #2563eb;
+  background: #eff6ff;
+  border-radius: 999px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.label {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.body {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.list {
+  margin: 0;
+  padding-left: 1.125rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--color-text);
+}
+
+.repLabel {
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-right: 0.25rem;
+}
+
+.anchors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: 0.125rem;
+}
+
+.anchor {
+  font-size: 0.75rem;
+  padding: 0.1875rem 0.5rem;
+  min-height: 1.75rem;
+  color: #374151;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.anchor:disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+
+.anchor:not(:disabled):hover {
+  background: #e5e7eb;
+}

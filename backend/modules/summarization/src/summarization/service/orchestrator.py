@@ -142,11 +142,17 @@ class SummarizationOrchestrationService:
                 if attempt == 2:
                     return AbstainDTO(reason="empty_translation")
                 continue
-            result = self._assembler.assemble_translation(draft, glossary)
+            result = self._assembler.assemble_translation(draft, glossary, source)
             self._store.put(key, result.to_dict())
             self._emit("u7.translate.ok", 1.0, request)
             return result
         return AbstainDTO(reason="empty_translation")
+
+    # --- full-text viewer (Q5=C) ---------------------------------------------
+    def full_text(self, paper_id: str, version: int) -> str | None:
+        """Normalized full text for the in-app viewer. None → unavailable. OA license
+        gating is applied at the router (the source port has no license signal)."""
+        return self._source.fetch_full_text(paper_id, version)
 
     # --- helpers -------------------------------------------------------------
     def _glossary_version(self, user_id: str) -> int:

@@ -10,11 +10,15 @@ from __future__ import annotations
 
 from typing import Any
 
+from fastapi import APIRouter, Body, Request
+from fastapi.responses import JSONResponse
+
 from ..api.gateway_seam import run_summarization
 from ..domain.models import (
     AuthSession,
     Persona,
     RequestContext,
+    Scope,
     SummaryRequest,
     TargetLang,
     Task,
@@ -22,17 +26,14 @@ from ..domain.models import (
 from ..service.orchestrator import SummarizationOrchestrationService
 
 
-def build_router(orchestrator: SummarizationOrchestrationService) -> Any:
-    from fastapi import APIRouter, Body, Request
-    from fastapi.responses import JSONResponse
-
+def build_router(
+    orchestrator: SummarizationOrchestrationService, *, fulltext_enabled: bool = False
+) -> Any:
     router = APIRouter()
 
     @router.post("/api/summarize")
     def summarize(request: Request, payload: dict = Body(...)) -> Any:  # noqa: B008
-        principal = getattr(request.state, "principal", None)
-        user_id = getattr(principal, "user_id", None) or (principal or {}).get("user_id") \
-            if principal else None
+        user_id = _principal_user_id(request)
         if not user_id:
             return JSONResponse({"status": "unauthorized"}, status_code=401)
 
@@ -41,13 +42,42 @@ def build_router(orchestrator: SummarizationOrchestrationService) -> Any:
             return JSONResponse({"status": "validation_error"}, status_code=400)
 
         ctx = RequestContext(
-            auth_session=AuthSession(user_id=str(user_id)),
+            auth_session=AuthSession(user_id=user_id),
             request_id=request.headers.get("x-request-id", ""),
         )
         response = run_summarization(orchestrator, parsed, ctx)
         return JSONResponse(response.to_dict())
 
+    @router.get("/api/papers/{paper_id}/full-text")
+    def full_text(request: Request, paper_id: str) -> Any:
+        """In-app full-text viewer source (Q5=C). OA-license-gated: disabled by default
+        (``license_unavailable`` → arXiv link-out) until a license signal is wired."""
+        user_id = _principal_user_id(request)
+        if not user_id:
+            return JSONResponse({"status": "unauthorized"}, status_code=401)
+        if not fulltext_enabled:
+            return JSONResponse({"status": "license_unavailable"})
+        try:
+            version = int(request.query_params.get("version", "1"))
+        except (TypeError, ValueError):
+            version = 1
+        text = orchestrator.full_text(paper_id, version)
+        if text is None:
+            return JSONResponse({"status": "source_unavailable"})
+        return JSONResponse({"status": "ok", "text": text})
+
     return router
+
+
+def _principal_user_id(request: Any) -> str | None:
+    """Extract the gateway-injected principal's user id (SEC-8). Trusts the gateway."""
+    principal = getattr(request.state, "principal", None)
+    if not principal:
+        return None
+    uid = getattr(principal, "user_id", None)
+    if uid is None and isinstance(principal, dict):
+        uid = principal.get("user_id")
+    return str(uid) if uid else None
 
 
 def _parse_request(payload: dict) -> SummaryRequest | None:
@@ -61,6 +91,7 @@ def _parse_request(payload: dict) -> SummaryRequest | None:
         return None
     persona = _enum_or_default(Persona, payload.get("persona"), Persona.EXPERT)
     lang = _enum_or_default(TargetLang, payload.get("targetLang"), TargetLang.KO)
+    scope = _enum_or_default(Scope, payload.get("scope"), Scope.ABSTRACT)
     abstract = payload.get("abstract")
     return SummaryRequest(
         paper_id=paper_id,
@@ -68,6 +99,7 @@ def _parse_request(payload: dict) -> SummaryRequest | None:
         task=task,
         target_lang=lang,
         persona=persona,
+        scope=scope,
         abstract=str(abstract) if abstract else None,
     )
 

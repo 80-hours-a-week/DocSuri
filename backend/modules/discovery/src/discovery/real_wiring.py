@@ -23,6 +23,7 @@ from .adapters.event_publisher import EventBridgeEventPublisher
 from .adapters.opensearch_index import (
     OpenSearchClientFactory,
     OpenSearchLexicalIndexAdapter,
+    OpenSearchPaperLookupAdapter,
     OpenSearchVectorStoreAdapter,
 )
 from .adapters.settings import DiscoverySettings
@@ -36,12 +37,14 @@ from .domain.validator import QueryValidator
 from .mocks.port_stubs import InMemoryEventPublisher, NoopObservabilityHub, StubCostGuard
 from .ports.search_ports import EventPublisher
 from .service.orchestrator import SearchOrchestrationService
+from .service.paper_metadata import PaperMetadataService
 
 
 @dataclass(frozen=True, slots=True)
 class RealBundle:
     orchestrator: SearchOrchestrationService
     event_publisher: EventPublisher
+    paper_service: PaperMetadataService
 
 
 def build_real_orchestrator(
@@ -95,4 +98,9 @@ def build_real_orchestrator(
         observability=observability or NoopObservabilityHub(),
         event_publisher=publisher,
     )
-    return RealBundle(orchestrator=orchestrator, event_publisher=publisher)
+    paper_service = PaperMetadataService(
+        OpenSearchPaperLookupAdapter(client, settings.opensearch_index)
+    )
+    return RealBundle(
+        orchestrator=orchestrator, event_publisher=publisher, paper_service=paper_service
+    )
