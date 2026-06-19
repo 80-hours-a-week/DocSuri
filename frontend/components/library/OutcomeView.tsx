@@ -2,7 +2,12 @@
 
 import { ResultList } from '../ResultList';
 import { StateView } from '../StateView';
+import { SummaryAction } from '../SummaryAction';
 import type { SearchOutcome } from '@/lib/api';
+import type { ResultCardVM } from '@/types/generated';
+
+// Per-card [요약] action on library rerun results too (Q2=A).
+const renderSummaryAction = (card: ResultCardVM) => <SummaryAction paperId={card.arxivId} />;
 
 // OutcomeView (US-D7) — renders a classified SearchOutcome (used by saved-search
 // and history rerun). Mirrors the search state machine's terminal branches so
@@ -10,9 +15,9 @@ import type { SearchOutcome } from '@/lib/api';
 export function OutcomeView({ outcome }: { outcome: SearchOutcome }) {
   switch (outcome.kind) {
     case 'page':
-      return <ResultList cards={outcome.cards} />;
+      return <ResultList cards={outcome.cards} renderAction={renderSummaryAction} />;
     case 'degraded':
-      return <ResultList cards={outcome.cards} degraded />;
+      return <ResultList cards={outcome.cards} degraded renderAction={renderSummaryAction} />;
     case 'empty':
       return <StateView kind="empty" />;
     case 'abstain':

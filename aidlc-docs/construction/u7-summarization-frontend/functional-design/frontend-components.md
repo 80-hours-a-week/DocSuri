@@ -3,7 +3,7 @@
 **단계**: CONSTRUCTION → Functional Design · **유닛**: U7 Summarization Frontend 슬라이스 · **일자**: 2026-06-19
 **스코프**: 단일 논문에 대한 온디맨드 **요약 / 초록 번역 / 전문 번역** 클라이언트 표면 + **출처 보기(전문 하이라이트 뷰어, Q5=C)**. 진입 = 검색·라이브러리 공용 카드(US-S1~S5).
 **근거**: 계획서 `construction/plans/u7-summarization-frontend-functional-design-plan.md`(§확정 결정 8문) · 백엔드 계약 `backend/modules/summarization/`(`POST /api/summarize`) · 프론트 자산 `frontend/lib/api/*`(ApiClient·classify union)·`StateView`·`ResultCard` · SSOT `inception/requirements/summarization-translation-pipeline.md`(2026-06-19 개정).
-**원칙**: 기술 무관 — props/state는 **의미적 계약**. 프레임워크/SSR/transport(mock vs BFF)·타입생성·성능 수치는 NFR.
+**원칙**: 기술 무관 — props/state는 **의미적 계약**. 프레임워크/SSR/transport(BFF 실 경로 — real-first, mock 없음)·타입생성·성능 수치는 NFR.
 
 ---
 

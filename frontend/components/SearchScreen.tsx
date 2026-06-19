@@ -7,12 +7,18 @@ import { StateView, type StateViewKind } from './StateView';
 import { ResultList } from './ResultList';
 import { SaveToLibraryButton } from './SaveToLibraryButton';
 import { SaveSearchButton } from './SaveSearchButton';
+import { SummaryAction } from './SummaryAction';
 import { getApiClient, UserFacingError, type SearchOutcome } from '@/lib/api';
 import { validateQuery, MAX_QUERY_LENGTH } from '@/lib/api/validate';
 import type { ResultCardVM } from '@/types/generated';
 
-// Per-card "담기" action (US-L2) attached to live results.
-const renderSaveAction = (card: ResultCardVM) => <SaveToLibraryButton card={card} />;
+// Per-card actions: U7 [요약] (inline tldr + 상세히 보기) + U4 "담기" (US-L2/S1, Q2=A).
+const renderCardActions = (card: ResultCardVM) => (
+  <>
+    <SummaryAction paperId={card.arxivId} />
+    <SaveToLibraryButton card={card} />
+  </>
+);
 
 // SearchScreen (LC-1/6, US-H1/D1, FR-1/11) — the hero surface. Owns the search
 // state machine and branches the SearchResponse union. Single request/response
@@ -121,9 +127,9 @@ function renderState(state: ScreenState, onRetry: () => void) {
   const { outcome } = state;
   switch (outcome.kind) {
     case 'page':
-      return <ResultList cards={outcome.cards} renderAction={renderSaveAction} />;
+      return <ResultList cards={outcome.cards} renderAction={renderCardActions} />;
     case 'degraded':
-      return <ResultList cards={outcome.cards} degraded renderAction={renderSaveAction} />;
+      return <ResultList cards={outcome.cards} degraded renderAction={renderCardActions} />;
     case 'empty':
       return <StateView kind="empty" />;
     case 'abstain':

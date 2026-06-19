@@ -6,8 +6,16 @@
 import type { Transport, TransportRequest, TransportResponse } from './transport';
 import { UserFacingError, normalizeHttpError } from './errors';
 import { classifySearchResponse, type SearchOutcome } from './classify';
+import {
+  classifySummarizeResponse,
+  classifyFullTextResponse,
+  type SummarizeOutcome,
+  type FullTextOutcome,
+} from './classifySummarize';
 import { recordPath } from '../observability';
 import type {
+  SummarizeRequest,
+  FullTextRequest,
   SearchRequest,
   SignupRequest,
   SignupResult,
@@ -62,6 +70,36 @@ export class ApiClient {
     const res = await this.request({ method: 'POST', path: '/api/search', body, idempotent: true });
     if (res.status === 200 || res.status === 400) {
       return classifySearchResponse(res.body);
+    }
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+  }
+
+  // ---- summarization slice (US-S1/S2/S3/S5, FR-12~14) ------------------
+
+  /** Summarize or translate a single paper; classified terminal outcome (BR-SF-14).
+   * task=summary takes persona; task=translate takes scope (abstract|full). */
+  async summarize(req: SummarizeRequest): Promise<SummarizeOutcome> {
+    const res = await this.request({
+      method: 'POST',
+      path: '/api/summarize',
+      body: req,
+      idempotent: true,
+    });
+    if (res.status === 200 || res.status === 400) {
+      return classifySummarizeResponse(res.body);
+    }
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+  }
+
+  /** Normalized full text for the in-app viewer (Q5=C; OA license-gated). PROVISIONAL
+   * contract — re-align when the backend full-text-return API is finalized (plan §6). */
+  async getFullText(req: FullTextRequest): Promise<FullTextOutcome> {
+    const path = `/api/papers/${encodeURIComponent(req.paperId)}/full-text?version=${encodeURIComponent(
+      String(req.version),
+    )}`;
+    const res = await this.request({ method: 'GET', path, idempotent: true });
+    if (res.status === 200 || res.status === 400) {
+      return classifyFullTextResponse(res.body);
     }
     throw normalizeHttpError(res.status, pick(res.body, 'message'));
   }

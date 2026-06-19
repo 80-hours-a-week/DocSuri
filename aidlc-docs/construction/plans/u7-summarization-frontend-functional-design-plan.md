@@ -2,7 +2,7 @@
 
 **단계**: CONSTRUCTION → Functional Design (유닛별 루프) · **유닛**: U7 Summarization **Frontend** 슬라이스 · **트랙**: 프론트(U5 코드베이스 `frontend/`) ⟶ U7 백엔드 API 소비 · **일자**: 2026-06-19
 **근거(SSOT)**: `aidlc-docs/inception/` — `user-stories/stories.md`(에픽 6 US-S1~S5: 구조화 요약·한국어 번역·출처보기/기권·개인화·온디맨드), `requirements/requirements.md`(FR-12~14·NFR-P2·QT-5) · **백엔드 계약(동결)**: `backend/modules/summarization/`(`api/router.py` `POST /api/summarize`, `domain/models.py` 응답 union: `ok`+§3 6필드+anchors / `abstain` / `cost_degraded` / `source_unavailable`) · **프론트 컨벤션**: `frontend/CLAUDE.md`(모바일 우선·발명 금지·XSS/안전링크), `construction/u5-frontend/functional-design/frontend-components.md`(ApiClient 단일 진입 · `screenState` union · StateView)
-**원칙**: 이 단계는 **기술 무관(technology-agnostic)** — 컴포넌트 계층·props/state 의미 계약·인터랙션 흐름·폼/상태 규칙·API 통합점만 설계한다. 프레임워크/SSR/transport(mock vs BFF)·타입생성·번들·성능 수치는 **NFR Requirements/Design**에서 확정.
+**원칙**: 이 단계는 **기술 무관(technology-agnostic)** — 컴포넌트 계층·props/state 의미 계약·인터랙션 흐름·폼/상태 규칙·API 통합점만 설계한다. 프레임워크/SSR/transport(BFF 실 경로 — real-first, mock 없음)·타입생성·번들·성능 수치는 **NFR Requirements/Design**에서 확정.
 **범위 명확화(플래그)**: U7은 백엔드 API까지만 설계·구현됐고 **요약/번역 클라이언트 화면은 명세된 적이 없다**(U5 FD는 히어로+검색+라이브러리 자리만, 요약/번역 미포함). 본 FD가 그 화면을 **최초 정의**한다 — `frontend/CLAUDE.md` "문서에 없으면 발명 말고 먼저 플래그" 원칙에 따라 §4 게이트로 사용자 결정을 받는다.
 
 **✅ 확정 결정 (2026-06-19, 오너) — 전 8문 확정. 백엔드 SSOT `inception/requirements/summarization-translation-pipeline.md` 2026-06-19 개정과 정합:**
@@ -34,7 +34,7 @@
     - `{ status:"abstain", reason }` · `{ status:"cost_degraded", message }` · `{ status:"source_unavailable", reason }`
 - **재사용 프론트 자산**: `ResultCard`(action 슬롯 보유) · `StateView`/`StateView.module.css`(비-해피 상태) · `lib/api/*`(ApiClient 단일 진입 + transport 시임 + 검증) · `screenState` union 패턴(idle|loading|page|empty|abstain|degraded|invalid|error) · 모바일 우선 CSS Module.
 - **신규 정의 대상(본 FD)**: 진입 액션(요약/번역 트리거) · §3 구조화 요약 렌더 컴포넌트 · 앵커("출처 보기") 표시 · persona 전환 UX · 번역 뷰 · 응답 union → screenState 매핑 · 신규 `ApiClient.summarize()` 메서드 계약. (실제 배치·범위는 §4 결정에 종속.)
-- **경계(범위 밖)**: transport 구현(mock/BFF), SSR 전략, 타입생성, 성능 예산 = NFR. 백엔드 마운트(app-shell `wiring.py`)·IAM = 인프라 last-mile(별도). 전문 하이라이트 뷰어 신설 여부 = Q5.
+- **경계(범위 밖)**: transport 구현(BFF 실 경로 — real-first, mock 없음), SSR 전략, 타입생성, 성능 예산 = NFR. 백엔드 마운트(app-shell `wiring.py`)·IAM = 인프라 last-mile(별도). 전문 하이라이트 뷰어 신설 여부 = Q5.
 - **핵심 트레이스**: FR-12, FR-13, FR-14, NFR-P2, QT-5(근거화 표면), US-S1..S5. 보안: XSS(논문 텍스트 렌더), 안전 링크(arXiv), 토큰 비노출(`frontend/CLAUDE.md` Part 2-B).
 
 ---
@@ -172,7 +172,7 @@ X) 기타 (please describe after [Answer]: tag below)
 ## 5. 진행 메모
 
 - 본 게이트 답변 → §2 산출물 생성 → FD 완료 메시지(REVIEW REQUIRED) → 승인 → NFR Requirements(transport·SSR·타입생성·성능 예산).
-- 백엔드 app-shell 마운트·IAM은 본 FD 범위 밖(인프라 last-mile). 프론트는 transport 시임(mock/BFF)으로 백엔드 마운트와 **독립적으로** 설계·테스트 가능(구체 결정은 NFR).
+- 백엔드 app-shell 마운트·IAM은 본 FD 범위 밖(인프라 last-mile). 프론트는 **실 BFF transport(real-first, mock 없음)** — 기존 엔드포인트(요약·초록번역)는 즉시 실 연동, 신규 계약(scope=full·getFullText)은 백엔드 §6 통합 의존.
 
 ---
 
