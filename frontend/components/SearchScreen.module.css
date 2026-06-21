@@ -21,10 +21,17 @@
   gap: 8px;
 }
 
+.inputWrap {
+  position: relative;
+  flex: 1;
+  display: flex;
+}
+
 .input {
   flex: 1;
   min-height: 48px;
-  padding: 0 14px;
+  /* right padding leaves room for the clear (✕) button */
+  padding: 0 44px 0 14px;
   border: 1px solid var(--color-border);
   border-radius: 12px;
   background: var(--color-surface);
@@ -33,6 +40,36 @@
 }
 
 .input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.clear {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* generous touch target (mobile-first) */
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.clear:hover {
+  color: var(--color-text);
+}
+
+.clear:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 1px;
 }

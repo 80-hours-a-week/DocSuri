@@ -16,9 +16,15 @@
   color: var(--color-text-muted);
 }
 
+.inputWrap {
+  position: relative;
+}
+
 .input {
+  width: 100%;
   min-height: 48px;
-  padding: 0 14px;
+  /* right padding leaves room for the clear/reveal adornment */
+  padding: 0 56px 0 14px;
   border: 1px solid var(--color-border);
   border-radius: 12px;
   background: var(--color-surface);
@@ -27,6 +33,36 @@
 }
 
 .input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.adornment {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* generous touch target (mobile-first) */
+  min-width: 36px;
+  height: 36px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.adornment:hover {
+  color: var(--color-text);
+}
+
+.adornment:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 1px;
 }
