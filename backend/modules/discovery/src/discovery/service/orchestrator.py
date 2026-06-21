@@ -4,7 +4,7 @@ The synchronous pipeline is SPLIT at the grounding seam so this U2 domain core N
 ``enforce`` (INV-1):
 
   * ``plan_and_retrieve`` — validate → derive degrade → expand (embedding fallback) →
-    retrieve → (no-match → abstain terminal) → rank → shape grounding input.
+    retrieve → (no-match → empty-page terminal) → rank → shape grounding input.
   * ``finalize`` — map the U6 verdict → assemble → publish SearchExecuted (non-blocking).
 
 The ``enforce`` call BETWEEN them is performed by the gateway seam (``discovery.api``,

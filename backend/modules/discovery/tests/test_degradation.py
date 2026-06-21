@@ -1,4 +1,4 @@
-"""Degrade matrix (BR-11/Q6): RERANK_OFF banner, LEXICAL_ONLY fallback, KO lexical-only abstain."""
+"""Degrade matrix (BR-11/Q6): RERANK_OFF banner, LEXICAL_ONLY fallback, KO no-match empty page."""
 
 from __future__ import annotations
 

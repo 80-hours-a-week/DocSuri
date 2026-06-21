@@ -35,6 +35,14 @@ def test_empty_grounded_degraded_is_empty_page_no_banner() -> None:
     assert response.root.meta.degraded is False
 
 
+def test_no_match_degraded_is_empty_page_no_banner() -> None:
+    # Same invariant for a no-match under an active degrade mode: empty page, no banner.
+    response = _assembler.assemble(NoMatchResult(), DegradeMode.LEXICAL_ONLY)
+    assert isinstance(response.root, SearchResultPageDTO)
+    assert response.root.meta.resultCount == 0
+    assert response.root.meta.degraded is False
+
+
 def test_grounding_refusal_is_abstain() -> None:
     response = _assembler.assemble(AbstainResult(reason="no_grounded_results"), DegradeMode.NORMAL)
     assert isinstance(response.root, AbstainDTO)

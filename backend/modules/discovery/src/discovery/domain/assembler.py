@@ -51,6 +51,8 @@ class ResultAssembler:
         # No-match, or a grounding pass that filtered out every candidate: an explicit empty
         # page (resultCount=0), NOT an abstain (BR-9 / U5 B3-a: 기권 ≠ 빈 결과). The empty page
         # carries no degrade banner — there are no cards to qualify.
+        # Order matters: NoMatchResult is checked first so ``.items`` is only read on the
+        # remaining GroundedResults branch (NoMatchResult has no ``items``).
         if isinstance(result, NoMatchResult) or not result.items:
             meta = ResultMeta(resultCount=0, degraded=False, degradationMode=None)
             return SearchResponse(SearchResultPageDTO(cards=[], meta=meta))
