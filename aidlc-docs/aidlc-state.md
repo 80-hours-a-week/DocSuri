@@ -153,3 +153,63 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 ## 비고
 - 이번 사이클은 클린 재시작이다. 폐기된 사이클 1(U1·U2·U4 데모)은 AWS Bedrock(Claude Haiku), Amazon Comprehend, S3 Vectors 기반 Bedrock Knowledge Base, Amplify 호스팅, Python 백엔드, Next.js 프런트엔드를 사용했다. 그중 어느 선택도 기본 계승하지 않으며 선행 사례(prior art)로만 참조한다.
 - 브랜치: `develop` (4 트랙 PR + 후속 크리티컬 패스 ①~⑦ PR 전부 머지 완료). **2026-06-18 기준: CONSTRUCTION 코드·인프라 종결·AWS 프로덕션 배포 완료(§크리티컬 패스 종결). 잔여 = 문서 정합·루트 `tests/` 린트 사각(F401 9건)·Operations 런북 결정.**
+## U8 Citation Graph — NFR Requirements Complete / NFR Design In Progress
+
+- Date: 2026-06-21
+- Unit: U8 Citation Graph
+- Completed: NFR Requirements answers Q1~Q12 all set to recommended option A.
+- Completed artifacts:
+  - `aidlc-docs/construction/u8-citation-graph/nfr-requirements/nfr-requirements.md`
+  - `aidlc-docs/construction/u8-citation-graph/nfr-requirements/tech-stack-decisions.md`
+- Next stage entered:
+  - `aidlc-docs/construction/plans/u8-citation-graph-nfr-design-plan.md`
+- Current gate: U8 NFR Design questions Q1~Q5 awaiting answers.
+- Code/FE generated: no.
+
+## U8 Citation Graph — NFR Design Complete / Infrastructure Design In Progress
+
+- Date: 2026-06-21
+- Unit: U8 Citation Graph
+- Completed: NFR Design answers Q1~Q5 all set to recommended option A.
+- Completed artifacts:
+  - `aidlc-docs/construction/u8-citation-graph/nfr-design/logical-components.md`
+  - `aidlc-docs/construction/u8-citation-graph/nfr-design/patterns.md`
+  - `aidlc-docs/construction/u8-citation-graph/nfr-design/runtime-architecture.md`
+  - `aidlc-docs/construction/u8-citation-graph/nfr-design/test-strategy.md`
+- Next stage entered:
+  - `aidlc-docs/construction/plans/u8-citation-graph-infrastructure-design-plan.md`
+- Current gate: U8 Infrastructure Design questions Q1~Q3 awaiting answers.
+- Code/FE generated: no.
+
+## U8 Citation Graph — Infrastructure Design Complete / Code Generation Plan Ready
+
+- Date: 2026-06-21
+- Unit: U8 Citation Graph
+- Completed: Infrastructure Design answers Q1~Q3 all set to recommended option A.
+- Completed artifacts:
+  - `aidlc-docs/construction/u8-citation-graph/infrastructure-design/infrastructure-components.md`
+  - `aidlc-docs/construction/u8-citation-graph/infrastructure-design/deployment-topology.md`
+  - `aidlc-docs/construction/u8-citation-graph/infrastructure-design/configuration.md`
+- Next gate:
+  - `aidlc-docs/construction/plans/u8-citation-graph-code-generation-plan.md`
+- Current gate: Code Generation approval question awaiting answer.
+- Code/FE generated: no.
+
+## U8 Citation Graph — Code Generation and Build/Test Complete
+
+- Date: 2026-06-21
+- Unit: U8 Citation Graph
+- Completed: Code Generation plan approved as option A.
+- Code generated:
+  - `backend/modules/citation_graph/__init__.py`
+  - `backend/modules/citation_graph/controller.py`
+  - `backend/wiring.py`
+  - `backend/tests/test_citation_graph.py`
+  - `backend/tests/test_app_shell.py`
+- Verification:
+  - `python -m pytest backend/tests/test_citation_graph.py backend/tests/test_app_shell.py -q` -> 15 passed
+  - `python -m pytest backend/tests -q` -> 33 passed, 1 skipped
+  - `python -m ruff check backend/modules/citation_graph backend/wiring.py backend/tests/test_citation_graph.py backend/tests/test_app_shell.py` -> pass
+  - `python -m compileall backend/modules/citation_graph backend/wiring.py` -> pass
+- FE generated: no.
+- Current gate: user review/approval, commit, or PR direction required.

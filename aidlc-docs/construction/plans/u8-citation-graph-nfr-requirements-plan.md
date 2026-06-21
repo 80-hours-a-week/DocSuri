@@ -23,12 +23,12 @@
 
 답변 확정 후 아래 산출물을 `aidlc-docs/construction/u8-citation-graph/nfr-requirements/`에 작성한다.
 
-- [ ] **nfr-requirements.md**
+- [x] **nfr-requirements.md**
   - NFR-P3 응답 목표 형태
   - provider 실패/쿼터 저하 요구사항
   - 보안/관측/비용 요구사항
   - QT-6 테스트 요구사항
-- [ ] **tech-stack-decisions.md**
+- [x] **tech-stack-decisions.md**
   - citation provider
   - snapshot cache/store
   - provider credential handling
@@ -50,7 +50,7 @@ C) OpenAlex 단일 provider로 시작한다.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q2 — Provider Credential
 provider API key가 필요한 경우 어디에서 읽을까요?
@@ -61,7 +61,7 @@ B) 설정 파일에 평문으로 둔다.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q3 — Snapshot Cache/Store
 7일 snapshot은 어디에 둘까요?
@@ -74,7 +74,7 @@ C) RDS 테이블에 저장한다.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q4 — Response Target
 NFR-P3 응답 목표를 어떻게 잡을까요?
@@ -85,7 +85,7 @@ B) 첫 provider 조회까지 P50 < 500ms로 잡는다.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q5 — Timeout/Retry
 provider 호출 실패 처리는 어떻게 할까요?
@@ -96,7 +96,7 @@ B) 성공할 때까지 여러 번 재시도한다.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q6 — Rate Limit / Quota
 provider rate limit은 어디서 관리할까요?
@@ -107,7 +107,7 @@ B) U8 내부에서만 관리한다.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q7 — Backend Integration
 U8 API runtime은 어디에 붙일까요?
@@ -118,7 +118,7 @@ B) 별도 ECS service로 분리한다.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q8 — Shared DTO
 U8 응답 DTO는 어떻게 관리할까요?
@@ -129,7 +129,7 @@ B) 지금 바로 shared DTO/schema를 만든다.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q9 — Observability
 U8 관측은 어디로 보낼까요?
@@ -140,7 +140,7 @@ B) U8 전용 로그/메트릭 파이프라인을 만든다.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q10 — Library Save Contract
 U4 Library 저장 메타 부족분은 어떻게 처리할까요?
@@ -151,7 +151,7 @@ B) 저장 전 U2 검색/card meta를 재조회한다.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q11 — Test Strategy
 U8 테스트 경계는 어떻게 잡을까요?
@@ -162,7 +162,7 @@ B) 모든 테스트가 실 provider를 호출한다.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ### Q12 — PBT Framework
 QT-6 PBT는 무엇을 쓸까요?
@@ -173,7 +173,7 @@ B) PBT 없이 예시 테스트만 둔다.
 
 X) 기타.
 
-[Answer]:
+[Answer]: A
 
 ---
 

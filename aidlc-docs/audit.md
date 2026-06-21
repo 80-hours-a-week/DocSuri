@@ -898,5 +898,29 @@
 **AI Response**: 사용자 진행 요청을 U8 Functional Design 승인 및 다음 단계 진행으로 처리. CONSTRUCTION per-unit 루프의 U8 NFR Requirements에 진입하여 `aidlc-docs/construction/plans/u8-citation-graph-nfr-requirements-plan.md` 작성. 질문 Q1~Q12는 citation provider, provider credential, Redis snapshot TTL, NFR-P3 응답 목표, timeout/retry, U6 rate/quota, backend FastAPI app-shell 통합, shared DTO 승격 시점, U6 관측, U4 저장 계약, 실 provider 테스트 경계, Hypothesis PBT 계승을 다룸. AI-DLC NFR Requirements 규칙상 `[Answer]:`가 모두 확정되기 전에는 `nfr-requirements.md`와 `tech-stack-decisions.md`를 생성하지 않음. 앱 코드·FE 미생성.
 **Context**: CONSTRUCTION — U8 NFR Requirements Step 1~4(계획+질문). 답변 대기. 다음(답변 확정 후): `aidlc-docs/construction/u8-citation-graph/nfr-requirements/` 산출물 생성 → 리뷰 게이트 → U8 NFR Design.
 
+## U8 NFR Requirements — 답변 확정·산출물 생성·NFR Design 진입
+
+**User Input(원문)**: "NFR Requirements 계획서 Q1~Q12는 모두 권장으로 하고, 다음 단계로 진행해 주세요."
+**AI Response**: U8 NFR Requirements 계획서 Q1~Q12를 모두 권장안 A로 확정하고 체크박스를 완료 처리. 산출물 `aidlc-docs/construction/u8-citation-graph/nfr-requirements/` 2문서 생성: `nfr-requirements.md`(성능, 복원력, 보안, 비용/쿼터, 관측성, QT-6 테스트 요구사항)와 `tech-stack-decisions.md`(Semantic Scholar 단일 provider, 기존 secrets/env, Redis 7일 TTL snapshot, 기존 FastAPI backend/U6 경로, backend-local DTO, U6 관측, fixture provider 테스트, Hypothesis PBT). 다음 단계로 `aidlc-docs/construction/plans/u8-citation-graph-nfr-design-plan.md` 작성. 앱 코드·FE 미생성.
+**Context**: CONSTRUCTION — U8 NFR Requirements 완료, U8 NFR Design Step 1~4(계획+질문) 진입. 답변 대기.
+
+## U8 NFR Design — 답변 확정·산출물 생성·Infrastructure Design 진입
+
+**User Input(원문)**: "다음 단계를 진행해 주세요."
+**AI Response**: U8 NFR Design 계획서 Q1~Q5를 모두 권장안 A로 확정하고 체크박스를 완료 처리. 산출물 `aidlc-docs/construction/u8-citation-graph/nfr-design/` 4문서 생성: `logical-components.md`, `patterns.md`, `runtime-architecture.md`, `test-strategy.md`. 결정 핵심은 기존 FastAPI backend/U6 경로, `GET /citation-tree` + `POST /citation-tree/save`, Semantic Scholar 2초 timeout+1 retry, Redis 7일 TTL, TreeBuilder 최종 50노드/depth2 강제, env-gated 실 provider 계약 테스트. 다음 단계로 `aidlc-docs/construction/plans/u8-citation-graph-infrastructure-design-plan.md` 작성. 앱 코드·FE 미생성.
+**Context**: CONSTRUCTION — U8 NFR Design 완료, U8 Infrastructure Design Step 1~4(계획+질문) 진입. 답변 대기.
+
+## U8 Infrastructure Design — 답변 확정·산출물 생성·Code Generation 계획 진입
+
+**User Input(원문)**: "전부 권장으로 확정하고 다음 단계를 진행해 주세요."
+**AI Response**: U8 Infrastructure Design 계획서 Q1~Q3를 모두 권장안 A로 확정하고 체크박스를 완료 처리. 산출물 `aidlc-docs/construction/u8-citation-graph/infrastructure-design/` 3문서 생성: `infrastructure-components.md`, `deployment-topology.md`, `configuration.md`. 결정 핵심은 `SEMANTIC_SCHOLAR_API_KEY`, `CITATION_GRAPH_ENABLED`, Redis prefix `citation_graph:v1:`, 기존 FastAPI backend/U6/Redis/U4 재사용, 신규 ECS/DB/S3/큐/graph DB 없음. 다음 단계로 `aidlc-docs/construction/plans/u8-citation-graph-code-generation-plan.md` 작성. 앱 코드·FE 미생성.
+**Context**: CONSTRUCTION — U8 Infrastructure Design 완료, U8 Code Generation 계획 승인 게이트 진입. 답변 대기.
+
+## U8 Code Generation — 코드 생성·검증 완료
+
+**User Input(원문)**: "제 개입이 필요한 단계 전까지 쭉 진행해 주세요."
+**AI Response**: U8 Code Generation 계획을 권장안 A 승인으로 처리하고 backend-only 구현 완료. 추가/수정: `backend/modules/citation_graph/` 모듈(`controller.py`, `__init__.py`), app-shell mount(`backend/wiring.py`), app-shell registry 테스트 갱신, `backend/tests/test_citation_graph.py`. 구현 범위: feature flag `CITATION_GRAPH_ENABLED`, 인증 필수, Semantic Scholar references provider, process-local snapshot store(문서상 Redis 교체 seam), bounded tree builder(depth<=2, visible nodes<=50), unresolved 분리, U4 library save gateway(arXiv ID 있는 노드만), U6 telemetry emit, env-gated 실 provider contract test stub. 검증: `.venv` 생성 후 backend test deps 설치, `python -m pytest backend/tests/test_citation_graph.py backend/tests/test_app_shell.py -q` 15 passed, `python -m pytest backend/tests -q` 33 passed, 이후 stub 추가 후 `python -m pytest backend/tests -q` 33 passed + 1 skipped, `python -m ruff check backend/modules/citation_graph backend/wiring.py backend/tests/test_citation_graph.py backend/tests/test_app_shell.py` 통과, `python -m compileall backend/modules/citation_graph backend/wiring.py` 통과. FE 미생성.
+**Context**: CONSTRUCTION — U8 Code Generation + Build/Test 완료. 다음은 사용자 리뷰/승인 또는 커밋/PR 지시 필요.
+
 ---
 

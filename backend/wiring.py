@@ -221,6 +221,20 @@ def _mount_ops(app: FastAPI, settings: Settings, result: MountResult) -> None:
     result.mounted.append("ops")
 
 
+def _mount_citation_graph(app: FastAPI, settings: Settings, result: MountResult) -> None:
+    from backend.modules.citation_graph import controller as citation_graph
+
+    for router in citation_graph.routers:
+        app.include_router(router)
+    result.mounted.append("citation_graph")
+
+
 # The real registry. Each entry is a `(app, settings, result) -> None` mounter whose name
 # (minus the `_mount_` prefix) labels it in MountResult / `/readyz`.
-_INTEGRATIONS = (_mount_accounts, _mount_discovery, _mount_library, _mount_ops)
+_INTEGRATIONS = (
+    _mount_accounts,
+    _mount_discovery,
+    _mount_library,
+    _mount_ops,
+    _mount_citation_graph,
+)

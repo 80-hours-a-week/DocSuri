@@ -47,7 +47,7 @@ def test_module_registry_complete_and_disjoint() -> None:
     assert readyz["status"] == "ready"
     mounted, skipped = set(readyz["mounted"]), set(readyz["skipped"])
     assert mounted.isdisjoint(skipped)
-    assert mounted | skipped == {"accounts", "discovery", "library", "ops"}
+    assert mounted | skipped == {"accounts", "discovery", "library", "ops", "citation_graph"}
 
 
 def test_discovery_and_accounts_actually_mount() -> None:
@@ -93,6 +93,7 @@ def test_mount_modules_never_raises_and_records_reasons() -> None:
         "discovery",
         "library",
         "ops",
+        "citation_graph",
     }
 
 
