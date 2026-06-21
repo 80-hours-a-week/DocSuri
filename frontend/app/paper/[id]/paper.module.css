@@ -13,18 +13,18 @@
   flex-direction: column;
   gap: 0.25rem;
   padding-bottom: 0.75rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .id {
   margin: 0;
   font-size: 0.8125rem;
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 .link {
   font-size: 0.875rem;
-  color: #2563eb;
+  color: var(--color-accent);
   min-height: 2.75rem;
   display: inline-flex;
   align-items: center;
