@@ -2,6 +2,7 @@
 // searchFixtures). Production is real-first (real BFF) — these are never shipped;
 // they let the U7 surface be previewed in dev (NEXT_PUBLIC_DOCSURI_REAL_API unset).
 import type { SummaryOkDTO, TranslationOkDTO, FullTextOkDTO } from '@/types/generated';
+import type { GlossaryUpsertResultDTO, GlossaryTermDTO } from '@/types/glossary';
 
 export const summaryResponse: SummaryOkDTO = {
   status: 'ok',
@@ -69,6 +70,22 @@ export const fullTranslationResponse: TranslationOkDTO = {
     keptTerms: ['Transformer', 'encoder', 'decoder', 'self-attention'],
   },
 };
+
+// Personal glossary (Phase 1/2a) — an in-memory store so the dev preview behaves like the
+// real round-trip: upsert remembers termFrom→termTo and bumps a version, and the list reads
+// it back so the badge editor pre-fills a previously saved rendering.
+const mockGlossary = new Map<string, string>();
+let mockGlossaryVer = 0;
+
+export function mockUpsertGlossaryTerm(termFrom: string, termTo: string): GlossaryUpsertResultDTO {
+  mockGlossary.set(termFrom, termTo);
+  mockGlossaryVer += 1;
+  return { status: 'ok', glossaryVer: mockGlossaryVer };
+}
+
+export function mockListGlossaryTerms(): GlossaryTermDTO[] {
+  return [...mockGlossary.entries()].map(([termFrom, termTo]) => ({ termFrom, termTo }));
+}
 
 export const fullTextResponse: FullTextOkDTO = {
   status: 'ok',
