@@ -106,6 +106,8 @@ export function SearchScreen() {
               type="button"
               className={styles.clear}
               onClick={clearQuery}
+              disabled={!query}
+              aria-hidden={query ? undefined : true}
               aria-label="검색어 지우기"
               data-testid="search-clear"
             >

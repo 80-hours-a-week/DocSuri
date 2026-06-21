@@ -69,6 +69,12 @@
   color: var(--color-text);
 }
 
+.clear:disabled {
+  /* shown for visual symmetry but inert while the field is empty */
+  opacity: 0.35;
+  cursor: default;
+}
+
 .clear:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 1px;

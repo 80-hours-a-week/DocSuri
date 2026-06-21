@@ -62,6 +62,12 @@
   color: var(--color-text);
 }
 
+.adornment:disabled {
+  /* empty-field clear (✕): shown for symmetry but inert */
+  opacity: 0.35;
+  cursor: default;
+}
+
 .adornment:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 1px;

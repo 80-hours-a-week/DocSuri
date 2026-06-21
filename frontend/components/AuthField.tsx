@@ -67,6 +67,8 @@ export function AuthField({ id, label, type, value, onChange, autoComplete, erro
               onChange('');
               inputRef.current?.focus();
             }}
+            disabled={!value}
+            aria-hidden={value ? undefined : true}
             aria-label={`${label} 지우기`}
             data-testid={`${testId}-clear`}
           >
