@@ -30,6 +30,12 @@ import type {
   HistoryPageDTO,
 } from '@/types/generated';
 import type { PaperMetaVM } from '@/types/paperMeta';
+import type {
+  GlossaryTermUpsertDTO,
+  GlossaryUpsertResultDTO,
+  GlossaryTermDTO,
+  GlossaryListDTO,
+} from '@/types/glossary';
 
 export interface ApiClientOptions {
   timeoutMs?: number;
@@ -118,6 +124,29 @@ export class ApiClient {
     if (res.status === 200 || res.status === 400) {
       return classifyFullTextResponse(res.body);
     }
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+  }
+
+  /** The user's saved personal terms (Phase 2a), to pre-fill the badge editor. Idempotent
+   * GET. The caller treats any failure as "no saved terms" (pre-fill is optional). */
+  async listGlossaryTerms(): Promise<GlossaryTermDTO[]> {
+    const res = await this.request({ method: 'GET', path: '/api/glossary', idempotent: true });
+    if (res.status === 200) return (res.body as GlossaryListDTO).terms ?? [];
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+  }
+
+  /** Add/override a personal glossary term (Phase 1, badge-tap). State-changing, so
+   * NOT idempotent (no auto-retry — a double POST would just re-upsert the same term).
+   * A successful upsert bumps the user's glossary version server-side, invalidating
+   * their cached summaries/translations so the next request reflects the new term. */
+  async upsertGlossaryTerm(req: GlossaryTermUpsertDTO): Promise<GlossaryUpsertResultDTO> {
+    const res = await this.request({
+      method: 'POST',
+      path: '/api/glossary',
+      body: req,
+      idempotent: false,
+    });
+    if (res.status === 200 || res.status === 201) return res.body as GlossaryUpsertResultDTO;
     throw normalizeHttpError(res.status, pick(res.body, 'message'));
   }
 

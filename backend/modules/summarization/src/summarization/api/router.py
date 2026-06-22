@@ -48,6 +48,38 @@ def build_router(
         response = run_summarization(orchestrator, parsed, ctx)
         return JSONResponse(response.to_dict())
 
+    @router.get("/api/glossary")
+    def list_glossary(request: Request) -> Any:
+        """The caller's saved personal terms (개인 용어집 Phase 2a) — pre-fills the badge editor.
+        Owner-scoped (SEC-8): returns only the principal's own terms. Fails closed (INV-4)."""
+        user_id = _principal_user_id(request)
+        if not user_id:
+            return JSONResponse({"status": "unauthorized"}, status_code=401)
+        try:
+            terms = orchestrator.list_glossary_terms(user_id)
+        except Exception:  # noqa: BLE001 — fail-closed; client degrades to no pre-fill
+            return JSONResponse({"status": "unavailable"}, status_code=503)
+        return JSONResponse({"status": "ok", "terms": terms})
+
+    @router.post("/api/glossary")
+    def upsert_glossary_term(request: Request, payload: dict = Body(...)) -> Any:  # noqa: B008
+        """Add/override a personal term (개인 용어집 Phase 1). Owner-scoped (SEC-8): the
+        gateway-injected principal is the only id trusted — the body never carries a user id.
+        A state-changing request (CSRF is the gateway's concern). Validates input (SEC-5) and
+        fails closed without surfacing internals (INV-4)."""
+        user_id = _principal_user_id(request)
+        if not user_id:
+            return JSONResponse({"status": "unauthorized"}, status_code=401)
+        term = _parse_glossary_term(payload)
+        if term is None:
+            return JSONResponse({"status": "validation_error"}, status_code=400)
+        term_from, term_to = term
+        try:
+            glossary_ver = orchestrator.upsert_glossary_term(user_id, term_from, term_to)
+        except Exception:  # noqa: BLE001 — fail-closed: never surface internals (INV-4/SEC-15)
+            return JSONResponse({"status": "unavailable"}, status_code=503)
+        return JSONResponse({"status": "ok", "glossaryVer": glossary_ver}, status_code=201)
+
     @router.get("/api/papers/{paper_id}/full-text")
     def full_text(request: Request, paper_id: str) -> Any:
         """In-app full-text viewer source (Q5=C). OA-license-gated: disabled by default
@@ -78,6 +110,26 @@ def _principal_user_id(request: Any) -> str | None:
     if uid is None and isinstance(principal, dict):
         uid = principal.get("user_id")
     return str(uid) if uid else None
+
+
+# Personal-term bounds (SEC-5). term_from mirrors a kept-as-is English term; term_to is the
+# user's preferred rendering (matches the frontend input maxLength).
+_MAX_TERM_FROM = 80
+_MAX_TERM_TO = 40
+
+
+def _parse_glossary_term(payload: dict) -> tuple[str, str] | None:
+    """Validate a personal-term upsert: both sides required, trimmed, length-bounded.
+    Returns ``(term_from, term_to)`` or None on any violation (→ 400)."""
+    if not isinstance(payload, dict):
+        return None
+    term_from = str(payload.get("termFrom", "")).strip()
+    term_to = str(payload.get("termTo", "")).strip()
+    if not term_from or not term_to:
+        return None
+    if len(term_from) > _MAX_TERM_FROM or len(term_to) > _MAX_TERM_TO:
+        return None
+    return term_from, term_to
 
 
 def _parse_request(payload: dict) -> SummaryRequest | None:

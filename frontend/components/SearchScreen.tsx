@@ -38,7 +38,14 @@ export function SearchScreen() {
   const [executedQuery, setExecutedQuery] = useState<string | null>(null);
   const [inlineError, setInlineError] = useState<string | null>(null);
   const inFlight = useRef(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
+
+  const clearQuery = useCallback(() => {
+    setQuery('');
+    setInlineError(null);
+    inputRef.current?.focus();
+  }, []);
 
   const runSearch = useCallback(async () => {
     if (inFlight.current) return;
@@ -78,18 +85,35 @@ export function SearchScreen() {
           논문 검색
         </label>
         <div className={styles.row}>
-          <input
-            id={inputId}
-            className={styles.input}
-            type="text"
-            value={query}
-            maxLength={MAX_QUERY_LENGTH}
-            placeholder="무엇이 궁금한가요?"
-            onChange={(e) => setQuery(e.target.value)}
-            aria-invalid={inlineError ? true : undefined}
-            aria-describedby={inlineError ? `${inputId}-err` : undefined}
-            data-testid="search-input"
-          />
+          <div className={styles.inputWrap}>
+            <input
+              ref={inputRef}
+              id={inputId}
+              className={styles.input}
+              type="text"
+              value={query}
+              maxLength={MAX_QUERY_LENGTH}
+              placeholder="무엇이 궁금한가요?"
+              spellCheck={false}
+              autoCapitalize="none"
+              autoCorrect="off"
+              onChange={(e) => setQuery(e.target.value)}
+              aria-invalid={inlineError ? true : undefined}
+              aria-describedby={inlineError ? `${inputId}-err` : undefined}
+              data-testid="search-input"
+            />
+            <button
+              type="button"
+              className={styles.clear}
+              onClick={clearQuery}
+              disabled={!query}
+              aria-hidden={query ? undefined : true}
+              aria-label="검색어 지우기"
+              data-testid="search-clear"
+            >
+              ✕
+            </button>
+          </div>
           <button
             type="submit"
             className={styles.submit}
