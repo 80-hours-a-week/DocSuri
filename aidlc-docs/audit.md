@@ -1065,3 +1065,27 @@
 
 ---
 
+
+## Workflow Start — Fix Login Feature (Requirements Analysis)
+**Timestamp**: 2026-06-22T12:00:00Z
+**User Input**: "Using AIDLC, fix the login feature."
+**AI Response**: "Resumed brownfield AI-DLC state. Login = U3 Accounts/Auth (built, deployed, live). Reverse Engineering skipped (existing unit + construction artifacts present). Entering Requirements Analysis at minimal/standard depth; defect symptom unspecified, so asking clarifying questions before scoping the fix."
+**Context**: INCEPTION — Workspace Detection (resume) + Requirements Analysis entry.
+
+---
+
+## Login Defect — Production Forensics (Requirements Analysis cont.)
+**Timestamp**: 2026-06-23T00:00:00Z
+**User Input**: (clarifications) symptom="valid creds rejected / generic client error"; environment="Production (docsuri.org)"; confirm-path="run SQL myself".
+**AI Response**: "Investigated U3 login on prod. Evidence: (1) Redis healthy (session probe → 'not found', not 'store unavailable'); (2) /auth/login 7d access logs = 9×200, 13×401, 0×500 → backend auth works for valid creds, no server errors; (3) /auth/session = 5×200 / 79×401 (mostly anonymous loads, noisy); (4) prod runs pre-386bf18 accounts code (no accounts metrics emitted) but login logic unchanged; (5) no email normalization anywhere (backend signup/login/verify + FE); (6) controller maps SessionStoreUnavailableException (a DomainException) → 401 (infra-as-auth mislabel); (7) two RDS instances (2026-06-17 replacement) — app uses newer (...7ajkntsj0ouu @12:45Z), older (...t3j09 @06:56Z) orphaned; (8) CloudFront E24JTHTYCCENSB uses CachingDisabled + AllViewerExceptHostHeader → forwards cookies both ways, /bff not cached. Remaining ambiguity (needs DB): casing vs PENDING vs orphaned-DB vs cookie-not-sticking. ECS Exec disabled; RDS private; one-off diagnostic task-def registration denied by guardrail (out of scope). Provided user read-only SQL to disambiguate."
+**Context**: INCEPTION — Requirements Analysis (root-cause localization for login fix). Awaiting SQL results before Code Generation.
+
+---
+
+## Login Fix — Code Generation (Construction · U3)
+**Timestamp**: 2026-06-23T00:30:00Z
+**User Input**: (scope selection) "Code hardening (AIDLC)".
+**AI Response**: "Implemented U3 login hardening. (1) controller._verification_link_base builds the email link from PUBLIC_APP_URL via /bff (fallback request.base_url) — fixes unreachable verification links behind CloudFront/BFF/ALB; (2) POST /auth/resend-verification (PENDING-only, no account enumeration) + frontend resend button on login failure; (3) normalize_email (trim+lowercase) at signup/login/resend trust boundary (defense-in-depth vs casing 401s); (4) login maps SessionStoreUnavailableException → 503 (was masquerading as 401); (5) CDK compute_stack adds PUBLIC_APP_URL=https://docsuri.org (next deploy). Tests: tests/accounts 28 passed (4 new), ruff clean; frontend tsc + next lint clean. NOTE: this is necessary but NOT sufficient — SES is still in sandbox (ProductionAccess:false), so verification emails to unverified recipients remain undeliverable until SES production access is granted; existing 5 PENDING accounts stay PENDING until they receive a deliverable link or are activated. Not yet committed (commit-review gate)."
+**Context**: CONSTRUCTION — Code Generation (U3 login fix). Awaiting commit approval.
+
+---
