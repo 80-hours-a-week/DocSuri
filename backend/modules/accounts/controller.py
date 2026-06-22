@@ -40,12 +40,13 @@ def _verification_link_base(request: Request) -> str:
 
     프로덕션: 브라우저는 백엔드 호스트를 알 수 없고 `request.base_url`은 CloudFront/BFF/ALB
     뒤의 내부 호스트라 메일에 그대로 넣으면 클릭 불가 링크가 된다. 따라서 공개 앱 URL
-    (`PUBLIC_APP_URL`, 예: https://docsuri.org)을 BFF 경유 경로로 구성한다 → 브라우저가
-    `/bff/auth/verify-email`로 접근하면 BFF가 게이트웨이→백엔드 GET /auth/verify-email로 포워딩.
-    로컬/개발: `PUBLIC_APP_URL` 미설정 시 백엔드를 직접 부르는 기존 동작으로 폴백."""
+    (`PUBLIC_APP_URL`, 예: https://docsuri.org)의 **프런트엔드 인증 페이지**(`/verify-email`)로
+    링크한다 → 사용자가 클릭하면 프런트 페이지가 BFF 경유로 백엔드 GET /auth/verify-email를
+    호출하고 친화적 결과 UI를 보여준다(원시 JSON 노출 금지). 로컬/개발: `PUBLIC_APP_URL`
+    미설정 시 백엔드를 직접 부르는 기존 동작으로 폴백."""
     public = os.getenv("PUBLIC_APP_URL", "").strip().rstrip("/")
     if public:
-        return f"{public}/bff/auth/verify-email"
+        return f"{public}/verify-email"
     return str(request.base_url) + "auth/verify-email"
 
 # DB 세션 디펜던시 스텁 (메인 App shell에서 오버라이드 예정)

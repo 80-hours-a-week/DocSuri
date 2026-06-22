@@ -211,6 +211,21 @@ export class ApiClient {
   }
 
   /**
+   * Activate a PENDING account from the emailed link's token (US-A1, BR-A5). Hits the
+   * backend GET /auth/verify-email via the BFF; resolves on 200, throws a
+   * UserFacingError on an expired/invalid token (4xx) so the page can show a retry path.
+   */
+  async verifyEmail(token: string): Promise<void> {
+    const res = await this.request({
+      method: 'GET',
+      path: `/auth/verify-email?token=${encodeURIComponent(token)}`,
+      idempotent: true,
+    });
+    if (res.status === 200) return;
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+  }
+
+  /**
    * Resend the account-verification email (US-A1 recourse). The backend returns a
    * generic success regardless of whether the address exists / is still PENDING
    * (no account enumeration), so this resolves on 200 and only throws on transport

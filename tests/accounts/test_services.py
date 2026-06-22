@@ -279,7 +279,7 @@ def test_verification_link_base_prefers_public_app_url(monkeypatch):
     from backend.modules.accounts import controller
 
     monkeypatch.setenv("PUBLIC_APP_URL", "https://docsuri.org/")
-    assert controller._verification_link_base(MagicMock()) == "https://docsuri.org/bff/auth/verify-email"
+    assert controller._verification_link_base(MagicMock()) == "https://docsuri.org/verify-email"
 
     monkeypatch.delenv("PUBLIC_APP_URL", raising=False)
     req = MagicMock()

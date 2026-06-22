@@ -178,8 +178,9 @@ class ComputeStack(Stack):
             "SES_SENDER_EMAIL": "no-reply@docsuri.org",  # via the SES domain identity below
             # Public apex used to build clickable verification links in emails. Behind
             # CloudFront/BFF/ALB the request host is internal, so the link must use this
-            # public URL routed through the BFF (controller._verification_link_base →
-            # {PUBLIC_APP_URL}/bff/auth/verify-email). Must match the CloudFront alias.
+            # public URL pointing at the frontend verify page (controller._verification_link_base
+            # → {PUBLIC_APP_URL}/verify-email), which calls the backend via the BFF. Must match
+            # the CloudFront alias.
             "PUBLIC_APP_URL": "https://docsuri.org",
             "OPENSEARCH_ENDPOINT": Fn.join("", [
                 "https://", opensearch_domain.domain_endpoint,
