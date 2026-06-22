@@ -12,6 +12,7 @@ import { usePaperMeta } from '@/lib/usePaperMeta';
 import { FullTextViewer } from './FullTextViewer';
 import { SummaryModal, type DetailView } from './SummaryModal';
 import { SaveToLibraryButton } from './SaveToLibraryButton';
+import { CitationTreePanel } from './CitationTreePanel';
 import styles from './PaperDetailIsland.module.css';
 
 interface PaperDetailIslandProps {
@@ -29,13 +30,14 @@ const ACTIONS: { view: DetailView; label: string }[] = [
 export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIslandProps) {
   const [anchor, setAnchor] = useState<AnchorVM | null>(null);
   const [modalView, setModalView] = useState<DetailView | null>(null);
+  const [citationOpen, setCitationOpen] = useState(false);
   const meta = usePaperMeta(paperId);
 
   return (
     <div className={styles.root}>
       {/* Sticky action bar directly under the DocSuri header — each button opens the
           summary/translation modal at its tab. */}
-      <div className={styles.actionsBar} role="group" aria-label="요약/번역 액션">
+      <div className={styles.actionsBar} role="group" aria-label="논문 상세 액션">
         {ACTIONS.map((a) => (
           <button
             key={a.view}
@@ -47,7 +49,19 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
             {a.label}
           </button>
         ))}
+        <button
+          type="button"
+          className={styles.action}
+          onClick={() => setCitationOpen((v) => !v)}
+          data-testid="open-citation-tree"
+        >
+          각주 트리
+        </button>
       </div>
+
+      {citationOpen ? (
+        <CitationTreePanel paperId={paperId} onClose={() => setCitationOpen(false)} />
+      ) : null}
 
       {meta.status === 'done' && meta.meta ? (
         <header className={styles.meta} data-testid="paper-meta">

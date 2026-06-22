@@ -36,6 +36,7 @@ import type {
   GlossaryTermDTO,
   GlossaryListDTO,
 } from '@/types/glossary';
+import type { CitationNode, CitationTreeQuery, CitationTreeResponse } from '@/types/citationGraph';
 
 export interface ApiClientOptions {
   timeoutMs?: number;
@@ -111,6 +112,33 @@ export class ApiClient {
     });
     if (res.status === 200) return res.body as PaperMetaVM;
     if (res.status === 404) return null;
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+  }
+
+  /** U8 citation tree for the paper detail page. GET is idempotent and can be cached by
+   * the gateway/backend; save is a user-scoped library mutation. */
+  async getCitationTree(paperId: string, params: CitationTreeQuery = {}): Promise<CitationTreeResponse> {
+    const sp = new URLSearchParams();
+    if (params.expandNodeId) sp.set('expandNodeId', params.expandNodeId);
+    if (params.refresh) sp.set('refresh', 'true');
+    const query = sp.toString();
+    const res = await this.request({
+      method: 'GET',
+      path: `/api/papers/${encodeURIComponent(paperId)}/citation-tree${query ? `?${query}` : ''}`,
+      idempotent: true,
+    });
+    if (res.status === 200) return res.body as CitationTreeResponse;
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+  }
+
+  async saveCitationNode(paperId: string, node: CitationNode): Promise<LibraryItemDTO> {
+    const res = await this.request({
+      method: 'POST',
+      path: `/api/papers/${encodeURIComponent(paperId)}/citation-tree/save`,
+      body: { node },
+      idempotent: false,
+    });
+    if (res.status === 200 || res.status === 201) return res.body as LibraryItemDTO;
     throw normalizeHttpError(res.status, pick(res.body, 'message'));
   }
 
