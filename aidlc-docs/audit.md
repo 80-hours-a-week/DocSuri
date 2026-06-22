@@ -944,3 +944,9 @@
 
 ---
 
+
+## 멀티모달 표시(그림·도표) — INCEPTION Requirements Analysis 재진입
+**Timestamp**: 2026-06-22T00:00:00Z
+**User Input(원문)**: "u7이 지금 s3에 정규화를 거친 그림이나 도표가 없는 텍스트 기반으로 요약/번역 … 근데 나는 그림이나 도표 등등 다 넣을거 … aidlc로 처음부터" → (스코핑) "표시 전용 먼저, 비전은 다음 사이클" → (브랜치 지시) "develop 말고 새 브랜치 파서 3개 갭·그림도표 모두 진행" → (확정) "a로 하고 Q2는 C로, 나머지 권장안 A로".
+**AI Response**: 보류 트랙 "그림·도표(멀티모달=요구사항 개정)"를 Requirements Analysis 재진입으로 착수(브랜치 `feature/multimodal-display`). 명확화 질문지 `inception/requirements/requirement-verification-questions-multimodal-display.md`(Q1~Q7) 작성·확정: **Q2=C(소스 가용성 혼합 추출 — LaTeX 구조화/PDF 크롭 폴백), 나머지 A**. 모순 점검 통과. `requirements.md` 등재: **FR-17**(그림·도표 자산 추출·저장·표시 — 표시 전용; 실재 자산만·생성 이미지 금지; OA 라이선스 게이트 재사용; 단기 만료 서명 URL; 앵커 자산 연결; 이미지 lazy-load), **FR-12 앵커 자산 연결 보강**, **§12 멀티모달 카브아웃**("그림·도표" 전면 제외 → "비전 LLM 추론만 제외"로 한정), §13 추적성 4행, 상단 개정노트(2026-06-22). `aidlc-state.md`에 멀티모달 표시 INCEPTION 항목 추가. **범위 경계**: 요약/번역 LLM 입력은 텍스트+캡션 유지(비전 추론=차기 사이클). 영향 유닛 U1·공유계약·U7(+백/프론트 정합 갭 3건 흡수: `summarization.schema.json` SSOT 수립·`validation_error`/`unauthorized` 상태 매핑)·U5. **앱 코드·FD 미생성.**
+**Context**: INCEPTION — 요구사항 등재 완료. 다음은 Construction per-unit Functional Design(U1부터) 승인 게이트. 미커밋(리뷰 대기).
