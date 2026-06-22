@@ -230,7 +230,7 @@ def test_changed_version_replaces_abstract_chunk() -> None:
         full_text={
             "2401.00001v1": "body v1",
             "2401.00001v2": "body v2",
-        }
+        },
     )
 
     pipeline, control, index, _, _ = build_test_pipeline(arxiv=arxiv)
