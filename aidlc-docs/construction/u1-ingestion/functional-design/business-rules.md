@@ -109,3 +109,45 @@
 - U1.EmbeddingGatewayAdapter(writer)·U2.QueryUnderstandingExpander(reader)는 **동일 VectorSpec(차원·모델·거리 — NFR Requirements PIN)**. 동일 임베딩 공간 불변식.
 - 계약 산출물 소유=공유 임베딩 게이트웨이 레이어(UQ5=A); U1(빌드 #1)이 값을 PIN, 후속 유닛 재결정 없음(NS-5). 선택 스토어 ANN 인덱스가 PIN된 차원·거리 메트릭 지원 확인(ANN 호환 게이트).
 - 단일 writer(U1)/단일 reader(U2) 경계.
+
+---
+
+## 7. 멀티모달 자산 규칙 (FR-17 — 표시 전용, 2026-06-22 확장)
+
+> **근거**: `requirements.md` FR-17 · FD 계획 Q1~Q7=A(Q2=C 혼합). **표시 전용** — §3 인덱싱/임베딩 경로·BR-5~9·VectorSpec **불변**(자산은 검색 비대상, `IndexRecord` 미포함).
+
+### 7.1 비즈니스 규칙 (BR)
+
+| ID | 규칙 | 근거/답 |
+|---|---|---|
+| **BR-22 (자산 추출 위치·dedup 게이팅)** | 그림·도표 자산은 `parse`에서 디스커버리하되 **저장은 dedup 이후 NEW\|CHANGED만**. DUPLICATE는 자산 재추출·재저장 **0**(재임베딩 0과 동일 비용 정신). | Q1=A, NFR-C1 |
+| **BR-23 (혼합 추출·소스 판정)** | **Q2=C**: arXiv e-print(LaTeX) 가용·추출 성공 시 `structured`, 없거나 실패 시 **PDF 페이지 크롭 `page-crop` 폴백**. `sourceMode`로 경로 기록(품질·관측). 추출 라이브러리·bbox 임계·이미지 포맷/해상도는 NFR. | Q2=C |
+| **BR-24 (실재 자산만 — 생성 금지)** | 상세/뷰어에 표시되는 자산은 **원문에서 추출된 실재 자산만**. 생성·합성·보정 이미지 금지(FR-5 날조 금지 정신의 표시 측 대응). 추출 불가=해당 자산 미표시(빈 자산 위조 금지). | FR-5, FR-17 |
+| **BR-25 (캡션 비중복·앵커 좌표)** | 캡션은 본문 보존분을 참조(중복 추출 안 함). 자산은 `sectionRef`+`ordinal`로 위치 좌표를 가져 앵커(`AnchorVM.target=figure\|table`)가 자산에 매칭된다(표시 측 연동, U7/U5). | 인셉션 Q5, FR-12 |
+| **BR-26 (OA 게이트 재사용·비공개)** | 자산 저장·노출은 전문과 **동일 OA 라이선스 게이트(BR-1)**. 비-OA 논문은 자산 미저장·미노출. 자산 바이너리는 오브젝트 스토리지 **공개 차단(SEC-9)**, 노출은 단기 만료 서명 URL(읽기 측 정책, U7). | BR-1, SEC-9, C-1 |
+| **BR-27 (자산 best-effort·비차단)** | **Q4=A**: 자산 추출·저장 실패는 **논문 인덱싱(INV-1 원자 커밋)·markIngested·워터마크 전진을 차단하지 않는다**. 실패는 `ASSET_EXTRACT_FAILURE`/`ASSET_STORE_FAILURE`로 관측·재시도(BR-17 경로). 검색 정합은 인덱스가 권위, 자산은 표시 보조. | Q4=A, NFR-R1(인덱스 측만) |
+| **BR-28 (자산 멱등·정리)** | `assetId(paperId,version,type,ordinal)` 결정적 → 재처리 멱등(중복 0). **CHANGED(vN↑)**: 이전 버전 stale 자산 교체/정리(`replace_assets`). **tombstone(철회)**: 자산·매니페스트 제거(`remove_assets`). 매니페스트↔저장 자산 정합(고아·누락 0). | Q3=A, Q4=A, BR-14 |
+
+### 7.2 PBT 속성 (추가)
+
+| 속성 | 진술 | 트레이스 |
+|---|---|---|
+| **P7 자산 추출 결정성** | 동일 `raw/ParsedPaper` → 동일 자산 집합·동일 `assetId`(순서·type별 ordinal 안정). | BR-22/28, 인셉션 Q3 |
+| **P8 매니페스트↔자산 정합** | `AssetManifest.assets`와 실제 저장 자산이 1:1(고아·누락 0); CHANGED 교체·tombstone 제거 후에도 정합. | BR-28 |
+
+### 7.3 FailureReason 추가
+
+`ASSET_EXTRACT_FAILURE` · `ASSET_STORE_FAILURE` — **둘 다 비차단(BR-27)**: 논문은 인덱싱 성공으로 커밋되며, 자산 실패만 관측·재시도. (RejectReason과 달리 논문 거부 아님.)
+
+### 7.4 추적성 (추가)
+
+| 요구사항 | 랜딩 |
+|---|---|
+| **FR-17**(그림·도표 자산 추출·표시) | BR-22~28, §6 AssetExtractor/AssetStorePort, FigureTableAsset/AssetManifest |
+| **Q2=C**(혼합 추출) | BR-23, AssetSourceMode |
+| **Q4=A**(자산 best-effort) | BR-27, §6.1 분리 커밋 경계 |
+| **Q6=A**(매니페스트 RDS) | AssetManifest 영속(S3 바이너리 + RDS 메타) |
+| **BR-1/SEC-9 재사용** | BR-26(OA 게이트·공개 차단) |
+| **FR-5**(날조 금지) 표시 측 | BR-24(실재 자산만) |
+
+> **범위 경계**: 읽기 측 계약 필드·서명 URL 발급·U5 렌더는 본 U1 FD 밖(공유계약·U7·U5 단계). U1은 **생산자**(추출·저장·매니페스트). 비전 LLM 추론은 차기 사이클(범위 밖).

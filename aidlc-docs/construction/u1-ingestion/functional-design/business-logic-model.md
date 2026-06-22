@@ -137,4 +137,75 @@ fetchFullText(Q2=C) ─▶ RawDocument ─(parse)─▶ ParsedPaper{abstract, bo
 - **`lastWrite`**: 성공 upsert/tombstone 커밋 시 전진(인제스천 건강도·정체 탐지, RES-7).
 - **운영 재구축 런북**(AS-5): triggerFullRebuild 진입점 정의; 절차·실행자·검증은 Infra/Operations.
 
+---
+
+## 6. 멀티모달 자산 추출·저장 (FR-17 — 표시 전용, 2026-06-22 확장)
+
+> **근거**: FR-17 · FD 계획 Q1~Q7=A(Q2=C 혼합). **표시 전용** — §1.1 인덱싱 경로(chunk·embed·upsert·INV-1 원자성)는 **불변**. 자산은 **best-effort 보조 산출**로 인덱스 커밋과 **분리**(Q4=A).
+
+### 6.1 `ingestOne` 삽입 지점 (Q1=A: parse 추출 + dedup 이후 NEW|CHANGED 저장)
+
+```
+ingestOne(record, job):
+  ...
+  2. parsed ← FetchParseProcessor.parse(raw)
+       # (FR-17) 메타+전문 정규화에 더해 그림·도표 자산 디스커버리:
+       #   assets[] ← AssetExtractor.extract(raw, parsed)        # Q2=C 혼합(아래 6.2)
+       #   parsed.assets = FigureTableAsset[](바이너리+메타, 캡션은 본문 캡션 참조)
+  ...
+  5. decision ← DeduplicationGuard.isNew(parsed)
+       DUPLICATE → return SKIPPED   # 자산도 재추출·재저장 0 (Q1=A, NFR-C1 정신)
+       NEW | CHANGED → 계속
+  6. (Q2=C) StoredFullText ← ObjectStorage.put(raw)             # 기존
+  6'. ── (FR-17, NEW|CHANGED만) 자산 저장: best-effort, 인덱스 원자성과 분리 (Q4=A) ──
+       if parsed.oaStatus == OA (BR-1 게이트 통과):              # 비-OA는 자산 미저장(전문과 동일)
+         for asset in parsed.assets:
+           objectRef ← AssetStorePort.put_asset(asset.binary)    # S3, SEC-9 비공개
+         AssetStorePort.put_manifest(AssetManifest(paperId, version, assets-meta))   # RDS (Q6=A)
+         if CHANGED: AssetStorePort.replace_assets(paperId, version)   # 이전 버전 stale 교체/정리
+       # 실패 시: emitFailureSignal(jobId, ASSET_*) → 관측·재시도 신호. 논문 인덱싱 비차단(Q4=A).
+  7..10. chunk → embed → upsert(INV-1 원자) → markIngested → advanceWatermark   # 불변, 자산과 독립
+```
+
+- **위치(Q1=A)**: 추출은 `parse`에 동반(디스커버리), **저장은 dedup 이후 NEW|CHANGED만** — DUPLICATE는 자산 재추출·재저장 0.
+- **원자성 경계(Q4=A)**: 자산 저장은 **INV-1 원자 커밋(인덱스) 밖**. 자산 실패는 `markIngested`/워터마크 전진을 **막지 않는다**(표시 전용; 검색 정합은 인덱스가 권위). 자산 실패는 `IngestionResilienceService`로 관측·재시도(별도 신호, FailureReason `ASSET_EXTRACT_FAILURE`/`ASSET_STORE_FAILURE`).
+
+### 6.2 혼합 추출 — `AssetExtractor.extract` (Q2=C)
+
+```
+extract(raw, parsed):
+  if raw.eprintSource(LaTeX) 가용:
+      assets ← structuredExtract(eprint)        # \includegraphics 그림 파일 + table 환경, sourceMode=structured
+      if assets 성공(비어있지 않음·검증 통과): return assets
+  # 폴백(소스 없음/추출 실패):
+  assets ← pageCropExtract(pdf, layout)          # 페이지 렌더 후 그림/표 영역 크롭, sourceMode=page-crop, pageRef/bbox 기록
+  return assets
+```
+- **결정성(P7)**: 동일 `raw/parsed` → 동일 자산 집합·동일 `assetId`(순서·type별 ordinal 안정). 추출 라이브러리·bbox 검출 임계·이미지 포맷/해상도는 **NFR/Infra**.
+- **캡션**: 본문에 보존된 캡션을 참조/연결(중복 추출 안 함, BR-25). `sectionRef`+`ordinal`로 앵커 매칭 좌표 부여.
+
+### 6.3 철회(tombstone) 연동 (Q4=A)
+
+`ingestOne` step 4 tombstone 경로(BR-14)에 자산 정리 추가:
+```
+... → VectorIndexWriter.tombstone(paperId)            # 기존(전 청크 제거)
+    → AssetStorePort.remove_assets(paperId)           # (FR-17) 자산·매니페스트 제거 (best-effort, 비차단)
+    → markIngested(paperId+vN) → advanceWatermark
+```
+
+### 6.4 데이터 흐름 ASCII (자산 분기 추가)
+
+```
+parse(Q2=C) ─▶ ParsedPaper{abstract, body/sections, assets[](FR-17)}
+   │ assets = AssetExtractor.extract: e-print 있으면 structured, 없/실패면 page-crop 폴백
+   ▼
+isNew ─DUPLICATE─▶ SKIPPED(자산 재저장 0)
+   │ NEW|CHANGED
+   ├─[인덱스 경로 불변]─▶ chunk ─▶ embed ─▶ upsert(INV-1 원자) ─▶ markIngested
+   └─[자산 경로 best-effort, OA 게이트]─▶ AssetStorePort.put_asset(S3) + put_manifest(RDS)
+                                          │ 실패 ─▶ emitFailureSignal(ASSET_*) (인덱싱 비차단)
+                                          │ CHANGED ─▶ replace_assets(stale 교체)
+철회 ─▶ tombstone(전 청크) + remove_assets(자산) ─▶ markIngested
+```
+
 > 결정·검증 규칙은 `business-rules.md`. 엔티티는 `domain-entities.md`.

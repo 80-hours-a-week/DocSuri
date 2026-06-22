@@ -950,3 +950,11 @@
 **User Input(원문)**: "u7이 지금 s3에 정규화를 거친 그림이나 도표가 없는 텍스트 기반으로 요약/번역 … 근데 나는 그림이나 도표 등등 다 넣을거 … aidlc로 처음부터" → (스코핑) "표시 전용 먼저, 비전은 다음 사이클" → (브랜치 지시) "develop 말고 새 브랜치 파서 3개 갭·그림도표 모두 진행" → (확정) "a로 하고 Q2는 C로, 나머지 권장안 A로".
 **AI Response**: 보류 트랙 "그림·도표(멀티모달=요구사항 개정)"를 Requirements Analysis 재진입으로 착수(브랜치 `feature/multimodal-display`). 명확화 질문지 `inception/requirements/requirement-verification-questions-multimodal-display.md`(Q1~Q7) 작성·확정: **Q2=C(소스 가용성 혼합 추출 — LaTeX 구조화/PDF 크롭 폴백), 나머지 A**. 모순 점검 통과. `requirements.md` 등재: **FR-17**(그림·도표 자산 추출·저장·표시 — 표시 전용; 실재 자산만·생성 이미지 금지; OA 라이선스 게이트 재사용; 단기 만료 서명 URL; 앵커 자산 연결; 이미지 lazy-load), **FR-12 앵커 자산 연결 보강**, **§12 멀티모달 카브아웃**("그림·도표" 전면 제외 → "비전 LLM 추론만 제외"로 한정), §13 추적성 4행, 상단 개정노트(2026-06-22). `aidlc-state.md`에 멀티모달 표시 INCEPTION 항목 추가. **범위 경계**: 요약/번역 LLM 입력은 텍스트+캡션 유지(비전 추론=차기 사이클). 영향 유닛 U1·공유계약·U7(+백/프론트 정합 갭 3건 흡수: `summarization.schema.json` SSOT 수립·`validation_error`/`unauthorized` 상태 매핑)·U5. **앱 코드·FD 미생성.**
 **Context**: INCEPTION — 요구사항 등재 완료. 다음은 Construction per-unit Functional Design(U1부터) 승인 게이트. 미커밋(리뷰 대기).
+
+---
+
+## 멀티모달 표시 — U1 Ingestion Functional Design (자산 추출)
+**Timestamp**: 2026-06-22T00:00:00Z
+**User Input(원문)**: (계획서 게이트) "진행" — Q1~Q7 권장안 A 확정.
+**AI Response**: U1 멀티모달 자산 추출 FD 계획서(`construction/plans/u1-ingestion-multimodal-functional-design-plan.md`) Q1~Q7 전부 A 확정·체크박스 완료. 기존 U1 FD 3종 확장: **`domain-entities.md` §10**(AssetType·AssetSourceMode{structured|page-crop}·결정적 AssetId·**FigureTableAsset**·**AssetManifest**·**AssetStorePort**; ParsedPaper.assets[] 보강), **`business-logic-model.md` §6**(`ingestOne` 자산 추출·저장 삽입 — Q1=A parse 추출+dedup 후 NEW|CHANGED 저장, Q2=C 혼합 추출 `AssetExtractor`, Q4=A best-effort·인덱스 원자성과 분리, tombstone `remove_assets`·CHANGED `replace_assets`, 데이터 흐름 ASCII), **`business-rules.md` §7**(BR-22 dedup 게이팅·BR-23 혼합 추출·BR-24 실재 자산만(생성 금지)·BR-25 캡션 비중복·앵커 좌표·BR-26 OA 게이트 재사용·BR-27 best-effort 비차단·BR-28 멱등·정리; PBT P7/P8; FailureReason ASSET_*; 추적성). **핵심 경계**: 표시 전용 → 인덱싱·임베딩·IndexRecord·VectorSpec 경로 불변(자산은 검색 비대상). 읽기 측 계약·서명 URL·U5 렌더는 본 FD 밖(공유계약·U7·U5). **앱 코드 미생성.**
+**Context**: CONSTRUCTION — U1 멀티모달 FD 완료. 다음 게이트: U1 NFR Requirements(추출 라이브러리·이미지 포맷/해상도·서명 정책). 미커밋(리뷰 대기).
