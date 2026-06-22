@@ -974,3 +974,11 @@
 **User Input(원문)**: (계획서 게이트) "진행" — Q1~Q5 권장안 A 확정.
 **AI Response**: U1 멀티모달 NFR Design 계획서(`construction/plans/u1-ingestion-multimodal-nfr-design-plan.md`) Q1~Q5 전부 A 확정·체크박스 완료. 기존 U1 NFR Design 2종 확장: **`logical-components.md` §5** — 신규 논리 컴포넌트 **AssetExtractor**(혼합 추출·캡션 매칭)·**Image Normalizer**(WebP·치수상한·메타스트립)·**AssetStore**(S3 prefix + 공유 RDS `paper_asset`) + 토폴로지 다이어그램(인덱스 경로와 독립) + `paper_asset` RDS 상태 설계((paper_id,version,asset_id) 키·write-order 정합). **`nfr-design-patterns.md` §7** — 7.1 page-crop 검출·캡션 정규식 근접 매칭 알고리즘((page,y,x) 결정성 P7), 7.2 이미지 정규화 파이프라인(safe_decode→픽셀상한 bomb 가드→다운스케일→WebP→메타스트립), 7.3 best-effort 격리(per-asset·인덱스 비차단·ASSET_*), 7.4 매니페스트 write-order 정합(S3 put→RDS upsert, P8 "행 있는데 객체 없음" 회피), 7.5 보안(공개차단·서명URL·최소권한 IAM·이미지 파싱 방어) + 추적성 4행. **기존 인덱스/원자성 토폴로지·패턴 불변.** **앱 코드 미생성.**
 **Context**: CONSTRUCTION — U1 멀티모달 NFR Design 완료. 다음 게이트: U1 Infrastructure Design. 미커밋(리뷰 대기).
+
+---
+
+## 멀티모달 표시 — U1 Ingestion Infrastructure Design (자산 인프라)
+**Timestamp**: 2026-06-22T00:00:00Z
+**User Input(원문)**: (계획서 게이트) "진행" — Q1~Q5 권장안 A 확정.
+**AI Response**: U1 멀티모달 Infrastructure Design 계획서(`construction/plans/u1-ingestion-multimodal-infrastructure-design-plan.md`) Q1~Q5 전부 A 확정·체크박스 완료. **U1 최초 Infra 산출물**을 멀티모달 범위로 신설: **`infrastructure-design/infrastructure-design.md`** — S3 자산(기존 전문 버킷 + `assets/{paperId}/{version}/{assetId}.webp` prefix·공개차단·SSE-KMS 재사용·만료없음), `paper_asset` 공유 RDS 스키마(키 (paper_id,version,asset_id)·마이그레이션·인덱스), presigned S3 전달(만료 ~10분, CloudFront 후속), 최소권한 IAM(워커 PUT/DELETE+RW / U7 GET·presign+RO), write-order 정합(P8), 비용($1600 내·자산 라인), 관측. **`deployment-architecture.md`** — 추출 co-location(기존 워커, 이미지 처리 메모리 헤드룸, ML/GPU 없음), 배포 토폴로지(쓰기 워커↔공유 S3/RDS↔U7 읽기 presign), 마이그레이션·워커 이미지 의존성(PyMuPDF) 다이제스트 핀, 기존 토폴로지 불변. **선결 상속(미결)**: 워커 런타임 타깃(ECS/Fargate vs Lambda)·리전·CD. 신규 버킷·DB 0. **앱 코드 미생성.**
+**Context**: CONSTRUCTION — U1 멀티모달 Infrastructure Design 완료. 다음 게이트: U1 Code Generation. 미커밋(리뷰 대기).
