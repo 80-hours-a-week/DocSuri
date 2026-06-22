@@ -46,6 +46,23 @@ from ._generated.dtos.search_schema import (
     ValidationErrorDTO,
 )
 
+# U7 — Summarization (summarization.schema.json)
+from ._generated.dtos.summarization_schema import (
+    Anchor,
+    AnchorTarget,
+    AssetRef,
+    PaperAssetsResponse,
+    Persona,
+    Reproducibility,
+    SummarizeScope,
+    SummarizeTask,
+    SummaryDraft,
+    SummaryRequest,
+    SummaryResponse,
+    SummaryResultDTO,
+    TranslationDraft,
+)
+
 __all__ = [
     # search
     "SearchRequest",
@@ -73,4 +90,19 @@ __all__ = [
     "HistoryEntry",
     "HistoryPageDTO",
     "SearchResultSetDTO",
+    # summarization
+    "SummaryRequest",
+    "SummaryResponse",
+    "SummaryResultDTO",
+    "SummaryDraft",
+    "TranslationDraft",
+    "Anchor",
+    "AnchorTarget",
+    "Persona",
+    "SummarizeScope",
+    "SummarizeTask",
+    "Reproducibility",
+    # summarization — FR-17 figure/table assets
+    "AssetRef",
+    "PaperAssetsResponse",
 ]

@@ -1,101 +1,323 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://docsuri.dev/shared/dtos/summarization.schema.json",
-  "title": "SummarizationContract",
-  "description": "U7 Summarization DTO contract (FD §8 SSOT promotion — formerly hand-curated in frontend/types/generated/summarize.ts). Producer: U7; Consumer: U5. SEC-9: only the fields below are exposed (NO tokens/cost/cache-key/model id, NO asset object_ref). FR-12~14 (summary/translate/personalize), FR-17 (figure/table assets, display-only — produced by U1, presigned by U7). 🟡 PROVISIONAL. Trace: FR-12, FR-13, FR-14, FR-17, FR-5, FR-11, SEC-8, SEC-9, BR-S1..S17.",
+  "title": "SummaryResponse",
+  "description": "U7 Summarization DTO contract. The ROOT schema describes SummaryResponse — the union (oneOf) returned by on-demand actions (FR-12/13/14) and branched by U5 ApiClient to surface status. All named DTOs (SummaryRequest, SummaryResultDTO, SummaryDraft, Anchor, TranslationDraft, AbstainDTO, CostDegradedDTO, SourceUnavailableDTO) are defined in $defs for type generation.",
+  "oneOf": [
+    { "$ref": "#/$defs/SummaryResultDTO" },
+    { "$ref": "#/$defs/AbstainDTO" },
+    { "$ref": "#/$defs/CostDegradedDTO" },
+    { "$ref": "#/$defs/SourceUnavailableDTO" }
+  ],
   "$defs": {
-    "Persona": { "type": "string", "enum": ["expert", "beginner"], "description": "Summary level (generation variant). FR-14." },
-    "SummarizeTask": { "type": "string", "enum": ["summary", "translate"] },
-    "SummarizeScope": { "type": "string", "enum": ["abstract", "full"], "description": "translate only; summary is fixed full." },
-    "SummarizeRequest": {
+    "SummarizeTask": {
+      "type": "string",
+      "enum": ["summary", "translate"],
+      "description": "The specific summarization task: core summary generation or language translation. Trace: FR-12, FR-13."
+    },
+    "SummarizeScope": {
+      "type": "string",
+      "enum": ["abstract", "full"],
+      "description": "The scope of source text used: abstract-only or full paper text. Trace: FR-13."
+    },
+    "Persona": {
+      "type": "string",
+      "enum": ["expert", "beginner"],
+      "description": "The target persona for summary generation: expert-level or beginner-level. Trace: FR-14."
+    },
+    "SummaryRequest": {
       "type": "object",
+      "title": "SummaryRequest",
+      "description": "Request payload to trigger summarization or translation (FR-12/13/14).",
       "properties": {
-        "task": { "$ref": "#/$defs/SummarizeTask" },
-        "paperId": { "type": "string" },
-        "version": { "type": "integer" },
-        "scope": { "$ref": "#/$defs/SummarizeScope" },
-        "persona": { "$ref": "#/$defs/Persona" },
-        "targetLang": { "type": "string", "enum": ["ko"] },
-        "abstract": { "type": "string" }
+        "paperId": {
+          "type": "string",
+          "description": "The unique identifier of the paper (arXiv ID). Trace: FR-12."
+        },
+        "version": {
+          "type": "integer",
+          "description": "The version of the paper. Trace: FR-12."
+        },
+        "task": {
+          "$ref": "#/$defs/SummarizeTask"
+        },
+        "targetLang": {
+          "type": "string",
+          "enum": ["ko"],
+          "description": "Target language for translation. Trace: FR-13."
+        },
+        "persona": {
+          "$ref": "#/$defs/Persona"
+        },
+        "scope": {
+          "$ref": "#/$defs/SummarizeScope"
+        },
+        "abstract": {
+          "type": "string",
+          "description": "Optional raw abstract string carried for full-text fallback or abstract-only translation. Trace: FR-13."
+        }
       },
-      "required": ["task", "paperId", "version"],
+      "required": ["paperId", "version", "task"],
       "additionalProperties": false
     },
-    "AnchorVM": {
+    "AnchorTarget": {
+      "type": "string",
+      "enum": ["section", "table", "figure"],
+      "description": "Target type for a grounding anchor reference. Trace: FR-12."
+    },
+    "Anchor": {
       "type": "object",
-      "description": "Per-claim grounding anchor (§3). target=figure|table links to a PaperAsset (FR-12, asset connection).",
+      "title": "Anchor",
+      "description": "A structured citation anchor mapping a claim back to source paper evidence (FR-12/US-S3).",
       "properties": {
-        "field": { "type": "string" },
-        "target": { "type": "string", "enum": ["section", "table", "figure"] },
-        "span": { "type": "string" },
-        "label": { "type": "string" }
+        "field": {
+          "type": "string",
+          "description": "The summary field name this anchor belongs to. Trace: FR-12."
+        },
+        "target": {
+          "$ref": "#/$defs/AnchorTarget"
+        },
+        "span": {
+          "type": "string",
+          "description": "The exact source quote or text span. Trace: FR-12."
+        },
+        "label": {
+          "type": "string",
+          "description": "Derived section, table, or figure label (e.g. 'Section 3.1'). Trace: FR-12."
+        }
       },
       "required": ["field", "target", "span", "label"],
       "additionalProperties": false
     },
-    "SummaryVM": {
+    "Reproducibility": {
       "type": "object",
+      "title": "Reproducibility",
+      "description": "Quick assessment of code and data availability. Trace: FR-12.",
       "properties": {
-        "tldr": { "type": "string" },
-        "contributions": { "type": "array", "items": { "type": "string" } },
-        "method": { "type": "string" },
-        "results": { "type": "string" },
-        "limitations": { "type": "string" },
-        "reproducibility": {
-          "type": "object",
-          "properties": { "code": { "type": "string" }, "data": { "type": "string" } },
-          "required": ["code", "data"],
-          "additionalProperties": false
+        "code": {
+          "type": "string",
+          "description": "Exposed code repository link or availability statement. Trace: FR-12."
         },
-        "anchors": { "type": "array", "items": { "$ref": "#/$defs/AnchorVM" } }
+        "data": {
+          "type": "string",
+          "description": "Exposed dataset link or availability statement. Trace: FR-12."
+        }
+      },
+      "required": ["code", "data"],
+      "additionalProperties": false
+    },
+    "SummaryDraft": {
+      "type": "object",
+      "title": "SummaryDraft",
+      "description": "Structured research paper summary containing key dimensions and citation anchors.",
+      "properties": {
+        "tldr": {
+          "type": "string",
+          "description": "A single-sentence TL;DR of the paper. Trace: FR-12."
+        },
+        "contributions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Key contributions identified. Trace: FR-12."
+        },
+        "method": {
+          "type": "string",
+          "description": "The methodology/approach description. Trace: FR-12."
+        },
+        "results": {
+          "type": "string",
+          "description": "Key findings/results. Trace: FR-12."
+        },
+        "limitations": {
+          "type": "string",
+          "description": "Limitations noted by the authors or pipeline. Trace: FR-12."
+        },
+        "reproducibility": {
+          "$ref": "#/$defs/Reproducibility"
+        },
+        "anchors": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Anchor" },
+          "description": "Grounding anchors for claims. Trace: FR-12."
+        },
+        "truncated": {
+          "type": "boolean",
+          "description": "Flag indicating if the summary draft was truncated. Trace: FR-12."
+        }
       },
       "required": ["tldr", "contributions", "method", "results", "limitations", "reproducibility", "anchors"],
       "additionalProperties": false
     },
-    "TranslationVM": {
+    "TranslationDraft": {
       "type": "object",
+      "title": "TranslationDraft",
+      "description": "Translated paper content keeping core technical terminology.",
       "properties": {
-        "koreanText": { "type": "string" },
-        "keptTerms": { "type": "array", "items": { "type": "string" } }
+        "koreanText": {
+          "type": "string",
+          "description": "Korean translated body text. Trace: FR-13."
+        },
+        "keptTerms": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Untranslated terminology or glossary terms. Trace: FR-13."
+        }
       },
       "required": ["koreanText", "keptTerms"],
       "additionalProperties": false
     },
-    "SummarizeResponse": {
-      "description": "Terminal-state union (status-discriminated). Gap #2/#3: unauthorized + validation_error(message) are first-class so the client maps them precisely (BR-S17).",
-      "oneOf": [
-        { "type": "object", "properties": { "status": { "const": "ok" }, "task": { "const": "summary" }, "summary": { "$ref": "#/$defs/SummaryVM" }, "meta": { "type": "object" }, "cached": { "type": "boolean" } }, "required": ["status", "task", "summary"] },
-        { "type": "object", "properties": { "status": { "const": "ok" }, "task": { "const": "translate" }, "translation": { "$ref": "#/$defs/TranslationVM" }, "meta": { "type": "object" }, "cached": { "type": "boolean" }, "scope": { "$ref": "#/$defs/SummarizeScope" } }, "required": ["status", "task", "translation"] },
-        { "type": "object", "properties": { "status": { "const": "abstain" }, "reason": {} }, "required": ["status"] },
-        { "type": "object", "properties": { "status": { "const": "cost_degraded" }, "message": { "type": "string" } }, "required": ["status"] },
-        { "type": "object", "properties": { "status": { "const": "source_unavailable" }, "reason": {} }, "required": ["status"] },
-        { "type": "object", "properties": { "status": { "const": "validation_error" }, "field": { "type": "string" }, "message": { "type": "string" } }, "required": ["status", "message"] },
-        { "type": "object", "properties": { "status": { "const": "unauthorized" } }, "required": ["status"] }
-      ]
+    "SummaryMeta": {
+      "type": "object",
+      "title": "SummaryMeta",
+      "description": "Summary metadata including fallback information.",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Source text indicator (e.g. 'full_text'). Trace: FR-12."
+        },
+        "fallback": {
+          "type": "string",
+          "description": "Fallback reason if processing was degraded (e.g., 'abstract'). Trace: FR-13."
+        }
+      },
+      "additionalProperties": false
+    },
+    "SummaryResultDTO": {
+      "type": "object",
+      "title": "SummaryResultDTO",
+      "description": "Successful summary or translation response. Only SEC-9 white-listed fields are exposed.",
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "ok",
+          "description": "Successful status indicator. Trace: FR-11."
+        },
+        "task": {
+          "$ref": "#/$defs/SummarizeTask"
+        },
+        "meta": {
+          "$ref": "#/$defs/SummaryMeta"
+        },
+        "cached": {
+          "type": "boolean",
+          "description": "Indicates if the response was served from cache. Trace: FR-11."
+        },
+        "summary": {
+          "$ref": "#/$defs/SummaryDraft"
+        },
+        "translation": {
+          "$ref": "#/$defs/TranslationDraft"
+        }
+      },
+      "required": ["status", "task", "meta", "cached"],
+      "additionalProperties": false
+    },
+    "AbstainDTO": {
+      "type": "object",
+      "title": "AbstainDTO",
+      "description": "Returned when summary is abstained due to failure to pass grounding validation rules. Trace: FR-12.",
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "abstain"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Non-technical reason for abstaining. Trace: SEC-9."
+        }
+      },
+      "required": ["status", "reason"],
+      "additionalProperties": false
+    },
+    "CostDegradedDTO": {
+      "type": "object",
+      "title": "CostDegradedDTO",
+      "description": "Returned when the budget circuit is OPEN and operations are degraded. Trace: NFR-C1.",
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "cost_degraded"
+        },
+        "message": {
+          "type": "string",
+          "description": "User-facing message. Trace: SEC-9."
+        }
+      },
+      "required": ["status", "message"],
+      "additionalProperties": false
+    },
+    "SourceUnavailableDTO": {
+      "type": "object",
+      "title": "SourceUnavailableDTO",
+      "description": "Returned when source content is unavailable for processing. Trace: FR-12.",
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "source_unavailable"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Reason for source unavailability. Trace: SEC-9."
+        }
+      },
+      "required": ["status", "reason"],
+      "additionalProperties": false
     },
     "AssetRef": {
       "type": "object",
       "title": "AssetRef",
-      "description": "FR-17 figure/table view-model (display-only). SEC-9: a short-lived presigned `url` only — the S3 object_ref and internal manifest columns are NEVER exposed. Produced by U1 ingestion (paper_asset), presigned by U7. Ordered by `ordinal`.",
+      "description": "FR-17 figure/table view-model (display-only). Produced by U1 ingestion (paper_asset), presigned by U7. SEC-9: a short-lived signed `url` only — the S3 object_ref and internal manifest columns are NEVER exposed.",
       "properties": {
-        "assetId": { "type": "string" },
-        "type": { "type": "string", "enum": ["figure", "table"] },
-        "ordinal": { "type": "integer" },
-        "caption": { "type": "string" },
-        "sourceMode": { "type": "string", "enum": ["structured", "page-crop"] },
-        "url": { "type": "string", "description": "Short-lived signed GET URL (SEC-9)." },
-        "pageRef": { "type": ["integer", "null"] },
-        "bbox": { "type": ["array", "null"], "items": { "type": "number" } }
+        "assetId": { "type": "string", "description": "Deterministic asset id. Trace: FR-17." },
+        "type": { "type": "string", "enum": ["figure", "table"], "description": "Asset kind. Trace: FR-17." },
+        "ordinal": { "type": "integer", "description": "Display order within its type. Trace: FR-17." },
+        "caption": { "type": "string", "description": "Figure/table caption (escaped on render). Trace: FR-17." },
+        "sourceMode": { "type": "string", "enum": ["structured", "page-crop"], "description": "How the asset was extracted (hybrid). Trace: FR-17." },
+        "url": { "type": "string", "description": "Short-lived signed GET URL (SEC-9). Trace: FR-17, SEC-9." },
+        "pageRef": { "type": ["integer", "null"], "description": "Source page (page-crop). Trace: FR-17." },
+        "bbox": { "type": ["array", "null"], "items": { "type": "number" }, "description": "Source bbox (page-crop). Trace: FR-17." }
       },
       "required": ["assetId", "type", "ordinal", "caption", "sourceMode", "url"],
       "additionalProperties": false
     },
+    "AssetsOkDTO": {
+      "type": "object",
+      "title": "AssetsOkDTO",
+      "description": "Successful asset manifest. Trace: FR-17.",
+      "properties": {
+        "status": { "type": "string", "const": "ok" },
+        "assets": { "type": "array", "items": { "$ref": "#/$defs/AssetRef" }, "description": "Figure/table assets in display order. Trace: FR-17." }
+      },
+      "required": ["status", "assets"],
+      "additionalProperties": false
+    },
+    "AssetsLicenseUnavailableDTO": {
+      "type": "object",
+      "title": "AssetsLicenseUnavailableDTO",
+      "description": "OA license not permitted (or assets not configured) → no assets shown. Trace: FR-17, BR-SF-11.",
+      "properties": {
+        "status": { "type": "string", "const": "license_unavailable" }
+      },
+      "required": ["status"],
+      "additionalProperties": false
+    },
+    "AssetsUnauthorizedDTO": {
+      "type": "object",
+      "title": "AssetsUnauthorizedDTO",
+      "description": "Authentication required (401). Trace: FR-17, SEC-8.",
+      "properties": {
+        "status": { "type": "string", "const": "unauthorized" }
+      },
+      "required": ["status"],
+      "additionalProperties": false
+    },
     "PaperAssetsResponse": {
-      "description": "GET /api/papers/{id}/assets terminal union. OA-license-gated like full-text (BR-SF-11). FR-17.",
+      "title": "PaperAssetsResponse",
+      "description": "GET /api/papers/{id}/assets terminal union (FR-17). OA-license-gated like full-text (BR-SF-11).",
       "oneOf": [
-        { "type": "object", "properties": { "status": { "const": "ok" }, "assets": { "type": "array", "items": { "$ref": "#/$defs/AssetRef" } } }, "required": ["status", "assets"] },
-        { "type": "object", "properties": { "status": { "const": "license_unavailable" } }, "required": ["status"] },
-        { "type": "object", "properties": { "status": { "const": "unauthorized" } }, "required": ["status"] }
+        { "$ref": "#/$defs/AssetsOkDTO" },
+        { "$ref": "#/$defs/AssetsLicenseUnavailableDTO" },
+        { "$ref": "#/$defs/AssetsUnauthorizedDTO" }
       ]
     }
   }

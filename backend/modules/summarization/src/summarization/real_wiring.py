@@ -31,11 +31,15 @@ class SummarizationBundle:
     settings: SummarizationSettings
 
 
+from typing import Callable
+
+
 def build_real_orchestrator(
     settings: SummarizationSettings,
     *,
     cost_guard: CostGuardCircuitBreaker,
     observability: ObservabilityHub,
+    abstract_lookup: Callable[[str], str | None] | None = None,
 ) -> SummarizationBundle:
     assert settings.s3_bucket is not None  # noqa: S101 — gated by summarization_enabled
 
@@ -55,7 +59,7 @@ def build_real_orchestrator(
 
     orchestrator = SummarizationOrchestrationService(
         store=store,
-        source_selector=SourceSelector(full_text),
+        source_selector=SourceSelector(full_text, abstract_lookup=abstract_lookup),
         refiner=InputRefiner(),
         glossary_resolver=GlossaryResolver(glossary_repo),
         length_router=LengthRouter(),

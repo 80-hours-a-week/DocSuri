@@ -22,12 +22,22 @@ class BedrockCohereQueryEmbedder:
     """Query embedding via Bedrock (Cohere Embed Multilingual v3, reader=search_query)."""
 
     def __init__(
-        self, *, model_id: str, region_name: str | None = None, client: Any | None = None
+        self,
+        *,
+        model_id: str,
+        region_name: str | None = None,
+        client: Any | None = None,
     ) -> None:
         if client is None:
             import boto3  # lazy: only the `real` extra needs boto3
+            from botocore.config import Config
 
-            client = boto3.client("bedrock-runtime", region_name=region_name)
+            config = Config(
+                connect_timeout=5.0,
+                read_timeout=10.0,
+                retries={"max_attempts": 1},
+            )
+            client = boto3.client("bedrock-runtime", region_name=region_name, config=config)
         self._client = client
         self._model_id = model_id
 

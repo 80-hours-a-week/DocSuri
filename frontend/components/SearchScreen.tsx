@@ -70,6 +70,11 @@ export function SearchScreen() {
     try {
       const outcome = await getApiClient().search(result.value);
       setExecutedQuery(result.value);
+      if (outcome.kind === 'invalid') {
+        setInlineError(outcome.message);
+      } else {
+        setInlineError(null);
+      }
       setState({ tag: 'outcome', outcome });
     } catch (err) {
       if (err instanceof UserFacingError && err.isAuth) {
@@ -197,7 +202,7 @@ function renderState(state: ScreenState, sort: SortKey, onRetry: () => void) {
     case 'abstain':
       return <StateView kind="abstain" />;
     case 'invalid':
-      return <StateView kind="invalid" message={outcome.message} />;
+      return <StateView kind="invalid" message={outcome.message} field={outcome.field} />;
     default: {
       const _exhaustive: never = outcome;
       return _exhaustive;

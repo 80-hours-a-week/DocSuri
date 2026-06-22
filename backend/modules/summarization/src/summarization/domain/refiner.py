@@ -32,6 +32,9 @@ _CAPTION_RE = re.compile(r"^\s*(table|figure|fig\.?)\s*\d+[:.]\s.*$", re.IGNOREC
 _FORMULA_RE = re.compile(
     r"\$[^$]+\$|\\\[[^\]]+\\\]|\\begin\{equation\}.*?\\end\{equation\}", re.DOTALL
 )
+_PRESERVED_RE = re.compile(
+    r"(?i)\b(appendix|supplementary results|supplementary material|supplementary information)\b.*"
+)
 _CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
 
@@ -70,6 +73,7 @@ class InputRefiner:
 
         captions = tuple(m.group(0).strip() for m in _CAPTION_RE.finditer(body))
         formulas = tuple(m.group(0).strip() for m in _FORMULA_RE.finditer(body))
+        preserved = tuple(m.group(0).strip() for m in _PRESERVED_RE.finditer(body))
         sections = self._derive_sections(body)
 
         return RefinedSource(
@@ -77,6 +81,7 @@ class InputRefiner:
             sections=sections,
             captions=captions,
             formulas=formulas,
+            preserved=preserved,
             token_count=_estimate_tokens(body),
         )
 

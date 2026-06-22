@@ -95,3 +95,14 @@ def test_translate_path() -> None:
     assert out["status"] == "ok"
     assert out["task"] == "translate"
     assert "translation" in out
+
+
+def test_orchestrator_abstains_on_map_reduce_length() -> None:
+    from summarization.domain.length_router import LengthRouter
+    length_router = LengthRouter(context_budget=10, input_cap=100)
+    orch = make_orchestrator()
+    orch._length = length_router
+
+    result = orch.run(_req(), _ctx())
+    assert isinstance(result, AbstainDTO)
+    assert result.reason == "input_too_long"

@@ -142,7 +142,14 @@ class ArxivHttpSource:
 
 
 def parse_atom_feed(body: str) -> list[MetadataRecord]:
-    root = ET.fromstring(body)
+    try:
+        root = ET.fromstring(body)
+    except ET.ParseError as e:
+        raise PermanentIngestionError(
+            f"Failed to parse XML Atom feed: {e}",
+            reason=FailureReason.PARSE_FAILURE,
+            stage="parse_atom_feed",
+        ) from e
     records: list[MetadataRecord] = []
     for entry in root.findall("atom:entry", ATOM_NS):
         arxiv_ref = _required_text(entry, "atom:id", ATOM_NS).rsplit("/", 1)[-1]
@@ -177,7 +184,14 @@ def parse_atom_feed(body: str) -> list[MetadataRecord]:
 
 
 def parse_oai_records(body: str) -> list[MetadataRecord]:
-    root = ET.fromstring(body)
+    try:
+        root = ET.fromstring(body)
+    except ET.ParseError as e:
+        raise PermanentIngestionError(
+            f"Failed to parse XML OAI records: {e}",
+            reason=FailureReason.PARSE_FAILURE,
+            stage="parse_oai_records",
+        ) from e
     records: list[MetadataRecord] = []
     for metadata in root.findall(".//oai:metadata/arxiv:arXiv", OAI_NS):
         arxiv_ref = _required_text(metadata, "arxiv:id", OAI_NS)
@@ -201,7 +215,14 @@ def parse_oai_records(body: str) -> list[MetadataRecord]:
 
 
 def parse_oai_resumption_token(body: str) -> str | None:
-    root = ET.fromstring(body)
+    try:
+        root = ET.fromstring(body)
+    except ET.ParseError as e:
+        raise PermanentIngestionError(
+            f"Failed to parse XML OAI resumption token: {e}",
+            reason=FailureReason.PARSE_FAILURE,
+            stage="parse_oai_resumption_token",
+        ) from e
     token = root.findtext(".//oai:resumptionToken", default="", namespaces=OAI_NS).strip()
     return token or None
 

@@ -41,6 +41,7 @@ class OpenSearchClientFactory:
             http_auth=http_auth,
             use_ssl=use_ssl,
             verify_certs=verify_certs,
+            timeout=10,
         )
 
 
