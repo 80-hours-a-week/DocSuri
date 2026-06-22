@@ -39,6 +39,21 @@ describe('CitationTreePanel', () => {
     ).not.toBeInTheDocument();
     expect(parentExpand).toHaveTextContent('확장');
 
+    await user.click(parentExpand);
+    expect(
+      await screen.findByText(
+        'Neural Machine Translation by Jointly Learning to Align and Translate',
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('citation-expand-doi:10.5555/3295222.3295349'));
+    expect(
+      await screen.findByText('Batch Normalization: Accelerating Deep Network Training'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('Neural Machine Translation by Jointly Learning to Align and Translate'),
+    ).not.toBeInTheDocument();
+
     await user.click(screen.getByTestId('citation-save-1706.03762'));
     expect(await screen.findByText('저장됨')).toBeInTheDocument();
   });

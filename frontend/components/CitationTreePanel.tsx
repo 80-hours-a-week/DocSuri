@@ -95,7 +95,7 @@ export function CitationTreePanel({ paperId, onClose }: CitationTreePanelProps) 
     setActionError(null);
     try {
       const tree = await getApiClient().getCitationTree(paperId, { expandNodeId: nodeId });
-      setExpanded((prev) => ({ ...prev, [nodeId]: tree }));
+      setExpanded({ [nodeId]: tree });
     } catch {
       setActionError('선택한 인용의 하위 트리를 불러오지 못했습니다.');
     } finally {

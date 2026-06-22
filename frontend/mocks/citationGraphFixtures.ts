@@ -24,27 +24,44 @@ const rootNodes = [
   },
 ];
 
-const expandedNodes = [
-  {
-    nodeId: '1409.0473',
-    title: 'Neural Machine Translation by Jointly Learning to Align and Translate',
-    year: 2015,
-    citationCount: 31000,
-    depth: 2,
-    arxivId: '1409.0473',
-    url: 'https://arxiv.org/abs/1409.0473',
-    saveable: true,
-    alreadyShown: false,
-  },
-];
+const expandedNodesByParent = {
+  '1706.03762': [
+    {
+      nodeId: '1409.0473',
+      title: 'Neural Machine Translation by Jointly Learning to Align and Translate',
+      year: 2015,
+      citationCount: 31000,
+      depth: 2,
+      arxivId: '1409.0473',
+      url: 'https://arxiv.org/abs/1409.0473',
+      saveable: true,
+      alreadyShown: false,
+    },
+  ],
+  'doi:10.5555/3295222.3295349': [
+    {
+      nodeId: '1512.03385',
+      title: 'Batch Normalization: Accelerating Deep Network Training',
+      year: 2015,
+      citationCount: 45000,
+      depth: 2,
+      arxivId: '1512.03385',
+      url: 'https://arxiv.org/abs/1512.03385',
+      saveable: true,
+      alreadyShown: false,
+    },
+  ],
+};
 
 export function mockCitationTree(paperId: string, expandNodeId?: string): CitationTreeResponse {
   if (expandNodeId) {
+    const expandedNodes =
+      expandedNodesByParent[expandNodeId as keyof typeof expandedNodesByParent] ?? [];
     return {
       status: 'Success',
       rootPaperId: paperId,
       nodes: expandedNodes,
-      edges: [{ source: expandNodeId, target: '1409.0473' }],
+      edges: expandedNodes.map((node) => ({ source: expandNodeId, target: node.nodeId })),
       unresolved: [],
       depthReturned: 2,
       truncated: false,
