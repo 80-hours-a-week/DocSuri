@@ -1015,3 +1015,12 @@
 **User Input(원문)**: "너의 판단을 믿고 승인할게 알아서 진행해줘" (트랙 위임 진행).
 **AI Response**: U7 멀티모달 FD(읽기 측 자산 노출 + 정합 갭 3건) — 위임 진행으로 게이트 결정 D1~D5 확정·계획서 작성. 기존 U7 FD 확장: **`domain-entities.md` §9**(AssetRef[서명 URL만·SEC-9]·PaperAssetsResponse union[ok/license_unavailable/unauthorized]·**`GET /api/papers/{id}/assets`** 독립 엔드포인트·AssetManifestReadPort/AssetUrlSigner[paper_asset 읽기+presign]·앵커↔자산 프론트 매칭·갭#1 SSOT `summarization.schema.json` 승격·갭#2/#3 상태 매핑), **`business-rules.md`**(BR-S15 자산 읽기·OA 게이트 BR-SF-11 재사용·presign, BR-S16 계약 SSOT, BR-S17 unauthorized/validation_error 상태, PBT-S6 자산 라운드트립·비노출). U7은 읽기 측(생산=U1)·요약/번역 생성·근거화·캐시 **불변**. **앱 코드 미생성.**
 **Context**: CONSTRUCTION — U7 멀티모달 FD 완료. 다음: U7 Code Generation(shared schema·/assets 엔드포인트·갭 수정·frontend types/classify). 미커밋(리뷰 대기).
+
+---
+
+## 멀티모달 표시 — U7 Summarization Code Generation + Build & Test (읽기 측 + 갭)
+**Timestamp**: 2026-06-22T00:00:00Z
+**User Input(원문)**: "u7코드까지 쌓고 올릴게 진행해줘" (위임 진행).
+**Build Status**: Success · **Test Status**: Pass (백엔드 summarization 48 passed/1skip·자산 7 passed·ruff clean; 프론트 tsc 0·next lint clean·vitest 75 passed)
+**AI Response**: U7 멀티모달 읽기 측 + 정합 갭 3건 코드. **공유 갭#1**: `shared/dtos/summarization.schema.json` SSOT 수립(요약/번역 + AssetRef/PaperAssetsResponse + unauthorized/validation_error). **백엔드**: `domain/models`(StoredAsset[내부·object_ref]·AssetRef[공개·서명 URL만·to_dict SEC-9])·`ports`(AssetReadPort)·`orchestrator`(asset_reader 주입·list_assets presign)·`api/router`(GET /api/papers/{id}/assets 인증·OA 게이트·서명 URL + 갭#2 validation_error message)·`adapters/rds_assets.py`(RdsS3AssetReader: paper_asset 읽기+S3 presign, object_ref 비노출)·`tests/test_assets_endpoint.py`(7). **프론트**: `summarize.ts`(AssetRef·PaperAssetsResponse·UnauthorizedDTO·SummarizeValidationErrorDTO[search 충돌 회피])·`classifySummarize`(classifyAssetsResponse + 갭#2/#3 매핑: validation_error→invalid·unauthorized→인증 메시지)·`apiClient.getAssets`·`test/classifyAssets.test.ts`(5). NFR/Infra 경량 폴드(읽기 포트·presign TTL·assets_enabled 게이트). 요약/번역 생성·근거화·캐시 불변. 코드 요약 `construction/u7-summarization/code/u7-multimodal-read-code-summary.md`. **U7 읽기 측 종결.**
+**Context**: CONSTRUCTION — U7 멀티모달 슬라이스 종결. 다음(마지막): U5 상세/뷰어 자산 렌더 컴포넌트. 미커밋(리뷰 대기).

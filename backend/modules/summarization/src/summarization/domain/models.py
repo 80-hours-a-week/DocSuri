@@ -252,3 +252,44 @@ class SourceUnavailableDTO:
 
 
 SummaryResponse = SummaryResultDTO | AbstainDTO | CostDegradedDTO | SourceUnavailableDTO
+
+
+# --- FR-17 multimodal asset read DTOs (display-only; produced by U1, read by U7) ----
+@dataclass(frozen=True, slots=True)
+class StoredAsset:
+    """Internal manifest row read from ``paper_asset`` (carries ``object_ref``)."""
+
+    asset_id: str
+    type: str  # figure | table
+    ordinal: int
+    caption: str
+    source_mode: str  # structured | page-crop
+    object_ref: str  # internal — NOT exposed (SEC-9); presigned before leaving U7
+    page_ref: int | None = None
+    bbox: list | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class AssetRef:
+    """Public asset view-model — a short-lived signed ``url`` only (SEC-9, BR-S15)."""
+
+    asset_id: str
+    type: str
+    ordinal: int
+    caption: str
+    source_mode: str
+    url: str  # presigned; object_ref/internal meta never exposed
+    page_ref: int | None = None
+    bbox: list | None = None
+
+    def to_dict(self) -> dict:
+        return {
+            "assetId": self.asset_id,
+            "type": self.type,
+            "ordinal": self.ordinal,
+            "caption": self.caption,
+            "sourceMode": self.source_mode,
+            "url": self.url,
+            "pageRef": self.page_ref,
+            "bbox": self.bbox,
+        }

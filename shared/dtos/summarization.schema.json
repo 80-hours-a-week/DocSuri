@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docsuri.dev/shared/dtos/summarization.schema.json",
+  "title": "SummarizationContract",
+  "description": "U7 Summarization DTO contract (FD §8 SSOT promotion — formerly hand-curated in frontend/types/generated/summarize.ts). Producer: U7; Consumer: U5. SEC-9: only the fields below are exposed (NO tokens/cost/cache-key/model id, NO asset object_ref). FR-12~14 (summary/translate/personalize), FR-17 (figure/table assets, display-only — produced by U1, presigned by U7). 🟡 PROVISIONAL. Trace: FR-12, FR-13, FR-14, FR-17, FR-5, FR-11, SEC-8, SEC-9, BR-S1..S17.",
+  "$defs": {
+    "Persona": { "type": "string", "enum": ["expert", "beginner"], "description": "Summary level (generation variant). FR-14." },
+    "SummarizeTask": { "type": "string", "enum": ["summary", "translate"] },
+    "SummarizeScope": { "type": "string", "enum": ["abstract", "full"], "description": "translate only; summary is fixed full." },
+    "SummarizeRequest": {
+      "type": "object",
+      "properties": {
+        "task": { "$ref": "#/$defs/SummarizeTask" },
+        "paperId": { "type": "string" },
+        "version": { "type": "integer" },
+        "scope": { "$ref": "#/$defs/SummarizeScope" },
+        "persona": { "$ref": "#/$defs/Persona" },
+        "targetLang": { "type": "string", "enum": ["ko"] },
+        "abstract": { "type": "string" }
+      },
+      "required": ["task", "paperId", "version"],
+      "additionalProperties": false
+    },
+    "AnchorVM": {
+      "type": "object",
+      "description": "Per-claim grounding anchor (§3). target=figure|table links to a PaperAsset (FR-12, asset connection).",
+      "properties": {
+        "field": { "type": "string" },
+        "target": { "type": "string", "enum": ["section", "table", "figure"] },
+        "span": { "type": "string" },
+        "label": { "type": "string" }
+      },
+      "required": ["field", "target", "span", "label"],
+      "additionalProperties": false
+    },
+    "SummaryVM": {
+      "type": "object",
+      "properties": {
+        "tldr": { "type": "string" },
+        "contributions": { "type": "array", "items": { "type": "string" } },
+        "method": { "type": "string" },
+        "results": { "type": "string" },
+        "limitations": { "type": "string" },
+        "reproducibility": {
+          "type": "object",
+          "properties": { "code": { "type": "string" }, "data": { "type": "string" } },
+          "required": ["code", "data"],
+          "additionalProperties": false
+        },
+        "anchors": { "type": "array", "items": { "$ref": "#/$defs/AnchorVM" } }
+      },
+      "required": ["tldr", "contributions", "method", "results", "limitations", "reproducibility", "anchors"],
+      "additionalProperties": false
+    },
+    "TranslationVM": {
+      "type": "object",
+      "properties": {
+        "koreanText": { "type": "string" },
+        "keptTerms": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["koreanText", "keptTerms"],
+      "additionalProperties": false
+    },
+    "SummarizeResponse": {
+      "description": "Terminal-state union (status-discriminated). Gap #2/#3: unauthorized + validation_error(message) are first-class so the client maps them precisely (BR-S17).",
+      "oneOf": [
+        { "type": "object", "properties": { "status": { "const": "ok" }, "task": { "const": "summary" }, "summary": { "$ref": "#/$defs/SummaryVM" }, "meta": { "type": "object" }, "cached": { "type": "boolean" } }, "required": ["status", "task", "summary"] },
+        { "type": "object", "properties": { "status": { "const": "ok" }, "task": { "const": "translate" }, "translation": { "$ref": "#/$defs/TranslationVM" }, "meta": { "type": "object" }, "cached": { "type": "boolean" }, "scope": { "$ref": "#/$defs/SummarizeScope" } }, "required": ["status", "task", "translation"] },
+        { "type": "object", "properties": { "status": { "const": "abstain" }, "reason": {} }, "required": ["status"] },
+        { "type": "object", "properties": { "status": { "const": "cost_degraded" }, "message": { "type": "string" } }, "required": ["status"] },
+        { "type": "object", "properties": { "status": { "const": "source_unavailable" }, "reason": {} }, "required": ["status"] },
+        { "type": "object", "properties": { "status": { "const": "validation_error" }, "field": { "type": "string" }, "message": { "type": "string" } }, "required": ["status", "message"] },
+        { "type": "object", "properties": { "status": { "const": "unauthorized" } }, "required": ["status"] }
+      ]
+    },
+    "AssetRef": {
+      "type": "object",
+      "title": "AssetRef",
+      "description": "FR-17 figure/table view-model (display-only). SEC-9: a short-lived presigned `url` only — the S3 object_ref and internal manifest columns are NEVER exposed. Produced by U1 ingestion (paper_asset), presigned by U7. Ordered by `ordinal`.",
+      "properties": {
+        "assetId": { "type": "string" },
+        "type": { "type": "string", "enum": ["figure", "table"] },
+        "ordinal": { "type": "integer" },
+        "caption": { "type": "string" },
+        "sourceMode": { "type": "string", "enum": ["structured", "page-crop"] },
+        "url": { "type": "string", "description": "Short-lived signed GET URL (SEC-9)." },
+        "pageRef": { "type": ["integer", "null"] },
+        "bbox": { "type": ["array", "null"], "items": { "type": "number" } }
+      },
+      "required": ["assetId", "type", "ordinal", "caption", "sourceMode", "url"],
+      "additionalProperties": false
+    },
+    "PaperAssetsResponse": {
+      "description": "GET /api/papers/{id}/assets terminal union. OA-license-gated like full-text (BR-SF-11). FR-17.",
+      "oneOf": [
+        { "type": "object", "properties": { "status": { "const": "ok" }, "assets": { "type": "array", "items": { "$ref": "#/$defs/AssetRef" } } }, "required": ["status", "assets"] },
+        { "type": "object", "properties": { "status": { "const": "license_unavailable" } }, "required": ["status"] },
+        { "type": "object", "properties": { "status": { "const": "unauthorized" } }, "required": ["status"] }
+      ]
+    }
+  }
+}

@@ -1,10 +1,8 @@
-/* Provisional — curated ahead of shared/dtos/summarization.schema.json.
- * Producer: U7 Summarization. Consumer: U7 frontend slice. SEC-9: only the fields
- * below are exposed (no tokens/cost/cache-key/model id).
- *
- * NOTE (Q5=C, 2026-06-19): `scope`, `getFullText`/FullText* are a NEW backend
- * contract. These shapes are provisional; re-align via `pnpm gen:types` once the
- * backend full-text-return API + `scope` param are finalized (plan §6). */
+/* Curated from shared/dtos/summarization.schema.json (SSOT — established 2026-06-22,
+ * FR-17 / FD §8). Producer: U7 Summarization. Consumer: U7/U5 frontend. SEC-9: only the
+ * fields below are exposed (no tokens/cost/cache-key/model id; assets expose a signed url
+ * only — never object_ref). Run `pnpm gen:types` to refresh the raw schema dump under
+ * types/.schema-raw/ for drift review. */
 
 export type SummarizeTask = 'summary' | 'translate';
 /** translate only; summary is fixed `full`. */
@@ -93,12 +91,27 @@ export interface SourceUnavailableDTO {
   reason: unknown;
 }
 
+/** Gap #2: validation failure carries a non-technical `message` (→ "check your input").
+ * Named distinctly from search's ValidationErrorDTO (status-discriminated here). */
+export interface SummarizeValidationErrorDTO {
+  status: 'validation_error';
+  field?: string;
+  message: string;
+}
+
+/** Gap #3: auth required (401). */
+export interface UnauthorizedDTO {
+  status: 'unauthorized';
+}
+
 export type SummarizeResponseDTO =
   | SummaryOkDTO
   | TranslationOkDTO
   | SummaryAbstainDTO
   | CostDegradedDTO
-  | SourceUnavailableDTO;
+  | SourceUnavailableDTO
+  | SummarizeValidationErrorDTO
+  | UnauthorizedDTO;
 
 // ---- Full-text return (Q5=C, provisional) ----
 
@@ -126,3 +139,34 @@ export type FullTextResponseDTO =
   | FullTextOkDTO
   | FullTextLicenseDTO
   | FullTextSourceUnavailableDTO;
+
+// ---- Figure/table assets (FR-17, display-only) ----
+
+/** A single figure/table for the detail/viewer. SEC-9: `url` is a short-lived signed URL;
+ * the S3 object_ref / internal manifest fields are NEVER exposed. Produced by U1, presigned
+ * by U7. Anchors (AnchorVM.target = figure|table) link by matching label/caption + ordinal. */
+export interface AssetRef {
+  assetId: string;
+  type: 'figure' | 'table';
+  ordinal: number;
+  caption: string;
+  sourceMode: 'structured' | 'page-crop';
+  url: string;
+  pageRef?: number | null;
+  bbox?: number[] | null;
+}
+
+export interface AssetsOkDTO {
+  status: 'ok';
+  assets: AssetRef[];
+}
+
+/** OA license not permitted (or assets not configured) → no assets shown (BR-SF-11). */
+export interface AssetsLicenseUnavailableDTO {
+  status: 'license_unavailable';
+}
+
+export type PaperAssetsResponseDTO =
+  | AssetsOkDTO
+  | AssetsLicenseUnavailableDTO
+  | UnauthorizedDTO;

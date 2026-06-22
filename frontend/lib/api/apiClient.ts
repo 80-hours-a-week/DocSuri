@@ -9,8 +9,10 @@ import { classifySearchResponse, type SearchOutcome } from './classify';
 import {
   classifySummarizeResponse,
   classifyFullTextResponse,
+  classifyAssetsResponse,
   type SummarizeOutcome,
   type FullTextOutcome,
+  type AssetsOutcome,
 } from './classifySummarize';
 import { recordPath } from '../observability';
 import type {
@@ -123,6 +125,19 @@ export class ApiClient {
     const res = await this.request({ method: 'GET', path, idempotent: true });
     if (res.status === 200 || res.status === 400) {
       return classifyFullTextResponse(res.body);
+    }
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+  }
+
+  /** Figure/table assets for the detail/viewer (FR-17, display-only; OA license-gated).
+   * Returns signed URLs only (SEC-9). Independent of the full-text viewer. */
+  async getAssets(paperId: string, version: number): Promise<AssetsOutcome> {
+    const path = `/api/papers/${encodeURIComponent(paperId)}/assets?version=${encodeURIComponent(
+      String(version),
+    )}`;
+    const res = await this.request({ method: 'GET', path, idempotent: true });
+    if (res.status === 200 || res.status === 401) {
+      return classifyAssetsResponse(res.body);
     }
     throw normalizeHttpError(res.status, pick(res.body, 'message'));
   }
