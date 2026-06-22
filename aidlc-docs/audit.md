@@ -10,8 +10,6 @@
 **AI 응답**: 레포 상태 조정(워킹 트리는 이미 블랭크 슬레이트; 열린 PR #33은 리셋의 커밋 쌍둥이; 신규 AI-DLC 룰셋 당일 추가; 기존 aidlc-state.md 없음). AI-DLC 환영 메시지 표시. 워크스페이스 탐지 판정: **Greenfield**(디스크에 소스 파일 없음).
 **맥락**: INCEPTION — 워크스페이스 탐지. Greenfield → 다음 단계 요구사항 분석.
 
----
-
 ## PR 문서 작성 및 커밋 메시지 상세화
 **Timestamp**: 2026-06-16T13:58:22Z
 **User Input**: ".github\\PULL_REQUEST_TEMPLATE.md 을 기반으로, 202606162300_PR.md를 작성해 주세요, 그리고 커밋 메시지를 좀 더 상세히 작성해 주세요."
@@ -857,6 +855,78 @@
 **User Input(원문)**: "승인할게 Build & Test 진행해줘"
 **AI Response**: Code Generation 승인 게이트 통과 → Build & Test 단계 진행. 유닛 스코프 산출물 `construction/u7-summarization/build-and-test/`(build-instructions·unit-test-instructions·integration-test-instructions·security-test-instructions·build-and-test-summary). **실측 검증**: `pytest` **29 passed + 1 skipped**(통합 self-skip)·per-file(refiner3·glossary4·grounding4·source/cache/length6·orchestrator7·pbt5·integration1skip)·`ruff check src tests` **All checks passed**·임포트 스모크 OK. 통합 5 시나리오(Bedrock·S3+Redis·전문read/폴백·RDS owner격리·비용게이트) 정의=게이트 레인 전용(real-first). 성능=N/A(NFR-P2 온디맨드). 보안 체크리스트(인젝션 본문격리·근거화·SEC-9 라운드트립·owner격리·fail-closed). **U7 CONSTRUCTION 종료(설계루프+코드+빌드/테스트).** Operations 전 last-mile(프레임워크 밖): app-shell 마운트(@ELSAPHABA)·인프라 증분(@Infra)·shared/dtos/summarization 승격·비동기 잡 fast-follow.
 **Context**: CONSTRUCTION — U7 Build & Test 완료. **U7(요약/번역) CONSTRUCTION 전 단계 종료(FD→NFRReq→NFRDes→Infra→CodeGen→Build&Test).** AI-DLC 프레임워크는 Build & Test에서 종료. 브랜치 feature/u7-v2, PR #115 — 머지·라이브 배포는 사용자/팀 결정.
+
+---
+
+## U8 인용 그래프/각주 트리 — Requirements Analysis 질문지 생성
+**Timestamp**: 2026-06-19T00:00:00Z
+**User Input(원문)**: "각주 트리를 보여주기 위하여 인용 그래프 기능을 추가하려고 하는데, AI-DLC 방법론을 기반으로 구현하려고 합니다. 이를 위하여 상세 질문지를 만들어 md 파일로 만들어 주세요. aidlc-docs 의 내용을 참고해 주세요."
+**AI Response**: 현재 `requirements.md` §12에서 인용 그래프/"trace" 내비게이션이 v1 제외임을 확인하고, 바로 설계/코드로 진입하지 않고 Requirements Analysis 재진입 질문지 `aidlc-docs/inception/requirements/requirement-verification-questions-citation-graph.md`를 생성. 질문 22개: 범위 편입·U8 유닛 경계·논문 상세보기 진입점·backward/forward 방향·depth/노드 상한·트리 표현·Semantic Scholar/OpenAlex/arXiv 데이터 소스·온디맨드+캐시·7일 TTL·표시 메타데이터·unresolved 분리·필터/정렬·U4 라이브러리 연동·로그인 요구·NFR-P3·U6 쿼터/비용 신호·실패 UX·모바일 인터랙션·U7 출처 연결·QT-6·운영 관측성·후속 산출물 범위를 포함. 코드/인프라 미생성.
+**Context**: INCEPTION 재진입 — U8 Citation Graph 후보 기능의 요구사항 명확화 게이트 작성. 답변 대기.
+
+---
+
+## U8 요구사항 답변 확정 + FR-15~ 등재
+**Timestamp**: 2026-06-19T00:00:00Z
+**User Input(원문)**: "Q3: 논문 상세보기 페이지에서, 요약, 초록 번역, 전문 번역, 각주 트리 4개 버튼을 배치하면 될 것 같습니다. 논문 상세보기 페이지는 타 분기에서 생성중이므로 FE를 구현할 필요 없습니다. \nQ4: B가 나을 것 같습니다. Q10은 제목, 연도, 인용수까지 나오면 좋을 것 같습니다.\nQ14: 검색 기능 자체가 로그인이 필요하므로 모든 기능을 로그인 필수로 하면 될 것 같습니다.\n\n나머지는 다 권장안으로 진행하겠습니다."
+**AI Response**: 질문지에 답변 반영 — Q3=X(논문 상세보기 페이지 4버튼·FE 구현 제외), Q4=B(backward references만), Q10=X(제목·연도·인용수), Q14=B(전체 로그인 필수), Q22=B(User Stories+Units Generation까지 진행), 나머지 A. 이후 Q22에 따라 `requirements.md` 갱신: **FR-15(논문 상세보기의 backward references 각주 트리, 기본 1-hop/최대 2-hop/50노드, 노드=제목·연도·인용수)·FR-16(인용 노드 라이브러리 저장/로그인 필수/실패 UX)·NFR-P3(검색 SLA 제외 온디맨드)·QT-6(인용 엣지 정확도+그래프 불변식)** 추가, §12에서 인용 그래프 제외를 일부 해제하는 U8 카브아웃 추가. `stories.md`에 **에픽 7 — 인용 그래프/각주 트리**와 US-CG1..CG6 추가. `unit-of-work.md`에 **U8 Citation Graph** API 모듈(`backend/modules/citation_graph/`) 등재, `unit-of-work-dependency.md`에 U8 행/열과 상세보기 각주 트리 흐름 추가, `unit-of-work-story-map.md`에 전수 33 스토리 매핑 반영. `aidlc-state.md` 갱신. Construction/코드/FE 미생성.
+**Context**: INCEPTION — U8 Citation Graph 요구사항·User Stories·Units Generation 완료. 다음 단계는 별도 승인 후 U8 Construction Functional Design.
+
+---
+
+## U8 CONSTRUCTION 진입 — Functional Design 계획·질문 게이트 작성
+**Timestamp**: 2026-06-19T00:00:00Z
+**User Input(원문)**: "제 개입이 필요한 단계 전까지 쭉 진행해 주세요."
+**AI Response**: U8 인용 그래프/각주 트리 유닛의 CONSTRUCTION per-unit 루프 첫 단계인 Functional Design에 진입. `aidlc-docs/construction/plans/u8-citation-graph-functional-design-plan.md` 작성: 유닛 컨텍스트, FD 산출물 계획(`domain-entities.md`, `business-logic-model.md`, `business-rules.md`), 가정, 명확화 질문 Q1~Q12, 불변식 INV-U8-1~5, 다음 절차를 포함. 질문은 API 응답 union, unresolved 노출, 중복/순환 처리, 2-hop lazy-load, 50노드 상한, 정렬, 수동 새로고침, U4 저장 메타 adapter, canonical id 우선순위, 관측 이벤트, QT-6 PBT 범위, 구현 전략을 다룸. 질문지는 `question-format-guide.md`에 맞춰 `A)`, `B)`, `X)`와 옵션 간 빈 줄 형식으로 정규화. AI-DLC Functional Design 규칙상 `[Answer]:`가 모두 확정되기 전에는 FD 산출물·앱 코드·FE를 생성하지 않음. 기술 스택 질문은 Functional Design 승인 후 NFR Requirements에서 진행하도록 이연.
+**Context**: CONSTRUCTION — U8 Citation Graph Functional Design Step 1~4(계획+질문). 답변 대기. 다음(답변 확정 후): `aidlc-docs/construction/u8-citation-graph/functional-design/` 산출물 생성 → 리뷰 게이트 → U8 NFR Requirements.
+
+---
+
+## U8 Functional Design — 답변 확정·산출물 생성
+**Timestamp**: 2026-06-19T00:00:00Z
+**User Input(원문)**: "전부 권장으로 진행하겠습니다."
+**AI Response**: U8 Functional Design 계획서 Q1~Q12 전부 권장안(A)으로 기록하고 계획 체크박스 3개를 완료 처리. 산출물 `aidlc-docs/construction/u8-citation-graph/functional-design/` 3문서 생성: `domain-entities.md`(요청/응답 union, root/node/edge/unresolved/snapshot/policy/error, PBT 속성), `business-logic-model.md`(조회, 2-hop lazy-load, 수동 refresh, U4 save gateway, failure model), `business-rules.md`(BR-CG1~14, QT-6 PBT-CG1~6, 보안/복원력/PBT compliance, traceability). 앱 코드·FE·기술 스택 결정은 생성하지 않음. 기술 스택 질문은 Functional Design 승인 후 NFR Requirements에서 진행.
+**Context**: CONSTRUCTION — U8 Functional Design 산출물 생성 완료. 리뷰/승인 대기. 다음(승인 후): U8 NFR Requirements.
+
+---
+
+## U8 NFR Requirements 진입 — 계획·질문 게이트 작성
+**Timestamp**: 2026-06-19T00:00:00Z
+**User Input(원문)**: "제 개입이 필요한 단계 전까지 쭉 진행해 주세요!"
+**AI Response**: 사용자 진행 요청을 U8 Functional Design 승인 및 다음 단계 진행으로 처리. CONSTRUCTION per-unit 루프의 U8 NFR Requirements에 진입하여 `aidlc-docs/construction/plans/u8-citation-graph-nfr-requirements-plan.md` 작성. 질문 Q1~Q12는 citation provider, provider credential, Redis snapshot TTL, NFR-P3 응답 목표, timeout/retry, U6 rate/quota, backend FastAPI app-shell 통합, shared DTO 승격 시점, U6 관측, U4 저장 계약, 실 provider 테스트 경계, Hypothesis PBT 계승을 다룸. AI-DLC NFR Requirements 규칙상 `[Answer]:`가 모두 확정되기 전에는 `nfr-requirements.md`와 `tech-stack-decisions.md`를 생성하지 않음. 앱 코드·FE 미생성.
+**Context**: CONSTRUCTION — U8 NFR Requirements Step 1~4(계획+질문). 답변 대기. 다음(답변 확정 후): `aidlc-docs/construction/u8-citation-graph/nfr-requirements/` 산출물 생성 → 리뷰 게이트 → U8 NFR Design.
+
+## U8 NFR Requirements — 답변 확정·산출물 생성·NFR Design 진입
+
+**User Input(원문)**: "NFR Requirements 계획서 Q1~Q12는 모두 권장으로 하고, 다음 단계로 진행해 주세요."
+**AI Response**: U8 NFR Requirements 계획서 Q1~Q12를 모두 권장안 A로 확정하고 체크박스를 완료 처리. 산출물 `aidlc-docs/construction/u8-citation-graph/nfr-requirements/` 2문서 생성: `nfr-requirements.md`(성능, 복원력, 보안, 비용/쿼터, 관측성, QT-6 테스트 요구사항)와 `tech-stack-decisions.md`(Semantic Scholar 단일 provider, 기존 secrets/env, Redis 7일 TTL snapshot, 기존 FastAPI backend/U6 경로, backend-local DTO, U6 관측, fixture provider 테스트, Hypothesis PBT). 다음 단계로 `aidlc-docs/construction/plans/u8-citation-graph-nfr-design-plan.md` 작성. 앱 코드·FE 미생성.
+**Context**: CONSTRUCTION — U8 NFR Requirements 완료, U8 NFR Design Step 1~4(계획+질문) 진입. 답변 대기.
+
+## U8 NFR Design — 답변 확정·산출물 생성·Infrastructure Design 진입
+
+**User Input(원문)**: "다음 단계를 진행해 주세요."
+**AI Response**: U8 NFR Design 계획서 Q1~Q5를 모두 권장안 A로 확정하고 체크박스를 완료 처리. 산출물 `aidlc-docs/construction/u8-citation-graph/nfr-design/` 4문서 생성: `logical-components.md`, `patterns.md`, `runtime-architecture.md`, `test-strategy.md`. 결정 핵심은 기존 FastAPI backend/U6 경로, `GET /citation-tree` + `POST /citation-tree/save`, Semantic Scholar 2초 timeout+1 retry, Redis 7일 TTL, TreeBuilder 최종 50노드/depth2 강제, env-gated 실 provider 계약 테스트. 다음 단계로 `aidlc-docs/construction/plans/u8-citation-graph-infrastructure-design-plan.md` 작성. 앱 코드·FE 미생성.
+**Context**: CONSTRUCTION — U8 NFR Design 완료, U8 Infrastructure Design Step 1~4(계획+질문) 진입. 답변 대기.
+
+## U8 Infrastructure Design — 답변 확정·산출물 생성·Code Generation 계획 진입
+
+**User Input(원문)**: "전부 권장으로 확정하고 다음 단계를 진행해 주세요."
+**AI Response**: U8 Infrastructure Design 계획서 Q1~Q3를 모두 권장안 A로 확정하고 체크박스를 완료 처리. 산출물 `aidlc-docs/construction/u8-citation-graph/infrastructure-design/` 3문서 생성: `infrastructure-components.md`, `deployment-topology.md`, `configuration.md`. 결정 핵심은 `SEMANTIC_SCHOLAR_API_KEY`, `CITATION_GRAPH_ENABLED`, Redis prefix `citation_graph:v1:`, 기존 FastAPI backend/U6/Redis/U4 재사용, 신규 ECS/DB/S3/큐/graph DB 없음. 다음 단계로 `aidlc-docs/construction/plans/u8-citation-graph-code-generation-plan.md` 작성. 앱 코드·FE 미생성.
+**Context**: CONSTRUCTION — U8 Infrastructure Design 완료, U8 Code Generation 계획 승인 게이트 진입. 답변 대기.
+
+## U8 Code Generation — 코드 생성·검증 완료
+
+**User Input(원문)**: "제 개입이 필요한 단계 전까지 쭉 진행해 주세요."
+**AI Response**: U8 Code Generation 계획을 권장안 A 승인으로 처리하고 backend-only 구현 완료. 추가/수정: `backend/modules/citation_graph/` 모듈(`controller.py`, `__init__.py`), app-shell mount(`backend/wiring.py`), app-shell registry 테스트 갱신, `backend/tests/test_citation_graph.py`. 구현 범위: feature flag `CITATION_GRAPH_ENABLED`, 인증 필수, Semantic Scholar references provider, process-local snapshot store(문서상 Redis 교체 seam), bounded tree builder(depth<=2, visible nodes<=50), unresolved 분리, U4 library save gateway(arXiv ID 있는 노드만), U6 telemetry emit, env-gated 실 provider contract test stub. 검증: `.venv` 생성 후 backend test deps 설치, `python -m pytest backend/tests/test_citation_graph.py backend/tests/test_app_shell.py -q` 15 passed, `python -m pytest backend/tests -q` 33 passed, 이후 stub 추가 후 `python -m pytest backend/tests -q` 33 passed + 1 skipped, `python -m ruff check backend/modules/citation_graph backend/wiring.py backend/tests/test_citation_graph.py backend/tests/test_app_shell.py` 통과, `python -m compileall backend/modules/citation_graph backend/wiring.py` 통과. FE 미생성.
+**Context**: CONSTRUCTION — U8 Code Generation + Build/Test 완료. 다음은 사용자 리뷰/승인 또는 커밋/PR 지시 필요.
+
+---
+
+## U8 Cross-Review 반영 — 202606221100 PR 준비
+**Timestamp**: 2026-06-22T00:00:00Z
+**User Input(원문)**: "Cross-Review.md 를 읽고 프로젝트 코드들을 수정해 주세요. 이후, @202606221100_PR.md를 작성해 주세요. 커밋 메시지도 작성해 주세요."
+**AI Response**: `Cross-Review.md`를 읽고 PR #117 U8 backend slice 지적을 반영. 브랜치명은 현재 `feature/u8-v1`로 CI prefix 조건 충족 확인. 코드 수정: `depth` 쿼리 제거 및 cache key 중복 제거, lazy 2-hop은 `expandNodeId`로만 제어, 저장 경로의 out-of-range `year`를 null 처리, `_emit`에서 `emit_log` 존재 여부 방어, telemetry `depthRequested`와 `depthReturned` 분리. 문서 수정: U8 Redis snapshot 단언을 현재 process-local in-memory TTL seam + production Redis target으로 정정. `202606221100_PR.md` 작성 예정. 앱 FE 변경 없음.
+**Context**: CONSTRUCTION — U8 Citation Graph Cross-Review follow-up. 코드/문서 수정 및 PR 메시지 작성.
 
 ---
 
