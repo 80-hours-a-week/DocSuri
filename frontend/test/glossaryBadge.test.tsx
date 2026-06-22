@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TranslationView } from '@/components/TranslationView';
+import { resetMockGlossary } from '@/mocks/summarizeFixtures';
 import type { TranslationVM } from '@/types/generated';
 
 // 개인 용어집 Phase 1 — drives the real MockTransport (mock-first) end to end through
@@ -23,6 +24,10 @@ function renderView() {
 }
 
 describe('GlossaryTermBadge (via TranslationView)', () => {
+  beforeEach(() => {
+    resetMockGlossary();
+  });
+
   it('opens an editor on tap and confirms after a successful save', async () => {
     const user = userEvent.setup();
     renderView();

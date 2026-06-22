@@ -34,18 +34,22 @@ export function GlossaryTermBadge({
   const [value, setValue] = useState('');
   const [status, setStatus] = useState<SaveStatus>('idle');
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const wasOpenRef = useRef(false);
   const panelId = useId();
 
-  // On open: pre-fill with the saved rendering and focus. On close: reset the draft/state so
-  // a reopened badge re-reads initialValue and a parent-driven close clears any "saved" note.
+  // Pre-fill with the saved rendering only on the open transition, then focus. A late-arriving
+  // glossary fetch can change initialValue while the editor is already open; re-running the
+  // pre-fill then would clobber the user's in-progress draft, so we latch on open instead.
+  // On close: reset the draft/state so a reopened badge re-reads initialValue afresh.
   useEffect(() => {
-    if (open) {
+    if (open && !wasOpenRef.current) {
       setValue(initialValue);
       requestAnimationFrame(() => inputRef.current?.focus());
-    } else {
+    } else if (!open) {
       setValue('');
       setStatus('idle');
     }
+    wasOpenRef.current = open;
   }, [open, initialValue]);
 
   const save = async () => {

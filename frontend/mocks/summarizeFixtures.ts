@@ -87,6 +87,12 @@ export function mockListGlossaryTerms(): GlossaryTermDTO[] {
   return [...mockGlossary.entries()].map(([termFrom, termTo]) => ({ termFrom, termTo }));
 }
 
+/** Reset the in-memory glossary so tests start from a clean store (no cross-test bleed). */
+export function resetMockGlossary(): void {
+  mockGlossary.clear();
+  mockGlossaryVer = 0;
+}
+
 export const fullTextResponse: FullTextOkDTO = {
   status: 'ok',
   text:
