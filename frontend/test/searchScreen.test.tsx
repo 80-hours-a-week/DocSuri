@@ -71,4 +71,22 @@ describe('SearchScreen state machine', () => {
     expect(await screen.findByTestId('state-view-error')).toBeInTheDocument();
     expect(screen.getByTestId('state-view-retry')).toBeInTheDocument();
   });
+
+  it('surfaces backend validation errors inline and sets aria-invalid', async () => {
+    const input = screen.getByTestId('search-input');
+    await submit('유효 keyword');
+    
+    // 1. Should display the validation error message inline
+    const inlineError = await screen.findByTestId('search-inline-error');
+    expect(inlineError).toBeInTheDocument();
+    expect(inlineError).toHaveTextContent('검색어를 확인해 주세요.');
+    
+    // 2. Input field should have aria-invalid="true"
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    
+    // 3. StateView for invalid should also be in the document and contain the field name as an attribute
+    const stateView = await screen.findByTestId('state-view-invalid');
+    expect(stateView).toBeInTheDocument();
+    expect(stateView).toHaveAttribute('data-field', 'query');
+  });
 });

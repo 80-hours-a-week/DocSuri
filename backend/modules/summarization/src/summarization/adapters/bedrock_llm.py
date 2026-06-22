@@ -25,6 +25,51 @@ from ..ports.ports import LlmUnavailable
 from ..prompts import build_summary_prompt, build_translate_prompt
 
 
+class LocalCircuitBreaker:
+    """Stateful in-memory circuit breaker."""
+    def __init__(self, failure_threshold: int = 5, recovery_timeout: float = 30.0) -> None:
+        import threading
+        self._failure_threshold = failure_threshold
+        self._recovery_timeout = recovery_timeout
+        self._state = "CLOSED"  # CLOSED, OPEN, HALF-OPEN
+        self._failure_count = 0
+        import time
+        self._last_state_change = time.time()
+        self._lock = threading.Lock()
+
+    def allow_request(self) -> bool:
+        with self._lock:
+            self._check_recovery()
+            return self._state != "OPEN"
+
+    def record_success(self) -> None:
+        with self._lock:
+            if self._state == "HALF-OPEN":
+                self._state = "CLOSED"
+                self._failure_count = 0
+                import time
+                self._last_state_change = time.time()
+            elif self._state == "CLOSED":
+                self._failure_count = 0
+
+    def record_failure(self) -> None:
+        with self._lock:
+            self._failure_count += 1
+            import time
+            now = time.time()
+            if self._state == "HALF-OPEN" or self._failure_count >= self._failure_threshold:
+                self._state = "OPEN"
+                self._last_state_change = now
+
+    def _check_recovery(self) -> None:
+        if self._state == "OPEN":
+            import time
+            now = time.time()
+            if now - self._last_state_change > self._recovery_timeout:
+                self._state = "HALF-OPEN"
+                self._last_state_change = now
+
+
 class BedrockLlmGateway:
     def __init__(
         self,
@@ -37,12 +82,19 @@ class BedrockLlmGateway:
     ) -> None:
         if client is None:
             import boto3  # lazy: only the `real` extra needs boto3
+            from botocore.config import Config
 
-            client = boto3.client("bedrock-runtime", region_name=region_name)
+            config = Config(
+                connect_timeout=5.0,
+                read_timeout=30.0,
+                retries={"max_attempts": 1},
+            )
+            client = boto3.client("bedrock-runtime", region_name=region_name, config=config)
         self._client = client
         self._summary_model = summary_model_id
         self._translate_model = translate_model_id
         self._max_retries = max_retries
+        self._cb = LocalCircuitBreaker()
 
     # --- public ports --------------------------------------------------------
     def summarize(
@@ -64,22 +116,32 @@ class BedrockLlmGateway:
 
     # --- bedrock plumbing ----------------------------------------------------
     def _invoke_json(self, model_id: str, system: str, user: str) -> dict:
+        if not self._cb.allow_request():
+            raise LlmUnavailable("Bedrock LLM circuit breaker is OPEN")
+
         body = {
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": 2000,
             "system": system,
             "messages": [{"role": "user", "content": [{"type": "text", "text": user}]}],
         }
+        import time
         last_exc: Exception | None = None
-        for _ in range(self._max_retries + 1):
+        for attempt in range(self._max_retries + 1):
+            if attempt > 0:
+                time.sleep(2 ** attempt * 0.5)
             try:
-                text = self._stream_text(model_id, body)
-                return _parse_json(text)
+                text, truncated = self._stream_text(model_id, body)
+                payload = _parse_json(text)
+                payload["_truncated"] = truncated
+                self._cb.record_success()
+                return payload
             except Exception as exc:  # noqa: BLE001 — any Bedrock/transport/parse error → retry/abstain
                 last_exc = exc
+        self._cb.record_failure()
         raise LlmUnavailable("Bedrock generation failed") from last_exc
 
-    def _stream_text(self, model_id: str, body: dict) -> str:
+    def _stream_text(self, model_id: str, body: dict) -> tuple[str, bool]:
         """Buffer the response stream into the full text (buffer-validate-stream, Q5)."""
         response = self._client.invoke_model_with_response_stream(
             modelId=model_id,
@@ -88,6 +150,7 @@ class BedrockLlmGateway:
             contentType="application/json",
         )
         chunks: list[str] = []
+        truncated = False
         for event in response.get("body", []):
             raw = event.get("chunk", {}).get("bytes")
             if not raw:
@@ -95,7 +158,12 @@ class BedrockLlmGateway:
             data = json.loads(raw.decode("utf-8"))
             if data.get("type") == "content_block_delta":
                 chunks.append(data.get("delta", {}).get("text", ""))
-        return "".join(chunks)
+            elif data.get("type") == "message_delta":
+                stop_reason = data.get("delta", {}).get("stop_reason")
+                if stop_reason == "max_tokens":
+                    truncated = True
+        text = "".join(chunks)
+        return text, truncated
 
 
 def _parse_json(text: str) -> dict:
@@ -124,6 +192,7 @@ def _to_summary_draft(payload: dict) -> SummaryDraft:
         limitations=str(payload.get("limitations", "")),
         reproducibility={"code": str(repro.get("code", "")), "data": str(repro.get("data", ""))},
         anchors=anchors,
+        truncated=bool(payload.get("_truncated", False)),
     )
 
 

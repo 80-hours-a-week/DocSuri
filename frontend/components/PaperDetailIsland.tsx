@@ -27,6 +27,7 @@ const ACTIONS: { view: DetailView; label: string }[] = [
 ];
 
 export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIslandProps) {
+  const safeArxivUrl = (arxivUrl && (arxivUrl.startsWith('http://') || arxivUrl.startsWith('https://'))) ? arxivUrl : undefined;
   const [anchor, setAnchor] = useState<AnchorVM | null>(null);
   const [modalView, setModalView] = useState<DetailView | null>(null);
   const meta = usePaperMeta(paperId);
@@ -75,8 +76,8 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
           </p>
           <p className={styles.idline}>
             <span>arXiv:{paperId}</span>
-            {arxivUrl ? (
-              <a className={styles.link} href={arxivUrl} target="_blank" rel="noopener noreferrer">
+            {safeArxivUrl ? (
+              <a className={styles.link} href={safeArxivUrl} target="_blank" rel="noopener noreferrer">
                 arXiv에서 원문 보기
               </a>
             ) : null}
@@ -91,7 +92,7 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
       {/* Body-first: the normalized S3 full text, with anchor highlight when set. */}
       <section className={styles.bodySection} aria-label="원문 전문">
         <h2 className={styles.bodyHeading}>원문 전문</h2>
-        <FullTextViewer paperId={paperId} version={version} anchor={anchor} arxivUrl={arxivUrl} />
+        <FullTextViewer paperId={paperId} version={version} anchor={anchor} arxivUrl={safeArxivUrl} />
       </section>
 
       {modalView ? (

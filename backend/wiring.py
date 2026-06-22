@@ -112,17 +112,22 @@ def _mount_discovery(app: FastAPI, settings: Settings, result: MountResult) -> N
     # (US-R4): the factories default to NoopObservabilityHub, so without this discovery's
     # emit_metric calls were silently dropped even though the real hub existed on app.state.
     observability = getattr(app.state, "observability", None)
+    cost_guard = getattr(app.state, "cost_guard", None)
 
     discovery_settings = DiscoverySettings.from_env()
     if discovery_settings.search_enabled:
         from discovery.real_wiring import build_real_orchestrator
 
-        bundle = build_real_orchestrator(discovery_settings, observability=observability)
+        bundle = build_real_orchestrator(
+            discovery_settings,
+            observability=observability,
+            cost_guard=cost_guard,
+        )
         read_path = "real(opensearch+bedrock)"
     else:
         from discovery.mocks.wiring import build_mock_orchestrator
 
-        bundle = build_mock_orchestrator(observability=observability)
+        bundle = build_mock_orchestrator(observability=observability, cost_guard=cost_guard)
         read_path = "mock"
 
     # The grounding gate is the REAL U6 single authority (INV-1) in BOTH modes — replacing the
@@ -133,6 +138,7 @@ def _mount_discovery(app: FastAPI, settings: Settings, result: MountResult) -> N
     grounding_hook = GroundingEnforcementHook()
     app.state.discovery_bundle = bundle
     app.state.grounding_hook = grounding_hook
+
     # The paper-detail metadata endpoint (GET /api/papers/{id}) is U2-owned (corpus data); both
     # bundles expose a paper_service. getattr keeps this resilient if a bundle predates it.
     app.include_router(
@@ -211,6 +217,7 @@ def _mount_library(app: FastAPI, settings: Settings, result: MountResult) -> Non
     app.state.library_history_consumer = SearchHistoryEventConsumer(
         SearchHistoryService(consumer_repo, gateway, audit)
     )
+
     result.mounted.append("library")
 
 
@@ -232,10 +239,24 @@ def _mount_summarization(app: FastAPI, settings: Settings, result: MountResult) 
     from summarization.real_wiring import build_real_orchestrator
 
     # Reuse the process-wide U6 single authorities the shell built (cost guard + observability).
+    def abstract_lookup(paper_id: str) -> str | None:
+        discovery_bundle = getattr(app.state, "discovery_bundle", None)
+        if discovery_bundle is not None:
+            paper_service = getattr(discovery_bundle, "paper_service", None)
+            if paper_service is not None:
+                try:
+                    meta = paper_service.get_paper_meta(paper_id)
+                    if meta is not None:
+                        return meta.abstract
+                except Exception:
+                    pass
+        return None
+
     bundle = build_real_orchestrator(
         sm_settings,
         cost_guard=app.state.cost_guard,
         observability=app.state.observability,
+        abstract_lookup=abstract_lookup,
     )
     app.state.summarization_bundle = bundle
     # The full-text viewer is OA-license-gated; the gate is passed from settings (default OFF —

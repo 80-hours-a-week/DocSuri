@@ -93,9 +93,10 @@ class SummarizationOrchestrationService:
         if source is None:
             return SourceUnavailableDTO(reason="no_full_text_or_abstract")
 
-        # 3. refine (structure-aware) → 5. length route (shape; over-cap → abstain).
+        # 3. refine (structure-aware) → 5. length route (shape; over-cap or map-reduce → abstain).
         refined = self._refiner.refine(source.raw)
-        if self._length.route(refined.token_count) == LengthRoute.OVER_CAP:
+        route = self._length.route(refined.token_count)
+        if route == LengthRoute.OVER_CAP or route == LengthRoute.MAP_REDUCE:
             return AbstainDTO(reason="input_too_long")
 
         # 4. glossary

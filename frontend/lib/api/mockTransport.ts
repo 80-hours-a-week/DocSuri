@@ -13,6 +13,7 @@ import {
   emptyResponse,
   abstainResponse,
   degradedResponse,
+  validationErrorResponse,
 } from '@/mocks/searchFixtures';
 import {
   summaryResponse,
@@ -72,6 +73,7 @@ export class MockTransport implements Transport {
       if (matches(query, '없음', 'empty')) return { status: 200, body: emptyResponse };
       if (matches(query, '기권', 'abstain')) return { status: 200, body: abstainResponse };
       if (matches(query, '저하', 'degraded')) return { status: 200, body: degradedResponse };
+      if (matches(query, '유효', 'invalid')) return { status: 400, body: validationErrorResponse };
       return { status: 200, body: pageResponse };
     }
 
