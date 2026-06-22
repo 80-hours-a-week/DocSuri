@@ -16,23 +16,17 @@ export function AppHeader({ title }: { title: string }) {
       <Link href={brandHref} className={styles.brand} data-testid="app-header-brand">
         {title}
       </Link>
+      {/* 화면 이동(검색/마이페이지)은 하단 탭바(BottomNav)가 담당한다.
+          상단은 브랜드 + 로그아웃만 유지한다. */}
       {status === 'authenticated' ? (
-        <nav className={styles.nav} aria-label="주요 메뉴">
-          <Link href="/search" className={styles.navLink} data-testid="app-header-search">
-            검색
-          </Link>
-          <Link href="/library" className={styles.navLink} data-testid="app-header-library">
-            라이브러리
-          </Link>
-          <button
-            type="button"
-            className={styles.signout}
-            onClick={() => void signOut()}
-            data-testid="app-header-signout"
-          >
-            로그아웃
-          </button>
-        </nav>
+        <button
+          type="button"
+          className={styles.signout}
+          onClick={() => void signOut()}
+          data-testid="app-header-signout"
+        >
+          로그아웃
+        </button>
       ) : null}
     </header>
   );

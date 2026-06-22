@@ -11,6 +11,7 @@ import type { AnchorVM } from '@/types/generated';
 import { usePaperMeta } from '@/lib/usePaperMeta';
 import { FullTextViewer } from './FullTextViewer';
 import { SummaryModal, type DetailView } from './SummaryModal';
+import { SaveToLibraryButton } from './SaveToLibraryButton';
 import styles from './PaperDetailIsland.module.css';
 
 interface PaperDetailIslandProps {
@@ -50,9 +51,21 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
 
       {meta.status === 'done' && meta.meta ? (
         <header className={styles.meta} data-testid="paper-meta">
-          <h1 className={styles.title} data-testid="paper-title">
-            {meta.meta.title}
-          </h1>
+          <div className={styles.titleRow}>
+            <h1 className={styles.title} data-testid="paper-title">
+              {meta.meta.title}
+            </h1>
+            <SaveToLibraryButton
+              card={{
+                arxivId: paperId,
+                title: meta.meta.title,
+                authors: meta.meta.authors,
+                year: meta.meta.year,
+                abstractSnippet: meta.meta.abstract,
+                arxivUrl: meta.meta.arxivUrl ?? arxivUrl,
+              }}
+            />
+          </div>
           <p className={styles.authors} data-testid="paper-authors">
             {meta.meta.authors.join(', ')}
             {meta.meta.year ? <span className={styles.year}> · {meta.meta.year}</span> : null}
