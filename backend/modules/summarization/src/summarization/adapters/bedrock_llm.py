@@ -10,6 +10,8 @@ the orchestrator abstains (Q1/RES-9). No Production Mock — this is the single 
 from __future__ import annotations
 
 import json
+import threading
+import time
 from typing import Any
 
 from ..domain.models import (
@@ -28,12 +30,10 @@ from ..prompts import build_summary_prompt, build_translate_prompt
 class LocalCircuitBreaker:
     """Stateful in-memory circuit breaker."""
     def __init__(self, failure_threshold: int = 5, recovery_timeout: float = 30.0) -> None:
-        import threading
         self._failure_threshold = failure_threshold
         self._recovery_timeout = recovery_timeout
         self._state = "CLOSED"  # CLOSED, OPEN, HALF-OPEN
         self._failure_count = 0
-        import time
         self._last_state_change = time.time()
         self._lock = threading.Lock()
 
@@ -47,7 +47,6 @@ class LocalCircuitBreaker:
             if self._state == "HALF-OPEN":
                 self._state = "CLOSED"
                 self._failure_count = 0
-                import time
                 self._last_state_change = time.time()
             elif self._state == "CLOSED":
                 self._failure_count = 0
@@ -55,7 +54,6 @@ class LocalCircuitBreaker:
     def record_failure(self) -> None:
         with self._lock:
             self._failure_count += 1
-            import time
             now = time.time()
             if self._state == "HALF-OPEN" or self._failure_count >= self._failure_threshold:
                 self._state = "OPEN"
@@ -63,7 +61,6 @@ class LocalCircuitBreaker:
 
     def _check_recovery(self) -> None:
         if self._state == "OPEN":
-            import time
             now = time.time()
             if now - self._last_state_change > self._recovery_timeout:
                 self._state = "HALF-OPEN"
@@ -125,7 +122,6 @@ class BedrockLlmGateway:
             "system": system,
             "messages": [{"role": "user", "content": [{"type": "text", "text": user}]}],
         }
-        import time
         last_exc: Exception | None = None
         for attempt in range(self._max_retries + 1):
             if attempt > 0:

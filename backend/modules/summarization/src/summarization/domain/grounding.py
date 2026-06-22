@@ -55,14 +55,22 @@ class GroundingValidator:
         # (1) anchor existence — span (and label, if present) must be in the source (Step 35)
         haystack = refined.body
         captions = "\n".join(refined.captions)
+        # preserved (Appendix/Supplementary, Step 36) is source content too — include it so an
+        # anchor into an appendix span/label is not falsely flagged anchor_missing.
+        preserved = "\n".join(refined.preserved)
         section_labels = {s.label.strip() for s in refined.sections if s.label.strip()}
         for a in draft.anchors:
             span = a.span.strip()
             label = a.label.strip()
             # Verify span
-            span_ok = not span or (span in haystack or span in captions)
+            span_ok = not span or (span in haystack or span in captions or span in preserved)
             # Verify label
-            label_ok = not label or (label in haystack or label in captions or label in section_labels)
+            label_ok = not label or (
+                label in haystack
+                or label in captions
+                or label in section_labels
+                or label in preserved
+            )
             
             if not span_ok or not label_ok:
                 violations.append(Violation("anchor_missing", a.field_name))

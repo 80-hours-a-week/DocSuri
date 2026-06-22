@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from hypothesis import given
+from hypothesis import assume, given
 from hypothesis import strategies as st
 
 from summarization.domain.cache_key import build_cache_key
@@ -113,6 +113,10 @@ def test_pbt_response_to_dict_sec9_all_states(status: str, tldr: str, korean: st
 def test_pbt_anchor_validation_soundness(span: str, ref_body: str, is_present: bool) -> None:
     from summarization.domain.grounding import GroundingValidator
     from summarization.domain.models import GroundingInput, SummaryDraft, Anchor, AnchorTarget, RefinedSource
+
+    # whitespace-only spans strip to "" → the validator treats them as no-span (auto-pass);
+    # the present/absent soundness property only holds once the span is non-empty after strip.
+    assume(span.strip())
     
     # If is_present is True, ensure the span exists in the ref_body
     if is_present:
