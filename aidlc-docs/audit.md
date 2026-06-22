@@ -966,3 +966,11 @@
 **User Input(원문)**: (계획서 게이트) "진행" — Q1~Q7 권장안 A 확정.
 **AI Response**: U1 멀티모달 NFR Requirements 계획서(`construction/plans/u1-ingestion-multimodal-nfr-requirements-plan.md`) Q1~Q7 전부 A 확정·체크박스 완료. 기존 U1 NFR 2종 확장: **`tech-stack-decisions.md`** — TD-11(PDF 크롭=**PyMuPDF(fitz) 휴리스틱**, ML/GPU 없음·CPU 배치), TD-12(LaTeX 구조화=e-print tarball 그래픽 직접 추출 + 표는 PDF 크롭), TD-13(이미지=**WebP 재인코딩**+치수/픽셀 상한+메타 스트립), TD-14(자산 저장=**S3 별도 prefix(private·SSE) + 매니페스트/메타 공유 RDS PostgreSQL**, 신규 스토어 0), TD-15(이미지 보안=안전 디코더 재인코딩·decompression bomb 가드·원본 바이트 비서빙). **`nfr-requirements.md` §11** — 성능(오프라인 배치·CPU·결정성 버전핀), 보안(SEC-9 비공개·서명 URL·이미지 파싱 방어·SSRF), 복원력(best-effort 비차단·타임아웃·서킷), 비용(distinct×1회 bounded·$1600 내 흡수·자산 라인 계상). 상속: TD-1 Python·TD-7 S3·TD-8 Hypothesis. TD-3/4(임베딩·OpenSearch) 무관. **앱 코드 미생성.**
 **Context**: CONSTRUCTION — U1 멀티모달 NFR Requirements 완료. 다음 게이트: U1 NFR Design. 미커밋(리뷰 대기).
+
+---
+
+## 멀티모달 표시 — U1 Ingestion NFR Design (자산 추출 패턴·논리 컴포넌트)
+**Timestamp**: 2026-06-22T00:00:00Z
+**User Input(원문)**: (계획서 게이트) "진행" — Q1~Q5 권장안 A 확정.
+**AI Response**: U1 멀티모달 NFR Design 계획서(`construction/plans/u1-ingestion-multimodal-nfr-design-plan.md`) Q1~Q5 전부 A 확정·체크박스 완료. 기존 U1 NFR Design 2종 확장: **`logical-components.md` §5** — 신규 논리 컴포넌트 **AssetExtractor**(혼합 추출·캡션 매칭)·**Image Normalizer**(WebP·치수상한·메타스트립)·**AssetStore**(S3 prefix + 공유 RDS `paper_asset`) + 토폴로지 다이어그램(인덱스 경로와 독립) + `paper_asset` RDS 상태 설계((paper_id,version,asset_id) 키·write-order 정합). **`nfr-design-patterns.md` §7** — 7.1 page-crop 검출·캡션 정규식 근접 매칭 알고리즘((page,y,x) 결정성 P7), 7.2 이미지 정규화 파이프라인(safe_decode→픽셀상한 bomb 가드→다운스케일→WebP→메타스트립), 7.3 best-effort 격리(per-asset·인덱스 비차단·ASSET_*), 7.4 매니페스트 write-order 정합(S3 put→RDS upsert, P8 "행 있는데 객체 없음" 회피), 7.5 보안(공개차단·서명URL·최소권한 IAM·이미지 파싱 방어) + 추적성 4행. **기존 인덱스/원자성 토폴로지·패턴 불변.** **앱 코드 미생성.**
+**Context**: CONSTRUCTION — U1 멀티모달 NFR Design 완료. 다음 게이트: U1 Infrastructure Design. 미커밋(리뷰 대기).
