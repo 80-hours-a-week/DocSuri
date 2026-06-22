@@ -958,3 +958,11 @@
 **User Input(원문)**: (계획서 게이트) "진행" — Q1~Q7 권장안 A 확정.
 **AI Response**: U1 멀티모달 자산 추출 FD 계획서(`construction/plans/u1-ingestion-multimodal-functional-design-plan.md`) Q1~Q7 전부 A 확정·체크박스 완료. 기존 U1 FD 3종 확장: **`domain-entities.md` §10**(AssetType·AssetSourceMode{structured|page-crop}·결정적 AssetId·**FigureTableAsset**·**AssetManifest**·**AssetStorePort**; ParsedPaper.assets[] 보강), **`business-logic-model.md` §6**(`ingestOne` 자산 추출·저장 삽입 — Q1=A parse 추출+dedup 후 NEW|CHANGED 저장, Q2=C 혼합 추출 `AssetExtractor`, Q4=A best-effort·인덱스 원자성과 분리, tombstone `remove_assets`·CHANGED `replace_assets`, 데이터 흐름 ASCII), **`business-rules.md` §7**(BR-22 dedup 게이팅·BR-23 혼합 추출·BR-24 실재 자산만(생성 금지)·BR-25 캡션 비중복·앵커 좌표·BR-26 OA 게이트 재사용·BR-27 best-effort 비차단·BR-28 멱등·정리; PBT P7/P8; FailureReason ASSET_*; 추적성). **핵심 경계**: 표시 전용 → 인덱싱·임베딩·IndexRecord·VectorSpec 경로 불변(자산은 검색 비대상). 읽기 측 계약·서명 URL·U5 렌더는 본 FD 밖(공유계약·U7·U5). **앱 코드 미생성.**
 **Context**: CONSTRUCTION — U1 멀티모달 FD 완료. 다음 게이트: U1 NFR Requirements(추출 라이브러리·이미지 포맷/해상도·서명 정책). 미커밋(리뷰 대기).
+
+---
+
+## 멀티모달 표시 — U1 Ingestion NFR Requirements (자산 추출 기술 스택)
+**Timestamp**: 2026-06-22T00:00:00Z
+**User Input(원문)**: (계획서 게이트) "진행" — Q1~Q7 권장안 A 확정.
+**AI Response**: U1 멀티모달 NFR Requirements 계획서(`construction/plans/u1-ingestion-multimodal-nfr-requirements-plan.md`) Q1~Q7 전부 A 확정·체크박스 완료. 기존 U1 NFR 2종 확장: **`tech-stack-decisions.md`** — TD-11(PDF 크롭=**PyMuPDF(fitz) 휴리스틱**, ML/GPU 없음·CPU 배치), TD-12(LaTeX 구조화=e-print tarball 그래픽 직접 추출 + 표는 PDF 크롭), TD-13(이미지=**WebP 재인코딩**+치수/픽셀 상한+메타 스트립), TD-14(자산 저장=**S3 별도 prefix(private·SSE) + 매니페스트/메타 공유 RDS PostgreSQL**, 신규 스토어 0), TD-15(이미지 보안=안전 디코더 재인코딩·decompression bomb 가드·원본 바이트 비서빙). **`nfr-requirements.md` §11** — 성능(오프라인 배치·CPU·결정성 버전핀), 보안(SEC-9 비공개·서명 URL·이미지 파싱 방어·SSRF), 복원력(best-effort 비차단·타임아웃·서킷), 비용(distinct×1회 bounded·$1600 내 흡수·자산 라인 계상). 상속: TD-1 Python·TD-7 S3·TD-8 Hypothesis. TD-3/4(임베딩·OpenSearch) 무관. **앱 코드 미생성.**
+**Context**: CONSTRUCTION — U1 멀티모달 NFR Requirements 완료. 다음 게이트: U1 NFR Design. 미커밋(리뷰 대기).
