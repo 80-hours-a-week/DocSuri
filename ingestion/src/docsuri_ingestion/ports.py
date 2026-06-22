@@ -6,6 +6,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from docsuri_shared.events import NewArxivEvent
 
+from .domain.assets import AssetManifest, ExtractedAsset
 from .domain.enums import DedupDecision, JobKind
 from .domain.models import (
     CategoryFilter,
@@ -114,6 +115,26 @@ class QueuePort(Protocol):
     def send_to_dlq(self, payload: Mapping[str, Any], *, reason: str) -> None: ...
 
     def parse_new_arxiv_event(self, payload: Mapping[str, Any]) -> NewArxivEvent: ...
+
+
+@runtime_checkable
+class AssetSourcePort(Protocol):
+    """FR-17 figure/table source bytes. Fetched lazily for NEW|CHANGED papers only."""
+
+    def fetch_eprint(self, metadata: MetadataRecord) -> bytes | None: ...
+
+    def fetch_pdf(self, metadata: MetadataRecord) -> bytes | None: ...
+
+
+@runtime_checkable
+class AssetStorePort(Protocol):
+    """FR-17 asset persistence: binary→S3, manifest→RDS (write-order S3 then RDS, P8)."""
+
+    def store_assets(
+        self, paper_id: str, version: int, assets: Sequence[ExtractedAsset]
+    ) -> AssetManifest: ...
+
+    def remove_assets(self, paper_id: str) -> None: ...
 
 
 @runtime_checkable

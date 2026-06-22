@@ -60,10 +60,11 @@
 
 > 상속: TD-1 Python·TD-7 S3·TD-8 Hypothesis·TD-9 컨테이너·TD-10 패키징. TD-3/4(임베딩·OpenSearch)는 **무관**(자산 검색 비대상). NFR 계획 Q1~Q7=A.
 
-## TD-11 — PDF 페이지 크롭(page-crop) 도구: **PyMuPDF(fitz) 휴리스틱** (Q1=A)
-- **근거**: 내장 이미지 블록 + 캡션("Figure N"/"Table N") 근접 영역 크롭을 **CPU·ML 없이** 수행. 의존성 경량(단일 Python 패키지), 오프라인 배치·$1600 전역 상한에 적합. distinct 논문×버전 1회(BR-22)라 처리량 bounded.
-- **대안**: 레이아웃 분석 ML 모델(pdffigures2[Java]/deepfigures[GPU]) — 검출 정밀도 우수하나 컴퓨트·운영 복잡도↑(시드 수십만 비용↑).
-- **전환 비용**: 낮음 — 추출은 포트(`AssetExtractor`) 뒤 추상화. 정밀도 부족 시 차기 사이클 ML 검출로 교체(재추출은 NEW/CHANGED 재처리로 흡수).
+## TD-11 — PDF 페이지 크롭(page-crop) 도구: **permissive 스택 휴리스틱** (Q1=A)
+> **정정 (2026-06-22, Code Generation Q1=A)**: 초안의 **PyMuPDF(fitz)는 AGPL-3.0**라 "프로덕션·공개 모바일 웹"에 전파 위험 → **permissive 스택으로 대체**: **`pypdfium2`(Apache-2.0/BSD-3, PDF 렌더) + `pdfplumber`/`pdfminer.six`(MIT, 텍스트·rect·캡션 레이아웃)**. 알고리즘(내장 이미지 객체 + 캡션 근접 매칭 + page-crop)은 동일.
+- **근거**: 내장 이미지 객체 + 캡션("Figure N"/"Table N") 근접 영역 크롭을 **CPU·ML 없이** 수행. permissive 라이선스, 오프라인 배치·$1600 전역 상한에 적합. distinct 논문×버전 1회(BR-22)라 처리량 bounded.
+- **대안**: ~~PyMuPDF(AGPL — 기각)~~; 레이아웃 분석 ML 모델(pdffigures2[Java]/deepfigures[GPU]) — 검출 정밀도 우수하나 컴퓨트·운영 복잡도↑.
+- **전환 비용**: 낮음 — 추출은 `AssetExtractor` 뒤 추상화. 정밀도 부족 시 차기 사이클 ML 검출로 교체(재추출은 NEW/CHANGED 재처리로 흡수).
 
 ## TD-12 — LaTeX 구조화(structured) 추출: **arXiv e-print tarball 그래픽 직접 추출 + 표는 PDF 크롭** (Q2=A)
 - **근거**: e-print(`/e-print/{id}`) tarball에서 `\includegraphics` 참조 그래픽 파일(PDF/PNG/JPG/EPS)을 직접 취득 → 그림 **원본 화질**. **표(LaTeX `table`/`tabular`)는 이미지가 아니므로 항상 PDF 영역 크롭(TD-11)** — 별도 LaTeX 컴파일 파이프라인 회피. EPS/PDF 그래픽은 TD-13 정규화로 래스터화.

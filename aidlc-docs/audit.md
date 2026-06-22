@@ -982,3 +982,18 @@
 **User Input(원문)**: (계획서 게이트) "진행" — Q1~Q5 권장안 A 확정.
 **AI Response**: U1 멀티모달 Infrastructure Design 계획서(`construction/plans/u1-ingestion-multimodal-infrastructure-design-plan.md`) Q1~Q5 전부 A 확정·체크박스 완료. **U1 최초 Infra 산출물**을 멀티모달 범위로 신설: **`infrastructure-design/infrastructure-design.md`** — S3 자산(기존 전문 버킷 + `assets/{paperId}/{version}/{assetId}.webp` prefix·공개차단·SSE-KMS 재사용·만료없음), `paper_asset` 공유 RDS 스키마(키 (paper_id,version,asset_id)·마이그레이션·인덱스), presigned S3 전달(만료 ~10분, CloudFront 후속), 최소권한 IAM(워커 PUT/DELETE+RW / U7 GET·presign+RO), write-order 정합(P8), 비용($1600 내·자산 라인), 관측. **`deployment-architecture.md`** — 추출 co-location(기존 워커, 이미지 처리 메모리 헤드룸, ML/GPU 없음), 배포 토폴로지(쓰기 워커↔공유 S3/RDS↔U7 읽기 presign), 마이그레이션·워커 이미지 의존성(PyMuPDF) 다이제스트 핀, 기존 토폴로지 불변. **선결 상속(미결)**: 워커 런타임 타깃(ECS/Fargate vs Lambda)·리전·CD. 신규 버킷·DB 0. **앱 코드 미생성.**
 **Context**: CONSTRUCTION — U1 멀티모달 Infrastructure Design 완료. 다음 게이트: U1 Code Generation. 미커밋(리뷰 대기).
+
+---
+
+## 멀티모달 표시 — U1 Ingestion Code Generation PART 1 (계획·승인 프롬프트)
+**Timestamp**: 2026-06-22T00:00:00Z
+**AI Response**: U1 멀티모달 Code Generation 계획서(`construction/plans/u1-ingestion-multimodal-code-generation-plan.md`) 작성 — 브라운필드 `ingestion/src/docsuri_ingestion/` 12 스텝(의존성·도메인 모델·포트·AssetExtractor·ImageNormalizer·AssetStore 어댑터 S3/RDS·application 와이어링·`paper_asset` 마이그레이션·설정·테스트 PBT P7/P8·코드요약·배포). **선행 질문 Q1(라이브러리 라이선스)**: NFR TD-11의 **PyMuPDF는 AGPL-3.0** → 프로덕션·공개 앱 부적합 위험. 권장 A=permissive 스택(pypdfium2 Apache/BSD + pdfplumber/pdfminer.six MIT + Pillow HPND)로 TD-11/TD-13 정정. 인덱스 경로 불변·자산 best-effort·토글 안전 기본(off). **승인 프롬프트 — 사용자 승인 대기(Q1 확정 포함).** 앱 코드 미생성(PART 2 대기).
+**Context**: CONSTRUCTION — U1 Code Generation PART 1(계획) 완료. PART 2(코드 생성) 승인 게이트. 미커밋.
+
+---
+
+## 멀티모달 표시 — U1 Ingestion Code Generation PART 2 (코드 생성)
+**Timestamp**: 2026-06-22T00:00:00Z
+**User Input(원문)**: "A로 진행해줘" (Q1=A permissive 스택 확정 + PART 2 진행).
+**AI Response**: U1 멀티모달 자산 추출 코드 생성(브라운필드 `ingestion/`). **Q1=A**: PyMuPDF(AGPL) 대신 **pypdfium2(Apache/BSD)+pdfplumber(MIT)+Pillow(HPND)** — NFR TD-11/13 정정(라이선스 안전). 신규: `domain/assets.py`(asset_id·RawAssetCandidate·FigureTableAsset·ExtractedAsset·AssetManifest), `asset_extraction.py`(caption_kind·**finalize_assets P7 순수**·ImageNormalizer[bomb 가드·WebP·메타스트립]·AssetExtractor[혼합: e-print 그래픽/PDF page-crop 폴백, import-guarded]), `adapters/assets.py`(ArxivAssetSource httpx·**S3RdsAssetStore** write-order S3→RDS P8·CHANGED 교체·tombstone 삭제), `migrations/postgres/002_paper_asset.sql`. 수정: `enums.py`(AssetType·AssetSourceMode·ASSET_* FailureReason), `ports.py`(AssetSourcePort·AssetStorePort), `application.py`(자산 포트 주입 미주입=비활성·`_store_assets_best_effort` 인덱스 커밋 후·비차단 BR-27·`_remove_assets_best_effort` tombstone), `settings.py`(MULTIMODAL_ASSETS_ENABLED off 기본·상한·KMS·타임아웃), `pyproject.toml`(assets optional extra). 테스트: `test_assets.py`(caption·finalize·**PBT P7**·ImageNormalizer importorskip), `test_asset_wiring.py`(기본 off·성공 store·**실패 인덱싱 비차단**). **인덱스/임베딩/IndexRecord 경로 코드 불변.** **검증**: `compileall` 통과 + 순수 모듈 import·finalize/caption 로직 스모크 통과. 전체 테스트 실행은 Build & Test.
+**Context**: CONSTRUCTION — U1 Code Generation 완료. 다음 게이트: U1 Build & Test. 미커밋(리뷰 대기).
