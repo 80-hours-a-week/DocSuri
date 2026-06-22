@@ -50,19 +50,20 @@
   color: var(--color-text-muted);
 }
 
-/* Sticky action bar (요약 · 초록 번역 · 전문 번역) directly under the DocSuri header. */
+/* Sticky action bar directly under the DocSuri header. */
 .actionsBar {
   position: sticky;
   top: 0;
   z-index: 10;
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   padding: 0.375rem 0;
   background: var(--color-bg);
 }
 
 .action {
-  flex: 1 1 0;
+  flex: 1 1 7rem;
   min-height: 2.75rem;
   padding: 0 0.5rem;
   border: 1px solid var(--color-border);
