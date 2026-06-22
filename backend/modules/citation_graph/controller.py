@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import time
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -86,7 +87,8 @@ class SemanticScholarProvider:
         headers = {"x-api-key": self._api_key} if self._api_key else {}
         timeout = float(os.getenv("CITATION_GRAPH_PROVIDER_TIMEOUT_SECONDS", "2"))
         retries = int(os.getenv("CITATION_GRAPH_PROVIDER_RETRIES", "1"))
-        url = f"https://api.semanticscholar.org/graph/v1/paper/{paper_id}/references"
+        encoded_paper_id = quote(paper_id, safe="")
+        url = f"https://api.semanticscholar.org/graph/v1/paper/{encoded_paper_id}/references"
         params = {
             "fields": "title,year,citationCount,externalIds,paperId,url",
             "limit": str(min(limit, 1000)),
@@ -105,7 +107,16 @@ class SemanticScholarProvider:
         return "unavailable", []
 
 
-router = APIRouter(prefix="/api/papers/{paper_id}/citation-tree", tags=["CitationGraph"])
+def _feature_enabled() -> None:
+    if os.getenv("CITATION_GRAPH_ENABLED", "false").lower() not in {"1", "true", "yes", "on"}:
+        raise HTTPException(status_code=404, detail="not found")
+
+
+router = APIRouter(
+    prefix="/api/papers/{paper_id}/citation-tree",
+    tags=["CitationGraph"],
+    dependencies=[Depends(_feature_enabled)],
+)
 _store = InMemorySnapshotStore()
 _provider = SemanticScholarProvider(os.getenv("SEMANTIC_SCHOLAR_API_KEY"))
 
@@ -129,11 +140,6 @@ PRINCIPAL_DEP = Depends(get_principal)
 STORE_DEP = Depends(get_snapshot_store)
 PROVIDER_DEP = Depends(get_provider)
 LIBRARY_DEP = Depends(get_library_service)
-
-
-def _feature_enabled() -> None:
-    if os.getenv("CITATION_GRAPH_ENABLED", "false").lower() not in {"1", "true", "yes", "on"}:
-        raise HTTPException(status_code=404, detail="not found")
 
 
 def _node(raw: dict[str, Any], depth: int, seen: set[str]) -> CitationNode | UnresolvedCitation:
@@ -189,7 +195,7 @@ def _build_tree(
         nodes=nodes,
         edges=edges,
         unresolved=unresolved,
-        depthReturned=min(depth, MAX_DEPTH),
+        depthReturned=target_depth,
         truncated=remaining > 0,
         remainingEstimate=remaining,
     )
@@ -225,7 +231,6 @@ async def get_citation_tree(
     store: InMemorySnapshotStore = STORE_DEP,
     provider: SemanticScholarProvider = PROVIDER_DEP,
 ) -> CitationTreeResponse:
-    _feature_enabled()
     started = time.perf_counter()
     parent = expandNodeId or paper_id
     key = f"{paper_id}:{parent}:{depth}"
@@ -254,15 +259,14 @@ async def get_citation_tree(
 @router.post("/save")
 async def save_citation_node(
     dto: SaveCitationNodeRequest,
-    _: Principal = PRINCIPAL_DEP,
+    principal: Principal = PRINCIPAL_DEP,
     library: LibraryService = LIBRARY_DEP,
 ):
-    _feature_enabled()
     node = dto.node
     if not node.saveable or not node.arxivId:
         raise HTTPException(status_code=422, detail="citation node is not saveable")
     return library.add(
-        _,
+        principal,
         LibraryItemCreateDTO(
             arXivId=node.arxivId,
             meta={
