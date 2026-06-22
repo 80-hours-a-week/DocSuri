@@ -85,6 +85,18 @@ def test_citation_tree_cache_hit(monkeypatch) -> None:
     assert provider.calls == 1
 
 
+def test_depth_query_does_not_create_duplicate_cache(monkeypatch) -> None:
+    provider = FixtureProvider()
+    store = controller.InMemorySnapshotStore()
+    client = _client(monkeypatch, provider=provider, store=store)
+
+    assert client.get("/api/papers/root/citation-tree", params={"depth": 2}).json()[
+        "depthReturned"
+    ] == 1
+    assert client.get("/api/papers/root/citation-tree").json()["cacheHit"] is True
+    assert provider.calls == 1
+
+
 def test_citation_tree_rate_limited_and_unavailable(monkeypatch) -> None:
     assert (
         _client(monkeypatch, provider=FixtureProvider("rate_limited"))
@@ -117,6 +129,17 @@ def test_save_citation_node(monkeypatch) -> None:
 
     assert resp.status_code == 200
     assert resp.json()["arXivId"] == "2101.00001"
+
+
+def test_save_nulls_out_of_range_year(monkeypatch) -> None:
+    client = _client(monkeypatch)
+    node = client.get("/api/papers/root/citation-tree").json()["nodes"][0]
+    node["year"] = 500
+
+    resp = client.post("/api/papers/root/citation-tree/save", json={"node": node})
+
+    assert resp.status_code == 200
+    assert resp.json()["meta"].get("year") is None
 
 
 def test_save_rejects_unsaveable_node(monkeypatch) -> None:
@@ -158,6 +181,27 @@ def test_semantic_scholar_provider_url_encodes_path(monkeypatch) -> None:
     asyncio.run(controller.SemanticScholarProvider().references("10.1/a b/../../x", 1))
 
     assert captured["url"].endswith("/paper/10.1%2Fa%20b%2F..%2F..%2Fx/references")
+
+
+def test_emit_ignores_observability_without_emit_log() -> None:
+    class State:
+        observability = object()
+
+    class App:
+        state = State()
+
+    class Request:
+        app = App()
+
+    response = controller.CitationTreeResponse(
+        status="Success",
+        rootPaperId="root",
+        nodes=[],
+        edges=[],
+        depthReturned=1,
+    )
+
+    controller._emit(Request(), response, latency_ms=1, depth_requested=1)
 
 
 @pytest.mark.skipif(

@@ -9,7 +9,7 @@ User
   -> existing frontend / paper-detail branch
   -> U6 gateway
   -> existing FastAPI backend
-     -> Redis snapshot cache
+     -> snapshot cache seam (in-memory now, Redis target)
      -> Semantic Scholar Graph API
      -> U4 Library
      -> U6 telemetry
@@ -25,4 +25,4 @@ Backend requires outbound HTTPS to Semantic Scholar Graph API. Provider credenti
 
 ## Scaling
 
-U8 scales with the existing backend worker count. Redis absorbs repeat reads through 7-day snapshots. If provider traffic becomes material, add provider-specific throttling before adding a new service.
+U8 scales with the existing backend worker count. Current in-memory snapshots are per-process and reset on restart, so they reduce repeat reads only within a worker. Redis should replace the seam before relying on shared cache-hit rate or quota reduction. If provider traffic becomes material, add provider-specific throttling before adding a new service.

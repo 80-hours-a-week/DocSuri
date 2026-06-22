@@ -9,7 +9,7 @@ Client / FE branch
   -> U6 gateway/auth/rate path
   -> FastAPI CitationGraphApi
   -> CitationGraphService
-     -> Redis snapshot store
+     -> snapshot store seam (in-memory now, Redis in production wiring)
      -> Semantic Scholar Graph API
      -> U4 Library save path
      -> U6 ObservabilityHub/EventStore
@@ -29,7 +29,7 @@ U8 runs inside the existing backend FastAPI app-shell behind the U6 gateway. No 
 
 ## Cache Boundary
 
-- Store: existing Redis.
+- Store: process-local in-memory TTL in current code; existing Redis is the production wiring target.
 - TTL: 7 days.
 - Payload: normalized response shape, provider status, fetched timestamp.
 

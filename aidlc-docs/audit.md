@@ -10,8 +10,6 @@
 **AI 응답**: 레포 상태 조정(워킹 트리는 이미 블랭크 슬레이트; 열린 PR #33은 리셋의 커밋 쌍둥이; 신규 AI-DLC 룰셋 당일 추가; 기존 aidlc-state.md 없음). AI-DLC 환영 메시지 표시. 워크스페이스 탐지 판정: **Greenfield**(디스크에 소스 파일 없음).
 **맥락**: INCEPTION — 워크스페이스 탐지. Greenfield → 다음 단계 요구사항 분석.
 
----
-
 ## PR 문서 작성 및 커밋 메시지 상세화
 **Timestamp**: 2026-06-16T13:58:22Z
 **User Input**: ".github\\PULL_REQUEST_TEMPLATE.md 을 기반으로, 202606162300_PR.md를 작성해 주세요, 그리고 커밋 메시지를 좀 더 상세히 작성해 주세요."
@@ -921,6 +919,14 @@
 **User Input(원문)**: "제 개입이 필요한 단계 전까지 쭉 진행해 주세요."
 **AI Response**: U8 Code Generation 계획을 권장안 A 승인으로 처리하고 backend-only 구현 완료. 추가/수정: `backend/modules/citation_graph/` 모듈(`controller.py`, `__init__.py`), app-shell mount(`backend/wiring.py`), app-shell registry 테스트 갱신, `backend/tests/test_citation_graph.py`. 구현 범위: feature flag `CITATION_GRAPH_ENABLED`, 인증 필수, Semantic Scholar references provider, process-local snapshot store(문서상 Redis 교체 seam), bounded tree builder(depth<=2, visible nodes<=50), unresolved 분리, U4 library save gateway(arXiv ID 있는 노드만), U6 telemetry emit, env-gated 실 provider contract test stub. 검증: `.venv` 생성 후 backend test deps 설치, `python -m pytest backend/tests/test_citation_graph.py backend/tests/test_app_shell.py -q` 15 passed, `python -m pytest backend/tests -q` 33 passed, 이후 stub 추가 후 `python -m pytest backend/tests -q` 33 passed + 1 skipped, `python -m ruff check backend/modules/citation_graph backend/wiring.py backend/tests/test_citation_graph.py backend/tests/test_app_shell.py` 통과, `python -m compileall backend/modules/citation_graph backend/wiring.py` 통과. FE 미생성.
 **Context**: CONSTRUCTION — U8 Code Generation + Build/Test 완료. 다음은 사용자 리뷰/승인 또는 커밋/PR 지시 필요.
+
+---
+
+## U8 Cross-Review 반영 — 202606221100 PR 준비
+**Timestamp**: 2026-06-22T00:00:00Z
+**User Input(원문)**: "Cross-Review.md 를 읽고 프로젝트 코드들을 수정해 주세요. 이후, @202606221100_PR.md를 작성해 주세요. 커밋 메시지도 작성해 주세요."
+**AI Response**: `Cross-Review.md`를 읽고 PR #117 U8 backend slice 지적을 반영. 브랜치명은 현재 `feature/u8-v1`로 CI prefix 조건 충족 확인. 코드 수정: `depth` 쿼리 제거 및 cache key 중복 제거, lazy 2-hop은 `expandNodeId`로만 제어, 저장 경로의 out-of-range `year`를 null 처리, `_emit`에서 `emit_log` 존재 여부 방어, telemetry `depthRequested`와 `depthReturned` 분리. 문서 수정: U8 Redis snapshot 단언을 현재 process-local in-memory TTL seam + production Redis target으로 정정. `202606221100_PR.md` 작성 예정. 앱 FE 변경 없음.
+**Context**: CONSTRUCTION — U8 Citation Graph Cross-Review follow-up. 코드/문서 수정 및 PR 메시지 작성.
 
 ---
 

@@ -14,9 +14,15 @@ from backend.modules.library.controller import get_library_service
 from backend.modules.library.schemas import LibraryItemCreateDTO
 from backend.modules.library.services.library import LibraryService
 
-MAX_DEPTH = int(os.getenv("CITATION_GRAPH_MAX_DEPTH", "2"))
-MAX_VISIBLE_NODES = int(os.getenv("CITATION_GRAPH_MAX_VISIBLE_NODES", "50"))
-SNAPSHOT_TTL_SECONDS = int(os.getenv("CITATION_GRAPH_SNAPSHOT_TTL_SECONDS", "604800"))
+MAX_DEPTH = 2
+
+
+def _max_visible_nodes() -> int:
+    return int(os.getenv("CITATION_GRAPH_MAX_VISIBLE_NODES", "50"))
+
+
+def _snapshot_ttl_seconds() -> int:
+    return int(os.getenv("CITATION_GRAPH_SNAPSHOT_TTL_SECONDS", "604800"))
 
 
 class CitationNode(BaseModel):
@@ -76,7 +82,7 @@ class InMemorySnapshotStore:
         return value.model_copy(update={"cacheHit": True})
 
     def set(self, key: str, value: CitationTreeResponse) -> None:
-        self._items[key] = (time.time() + SNAPSHOT_TTL_SECONDS, value)
+        self._items[key] = (time.time() + _snapshot_ttl_seconds(), value)
 
 
 class SemanticScholarProvider:
@@ -164,9 +170,13 @@ def _node(raw: dict[str, Any], depth: int, seen: set[str]) -> CitationNode | Unr
     )
 
 
-def _build_tree(
-    root: str, parent: str, depth: int, raw_items: list[dict[str, Any]]
-) -> CitationTreeResponse:
+def _library_year(year: int | None) -> int | None:
+    if isinstance(year, int) and not isinstance(year, bool) and 1900 <= year <= 2100:
+        return year
+    return None
+
+
+def _build_tree(root: str, parent: str, raw_items: list[dict[str, Any]]) -> CitationTreeResponse:
     target_depth = 2 if parent != root else 1
     seen = {root}
     nodes: list[CitationNode] = []
@@ -185,7 +195,7 @@ def _build_tree(
         if isinstance(item, UnresolvedCitation):
             unresolved.append(item)
             continue
-        if len(nodes) < MAX_VISIBLE_NODES:
+        if len(nodes) < _max_visible_nodes():
             nodes.append(item)
             edges.append(CitationEdge(fromNodeId=parent, toNodeId=item.nodeId, depth=target_depth))
     remaining = max(0, len(sorted_items) - len(nodes) - len(unresolved))
@@ -201,10 +211,13 @@ def _build_tree(
     )
 
 
-def _emit(request: Request, response: CitationTreeResponse, latency_ms: int) -> None:
+def _emit(
+    request: Request, response: CitationTreeResponse, latency_ms: int, depth_requested: int
+) -> None:
     hub = getattr(request.app.state, "observability", None)
-    if hub:
-        hub.emit_log(
+    emit_log = getattr(hub, "emit_log", None)
+    if emit_log:
+        emit_log(
             {
                 "event": "citation_graph.lookup",
                 "paperId": response.rootPaperId,
@@ -212,7 +225,7 @@ def _emit(request: Request, response: CitationTreeResponse, latency_ms: int) -> 
                 "providerStatus": response.providerStatus,
                 "nodeCount": len(response.nodes),
                 "unresolvedCount": len(response.unresolved),
-                "depthRequested": response.depthReturned,
+                "depthRequested": depth_requested,
                 "depthReturned": response.depthReturned,
                 "truncated": response.truncated,
                 "latencyMs": latency_ms,
@@ -224,8 +237,7 @@ def _emit(request: Request, response: CitationTreeResponse, latency_ms: int) -> 
 async def get_citation_tree(
     paper_id: str,
     request: Request,
-    depth: int = Query(default=1, ge=1, le=MAX_DEPTH),
-    expandNodeId: str | None = Query(default=None),
+    expandNodeId: str | None = None,
     refresh: bool = Query(default=False),
     _: Principal = PRINCIPAL_DEP,
     store: InMemorySnapshotStore = STORE_DEP,
@@ -233,12 +245,13 @@ async def get_citation_tree(
 ) -> CitationTreeResponse:
     started = time.perf_counter()
     parent = expandNodeId or paper_id
-    key = f"{paper_id}:{parent}:{depth}"
+    depth_requested = 2 if expandNodeId else 1
+    key = f"{paper_id}:{parent}"
     if not refresh and (cached := store.get(key)):
-        _emit(request, cached, int((time.perf_counter() - started) * 1000))
+        _emit(request, cached, int((time.perf_counter() - started) * 1000), depth_requested)
         return cached
 
-    provider_status, items = await provider.references(parent, MAX_VISIBLE_NODES + 1)
+    provider_status, items = await provider.references(parent, _max_visible_nodes() + 1)
     if provider_status in {"rate_limited", "unavailable"} and not items:
         return CitationTreeResponse(
             status="RateLimited" if provider_status == "rate_limited" else "Unavailable",
@@ -248,11 +261,11 @@ async def get_citation_tree(
             depthReturned=0,
             providerStatus=provider_status,
         )
-    response = _build_tree(paper_id, parent, depth, items).model_copy(
+    response = _build_tree(paper_id, parent, items).model_copy(
         update={"providerStatus": provider_status}
     )
     store.set(key, response)
-    _emit(request, response, int((time.perf_counter() - started) * 1000))
+    _emit(request, response, int((time.perf_counter() - started) * 1000), depth_requested)
     return response
 
 
@@ -272,7 +285,7 @@ async def save_citation_node(
             meta={
                 "title": node.title,
                 "authors": [],
-                "year": node.year,
+                "year": _library_year(node.year),
                 "arxivId": node.arxivId,
                 "abstractSnippet": None,
                 "arxivUrl": node.url,

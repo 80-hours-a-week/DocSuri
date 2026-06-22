@@ -6,7 +6,7 @@
 
 ## Cache-First Read
 
-Validate auth and bounds, read Redis unless `refresh=true`, return usable snapshot immediately, and call provider only on miss/refresh/uncovered expansion.
+Validate auth and bounds, read the snapshot store unless `refresh=true`, return usable snapshot immediately, and call provider only on miss/refresh/uncovered expansion. Current code uses process-local in-memory TTL; Redis is the production adapter target.
 
 ## Lazy 2-Hop Expansion
 

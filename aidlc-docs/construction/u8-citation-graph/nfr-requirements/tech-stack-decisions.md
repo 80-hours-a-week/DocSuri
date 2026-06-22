@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | TD-U8-1 | Start with Semantic Scholar Graph API as the only citation provider. | One provider is enough for v1; add OpenAlex only when coverage data proves the need. |
 | TD-U8-2 | Read provider credentials from the existing ECS/Secrets Manager/env path. | No new secret mechanism. |
-| TD-U8-3 | Store 7-day citation snapshots in existing Redis TTL cache. | Fast cache-first behavior without adding durable graph storage. |
+| TD-U8-3 | Target 7-day citation snapshots through a snapshot-store seam; current code ships process-local in-memory cache, production wiring should swap Redis TTL cache. | Keeps v1 small while preserving the Redis production path. |
 | TD-U8-4 | Keep U8 in the existing FastAPI backend app-shell behind U6 gateway. | No separate service until load requires it. |
 | TD-U8-5 | Keep U8 DTOs backend-local until FE paper-detail integration needs shared schemas. | Avoid premature shared-contract churn. |
 | TD-U8-6 | Emit U8 events through U6 ObservabilityHub/EventStore. | Reuses existing operational path. |
@@ -24,7 +24,7 @@ Semantic Scholar is used only for bibliographic citation metadata. U8 sends pape
 
 ## Cache Boundary
 
-Redis snapshot keys should include provider, root paper id, direction, and expansion node when relevant. The exact key format belongs to NFR Design.
+Current v1 keys are process-local and include root paper id plus expansion node. Redis snapshot keys should later include provider, root paper id, direction, and expansion node when production wiring replaces the in-memory seam.
 
 ## Integration Boundary
 

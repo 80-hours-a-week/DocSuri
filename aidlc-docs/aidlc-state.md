@@ -4,7 +4,7 @@
 - **프로젝트명**: DocSuri (연구 지원 애플리케이션)
 - **프로젝트 유형**: Greenfield(그린필드)
 - **시작일**: 2026-06-15T04:36:30Z
-- **현재 단계**: CONSTRUCTION - U8 Citation Graph NFR Requirements 계획·질문 게이트 작성 완료, 답변 대기. **[2026-06-19: Functional Design 승인 처리 후 `construction/plans/u8-citation-graph-nfr-requirements-plan.md` Q1~Q12 답변 대기.]**
+- **현재 단계**: CONSTRUCTION - U8 Citation Graph Code Generation/Build&Test 완료, Cross-Review 반영 중. **[2026-06-22: 브랜치 `feature/u8-v1`; depth 쿼리 제거, in-memory snapshot seam 문서 정정, 저장 year 방어, telemetry 방어 보강.]**
 - **문서 언어**: 한국어(`aidlc-docs/` 산출물). 업스트림 룰셋(`AGENTS.md`, `.aidlc-rule-details/`)은 영어 유지.
 
 ## ⚠️ 검증 재기준선 (Verification Re-baseline) — 2026-06-16
@@ -130,7 +130,8 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 
 **U8 Citation Graph** (인용 그래프/각주 트리 — 2026-06-19 편입 유닛, FE 구현 제외 API 모듈):
 - [x] Functional Design — **완료·승인 (2026-06-19)**. 계획서 `construction/plans/u8-citation-graph-functional-design-plan.md` Q1~Q12 전부 권장안(A) 반영 및 체크박스 완료. 산출물 `construction/u8-citation-graph/functional-design/` 3문서(`domain-entities.md`, `business-logic-model.md`, `business-rules.md`) 생성. **앱 코드·FE 미생성.**
-- [~] NFR Requirements — **계획·질문 게이트 작성 완료, 답변 대기 (2026-06-19)**. 계획서 `construction/plans/u8-citation-graph-nfr-requirements-plan.md` 작성. Q1~Q12는 citation provider, provider credential, Redis snapshot TTL, NFR-P3 응답 목표, timeout/retry, U6 rate/quota, FastAPI app-shell 통합, DTO 승격, U6 관측, U4 저장 계약, 실 provider 테스트 경계, Hypothesis PBT 계승을 다룸. **NFR 산출물·앱 코드·FE 미생성.**
+- [x] NFR Requirements / NFR Design / Infrastructure Design / Code Generation / Build&Test — **완료 (2026-06-21)**. U8 backend-only citation graph slice 생성 및 검증 완료.
+- [~] Cross-Review 반영 — **진행 (2026-06-22)**. 브랜치명은 `feature/u8-v1`로 CI prefix 조건 충족. 코드 수정: 죽은 `depth` 쿼리 제거, provider/cache key 중복 제거, save year 범위 밖 값 null 처리, telemetry `emit_log` 방어 및 `depthRequested` 분리. 문서 수정: Redis 단언을 현재 process-local in-memory snapshot seam + production Redis target으로 정정.
 
 **공통 후속 단계** (per-unit 또는 횡단):
 - [x] 병렬 개발 조율 (2026-06-16 반영) — `shared/` 공용 규약 선행 작성 및 3개 독립 트랙 병렬 진행 확정
@@ -212,4 +213,18 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
   - `python -m ruff check backend/modules/citation_graph backend/wiring.py backend/tests/test_citation_graph.py backend/tests/test_app_shell.py` -> pass
   - `python -m compileall backend/modules/citation_graph backend/wiring.py` -> pass
 - FE generated: no.
+- Current gate: user review/approval, commit, or PR direction required.
+
+## U8 Citation Graph — Cross-Review Follow-up
+
+- Date: 2026-06-22
+- Branch: `feature/u8-v1` (branch-name CI prefix compliant)
+- Code changes:
+  - removed dead `depth` query from citation tree API and cache key
+  - kept lazy 2-hop controlled by `expandNodeId`
+  - nulls out-of-range library save year values before U4 validation
+  - guards telemetry against observability objects without `emit_log`
+  - keeps `depthRequested` distinct from `depthReturned`
+- Documentation changes:
+  - corrected Redis wording: current implementation is process-local in-memory TTL seam; Redis remains production adapter target
 - Current gate: user review/approval, commit, or PR direction required.

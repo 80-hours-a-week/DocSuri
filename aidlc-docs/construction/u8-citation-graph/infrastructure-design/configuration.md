@@ -8,11 +8,10 @@
 | --- | --- | --- |
 | `CITATION_GRAPH_ENABLED` | `false` | Enables U8 endpoints. |
 | `SEMANTIC_SCHOLAR_API_KEY` | unset | Optional provider API key. |
-| `CITATION_GRAPH_REDIS_PREFIX` | `citation_graph:v1:` | Redis snapshot key prefix. |
+| `CITATION_GRAPH_REDIS_PREFIX` | `citation_graph:v1:` | Reserved for the Redis production snapshot adapter; current code uses process-local in-memory keys. |
 | `CITATION_GRAPH_SNAPSHOT_TTL_SECONDS` | `604800` | 7-day snapshot TTL. |
 | `CITATION_GRAPH_PROVIDER_TIMEOUT_SECONDS` | `2` | Semantic Scholar timeout target. |
 | `CITATION_GRAPH_PROVIDER_RETRIES` | `1` | Maximum retry count. |
-| `CITATION_GRAPH_MAX_DEPTH` | `2` | Hard depth cap. |
 | `CITATION_GRAPH_MAX_VISIBLE_NODES` | `50` | Hard response node cap. |
 | `CITATION_GRAPH_CONTRACT_TESTS` | unset | Enables opt-in real provider contract tests. |
 
