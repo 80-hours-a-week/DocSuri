@@ -38,7 +38,7 @@ def test_withdrawal_detection_uses_metadata_and_full_text() -> None:
     assert detect_withdrawal(metadata, "This paper has been withdrawn by the authors.")
 
 
-def test_chunker_is_deterministic_and_contiguous() -> None:
+def test_chunker_produces_single_abstract_chunk() -> None:
     processor = FetchParseProcessor()
     metadata = sample_metadata()
     raw = RawDocument(
@@ -47,11 +47,13 @@ def test_chunker_is_deterministic_and_contiguous() -> None:
         source_url="local://paper",
     )
     paper = processor.parse(raw)
-    chunker = Chunker(max_chunk_chars=300, overlap_chars=30)
+    chunker = Chunker()
     first = chunker.chunk(paper)
     second = chunker.chunk(paper)
     assert first == second
-    assert [chunk.ordinal for chunk in first.chunks] == list(range(len(first.chunks)))
+    assert len(first.chunks) == 1
+    assert first.chunks[0].section == "abstract"
+    assert first.chunks[0].ordinal == 0
 
 
 def test_dedup_guard_decisions_and_mark_ingested() -> None:

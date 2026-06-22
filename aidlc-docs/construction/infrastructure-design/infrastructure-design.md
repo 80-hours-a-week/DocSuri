@@ -31,7 +31,7 @@ U1 Ingestion이 쓰고 U2 Discovery가 읽는 **공유 벡터 인덱스**(Vector
 | **엔진 버전** | OpenSearch `2.11+` (k-NN 플러그인 내장) | k-NN HNSW 1024-dim 지원 |
 | **인스턴스 타입** | `m6g.large.search` (2 vCPU / 8 GB, Graviton3) | 수십만 1024-dim 벡터 + BM25 인덱스에 충분한 메모리 여유; $1600 상한 내 |
 | **데이터 노드** | **2** (Multi-AZ, 각 AZ에 1개) | 가용성 + replica shard 분산 |
-| **스토리지** | EBS gp3, 노드당 **50 GB** (총 100 GB) | 수십만 문서 × ~5KB/doc + k-NN 그래프; 초기 여유분 포함. ILM으로 관리 |
+| **스토리지** | EBS gp3, 노드당 **50 GB** (총 100 GB) | 수십만 문서 × ~5KB/doc(논문당 1벡터, Q2=B) + k-NN 그래프; 초기 여유분 포함. ILM으로 관리 |
 | **마스터 노드** | 없음 (2 데이터 노드 도메인은 전용 마스터 불요) | 비용 절감 |
 | **레플리카** | index replica = 1 (2 노드 = 1 primary + 1 replica per shard) | AZ 장애 시 읽기 가용 |
 
@@ -162,7 +162,7 @@ arXiv Atom 피드 기반 near-real-time 트리거는 EventBridge Pipes(SQS→ste
 | **input_type** | writer=`search_document` (U1 인제스천) / reader=`search_query` (U2 검색) |
 | **차원** | 1024 (VectorSpec FROZEN) |
 | **호출 주체** | `docsuri-ingestion-task-role` (벌크 임베딩) · `docsuri-api-task-role` (검색 질의 임베딩) |
-| **비용 추정** | ~$0.0001/1K tokens; 초기 벌크(수십만×~300 tokens avg) ≈ $3-5 일회성; 이후 일일 수십 건 ≈ 무시 |
+| **비용 추정** | ~$0.0001/1K tokens; 초기 벌크(수십만×~300 tokens avg, **제목+초록만 — issue #120 Q2=B**) ≈ $2-5 일회성; 이후 일일 수십 건 ≈ 무시 |
 
 ### 5.2. 모델 접근 권한
 
