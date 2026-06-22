@@ -19,7 +19,9 @@ from docsuri_ingestion.domain.models import MetadataRecord
 class ArxivAssetSource:
     """Fetch PDF / e-print bytes from arXiv for asset extraction (best-effort)."""
 
-    def __init__(self, *, base_url: str = "https://arxiv.org", timeout_seconds: float = 20.0) -> None:
+    def __init__(
+        self, *, base_url: str = "https://arxiv.org", timeout_seconds: float = 20.0
+    ) -> None:
         self._base = base_url.rstrip("/")
         self._timeout = timeout_seconds
 

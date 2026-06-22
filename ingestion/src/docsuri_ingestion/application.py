@@ -4,11 +4,11 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import uuid4
 
+from .asset_extraction import AssetExtractor
 from .config import CORPUS_SLICE_CATEGORIES
 from .domain.enums import DedupDecision, FailureClass, FailureReason, JobKind
 from .domain.errors import IngestionError, PermanentIngestionError
 from .domain.models import EmbeddingBatch, IngestionJob, Tombstone
-from .asset_extraction import AssetExtractor
 from .ports import (
     ArxivSourcePort,
     AssetSourcePort,

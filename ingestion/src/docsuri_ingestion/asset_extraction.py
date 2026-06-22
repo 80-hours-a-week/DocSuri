@@ -25,6 +25,8 @@ from .domain.enums import AssetSourceMode, AssetType
 # Caption detection — "Figure 1", "Fig. 2", "Table 3" (case-insensitive, line start).
 _CAPTION_RE = re.compile(r"^\s*(figure|fig\.?|table)\s+\d+", re.IGNORECASE)
 
+_ASSETS_EXTRA_MISSING = "multimodal assets extra not installed (pip install .[assets])"
+
 
 def caption_kind(text: str) -> AssetType | None:
     """Classify a text line as a figure/table caption, or None. Pure (P7)."""
@@ -90,8 +92,8 @@ class ImageNormalizer:
             return None
         try:
             from PIL import Image
-        except ImportError:  # pragma: no cover - assets extra not installed
-            raise RuntimeError("multimodal assets extra not installed (pip install .[assets])")
+        except ImportError as exc:  # pragma: no cover - assets extra not installed
+            raise RuntimeError(_ASSETS_EXTRA_MISSING) from exc
         try:
             with Image.open(io.BytesIO(raw)) as img:
                 width, height = img.size
@@ -170,8 +172,8 @@ class AssetExtractor:
         try:
             import pdfplumber
             import pypdfium2 as pdfium
-        except ImportError:  # pragma: no cover - assets extra not installed
-            raise RuntimeError("multimodal assets extra not installed (pip install .[assets])")
+        except ImportError as exc:  # pragma: no cover - assets extra not installed
+            raise RuntimeError(_ASSETS_EXTRA_MISSING) from exc
 
         out: list[RawAssetCandidate] = []
         try:

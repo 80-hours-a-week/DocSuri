@@ -997,3 +997,13 @@
 **User Input(원문)**: "A로 진행해줘" (Q1=A permissive 스택 확정 + PART 2 진행).
 **AI Response**: U1 멀티모달 자산 추출 코드 생성(브라운필드 `ingestion/`). **Q1=A**: PyMuPDF(AGPL) 대신 **pypdfium2(Apache/BSD)+pdfplumber(MIT)+Pillow(HPND)** — NFR TD-11/13 정정(라이선스 안전). 신규: `domain/assets.py`(asset_id·RawAssetCandidate·FigureTableAsset·ExtractedAsset·AssetManifest), `asset_extraction.py`(caption_kind·**finalize_assets P7 순수**·ImageNormalizer[bomb 가드·WebP·메타스트립]·AssetExtractor[혼합: e-print 그래픽/PDF page-crop 폴백, import-guarded]), `adapters/assets.py`(ArxivAssetSource httpx·**S3RdsAssetStore** write-order S3→RDS P8·CHANGED 교체·tombstone 삭제), `migrations/postgres/002_paper_asset.sql`. 수정: `enums.py`(AssetType·AssetSourceMode·ASSET_* FailureReason), `ports.py`(AssetSourcePort·AssetStorePort), `application.py`(자산 포트 주입 미주입=비활성·`_store_assets_best_effort` 인덱스 커밋 후·비차단 BR-27·`_remove_assets_best_effort` tombstone), `settings.py`(MULTIMODAL_ASSETS_ENABLED off 기본·상한·KMS·타임아웃), `pyproject.toml`(assets optional extra). 테스트: `test_assets.py`(caption·finalize·**PBT P7**·ImageNormalizer importorskip), `test_asset_wiring.py`(기본 off·성공 store·**실패 인덱싱 비차단**). **인덱스/임베딩/IndexRecord 경로 코드 불변.** **검증**: `compileall` 통과 + 순수 모듈 import·finalize/caption 로직 스모크 통과. 전체 테스트 실행은 Build & Test.
 **Context**: CONSTRUCTION — U1 Code Generation 완료. 다음 게이트: U1 Build & Test. 미커밋(리뷰 대기).
+
+---
+
+## 멀티모달 표시 — U1 Ingestion Build & Test
+**Timestamp**: 2026-06-22T00:00:00Z
+**Build Status**: Success (uv sync --extra assets — pypdfium2·pdfplumber·pdfminer.six·pillow)
+**Test Status**: Pass — pytest 42 passed/0 failed, ruff clean
+**AI Response**: U1 멀티모달 Build & Test. `uv run --extra assets pytest` 42 passed(자산 신규: caption_kind·finalize PBT P7·ImageNormalizer[bomb 가드·undecodable 거부·WebP]·best-effort 비차단 wiring + 인덱스 경로 회귀). 린트 B904(raise-from)·E501(line len) 정정 후 `ruff check` All checks passed. 실 추출(_page_crop/_structured)·S3RdsAssetStore는 env-gated 통합으로 이연(P8는 store write-order로 보장). 산출물 `construction/u1-ingestion/build-and-test/`(build-instructions·unit-test-instructions·build-and-test-summary). 코드 정정 커밋(lint fix). **U1 생산자 멀티모달 슬라이스 종결.**
+**Files Generated**: build-instructions.md, unit-test-instructions.md, build-and-test-summary.md
+**Context**: CONSTRUCTION — U1 멀티모달 트랙 종결. 다음: 공유계약(shared/dtos + paper_asset 노출) → U7(읽기·서명 URL·갭 3건) → U5(렌더). 미커밋(리뷰 대기).
