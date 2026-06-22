@@ -47,6 +47,8 @@ export function CitationTreePanel({ paperId, onClose }: CitationTreePanelProps) 
   const [saving, setSaving] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   const load = useCallback(
     async (refresh = false) => {
@@ -69,7 +71,7 @@ export function CitationTreePanel({ paperId, onClose }: CitationTreePanelProps) 
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose?.();
+      if (event.key === 'Escape') onCloseRef.current?.();
     };
     document.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
@@ -79,7 +81,7 @@ export function CitationTreePanel({ paperId, onClose }: CitationTreePanelProps) 
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [onClose]);
+  }, []);
 
   async function toggleExpand(nodeId: string) {
     if (expanded[nodeId]) {
@@ -95,6 +97,7 @@ export function CitationTreePanel({ paperId, onClose }: CitationTreePanelProps) 
     setActionError(null);
     try {
       const tree = await getApiClient().getCitationTree(paperId, { expandNodeId: nodeId });
+      // Keep one branch open at a time so dense citation graphs stay readable.
       setExpanded({ [nodeId]: tree });
     } catch {
       setActionError('선택한 인용의 하위 트리를 불러오지 못했습니다.');
@@ -229,25 +232,28 @@ function CitationGraph({
 }) {
   const [zoom, setZoom] = useState(1);
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const pendingScrollCenterRef = useRef<{ x: number; y: number } | null>(null);
   const graph = layoutGraph(tree, expandedById);
   const byId = new Map(graph.nodes.map((item) => [item.node.nodeId, item]));
 
+  useEffect(() => {
+    const target = pendingScrollCenterRef.current;
+    const viewport = viewportRef.current;
+    if (!target || !viewport) return;
+    pendingScrollCenterRef.current = null;
+    viewport.scrollLeft = target.x * zoom - viewport.clientWidth / 2;
+    viewport.scrollTop = target.y * zoom - viewport.clientHeight / 2;
+  }, [zoom]);
+
   function changeZoom(nextZoom: number) {
     const viewport = viewportRef.current;
+    if (nextZoom === zoom) return;
     const currentZoom = zoom;
-    const logicalCenterX = viewport
-      ? (viewport.scrollLeft + viewport.clientWidth / 2) / currentZoom
-      : graph.rootX;
-    const logicalCenterY = viewport
-      ? (viewport.scrollTop + viewport.clientHeight / 2) / currentZoom
-      : graph.rootY;
-
+    pendingScrollCenterRef.current = {
+      x: viewport ? (viewport.scrollLeft + viewport.clientWidth / 2) / currentZoom : graph.rootX,
+      y: viewport ? (viewport.scrollTop + viewport.clientHeight / 2) / currentZoom : graph.rootY,
+    };
     setZoom(nextZoom);
-    requestAnimationFrame(() => {
-      if (!viewport) return;
-      viewport.scrollLeft = logicalCenterX * nextZoom - viewport.clientWidth / 2;
-      viewport.scrollTop = logicalCenterY * nextZoom - viewport.clientHeight / 2;
-    });
   }
 
   return (
@@ -407,6 +413,7 @@ function GraphNodeCard({
   return (
     <article
       className={styles.graphNode}
+      aria-label={node.title}
       style={{
         left: x * zoom,
         top: y * zoom,

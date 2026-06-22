@@ -1057,3 +1057,11 @@
 
 ---
 
+## U8 Citation Graph Cross-Review Follow-up
+**Timestamp**: 2026-06-22T09:03:21Z
+**User Input**: "Cross-Review.md 을 읽고, 코드를 수정해 주세요. 이후, 2002606221830_PR.md를 작성해 주세요. 그리고 커밋 메시지를 작성해 주세요."
+**AI Response**: "`Cross-Review.md`의 PR #131 리뷰를 반영해 `CitationTreePanel`의 `onClose` 참조를 ref로 안정화하고, Escape/body overflow effect를 1회 설치로 변경함. 줌 스크롤 보정을 `requestAnimationFrame`에서 `zoom` effect + pending center ref 방식으로 이동함. 단일 브랜치 확장 정책 주석과 노드 `aria-label`을 추가하고, 최신 `onClose` 호출 회귀 테스트를 추가함. `2002606221830_PR.md`를 PR 템플릿 형식으로 작성함. 검증: `npx tsc --noEmit`, `npx vitest run test/citationTreePanel.test.tsx --reporter=verbose`, `npm --prefix frontend run lint`, `npx vitest run` 통과."
+**Context**: Frontend implementation — U8 Citation Graph cross-review fixes and PR draft.
+
+---
+

@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CitationTreePanel } from '@/components/CitationTreePanel';
 
@@ -56,5 +56,21 @@ describe('CitationTreePanel', () => {
 
     await user.click(screen.getByTestId('citation-save-1706.03762'));
     expect(await screen.findByText('저장됨')).toBeInTheDocument();
+  });
+
+  it('uses the latest onClose handler for Escape without remounting the modal effect', async () => {
+    const user = userEvent.setup();
+    const firstClose = vi.fn();
+    const secondClose = vi.fn();
+    const { rerender } = render(<CitationTreePanel paperId="2101.00001" onClose={firstClose} />);
+
+    expect(await screen.findByTestId('citation-tree-panel')).toBeInTheDocument();
+    await waitFor(() => expect(document.body.style.overflow).toBe('hidden'));
+
+    rerender(<CitationTreePanel paperId="2101.00001" onClose={secondClose} />);
+    await user.keyboard('{Escape}');
+
+    expect(firstClose).not.toHaveBeenCalled();
+    expect(secondClose).toHaveBeenCalledTimes(1);
   });
 });
