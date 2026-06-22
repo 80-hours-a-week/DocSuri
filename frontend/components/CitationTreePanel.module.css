@@ -95,55 +95,101 @@
   color: var(--color-danger, #b42318);
 }
 
-.tree {
+.graph {
+  position: relative;
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  background: var(--color-bg);
+  overflow: hidden;
+}
+
+.zoomControls {
+  position: sticky;
+  top: 0;
+  z-index: 4;
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: color-mix(in srgb, var(--color-bg) 88%, transparent);
 }
 
-.panel > .tree {
-  min-height: 0;
-  overflow: auto;
-}
-
-.node {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.nodeMain {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.25rem;
-  min-width: max-content;
-}
-
-.branch {
-  flex: 0 0 auto;
-  white-space: pre;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-    monospace;
-  font-size: 0.875rem;
-  line-height: 1.8;
+.zoomValue {
+  min-width: 3rem;
+  text-align: center;
+  font-size: 0.8125rem;
+  font-weight: 700;
   color: var(--color-text-muted);
 }
 
-.nodeText {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-  min-width: 24rem;
-  padding: 0.25rem 0.375rem;
-  border-radius: 0.375rem;
+.graphViewport {
+  height: 32rem;
+  overflow-x: auto;
+  overflow-y: auto;
 }
 
-.nodeText:hover {
-  background: var(--color-mockup-bg);
+.graphWorld {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+.graphCanvas {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.graphSvg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.edge {
+  stroke: var(--color-border);
+  stroke-width: 2;
+}
+
+.rootNode {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 9.5rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 48%, var(--color-border));
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--color-accent), #2563eb);
+  color: #fff;
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.24);
+}
+
+.rootBadge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  opacity: 0.88;
+}
+
+.graphNode {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  width: 13.5rem;
+  padding: 0.625rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  background: var(--color-surface);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
 }
 
 .nodeTitle {
@@ -179,19 +225,25 @@
 }
 
 @media (max-width: 520px) {
-  .header,
-  .nodeText {
+  .header {
     flex-direction: column;
   }
 
-  .tools,
-  .nodeActions {
+  .tools {
     width: 100%;
   }
 
   .button,
   .secondary {
     flex: 1 1 0;
+  }
+
+  .graph {
+    min-height: 24rem;
+  }
+
+  .graphSvg {
+    height: 28rem;
   }
 }
 

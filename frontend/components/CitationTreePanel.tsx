@@ -15,6 +15,30 @@ type LoadState =
   | { kind: 'done'; tree: CitationTreeResponse }
   | { kind: 'error'; message: string };
 
+interface GraphNode {
+  node: CitationNode;
+  parentId: string;
+  x: number;
+  y: number;
+  depth: number;
+}
+
+interface GraphLayout {
+  width: number;
+  height: number;
+  rootX: number;
+  rootY: number;
+  nodes: GraphNode[];
+}
+
+const MIN_GRAPH_WIDTH = 1100;
+const GRAPH_PADDING_X = 160;
+const ROOT_Y = 90;
+const DEPTH_1_Y = 300;
+const DEPTH_2_Y = 620;
+const GRAPH_HEIGHT = 940;
+const COLUMN_GAP = 260;
+
 export function CitationTreePanel({ paperId, onClose }: CitationTreePanelProps) {
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [expanded, setExpanded] = useState<Record<string, CitationTreeResponse>>({});
@@ -57,7 +81,16 @@ export function CitationTreePanel({ paperId, onClose }: CitationTreePanelProps) 
     };
   }, [onClose]);
 
-  async function expand(nodeId: string) {
+  async function toggleExpand(nodeId: string) {
+    if (expanded[nodeId]) {
+      setExpanded((prev) => {
+        const next = { ...prev };
+        delete next[nodeId];
+        return next;
+      });
+      return;
+    }
+
     setExpanding(nodeId);
     setActionError(null);
     try {
@@ -141,22 +174,15 @@ export function CitationTreePanel({ paperId, onClose }: CitationTreePanelProps) 
               {actionError}
             </p>
           ) : null}
-          <ul className={styles.tree}>
-            {state.tree.nodes.map((node, index) => (
-              <TreeNode
-                key={node.nodeId}
-                node={node}
-                prefix=""
-                isLast={index === state.tree.nodes.length - 1}
-                expandedById={expanded}
-                expanding={expanding === node.nodeId}
-                savedIds={saved}
-                savingId={saving}
-                onExpand={expand}
-                onSave={save}
-              />
-            ))}
-          </ul>
+          <CitationGraph
+            tree={state.tree}
+            expandedById={expanded}
+            expandingId={expanding}
+            savedIds={saved}
+            savingId={saving}
+            onExpand={toggleExpand}
+            onSave={save}
+          />
           {state.tree.unresolved.length > 0 ? (
             <div>
               <p className={styles.meta}>해결되지 않은 인용</p>
@@ -184,91 +210,237 @@ function TreeMeta({ tree }: { tree: CitationTreeResponse }) {
   );
 }
 
-function TreeNode({
-  node,
-  prefix,
-  isLast,
+function CitationGraph({
+  tree,
   expandedById,
-  expanding,
+  expandingId,
   savedIds,
   savingId,
   onExpand,
   onSave,
 }: {
-  node: CitationNode;
-  prefix: string;
-  isLast: boolean;
+  tree: CitationTreeResponse;
   expandedById: Record<string, CitationTreeResponse>;
-  expanding: boolean;
+  expandingId: string | null;
   savedIds: Set<string>;
   savingId: string | null;
   onExpand: (nodeId: string) => void;
   onSave: (node: CitationNode) => void;
 }) {
-  const year = node.year ? String(node.year) : '연도 미상';
-  const citations = typeof node.citationCount === 'number' ? `${node.citationCount.toLocaleString()}회 인용` : '인용수 미상';
-  const expanded = expandedById[node.nodeId];
-  const saved = savedIds.has(node.nodeId);
-  const saving = savingId === node.nodeId;
-  const childPrefix = `${prefix}${isLast ? '    ' : '│   '}`;
-  const childNodes = expanded?.nodes ?? [];
+  const [zoom, setZoom] = useState(1);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const graph = layoutGraph(tree, expandedById);
+  const byId = new Map(graph.nodes.map((item) => [item.node.nodeId, item]));
+
+  function changeZoom(nextZoom: number) {
+    const viewport = viewportRef.current;
+    const currentZoom = zoom;
+    const logicalCenterX = viewport
+      ? (viewport.scrollLeft + viewport.clientWidth / 2) / currentZoom
+      : graph.rootX;
+    const logicalCenterY = viewport
+      ? (viewport.scrollTop + viewport.clientHeight / 2) / currentZoom
+      : graph.rootY;
+
+    setZoom(nextZoom);
+    requestAnimationFrame(() => {
+      if (!viewport) return;
+      viewport.scrollLeft = logicalCenterX * nextZoom - viewport.clientWidth / 2;
+      viewport.scrollTop = logicalCenterY * nextZoom - viewport.clientHeight / 2;
+    });
+  }
 
   return (
-    <li className={styles.node}>
-      <div className={styles.nodeMain}>
-        <span className={styles.branch} aria-hidden="true">
-          {prefix}
-          {isLast ? '└── ' : '├── '}
-        </span>
-        <div className={styles.nodeText}>
-          <div>
-            <p className={styles.nodeTitle}>{node.title}</p>
-            <div className={styles.nodeMeta}>
-              <span>{year}</span>
-              <span>{citations}</span>
-              {node.alreadyShown ? <span>이미 표시됨</span> : null}
+    <div className={styles.graph} data-testid="citation-graph">
+      <div className={styles.zoomControls} aria-label="그래프 확대/축소">
+        <button
+          type="button"
+          className={styles.secondary}
+          onClick={() => changeZoom(Math.max(0.25, zoom - 0.25))}
+          disabled={zoom <= 0.25}
+        >
+          축소
+        </button>
+        <span className={styles.zoomValue}>{Math.round(zoom * 100)}%</span>
+        <button
+          type="button"
+          className={styles.secondary}
+          onClick={() => changeZoom(Math.min(1.5, zoom + 0.25))}
+          disabled={zoom >= 1.5}
+        >
+          확대
+        </button>
+      </div>
+
+      <div className={styles.graphViewport} ref={viewportRef}>
+        <div
+          className={styles.graphWorld}
+          style={{ width: graph.width * zoom, height: graph.height * zoom }}
+        >
+          <div
+            className={styles.graphCanvas}
+            style={{
+              width: graph.width * zoom,
+              height: graph.height * zoom,
+            }}
+          >
+            <svg
+              className={styles.graphSvg}
+              viewBox={`0 0 ${graph.width} ${graph.height}`}
+              aria-hidden="true"
+            >
+              {graph.nodes.map((item) => {
+                const parent = item.parentId === tree.rootPaperId ? null : byId.get(item.parentId);
+                const x1 = parent?.x ?? graph.rootX;
+                const y1 = parent?.y ?? graph.rootY;
+                return (
+                  <line
+                    key={`${item.parentId}-${item.node.nodeId}`}
+                    x1={x1}
+                    y1={y1}
+                    x2={item.x}
+                    y2={item.y}
+                    className={styles.edge}
+                  />
+                );
+              })}
+            </svg>
+
+            <div
+              className={styles.rootNode}
+              style={{
+                left: graph.rootX * zoom,
+                top: graph.rootY * zoom,
+                transform: `translate(-50%, -50%) scale(${zoom})`,
+              }}
+              aria-label={`현재 논문 ${tree.rootPaperId}`}
+            >
+              <span className={styles.rootBadge}>현재 논문</span>
+              <strong>{tree.rootPaperId}</strong>
             </div>
-          </div>
-          <div className={styles.nodeActions}>
-            <button
-              type="button"
-              className={styles.button}
-              onClick={() => onExpand(node.nodeId)}
-              disabled={expanding}
-              data-testid={`citation-expand-${node.nodeId}`}
-            >
-              {expanding ? '확장 중' : expanded ? '다시 확장' : '확장'}
-            </button>
-            <button
-              type="button"
-              className={styles.button}
-              onClick={() => onSave(node)}
-              disabled={!node.saveable || saving || saved}
-              data-testid={`citation-save-${node.nodeId}`}
-            >
-              {saved ? '저장됨' : saving ? '저장 중' : node.saveable ? '저장' : '저장 불가'}
-            </button>
+
+            {graph.nodes.map((item) => (
+              <GraphNodeCard
+                key={item.node.nodeId}
+                node={item.node}
+                x={item.x}
+                y={item.y}
+                depth={item.depth}
+                zoom={zoom}
+                expanded={Boolean(expandedById[item.node.nodeId])}
+                expanding={expandingId === item.node.nodeId}
+                saved={savedIds.has(item.node.nodeId)}
+                saving={savingId === item.node.nodeId}
+                onExpand={onExpand}
+                onSave={onSave}
+              />
+            ))}
           </div>
         </div>
       </div>
-      {expanded ? (
-        <ul className={styles.tree}>
-          {childNodes.map((child, index) => (
-            <TreeNode
-              key={child.nodeId}
-              node={child}
-              prefix={childPrefix}
-              isLast={index === childNodes.length - 1}
-              expandedById={expandedById}
-              expanding={false}
-              savedIds={savedIds}
-              savingId={savingId}
-              onExpand={onExpand}
-              onSave={onSave}
-            />
-          ))}
-        </ul>
-      ) : null}
-    </li>
+    </div>
+  );
+}
+
+function layoutGraph(
+  tree: CitationTreeResponse,
+  expandedById: Record<string, CitationTreeResponse>,
+): GraphLayout {
+  const depth1 = tree.nodes;
+  const depth2 = depth1.flatMap((parent) =>
+    (expandedById[parent.nodeId]?.nodes ?? []).map((node) => ({ node, parentId: parent.nodeId })),
+  );
+  const rowCount = Math.max(depth1.length, depth2.length, 1);
+  const width = Math.max(MIN_GRAPH_WIDTH, GRAPH_PADDING_X * 2 + (rowCount - 1) * COLUMN_GAP);
+  const rootX = width / 2;
+
+  const spread = <T,>(items: T[], y: number, toNode: (item: T) => CitationNode, toParent: (item: T) => string) =>
+    items.map((item, index) => ({
+      node: toNode(item),
+      parentId: toParent(item),
+      x: items.length === 1 ? rootX : GRAPH_PADDING_X + index * ((width - GRAPH_PADDING_X * 2) / (items.length - 1)),
+      y,
+      depth: y === DEPTH_1_Y ? 1 : 2,
+    }));
+
+  return {
+    width,
+    height: GRAPH_HEIGHT,
+    rootX,
+    rootY: ROOT_Y,
+    nodes: [
+      ...spread(depth1, DEPTH_1_Y, (node) => node, () => tree.rootPaperId),
+      ...spread(depth2, DEPTH_2_Y, (item) => item.node, (item) => item.parentId),
+    ],
+  };
+}
+
+function GraphNodeCard({
+  node,
+  x,
+  y,
+  depth,
+  zoom,
+  expanded,
+  expanding,
+  saved,
+  saving,
+  onExpand,
+  onSave,
+}: {
+  node: CitationNode;
+  x: number;
+  y: number;
+  depth: number;
+  zoom: number;
+  expanded: boolean;
+  expanding: boolean;
+  saved: boolean;
+  saving: boolean;
+  onExpand: (nodeId: string) => void;
+  onSave: (node: CitationNode) => void;
+}) {
+  const year = node.year ? String(node.year) : '연도 미상';
+  const citations = typeof node.citationCount === 'number' ? `${node.citationCount.toLocaleString()}회 인용` : '인용수 미상';
+  const canExpand = depth < 2;
+
+  return (
+    <article
+      className={styles.graphNode}
+      style={{
+        left: x * zoom,
+        top: y * zoom,
+        transform: `translate(-50%, -50%) scale(${zoom})`,
+      }}
+    >
+      <p className={styles.nodeTitle}>{node.title}</p>
+      <div className={styles.nodeMeta}>
+        <span>{year}</span>
+        <span>{citations}</span>
+        {node.alreadyShown ? <span>이미 표시됨</span> : null}
+      </div>
+      <div className={styles.nodeActions}>
+        {canExpand ? (
+          <button
+            type="button"
+            className={styles.button}
+            onClick={() => onExpand(node.nodeId)}
+            disabled={expanding}
+            data-testid={`citation-expand-${node.nodeId}`}
+          >
+            {expanding ? '확장 중' : expanded ? '축소' : '확장'}
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className={styles.button}
+          onClick={() => onSave(node)}
+          disabled={!node.saveable || saving || saved}
+          data-testid={`citation-save-${node.nodeId}`}
+        >
+          {saved ? '저장됨' : saving ? '저장 중' : node.saveable ? '저장' : '저장 불가'}
+        </button>
+      </div>
+    </article>
   );
 }

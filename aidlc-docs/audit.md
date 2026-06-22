@@ -977,3 +977,83 @@
 
 ---
 
+## U8 Citation Tree Frontend 그래프 시각화
+**Timestamp**: 2026-06-22T07:13:10Z
+**User Input**: "일단 1번으로 진행해 만들어 주세요."
+**AI Response**: "`CitationTreePanel`의 파일트리형 목록 표시를 새 의존성 없는 SVG 방사형 인용 그래프로 교체함. 현재 논문을 중앙에 두고 인용 노드를 주변에 배치하며, 기존 확장/저장 버튼 동작과 테스트를 유지함. 검증: `npx tsc --noEmit`, `npx vitest run test/citationTreePanel.test.tsx --reporter=verbose`, `npm --prefix frontend run lint`, `npx vitest run` 통과."
+**Context**: Frontend implementation — U8 Citation Tree visual graph refinement.
+
+---
+
+## U8 Citation Graph Zoom and Root Node Polish
+**Timestamp**: 2026-06-22T07:17:37Z
+**User Input**: "노드가 위쪽에 있으면 노드 박스가 잘려요!!! 확대-축소 버튼을 넣던지 하면 좋을 것 같아요. 그리고 중앙의 노드가 너무 못생겼어요. 좀 이쁘기 만들어 주세요."
+**AI Response**: "`CitationTreePanel` 그래프를 고정 px 캔버스와 scrollable viewport 구조로 변경해 상단 노드 잘림을 줄이고, 75%~150% 확대/축소 버튼을 추가함. 중앙 현재 논문 노드를 SVG 원형 텍스트에서 gradient HTML pill 카드로 교체함. 검증: `npx tsc --noEmit`, `npx vitest run test/citationTreePanel.test.tsx --reporter=verbose`, `npm --prefix frontend run lint`, `npx vitest run` 통과."
+**Context**: Frontend implementation — U8 Citation Graph usability and visual polish.
+
+---
+
+## U8 Citation Graph Bottom Clipping and Zoom Range Fix
+**Timestamp**: 2026-06-22T07:20:49Z
+**User Input**: "이번엔 아래 노드가 잘리는데요?? 그리고 축소는 25%까지 할 수 있도록 해주세요."
+**AI Response**: "`CitationTreePanel` 그래프 캔버스를 1100x900으로 확장해 하단 노드 카드 여백을 늘리고, 축소 하한을 25%로 변경함. 컴포넌트 테스트에 25% 축소 도달 및 축소 버튼 disabled 검증을 추가함. 검증: `npx tsc --noEmit`, `npx vitest run test/citationTreePanel.test.tsx --reporter=verbose`, `npm --prefix frontend run lint`, `npx vitest run` 통과."
+**Context**: Frontend implementation — U8 Citation Graph clipping and zoom behavior.
+
+---
+
+## U8 Citation Graph Centered Zoom and Horizontal Scroll
+**Timestamp**: 2026-06-22T07:23:52Z
+**User Input**: "축소 버튼을 누르면 중심으로 축소되는게 아니라 좌상단 쪽으로 축소되어 버려요. 그리고 위아래 스크롤 뿐만 아니라 좌우 스크롤도 추가하면 좋을 것 같아요."
+**AI Response**: "`CitationTreePanel` 그래프 viewport ref를 추가해 확대/축소 전후의 viewport 중심 논리 좌표를 유지하도록 스크롤 위치를 보정함. `graphViewport` overflow를 x/y 양방향 auto로 명시함. 검증: `npx tsc --noEmit`, `npx vitest run test/citationTreePanel.test.tsx --reporter=verbose`, `npm --prefix frontend run lint`, `npx vitest run` 통과."
+**Context**: Frontend implementation — U8 Citation Graph zoom centering and scroll behavior.
+
+---
+
+## U8 Citation Graph Low-Zoom Centering Fix
+**Timestamp**: 2026-06-22T07:26:42Z
+**User Input**: "전 까지는 괜찮은데, 50%, 25% 부터 좌상단으로 그래프가 몰려버려요."
+**AI Response**: "`CitationTreePanel.module.css`에서 그래프 viewport를 flex container로 바꾸고 graph world에 `margin: auto`를 적용해, 50% 이하처럼 scaled graph가 viewport보다 작아질 때도 중앙 정렬되도록 수정함. 검증: `npx tsc --noEmit`, `npx vitest run test/citationTreePanel.test.tsx --reporter=verbose`, `npm --prefix frontend run lint` 통과."
+**Context**: Frontend implementation — U8 Citation Graph low-zoom centering behavior.
+
+---
+
+## U8 Citation Graph Bidirectional Scroll Fix
+**Timestamp**: 2026-06-22T07:30:15Z
+**User Input**: "100% 에서, 우측으로의 스크롤은 되는데 좌측으로의 스크롤은 안되네요."
+**AI Response**: "`CitationTreePanel` 그래프에서 전체 `transform: scale()` 기반 확대/축소를 제거하고, 캔버스 크기와 HTML 노드 좌표를 zoom 값으로 직접 계산하도록 변경함. `graphViewport`의 flex 중앙 정렬을 제거하고 `graphWorld`/`graphCanvas` 구조를 grid 기반으로 정리해 100% 이상에서도 좌우 스크롤 범위가 정상 생성되도록 수정함. 검증: `npx tsc --noEmit`, `npx vitest run test/citationTreePanel.test.tsx --reporter=verbose`, `npm --prefix frontend run lint`, `npx vitest run` 통과."
+**Context**: Frontend implementation — U8 Citation Graph scroll range and zoom rendering.
+
+---
+
+## U8 Citation Graph Layered DAG Layout
+**Timestamp**: 2026-06-22T07:53:48Z
+**User Input**: "그래프 모양을 좀 바꿔줄래요? 위에서 아래로 내려가는 레이어형 그래프로 바꿔 그려주실수 있나요? Git의 브랜치 그래프를 생각하면 될 것 같아요. Citation_Graph_UI_Guide.md 를 참고하세요. 또, 파파생 노드의 확장 버튼을 누르면 400에러가 떠버려요. depth 2까지 표시하고, depth 2의 노드들은 확장 버튼이 안 뜨도록 해주세요."
+**AI Response**: "`Citation_Graph_UI_Guide.md`를 참고해 `CitationTreePanel` 그래프를 방사형에서 위→아래 layered DAG 레이아웃으로 변경함. Root, depth 1, depth 2를 별도 row로 배치하고 parent→child edge를 연결함. depth 2 노드에는 확장 버튼을 렌더링하지 않아 400 호출 경로를 제거함. 테스트에 depth 2 확장 버튼 미노출 검증을 추가함. 검증: `npx tsc --noEmit`, `npx vitest run test/citationTreePanel.test.tsx --reporter=verbose`, `npm --prefix frontend run lint`, `npx vitest run` 통과."
+**Context**: Frontend implementation — U8 Citation Graph guide alignment and depth guard.
+
+---
+
+## U8 Citation Graph Canvas Padding Increase
+**Timestamp**: 2026-06-22T07:57:06Z
+**User Input**: "캔버스 크기 좀 넉넉하게 줘봐요... 75%에서 depth 2까지 확장 누르면 depth 2의 노드들의 아랫부분이 짤려버려요."
+**AI Response**: "`CitationTreePanel` layered graph의 depth 2 row를 아래로 조정하고 전체 canvas height를 940으로 늘려 75% zoom에서 depth 2 노드 하단 여백을 확보함. 검증: `npx tsc --noEmit`, `npx vitest run test/citationTreePanel.test.tsx --reporter=verbose`, `npm --prefix frontend run lint` 통과."
+**Context**: Frontend implementation — U8 Citation Graph canvas padding.
+
+---
+
+## U8 Citation Graph Expand Collapse Toggle
+**Timestamp**: 2026-06-22T08:00:12Z
+**User Input**: "하나 더요. 확장 버튼을 눌러 확장하고, 이후 다시 눌러 축소할 수 있도록 확장/축소 버튼으로 바꾸어 주세요."
+**AI Response**: "`CitationTreePanel`의 1-hop 노드 확장 버튼을 토글 동작으로 변경함. 이미 확장된 노드는 API 재호출 없이 expanded map에서 제거해 축소하고, 버튼 문구를 `확장`/`축소`로 전환함. 테스트에 확장 후 축소 및 depth 2 노드 제거 검증을 추가함. 검증: `npx tsc --noEmit`, `npx vitest run test/citationTreePanel.test.tsx --reporter=verbose`, `npm --prefix frontend run lint` 통과."
+**Context**: Frontend implementation — U8 Citation Graph expand/collapse behavior.
+
+---
+
+## U8 Citation Graph Vertical Padding Balance
+**Timestamp**: 2026-06-22T07:33:33Z
+**User Input**: "대부분 좋은데, 상하 스크롤에서, 위쪽으로 캔버스 여백? 이동 공간? 이 좀 더 많은 것 같아요. 위와 아래의 공간을 같도록 잘 맞추어 주세요."
+**AI Response**: "`CitationTreePanel` 그래프의 `CENTER_Y`를 고정 캔버스 중앙값에서 420으로 조정해 상단/하단 노드 카드 체감 여백을 맞춤. 검증: `npx tsc --noEmit`, `npx vitest run test/citationTreePanel.test.tsx --reporter=verbose`, `npm --prefix frontend run lint` 통과."
+**Context**: Frontend implementation — U8 Citation Graph vertical spacing polish.
+
+---
+
