@@ -944,3 +944,36 @@
 
 ---
 
+## U1 SQS 권장 수정 방안 정리
+**Timestamp**: 2026-06-22T05:44:45Z
+**User Input**: "좋아요. 권장 수정 방안을 U1_SQS.md 에 정리해 작성해 주세요."
+**AI Response**: "`U1_SQS.md`에 단일 SQS 큐 유지, JSON 메시지 타입 도입, 워커 디스패치 규칙, DLQ 처리, 큐 분리 검토 시점을 권장 수정 방안으로 정리함."
+**Context**: Documentation update — U1 SQS 설계 메모 보강.
+
+---
+
+## U8 Citation Tree Frontend 모달 전환
+**Timestamp**: 2026-06-22T06:19:37Z
+**User Input**: "u8의 현재 프론트엔드에서, 각주 트리를 열 때, 아래로 창이 늘어나는 것이 아닌, 모달 형식으로 열리도록 수정해 주세요. 또, 간단한 리스트 형식이 아닌, `├── main.py
+├── scraper/
+│   ├── __init__.py
+│   ├── gallery_scraper.py
+│   ├── post_scraper.py
+│   └── comment_scraper.py
+├── database/
+│   ├── __init__.py
+│   ├── json_handler.py
+│   └── mongodb_handler.py
+├── utils/
+│   ├── __init__.py
+│   ├── user_agent.py
+│   └── logger.py
+├── config/
+│   └── settings.py
+├── pyproject.toml
+└── README.md` 느낌의 각주 트리로 보이도록 수정해 주세요/"
+**AI Response**: "`CitationTreePanel`을 dialog 모달 오버레이로 전환하고, 인용 노드를 `├──`, `│`, `└──` prefix 기반 트리 UI로 렌더링하도록 수정함. 관련 컴포넌트 테스트에 모달/트리 표시 검증을 추가함."
+**Context**: Frontend implementation — U8 Citation Tree panel UI refinement.
+
+---
+

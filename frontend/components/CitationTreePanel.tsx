@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getApiClient } from '@/lib/api';
 import type { CitationNode, CitationTreeResponse } from '@/types/citationGraph';
 import styles from './CitationTreePanel.module.css';
@@ -22,6 +22,7 @@ export function CitationTreePanel({ paperId, onClose }: CitationTreePanelProps) 
   const [saved, setSaved] = useState<Set<string>>(() => new Set());
   const [saving, setSaving] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const panelRef = useRef<HTMLElement | null>(null);
 
   const load = useCallback(
     async (refresh = false) => {
@@ -41,6 +42,20 @@ export function CitationTreePanel({ paperId, onClose }: CitationTreePanelProps) 
   useEffect(() => {
     void load(false);
   }, [load]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose?.();
+    };
+    document.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    panelRef.current?.focus();
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [onClose]);
 
   async function expand(nodeId: string) {
     setExpanding(nodeId);
@@ -69,7 +84,17 @@ export function CitationTreePanel({ paperId, onClose }: CitationTreePanelProps) 
   }
 
   return (
-    <section className={styles.panel} aria-label="각주 트리" data-testid="citation-tree-panel">
+    <div className={styles.backdrop} onClick={onClose} data-testid="citation-tree-backdrop">
+      <section
+        ref={panelRef}
+        className={styles.panel}
+        role="dialog"
+        aria-modal="true"
+        aria-label="각주 트리"
+        tabIndex={-1}
+        onClick={(event) => event.stopPropagation()}
+        data-testid="citation-tree-panel"
+      >
       <div className={styles.header}>
         <div>
           <h2 className={styles.title}>각주 트리</h2>
@@ -85,8 +110,14 @@ export function CitationTreePanel({ paperId, onClose }: CitationTreePanelProps) 
             새로고침
           </button>
           {onClose ? (
-            <button type="button" className={styles.secondary} onClick={onClose}>
-              닫기
+            <button
+              type="button"
+              className={styles.close}
+              onClick={onClose}
+              aria-label="닫기"
+              data-testid="citation-tree-close"
+            >
+              ✕
             </button>
           ) : null}
         </div>
@@ -110,11 +141,13 @@ export function CitationTreePanel({ paperId, onClose }: CitationTreePanelProps) 
               {actionError}
             </p>
           ) : null}
-          <ul className={styles.list}>
-            {state.tree.nodes.map((node) => (
+          <ul className={styles.tree}>
+            {state.tree.nodes.map((node, index) => (
               <TreeNode
                 key={node.nodeId}
                 node={node}
+                prefix=""
+                isLast={index === state.tree.nodes.length - 1}
                 expandedById={expanded}
                 expanding={expanding === node.nodeId}
                 savedIds={saved}
@@ -136,7 +169,8 @@ export function CitationTreePanel({ paperId, onClose }: CitationTreePanelProps) 
           ) : null}
         </>
       )}
-    </section>
+      </section>
+    </div>
   );
 }
 
@@ -152,6 +186,8 @@ function TreeMeta({ tree }: { tree: CitationTreeResponse }) {
 
 function TreeNode({
   node,
+  prefix,
+  isLast,
   expandedById,
   expanding,
   savedIds,
@@ -160,6 +196,8 @@ function TreeNode({
   onSave,
 }: {
   node: CitationNode;
+  prefix: string;
+  isLast: boolean;
   expandedById: Record<string, CitationTreeResponse>;
   expanding: boolean;
   savedIds: Set<string>;
@@ -172,56 +210,64 @@ function TreeNode({
   const expanded = expandedById[node.nodeId];
   const saved = savedIds.has(node.nodeId);
   const saving = savingId === node.nodeId;
+  const childPrefix = `${prefix}${isLast ? '    ' : '│   '}`;
+  const childNodes = expanded?.nodes ?? [];
 
   return (
     <li className={styles.node}>
       <div className={styles.nodeMain}>
-        <div>
-          <p className={styles.nodeTitle}>{node.title}</p>
-          <div className={styles.nodeMeta}>
-            <span>{year}</span>
-            <span>{citations}</span>
-            {node.alreadyShown ? <span>이미 표시됨</span> : null}
+        <span className={styles.branch} aria-hidden="true">
+          {prefix}
+          {isLast ? '└── ' : '├── '}
+        </span>
+        <div className={styles.nodeText}>
+          <div>
+            <p className={styles.nodeTitle}>{node.title}</p>
+            <div className={styles.nodeMeta}>
+              <span>{year}</span>
+              <span>{citations}</span>
+              {node.alreadyShown ? <span>이미 표시됨</span> : null}
+            </div>
           </div>
-        </div>
-        <div className={styles.nodeActions}>
-          <button
-            type="button"
-            className={styles.button}
-            onClick={() => onExpand(node.nodeId)}
-            disabled={expanding}
-            data-testid={`citation-expand-${node.nodeId}`}
-          >
-            {expanding ? '확장 중' : expanded ? '다시 확장' : '확장'}
-          </button>
-          <button
-            type="button"
-            className={styles.button}
-            onClick={() => onSave(node)}
-            disabled={!node.saveable || saving || saved}
-            data-testid={`citation-save-${node.nodeId}`}
-          >
-            {saved ? '저장됨' : saving ? '저장 중' : node.saveable ? '저장' : '저장 불가'}
-          </button>
+          <div className={styles.nodeActions}>
+            <button
+              type="button"
+              className={styles.button}
+              onClick={() => onExpand(node.nodeId)}
+              disabled={expanding}
+              data-testid={`citation-expand-${node.nodeId}`}
+            >
+              {expanding ? '확장 중' : expanded ? '다시 확장' : '확장'}
+            </button>
+            <button
+              type="button"
+              className={styles.button}
+              onClick={() => onSave(node)}
+              disabled={!node.saveable || saving || saved}
+              data-testid={`citation-save-${node.nodeId}`}
+            >
+              {saved ? '저장됨' : saving ? '저장 중' : node.saveable ? '저장' : '저장 불가'}
+            </button>
+          </div>
         </div>
       </div>
       {expanded ? (
-        <div className={styles.children}>
-          <ul className={styles.list}>
-            {expanded.nodes.map((child) => (
-              <TreeNode
-                key={child.nodeId}
-                node={child}
-                expandedById={expandedById}
-                expanding={false}
-                savedIds={savedIds}
-                savingId={savingId}
-                onExpand={onExpand}
-                onSave={onSave}
-              />
-            ))}
-          </ul>
-        </div>
+        <ul className={styles.tree}>
+          {childNodes.map((child, index) => (
+            <TreeNode
+              key={child.nodeId}
+              node={child}
+              prefix={childPrefix}
+              isLast={index === childNodes.length - 1}
+              expandedById={expandedById}
+              expanding={false}
+              savedIds={savedIds}
+              savingId={savingId}
+              onExpand={onExpand}
+              onSave={onSave}
+            />
+          ))}
+        </ul>
       ) : null}
     </li>
   );

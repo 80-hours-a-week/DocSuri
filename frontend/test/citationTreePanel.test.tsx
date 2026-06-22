@@ -9,7 +9,9 @@ describe('CitationTreePanel', () => {
     render(<CitationTreePanel paperId="2101.00001" />);
 
     expect(await screen.findByTestId('citation-tree-panel')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: '각주 트리' })).toBeInTheDocument();
     expect(await screen.findByText('Attention Is All You Need')).toBeInTheDocument();
+    expect(screen.getByText(/├──/)).toBeInTheDocument();
     expect(screen.getByText(/OpenReview workshop record/)).toBeInTheDocument();
 
     await user.click(screen.getByTestId('citation-expand-1706.03762'));
