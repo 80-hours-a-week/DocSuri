@@ -15,6 +15,16 @@ import {
   degradedResponse,
 } from '@/mocks/searchFixtures';
 import {
+  summaryResponse,
+  beginnerSummaryResponse,
+  abstractTranslationResponse,
+  fullTranslationResponse,
+  fullTextResponse,
+  mockUpsertGlossaryTerm,
+  mockListGlossaryTerms,
+} from '@/mocks/summarizeFixtures';
+import { mockPaperMeta } from '@/mocks/paperFixtures';
+import {
   mockSignup,
   mockLogin,
   mockLogout,
@@ -63,6 +73,38 @@ export class MockTransport implements Transport {
       if (matches(query, '기권', 'abstain')) return { status: 200, body: abstainResponse };
       if (matches(query, '저하', 'degraded')) return { status: 200, body: degradedResponse };
       return { status: 200, body: pageResponse };
+    }
+
+    // U7 summarize/translate (dev preview only) ------------------------------
+    if (req.path === '/api/summarize' && req.method === 'POST') {
+      const body = (req.body ?? {}) as { task?: string; scope?: string; persona?: string };
+      if (body.task === 'translate') {
+        return {
+          status: 200,
+          body: body.scope === 'full' ? fullTranslationResponse : abstractTranslationResponse,
+        };
+      }
+      return {
+        status: 200,
+        body: body.persona === 'beginner' ? beginnerSummaryResponse : summaryResponse,
+      };
+    }
+    if (req.path === '/api/glossary' && req.method === 'GET') {
+      return { status: 200, body: { status: 'ok', terms: mockListGlossaryTerms() } };
+    }
+    if (req.path === '/api/glossary' && req.method === 'POST') {
+      const body = (req.body ?? {}) as { termFrom?: unknown; termTo?: unknown };
+      const termFrom = String(body.termFrom ?? '').trim();
+      const termTo = String(body.termTo ?? '').trim();
+      if (!termFrom || !termTo) return { status: 400, body: { message: '용어를 입력해 주세요.' } };
+      return { status: 201, body: mockUpsertGlossaryTerm(termFrom, termTo) };
+    }
+    if (/^\/api\/papers\/[^/]+\/full-text$/.test(path) && req.method === 'GET') {
+      return { status: 200, body: fullTextResponse };
+    }
+    const metaMatch = path.match(/^\/api\/papers\/([^/]+)$/);
+    if (metaMatch && req.method === 'GET') {
+      return { status: 200, body: mockPaperMeta(decodeURIComponent(metaMatch[1])) };
     }
 
     if (req.path === '/auth/signup' && req.method === 'POST') {

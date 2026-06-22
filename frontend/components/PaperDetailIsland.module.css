@@ -1,0 +1,101 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Paper metadata header (title / authors / abstract). */
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--color-text);
+}
+
+.authors {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.year {
+  color: var(--color-text-muted);
+}
+
+.abstract {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--color-text);
+}
+
+.metaLoading {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+/* Sticky action bar (요약 · 초록 번역 · 전문 번역) directly under the DocSuri header. */
+.actionsBar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.625rem 0;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.action {
+  flex: 1 1 0;
+  min-height: 2.75rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.625rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.action:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* arXiv id + safe link-out, shown with the metadata. */
+.idline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.link {
+  color: var(--color-accent);
+}
+
+.bodySection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.bodyHeading {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+}

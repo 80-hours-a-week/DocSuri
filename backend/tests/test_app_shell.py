@@ -64,7 +64,10 @@ def test_discovery_and_accounts_actually_mount() -> None:
     # `skipped == []` still proves every registered module actually mounts.
     result = create_app(_TEST_SETTINGS).state.mount_result
     assert {"accounts", "discovery"} <= set(result.mounted), result.skipped
-    assert result.skipped == []
+    # summarization (U7) is real-first with NO mock wiring, so it legitimately skips when the
+    # real read path (S3 bucket + Bedrock) is unconfigured — as in tests. Every OTHER registered
+    # module must still mount; nothing else may skip.
+    assert all(name == "summarization" for name, _ in result.skipped), result.skipped
 
 
 def test_discovery_search_endpoint_is_live() -> None:
@@ -75,6 +78,21 @@ def test_discovery_search_endpoint_is_live() -> None:
     resp = _client().post("/api/search", json={"query": "transformer attention"})
     assert resp.status_code == 200
     assert "cards" in resp.json()
+
+
+def test_paper_metadata_endpoint_is_live() -> None:
+    # The mounted discovery router serves GET /api/papers/{id} (paper-detail header metadata,
+    # U2-owned corpus data) end-to-end through the mock pipeline. A known fixture id returns the
+    # projected metadata (full abstract); an unknown id degrades to 404 (detail page falls back
+    # to the arXiv link-out). Distinct from /api/papers/{id}/full-text (summarization/U7).
+    client = _client()
+    ok = client.get("/api/papers/2401.00001")
+    assert ok.status_code == 200
+    body = ok.json()
+    assert body["title"] == "Diffusion Models for Protein Structure Prediction"
+    assert body["arxivId"] == "2401.00001v1"
+    assert body["abstract"]  # full abstract present
+    assert client.get("/api/papers/9999.99999").status_code == 404
 
 
 def test_absent_module_skips_gracefully_not_fatal() -> None:
@@ -98,6 +116,7 @@ def test_mount_modules_never_raises_and_records_reasons() -> None:
         "accounts",
         "discovery",
         "library",
+        "summarization",
         "ops",
         "citation_graph",
     }

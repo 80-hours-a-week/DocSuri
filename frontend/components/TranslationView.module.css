@@ -1,0 +1,29 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.cached {
+  align-self: flex-start;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  color: var(--color-accent);
+  background: var(--color-accent-soft-bg);
+  border-radius: 999px;
+}
+
+.terms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.text {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

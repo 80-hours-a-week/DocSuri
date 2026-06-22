@@ -87,3 +87,9 @@ class GlossaryRepositoryPort(Protocol):
     def get_glossary_version(self, user_id: str) -> int:
         """Return the user's current ``glossary_ver`` (0 when none → shared baseline)."""
         ...
+
+    def upsert_term(
+        self, user_id: str, term_from: str, term_to: str, *, prompt_enforced: bool
+    ) -> int:
+        """Add/override a personal term (owner-scoped); return the bumped ``glossary_ver``."""
+        ...

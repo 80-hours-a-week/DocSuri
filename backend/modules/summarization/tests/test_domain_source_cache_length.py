@@ -4,13 +4,17 @@ from __future__ import annotations
 
 from summarization.domain.cache_key import build_cache_key
 from summarization.domain.length_router import LengthRoute, LengthRouter
-from summarization.domain.models import SourceKind, SummaryRequest, Task
+from summarization.domain.models import Scope, SourceKind, SummaryRequest, Task
 from summarization.domain.source_selector import SourceSelector
 from tests.stubs import StubFullText
 
 
-def _req(task: Task, abstract: str | None = None) -> SummaryRequest:
-    return SummaryRequest(paper_id="2401.00001", version=1, task=task, abstract=abstract)
+def _req(
+    task: Task, abstract: str | None = None, scope: Scope = Scope.ABSTRACT
+) -> SummaryRequest:
+    return SummaryRequest(
+        paper_id="2401.00001", version=1, task=task, scope=scope, abstract=abstract
+    )
 
 
 def test_summary_uses_full_text() -> None:
@@ -33,12 +37,42 @@ def test_translate_uses_abstract() -> None:
     assert src is not None and src.kind == SourceKind.ABSTRACT
 
 
+def test_translate_full_uses_full_text() -> None:
+    src = SourceSelector(StubFullText(text="full body")).select(
+        _req(Task.TRANSLATE, scope=Scope.FULL)
+    )
+    assert src is not None and src.kind == SourceKind.FULL_TEXT
+
+
+def test_translate_full_falls_back_to_abstract() -> None:
+    src = SourceSelector(StubFullText(text=None)).select(
+        _req(Task.TRANSLATE, abstract="abs", scope=Scope.FULL)
+    )
+    assert src is not None and src.kind == SourceKind.ABSTRACT
+    assert src.fallback_reason == "full_text_unavailable"
+
+
 def test_cache_key_is_immutable_and_pathed() -> None:
     key = build_cache_key(_req(Task.SUMMARY), glossary_ver=0, model_ver="m1")
     same = build_cache_key(_req(Task.SUMMARY), glossary_ver=0, model_ver="m1")
     assert key == same  # deterministic identity (PBT-S1)
     assert key.object_path().startswith("summaries/2401.00001/v1/")
     assert key.redis_key().startswith("sum:")
+
+
+def test_cache_key_scope_dimension() -> None:
+    # summary is fixed to full text; translate varies by scope -> distinct objects.
+    summary = build_cache_key(_req(Task.SUMMARY), glossary_ver=0, model_ver="m1")
+    assert summary.scope == Scope.FULL
+    abs_tr = build_cache_key(
+        _req(Task.TRANSLATE, scope=Scope.ABSTRACT), glossary_ver=0, model_ver="m1"
+    )
+    full_tr = build_cache_key(
+        _req(Task.TRANSLATE, scope=Scope.FULL), glossary_ver=0, model_ver="m1"
+    )
+    assert abs_tr.scope == Scope.ABSTRACT and full_tr.scope == Scope.FULL
+    assert abs_tr != full_tr
+    assert abs_tr.object_path() != full_tr.object_path()
 
 
 def test_length_router_branches() -> None:

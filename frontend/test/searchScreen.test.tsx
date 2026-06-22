@@ -29,6 +29,24 @@ describe('SearchScreen state machine', () => {
     expect(screen.getByTestId('search-inline-error')).toBeInTheDocument();
   });
 
+  it('disables the clear (✕) button while the field is empty', () => {
+    expect(screen.getByTestId('search-clear')).toBeDisabled();
+  });
+
+  it('clears the query and returns focus when ✕ is clicked', async () => {
+    const user = userEvent.setup();
+    const input = screen.getByTestId('search-input');
+    await user.type(input, 'transformer');
+    expect(input).toHaveValue('transformer');
+
+    const clear = screen.getByTestId('search-clear');
+    expect(clear).toBeEnabled();
+    await user.click(clear);
+
+    expect(input).toHaveValue('');
+    expect(input).toHaveFocus();
+  });
+
   it('renders a result list for a normal query', async () => {
     await submit('transformer attention');
     expect(await screen.findByTestId('result-list')).toBeInTheDocument();

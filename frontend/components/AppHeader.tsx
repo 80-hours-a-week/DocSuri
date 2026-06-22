@@ -7,9 +7,13 @@ import { useSession } from './session/SessionContext';
 // AppHeader (LC-1) — minimal top bar with brand + sign-out for authed screens.
 export function AppHeader({ title }: { title: string }) {
   const { status, signOut } = useSession();
+  // Authenticated users treat the brand as the app home (search); anonymous /
+  // first-time visitors land on the hero. The nav flow is silent on this, so
+  // this is a code-level navigation choice.
+  const brandHref = status === 'authenticated' ? '/search' : '/';
   return (
     <header className={styles.header}>
-      <Link href="/" className={styles.brand} data-testid="app-header-brand">
+      <Link href={brandHref} className={styles.brand} data-testid="app-header-brand">
         {title}
       </Link>
       {status === 'authenticated' ? (

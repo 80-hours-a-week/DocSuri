@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 
 from ..domain.models import AuthSession, RequestContext
 from ..service.orchestrator import SearchOrchestrationService, SearchUnavailable
+from ..service.paper_metadata import PaperMetadataService
 from .gateway_seam import run_search
 
 # Generic fail-closed messages (SEC-9/SEC-15 — no internal detail / stack / framework info).
@@ -26,7 +27,9 @@ _GENERIC_ERROR_MESSAGE = "Something went wrong. Please try again."
 
 
 def build_router(
-    orchestrator: SearchOrchestrationService, grounding_hook: GroundingEnforcementHook
+    orchestrator: SearchOrchestrationService,
+    grounding_hook: GroundingEnforcementHook,
+    paper_service: PaperMetadataService | None = None,
 ) -> APIRouter:
     router = APIRouter()
 
@@ -47,15 +50,29 @@ def build_router(
         status = 400 if isinstance(response.root, ValidationErrorDTO) else 200
         return JSONResponse(status_code=status, content=response.model_dump(mode="json"))
 
+    if paper_service is not None:
+
+        @router.get("/api/papers/{paper_id}")
+        def paper_meta(paper_id: str) -> JSONResponse:
+            """Paper-detail header metadata (title/authors/abstract). 404 when not indexed so
+            the detail page degrades to the arXiv id + link-out. SearchUnavailable (store
+            outage) is mapped to the generic 503 by the app-shell / build_app handler."""
+            meta = paper_service.get_paper_meta(paper_id)
+            if meta is None:
+                return JSONResponse(status_code=404, content={"message": "Paper not found."})
+            return JSONResponse(status_code=200, content=meta.model_dump(mode="json"))
+
     return router
 
 
 def build_app(
-    orchestrator: SearchOrchestrationService, grounding_hook: GroundingEnforcementHook
+    orchestrator: SearchOrchestrationService,
+    grounding_hook: GroundingEnforcementHook,
+    paper_service: PaperMetadataService | None = None,
 ) -> FastAPI:
     """Standalone dev app (mock-first). The real backend app is the app-shell's (CG-5)."""
     app = FastAPI(title="DocSuri Discovery (U2) — mock-first")
-    app.include_router(build_router(orchestrator, grounding_hook))
+    app.include_router(build_router(orchestrator, grounding_hook, paper_service))
 
     @app.exception_handler(SearchUnavailable)
     def _on_unavailable(_request, _exc):  # fail-closed: generic 503 (INV-3/SEC-15)

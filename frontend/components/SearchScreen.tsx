@@ -7,12 +7,18 @@ import { StateView, type StateViewKind } from './StateView';
 import { ResultList } from './ResultList';
 import { SaveToLibraryButton } from './SaveToLibraryButton';
 import { SaveSearchButton } from './SaveSearchButton';
+import { SummaryAction } from './SummaryAction';
 import { getApiClient, UserFacingError, type SearchOutcome } from '@/lib/api';
 import { validateQuery, MAX_QUERY_LENGTH } from '@/lib/api/validate';
 import type { ResultCardVM } from '@/types/generated';
 
-// Per-card "담기" action (US-L2) attached to live results.
-const renderSaveAction = (card: ResultCardVM) => <SaveToLibraryButton card={card} />;
+// Per-card actions: U7 [요약] (inline tldr + 상세히 보기) + U4 "담기" (US-L2/S1, Q2=A).
+const renderCardActions = (card: ResultCardVM) => (
+  <>
+    <SummaryAction paperId={card.arxivId} />
+    <SaveToLibraryButton card={card} />
+  </>
+);
 
 // SearchScreen (LC-1/6, US-H1/D1, FR-1/11) — the hero surface. Owns the search
 // state machine and branches the SearchResponse union. Single request/response
@@ -32,7 +38,14 @@ export function SearchScreen() {
   const [executedQuery, setExecutedQuery] = useState<string | null>(null);
   const [inlineError, setInlineError] = useState<string | null>(null);
   const inFlight = useRef(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
+
+  const clearQuery = useCallback(() => {
+    setQuery('');
+    setInlineError(null);
+    inputRef.current?.focus();
+  }, []);
 
   const runSearch = useCallback(async () => {
     if (inFlight.current) return;
@@ -72,18 +85,35 @@ export function SearchScreen() {
           논문 검색
         </label>
         <div className={styles.row}>
-          <input
-            id={inputId}
-            className={styles.input}
-            type="text"
-            value={query}
-            maxLength={MAX_QUERY_LENGTH}
-            placeholder="무엇이 궁금한가요?"
-            onChange={(e) => setQuery(e.target.value)}
-            aria-invalid={inlineError ? true : undefined}
-            aria-describedby={inlineError ? `${inputId}-err` : undefined}
-            data-testid="search-input"
-          />
+          <div className={styles.inputWrap}>
+            <input
+              ref={inputRef}
+              id={inputId}
+              className={styles.input}
+              type="text"
+              value={query}
+              maxLength={MAX_QUERY_LENGTH}
+              placeholder="무엇이 궁금한가요?"
+              spellCheck={false}
+              autoCapitalize="none"
+              autoCorrect="off"
+              onChange={(e) => setQuery(e.target.value)}
+              aria-invalid={inlineError ? true : undefined}
+              aria-describedby={inlineError ? `${inputId}-err` : undefined}
+              data-testid="search-input"
+            />
+            <button
+              type="button"
+              className={styles.clear}
+              onClick={clearQuery}
+              disabled={!query}
+              aria-hidden={query ? undefined : true}
+              aria-label="검색어 지우기"
+              data-testid="search-clear"
+            >
+              ✕
+            </button>
+          </div>
           <button
             type="submit"
             className={styles.submit}
@@ -121,9 +151,9 @@ function renderState(state: ScreenState, onRetry: () => void) {
   const { outcome } = state;
   switch (outcome.kind) {
     case 'page':
-      return <ResultList cards={outcome.cards} renderAction={renderSaveAction} />;
+      return <ResultList cards={outcome.cards} renderAction={renderCardActions} />;
     case 'degraded':
-      return <ResultList cards={outcome.cards} degraded renderAction={renderSaveAction} />;
+      return <ResultList cards={outcome.cards} degraded renderAction={renderCardActions} />;
     case 'empty':
       return <StateView kind="empty" />;
     case 'abstain':

@@ -6,8 +6,16 @@
 import type { Transport, TransportRequest, TransportResponse } from './transport';
 import { UserFacingError, normalizeHttpError } from './errors';
 import { classifySearchResponse, type SearchOutcome } from './classify';
+import {
+  classifySummarizeResponse,
+  classifyFullTextResponse,
+  type SummarizeOutcome,
+  type FullTextOutcome,
+} from './classifySummarize';
 import { recordPath } from '../observability';
 import type {
+  SummarizeRequest,
+  FullTextRequest,
   SearchRequest,
   SignupRequest,
   SignupResult,
@@ -21,6 +29,13 @@ import type {
   LibraryPageDTO,
   HistoryPageDTO,
 } from '@/types/generated';
+import type { PaperMetaVM } from '@/types/paperMeta';
+import type {
+  GlossaryTermUpsertDTO,
+  GlossaryUpsertResultDTO,
+  GlossaryTermDTO,
+  GlossaryListDTO,
+} from '@/types/glossary';
 
 export interface ApiClientOptions {
   timeoutMs?: number;
@@ -63,6 +78,75 @@ export class ApiClient {
     if (res.status === 200 || res.status === 400) {
       return classifySearchResponse(res.body);
     }
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+  }
+
+  // ---- summarization slice (US-S1/S2/S3/S5, FR-12~14) ------------------
+
+  /** Summarize or translate a single paper; classified terminal outcome (BR-SF-14).
+   * task=summary takes persona; task=translate takes scope (abstract|full). */
+  async summarize(req: SummarizeRequest): Promise<SummarizeOutcome> {
+    const res = await this.request({
+      method: 'POST',
+      path: '/api/summarize',
+      body: req,
+      idempotent: true,
+    });
+    if (res.status === 200 || res.status === 400) {
+      return classifySummarizeResponse(res.body);
+    }
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+  }
+
+  /** Paper header metadata (title/authors/abstract) for the detail route. Backed by the
+   * discovery (U2) endpoint GET /api/papers/{id} (corpus data — title/authors/abstract are not
+   * U7's). Returns null on 404 so the detail page degrades to the arXiv id + link-out. The
+   * PaperMetaVM type is still hand-authored (mirrors discovery's PaperMetaDTO) pending shared-
+   * schema promotion + codegen. */
+  async getPaperMeta(arxivId: string): Promise<PaperMetaVM | null> {
+    const res = await this.request({
+      method: 'GET',
+      path: `/api/papers/${encodeURIComponent(arxivId)}`,
+      idempotent: true,
+    });
+    if (res.status === 200) return res.body as PaperMetaVM;
+    if (res.status === 404) return null;
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+  }
+
+  /** Normalized full text for the in-app viewer (Q5=C; OA license-gated). PROVISIONAL
+   * contract — re-align when the backend full-text-return API is finalized (plan §6). */
+  async getFullText(req: FullTextRequest): Promise<FullTextOutcome> {
+    const path = `/api/papers/${encodeURIComponent(req.paperId)}/full-text?version=${encodeURIComponent(
+      String(req.version),
+    )}`;
+    const res = await this.request({ method: 'GET', path, idempotent: true });
+    if (res.status === 200 || res.status === 400) {
+      return classifyFullTextResponse(res.body);
+    }
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+  }
+
+  /** The user's saved personal terms (Phase 2a), to pre-fill the badge editor. Idempotent
+   * GET. The caller treats any failure as "no saved terms" (pre-fill is optional). */
+  async listGlossaryTerms(): Promise<GlossaryTermDTO[]> {
+    const res = await this.request({ method: 'GET', path: '/api/glossary', idempotent: true });
+    if (res.status === 200) return (res.body as GlossaryListDTO).terms ?? [];
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+  }
+
+  /** Add/override a personal glossary term (Phase 1, badge-tap). State-changing, so
+   * NOT idempotent (no auto-retry — a double POST would just re-upsert the same term).
+   * A successful upsert bumps the user's glossary version server-side, invalidating
+   * their cached summaries/translations so the next request reflects the new term. */
+  async upsertGlossaryTerm(req: GlossaryTermUpsertDTO): Promise<GlossaryUpsertResultDTO> {
+    const res = await this.request({
+      method: 'POST',
+      path: '/api/glossary',
+      body: req,
+      idempotent: false,
+    });
+    if (res.status === 200 || res.status === 201) return res.body as GlossaryUpsertResultDTO;
     throw normalizeHttpError(res.status, pick(res.body, 'message'));
   }
 

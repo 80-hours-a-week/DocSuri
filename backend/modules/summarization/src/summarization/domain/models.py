@@ -22,6 +22,13 @@ class Persona(StrEnum):
     BEGINNER = "beginner"
 
 
+class Scope(StrEnum):
+    """Translate source scope. summary is always full text (scope ignored)."""
+
+    ABSTRACT = "abstract"
+    FULL = "full"
+
+
 class TargetLang(StrEnum):
     KO = "ko"
 
@@ -61,6 +68,7 @@ class SummaryRequest:
     task: Task
     target_lang: TargetLang = TargetLang.KO
     persona: Persona = Persona.EXPERT
+    scope: Scope = Scope.ABSTRACT  # translate only (abstract|full); summary = full text
     abstract: str | None = None  # carried for translate / full-text fallback (Q1)
 
 
@@ -71,6 +79,7 @@ class SummaryCacheKey:
     version: int
     task: Task
     target_lang: TargetLang
+    scope: Scope
     persona: Persona
     glossary_ver: int
     model_ver: str
@@ -80,7 +89,8 @@ class SummaryCacheKey:
         """S3 object path (infrastructure-design §2.1). Immutable → permanent (INV-5)."""
         return (
             f"summaries/{self.paper_id}/v{self.version}/"
-            f"{self.task}_{self.target_lang}_{self.persona}_{self.model_ver}_{self.prompt_ver}.json"
+            f"{self.task}_{self.target_lang}_{self.scope}_{self.persona}"
+            f"_{self.model_ver}_{self.prompt_ver}.json"
         )
 
     def redis_key(self) -> str:

@@ -27,6 +27,7 @@ __all__ = [
     "EmbeddingAdapter",
     "VectorStoreAdapter",
     "LexicalIndexAdapter",
+    "PaperLookupAdapter",
     "EventPublisher",
 ]
 
@@ -71,6 +72,19 @@ class LexicalIndexAdapter(Protocol):
 
     def bm25_search(self, terms: Sequence[str], top_k: int) -> list[ScoredRecord]:
         """Return up to ``top_k`` records in BM25 order. Raises ``IndexUnavailable``."""
+        ...
+
+
+@runtime_checkable
+class PaperLookupAdapter(Protocol):
+    """Single-document read over the shared OpenSearch index — fetch one record for a paper by
+    its id (paperId or display arxivId). Powers the paper-detail metadata endpoint (the detail
+    page needs title/authors/abstract, which live on the corpus record, not in U7). Records are
+    per-chunk; ANY chunk carries the paper-level metadata, so the first match is sufficient."""
+
+    def fetch_paper(self, paper_id: str) -> IndexRecord | None:
+        """Return one record for ``paper_id`` (matched on paperId or arxivId), or None when no
+        such paper is indexed. Raises ``IndexUnavailable`` on a store failure (fail-closed)."""
         ...
 
 

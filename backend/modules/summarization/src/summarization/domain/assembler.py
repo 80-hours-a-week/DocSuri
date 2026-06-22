@@ -26,9 +26,12 @@ class ResultAssembler:
         return SummaryResultDTO(task=Task.SUMMARY, summary=draft, meta=meta)
 
     def assemble_translation(
-        self, draft: TranslationDraft, glossary: Glossary
+        self, draft: TranslationDraft, glossary: Glossary, source: SourceText
     ) -> SummaryResultDTO:
         # Deterministic post-substitution for user-preference simple nouns (no LLM re-call).
         text = GlossaryResolver.post_substitute(draft.korean_text, glossary)
         final = TranslationDraft(korean_text=text, kept_terms=draft.kept_terms)
-        return SummaryResultDTO(task=Task.TRANSLATE, translation=final, meta={"source": "abstract"})
+        meta = {"source": str(source.kind)}  # abstract | full_text (scope=full)
+        if source.fallback_reason:
+            meta["fallback"] = source.fallback_reason
+        return SummaryResultDTO(task=Task.TRANSLATE, translation=final, meta=meta)

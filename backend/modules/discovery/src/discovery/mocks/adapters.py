@@ -57,6 +57,20 @@ class MockLexicalIndexAdapter:
         return scored[:top_k]
 
 
+class MockPaperLookupAdapter:
+    """Fixture-backed single-paper lookup — returns the first record matching ``paper_id`` on
+    either paperId or display arxivId (the detail route id is the arxivId)."""
+
+    def __init__(self, records: Sequence[IndexRecord] = tuple(fixtures.RECORDS)) -> None:
+        self._records = list(records)
+
+    def fetch_paper(self, paper_id: str) -> IndexRecord | None:
+        for record in self._records:
+            if paper_id in (record.paperId, record.arxivId):
+                return record
+        return None
+
+
 class FailingEmbeddingAdapter:
     """Always fails — RES-12: embedding outage → orchestrator lexical-only fallback."""
 
