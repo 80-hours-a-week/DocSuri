@@ -1024,3 +1024,12 @@
 **Build Status**: Success · **Test Status**: Pass (백엔드 summarization 48 passed/1skip·자산 7 passed·ruff clean; 프론트 tsc 0·next lint clean·vitest 75 passed)
 **AI Response**: U7 멀티모달 읽기 측 + 정합 갭 3건 코드. **공유 갭#1**: `shared/dtos/summarization.schema.json` SSOT 수립(요약/번역 + AssetRef/PaperAssetsResponse + unauthorized/validation_error). **백엔드**: `domain/models`(StoredAsset[내부·object_ref]·AssetRef[공개·서명 URL만·to_dict SEC-9])·`ports`(AssetReadPort)·`orchestrator`(asset_reader 주입·list_assets presign)·`api/router`(GET /api/papers/{id}/assets 인증·OA 게이트·서명 URL + 갭#2 validation_error message)·`adapters/rds_assets.py`(RdsS3AssetReader: paper_asset 읽기+S3 presign, object_ref 비노출)·`tests/test_assets_endpoint.py`(7). **프론트**: `summarize.ts`(AssetRef·PaperAssetsResponse·UnauthorizedDTO·SummarizeValidationErrorDTO[search 충돌 회피])·`classifySummarize`(classifyAssetsResponse + 갭#2/#3 매핑: validation_error→invalid·unauthorized→인증 메시지)·`apiClient.getAssets`·`test/classifyAssets.test.ts`(5). NFR/Infra 경량 폴드(읽기 포트·presign TTL·assets_enabled 게이트). 요약/번역 생성·근거화·캐시 불변. 코드 요약 `construction/u7-summarization/code/u7-multimodal-read-code-summary.md`. **U7 읽기 측 종결.**
 **Context**: CONSTRUCTION — U7 멀티모달 슬라이스 종결. 다음(마지막): U5 상세/뷰어 자산 렌더 컴포넌트. 미커밋(리뷰 대기).
+
+---
+
+## 멀티모달 표시 — U5 Frontend 자산 렌더 Code + Build & Test (트랙 종결)
+**Timestamp**: 2026-06-22T00:00:00Z
+**User Input(원문)**: "남은 것 진행부터해줘" (위임 진행).
+**Build Status**: Success (next build OK) · **Test Status**: Pass (tsc 0·next lint clean·vitest 80 passed)
+**AI Response**: U5 멀티모달 자산 렌더(마지막 유닛). 신규 `lib/assetAnchor.ts`(captionNumber·matchAssetForAnchor 순수 — figure/table 앵커↔자산 매칭, 인셉션 Q5)·`lib/useAssets.ts`(페치 훅)·`components/AssetGallery.tsx`(+css: lazy-load·치수 예약 프레임·캡션 React 이스케이프 BR-SF-9·서명 URL img SEC-9·로딩/에러 재시도/빈·라이선스 미허용/미인증 미표시·활성 앵커 스크롤 하이라이트). 수정 `PaperDetailIsland`(자산 섹션 + anchor 전달)·`lib/api/index`(AssetsOutcome export)·`mockTransport`+`summarizeFixtures`(/assets mock + 인라인 SVG data URL 픽스처). 테스트 `test/assetAnchor.test.ts`(매처)·`test/assetGallery.test.tsx`(렌더). **검증: tsc 0·next lint clean·vitest 80 passed(+5)·next build OK.** 코드 요약 `construction/u5-frontend/code/u5-multimodal-asset-render-code-summary.md`. **멀티모달 표시(FR-17) 트랙 완결**(U1→U7→U5; 비전 추론 차기 사이클).
+**Context**: CONSTRUCTION — 멀티모달 트랙 완결. 9커밋 `feature/multimodal-display`(미push). 다음: 사용자 push/PR·승인 후 Operations. 미커밋(본 U5 커밋 대기).

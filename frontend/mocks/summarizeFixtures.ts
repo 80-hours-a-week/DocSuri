@@ -1,7 +1,7 @@
 // Dev-only summarize/translate/full-text fixtures (mock transport layer, same as
 // searchFixtures). Production is real-first (real BFF) — these are never shipped;
 // they let the U7 surface be previewed in dev (NEXT_PUBLIC_DOCSURI_REAL_API unset).
-import type { SummaryOkDTO, TranslationOkDTO, FullTextOkDTO } from '@/types/generated';
+import type { SummaryOkDTO, TranslationOkDTO, FullTextOkDTO, AssetsOkDTO } from '@/types/generated';
 import type { GlossaryUpsertResultDTO, GlossaryTermDTO } from '@/types/glossary';
 
 export const summaryResponse: SummaryOkDTO = {
@@ -92,6 +92,34 @@ export function resetMockGlossary(): void {
   mockGlossary.clear();
   mockGlossaryVer = 0;
 }
+
+// FR-17 figure/table assets (dev preview). Inline SVG data URLs render without network.
+const _ph = (label: string, fill: string): string =>
+  `data:image/svg+xml;utf8,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200"><rect width="100%" height="100%" fill="${fill}"/><text x="50%" y="50%" font-size="20" fill="#333" text-anchor="middle" dominant-baseline="middle">${label}</text></svg>`,
+  )}`;
+
+export const assetsResponse: AssetsOkDTO = {
+  status: 'ok',
+  assets: [
+    {
+      assetId: '2401.00001:v1:figure:0',
+      type: 'figure',
+      ordinal: 0,
+      caption: 'Figure 1: The Transformer — model architecture.',
+      sourceMode: 'page-crop',
+      url: _ph('Figure 1', '#e8f0fe'),
+    },
+    {
+      assetId: '2401.00001:v1:table:0',
+      type: 'table',
+      ordinal: 0,
+      caption: 'Table 1: BLEU scores on WMT 2014.',
+      sourceMode: 'page-crop',
+      url: _ph('Table 1', '#fef7e0'),
+    },
+  ],
+};
 
 export const fullTextResponse: FullTextOkDTO = {
   status: 'ok',
