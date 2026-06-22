@@ -3,22 +3,31 @@
 import { useCallback, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './SearchScreen.module.css';
-import { StateView, type StateViewKind } from './StateView';
+import { StateView } from './StateView';
 import { ResultList } from './ResultList';
 import { SaveToLibraryButton } from './SaveToLibraryButton';
 import { SaveSearchButton } from './SaveSearchButton';
-import { SummaryAction } from './SummaryAction';
 import { getApiClient, UserFacingError, type SearchOutcome } from '@/lib/api';
 import { validateQuery, MAX_QUERY_LENGTH } from '@/lib/api/validate';
 import type { ResultCardVM } from '@/types/generated';
 
-// Per-card actions: U7 [요약] (inline tldr + 상세히 보기) + U4 "담기" (US-L2/S1, Q2=A).
-const renderCardActions = (card: ResultCardVM) => (
-  <>
-    <SummaryAction paperId={card.arxivId} />
-    <SaveToLibraryButton card={card} />
-  </>
-);
+// Per-card save control (US-L2/S1, Q2=A): a bookmark icon on the card's top-right.
+const renderBookmark = (card: ResultCardVM) => <SaveToLibraryButton card={card} />;
+
+// Result sort (client-side, over the received top-N): relevance = the ranking order
+// U2 returned (PBT-03); recent = publication year desc. This only re-orders what was
+// returned — it does not re-query the corpus.
+type SortKey = 'relevance' | 'recent';
+
+function sortCards(cards: ResultCardVM[], sort: SortKey): ResultCardVM[] {
+  if (sort !== 'recent') return cards;
+  // Decorate-sort-undecorate keeps it stable: received order breaks year ties and
+  // keeps missing-year cards in their original relative position.
+  return cards
+    .map((c, i) => [c, i] as const)
+    .sort(([a, ai], [b, bi]) => (b.year ?? 0) - (a.year ?? 0) || ai - bi)
+    .map(([c]) => c);
+}
 
 // SearchScreen (LC-1/6, US-H1/D1, FR-1/11) — the hero surface. Owns the search
 // state machine and branches the SearchResponse union. Single request/response
@@ -37,6 +46,7 @@ export function SearchScreen() {
   const [state, setState] = useState<ScreenState>({ tag: 'idle' });
   const [executedQuery, setExecutedQuery] = useState<string | null>(null);
   const [inlineError, setInlineError] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortKey>('relevance');
   const inFlight = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
@@ -78,12 +88,14 @@ export function SearchScreen() {
     void runSearch();
   };
 
+  const cards =
+    state.tag === 'outcome' && (state.outcome.kind === 'page' || state.outcome.kind === 'degraded')
+      ? state.outcome.cards
+      : null;
+
   return (
     <div className={styles.root}>
       <form className={styles.form} onSubmit={onSubmit} data-testid="search-form" role="search">
-        <label htmlFor={inputId} className={styles.label}>
-          논문 검색
-        </label>
         <div className={styles.row}>
           <div className={styles.inputWrap}>
             <input
@@ -91,6 +103,7 @@ export function SearchScreen() {
               id={inputId}
               className={styles.input}
               type="text"
+              aria-label="논문 검색"
               value={query}
               maxLength={MAX_QUERY_LENGTH}
               placeholder="무엇이 궁금한가요?"
@@ -131,19 +144,44 @@ export function SearchScreen() {
       </form>
 
       {state.tag === 'outcome' && executedQuery ? (
-        <div className={styles.actions} data-testid="search-actions">
+        <div className={styles.toolbar} data-testid="search-actions">
           <SaveSearchButton key={executedQuery} query={executedQuery} />
+          {cards && cards.length > 0 ? <SortControl sort={sort} onChange={setSort} /> : null}
         </div>
       ) : null}
 
       <div className={styles.results} aria-live="polite">
-        {renderState(state, () => void runSearch())}
+        {renderState(state, sort, () => void runSearch())}
       </div>
     </div>
   );
 }
 
-function renderState(state: ScreenState, onRetry: () => void) {
+function SortControl({ sort, onChange }: { sort: SortKey; onChange: (s: SortKey) => void }) {
+  const options: [SortKey, string][] = [
+    ['relevance', '관련도순'],
+    ['recent', '최신순'],
+  ];
+  return (
+    <div className={styles.sort} role="group" aria-label="결과 정렬" data-testid="result-sort">
+      {options.map(([key, label]) => (
+        <button
+          key={key}
+          type="button"
+          className={styles.sortOption}
+          data-active={sort === key}
+          aria-pressed={sort === key}
+          onClick={() => onChange(key)}
+          data-testid={`result-sort-${key}`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function renderState(state: ScreenState, sort: SortKey, onRetry: () => void) {
   if (state.tag === 'idle') return null;
   if (state.tag === 'loading') return <StateView kind="loading" />;
   if (state.tag === 'error') return <StateView kind="error" message={state.message} onRetry={onRetry} />;
@@ -151,9 +189,9 @@ function renderState(state: ScreenState, onRetry: () => void) {
   const { outcome } = state;
   switch (outcome.kind) {
     case 'page':
-      return <ResultList cards={outcome.cards} renderAction={renderCardActions} />;
+      return <ResultList cards={sortCards(outcome.cards, sort)} renderBookmark={renderBookmark} />;
     case 'degraded':
-      return <ResultList cards={outcome.cards} degraded renderAction={renderCardActions} />;
+      return <ResultList cards={sortCards(outcome.cards, sort)} degraded renderBookmark={renderBookmark} />;
     case 'empty':
       return <StateView kind="empty" />;
     case 'abstain':

@@ -60,7 +60,7 @@ SessionContext (AppShell 제공) ── useSession()
 - **책임**: 질의 입력(≤500자)·동기 검색 트리거·상태 표시.
 - **state(로컬)**: `query`, `screenState`(idle|loading|page|empty|abstain|degraded|invalid|error), `response?`.
 - **메서드**: `submitQuery`, `renderState`, `validateInput`.
-- **상호작용**: 입력 → 클라 검증(BR-U5-1) → 제출(로딩, 버튼 비활성·디듀프) → union 분기 렌더.
+- **상호작용**: 입력 → 클라 검증(BR-U5-1) → 제출(로딩, 버튼 비활성·디듀프) → union 분기 렌더. 결과가 있으면 **검색어 저장 + 정렬 토글(관련도순/최신순)** 을 한 툴바로 노출(정렬=클라 측, 받은 top-N 재정렬, BR-U5-5).
 - **API 통합점**: `ApiClient.search(SearchRequest)` → `SearchResponse` union.
 - **근거**: FR-1, SEC-5, NFR-U1, NFR-P1, FR-11, US-H1.
 
@@ -71,10 +71,10 @@ SessionContext (AppShell 제공) ── useSession()
 - **근거**: FR-3, FR-11, US-D7.
 
 ### 2.7 ResultCard
-- **책임**: 단일 논문 폰 카드 — **7필드만**(가로 스크롤 없음).
-- **props**: `card: ResultCardVM`.
-- **상호작용**: `arxivUrl` 외부 링크(http/https + noopener, BR-U5-7); (후속) 라이브러리 저장 진입점.
-- **규칙**: BR-U5-4/5/6. 근거: FR-4, FR-5, NFR-U1, SEC-9.
+- **책임**: 단일 논문 폰 카드(가로 스크롤 없음). `relevance`는 계약 유지·**화면 미표시**(2026-06-22 UX 패스, BR-U5-4/5).
+- **props**: `card: ResultCardVM`, `bookmark?`(우상단 저장 슬롯), `action?`(푸터 슬롯 — 라이브러리 제거 등).
+- **상호작용**: `arxivUrl` 외부 링크(http/https + noopener, BR-U5-7); **우상단 북마크 아이콘 = 라이브러리 저장**(`SaveToLibraryButton`, 멱등 add, BR-U5-23). 카드의 tldr 요약 피크 기능은 폐지(요약은 상세로 일원화 — u7-frontend FD §0 참조).
+- **규칙**: BR-U5-4/5/6/23. 근거: FR-4, FR-5, NFR-U1, SEC-9, US-L2.
 
 ### 2.8 StateView
 - **책임**: 빈/기권/저하/로딩/에러 비기술 공유 표시.

@@ -860,3 +860,12 @@
 
 ---
 
+## 프론트 카드·내비 UX 패스 (Phase A) — 코드 + 문서 정합
+**Timestamp**: 2026-06-22T00:00:00Z
+**User Input(원문)**: "지금 요약에서 이름 변경 '기여'→'차별성'… 카드에도 담기 버튼 대신 카드 오른쪽 위에 북마크 아이콘… 카드에 요약 버튼 제거… 카드에서 관련도 높음 표시 제거→필터… 네비게이션바 만들기" → (분류·합의 후) "Phase A 한 브랜치로 착수해줘" → UI 미세조정 4건 → "문서 정합 진행해줘".
+**변경 분류**: 완료 단계(U5 Frontend·U7 Frontend FD) 수정 — 영향 낮음(프론트 로컬·계약/DTO 불변). 데이터 종속 항목(카드 인용수=U8 머지 후, 그림·도표=요구사항 개정 별 트랙, 연도 범위필터)은 본 패스에서 제외.
+**AI Response**: 브랜치 `feature/u5-card-nav-ux`(develop 기준). 코드: ① 상세 요약 단락명 `핵심 기여/연구 방법/주요 결과`(+tldr `한 줄 요약`) ② 카드 `SummaryAction`/`SummaryInline` 제거(카드 tldr 피크 폐지·요약 상세 일원화) ③ 담기→카드 우상단·상세 제목 옆 북마크 아이콘(저장 계약 불변) ④ 카드 relevance 미표시 + 클라 정렬 토글(관련도순/최신순) ⑤ 네비바 검색/마이페이지 ⑥ 검색 '논문 검색' 라벨 제거(aria-label 보존)·'검색 저장'→'검색어 저장'·저장+정렬 한 툴바·상세 헤더 높이/간격/구분선 축소. **문서 정합**: u5 `business-rules`(BR-U5-4/5 정정·BR-U5-23 신설)·`domain-entities`(relevance 미렌더)·`frontend-components`(ResultCard·SearchScreen); u7-frontend `frontend-components`(§0 카드 요약 폐지·§2.1~2.3 정정·**Q1·Q2 결정 대체 명시**)·`nfr-design/logical-components`·`nfr-design-patterns`(E2E). **검증**: `tsc` 0·`next lint` clean·`vitest` 70 passed·`next build` OK(라우트 10).
+**Context**: CONSTRUCTION — U5/U7 프론트 UX 패스(Phase A) 코드·문서 정합 완료. 미커밋(working tree). 다음: 커밋 → push/PR(사용자 승인 후). 보류 트랙: 카드 인용수(U8 머지 후)·그림·도표(요구사항 개정)·필터.
+
+---
+
