@@ -51,6 +51,7 @@ def test_module_registry_complete_and_disjoint() -> None:
         "accounts",
         "discovery",
         "library",
+        "summarization",
         "ops",
         "citation_graph",
     }
