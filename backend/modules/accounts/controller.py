@@ -59,24 +59,29 @@ def get_session_manager(repo: SessionRepository = Depends(get_session_repo)) -> 
     return SessionManager(repo)
 
 def get_signup_service(
+    request: Request,
     repo: CredentialRepository = Depends(get_credential_repo),
 ) -> SignupService:
     # 메인 App Shell 또는 DI 컨테이너에서 설정 주입. default는 로컬 모킹 클라이언트.
     # 프로덕션(ENV!=local·SES_MOCK!=true)은 SES — 발신자(SES_SENDER_EMAIL)·리전을 주입한다.
     # 발신자 미설정 시 SES Source가 비어 발송 실패하므로 검증된 도메인 주소를 기본값으로 둔다.
+    observability = getattr(request.app.state, "observability", None)
     email_client = get_email_client(
         env=os.getenv("ENV", "local"),
         sender_email=os.getenv("SES_SENDER_EMAIL", "no-reply@docsuri.org"),
         region=os.getenv("SES_REGION", "ap-northeast-2"),
+        observability_hub=observability,
     )
-    return SignupService(repo, email_client)
+    return SignupService(repo, email_client, observability_hub=observability)
 
 def get_auth_service(
+    request: Request,
     repo: CredentialRepository = Depends(get_credential_repo),
     manager: SessionManager = Depends(get_session_manager),
     recaptcha: RecaptchaClient = Depends(get_recaptcha_client)
 ) -> AuthenticationService:
-    return AuthenticationService(repo, manager, recaptcha)
+    observability = getattr(request.app.state, "observability", None)
+    return AuthenticationService(repo, manager, recaptcha, observability_hub=observability)
 
 def get_totp_service(
     repo: CredentialRepository = Depends(get_credential_repo),

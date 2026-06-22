@@ -50,13 +50,15 @@ export function FullTextViewer({ paperId, version, anchor, arxivUrl }: FullTextV
   }
 
   const { outcome } = state;
+  const safeArxivUrl = (arxivUrl && (arxivUrl.startsWith('http://') || arxivUrl.startsWith('https://'))) ? arxivUrl : undefined;
+
   switch (outcome.kind) {
     case 'licenseUnavailable':
       return (
         <div className={styles.gate} data-testid="fulltext-license">
           <StateView kind="licenseUnavailable" />
-          {arxivUrl ? (
-            <a className={styles.link} href={arxivUrl} target="_blank" rel="noopener noreferrer">
+          {safeArxivUrl ? (
+            <a className={styles.link} href={safeArxivUrl} target="_blank" rel="noopener noreferrer">
               arXiv에서 원문 보기
             </a>
           ) : null}
@@ -72,8 +74,8 @@ export function FullTextViewer({ paperId, version, anchor, arxivUrl }: FullTextV
         <div className={styles.root} data-testid="fulltext-viewer">
           <p className={styles.note}>
             원문은 참고문헌·저자 정보 등이 제거된 정규화 텍스트예요. 정확한 원문은{' '}
-            {arxivUrl ? (
-              <a href={arxivUrl} target="_blank" rel="noopener noreferrer">
+            {safeArxivUrl ? (
+              <a href={safeArxivUrl} target="_blank" rel="noopener noreferrer">
                 arXiv
               </a>
             ) : (

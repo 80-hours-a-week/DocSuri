@@ -124,19 +124,28 @@ class OpenSearchVectorIndex:
     def tombstone_paper(self, tombstone: Tombstone) -> None:
         # Version ordering is guarded by ControlPlaneStore. The index operation deletes
         # all existing chunks for the paper that won that CAS.
-        self._client.delete_by_query(
+        response = self._client.delete_by_query(
             index=self._index_name,
             body={"query": {"term": {"paperId": tombstone.paper_id}}},
             refresh=True,
             conflicts="proceed",
         )
+        failures = response.get("failures", [])
+        version_conflicts = response.get("version_conflicts", 0)
+        if failures or version_conflicts > 0:
+            raise RetriableIngestionError(
+                f"OpenSearch delete_by_query had {len(failures)} failures and "
+                f"{version_conflicts} version conflicts",
+                reason=FailureReason.BULK_INDEX_PARTIAL_FAILURE,
+                stage="index_tombstone",
+            )
         self._record_write()
         self._stats_cache.invalidate()
 
     def delete_stale_chunks(self, paper_id: str, keep_chunk_ids: set[str]) -> None:
         if not keep_chunk_ids:
             return
-        self._client.delete_by_query(
+        response = self._client.delete_by_query(
             index=self._index_name,
             body={
                 "query": {
@@ -149,6 +158,15 @@ class OpenSearchVectorIndex:
             refresh=True,
             conflicts="proceed",
         )
+        failures = response.get("failures", [])
+        version_conflicts = response.get("version_conflicts", 0)
+        if failures or version_conflicts > 0:
+            raise RetriableIngestionError(
+                f"OpenSearch delete_by_query (stale) had {len(failures)} failures and "
+                f"{version_conflicts} version conflicts",
+                reason=FailureReason.BULK_INDEX_PARTIAL_FAILURE,
+                stage="index_delete_stale",
+            )
         self._record_write()
         self._stats_cache.invalidate()
 

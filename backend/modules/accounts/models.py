@@ -63,6 +63,15 @@ class EmailAddress:
             raise InvalidEmailException("Email must contain '@'")
         if len(self.value) > 254:
             raise InvalidEmailException("Email exceeds maximum allowed length of 254 characters")
+        
+        parts = self.value.split("@")
+        local_part = parts[0]
+        domain = parts[-1]
+        if len(local_part) > 64:
+            raise InvalidEmailException("Email local-part exceeds maximum allowed length of 64 characters")
+        if len(domain) > 255:
+            raise InvalidEmailException("Email domain exceeds maximum allowed length of 255 characters")
+
         if not self._pattern.match(self.value):
             raise InvalidEmailException(f"Email violates RFC 5322 formatting: {self.value}")
 

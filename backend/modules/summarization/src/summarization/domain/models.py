@@ -119,6 +119,7 @@ class RefinedSource:
     sections: tuple[Section, ...] = ()
     captions: tuple[str, ...] = ()  # Table/Figure captions — preserved (Q2)
     formulas: tuple[str, ...] = ()  # LaTeX — preserved, never translated
+    preserved: tuple[str, ...] = ()  # Appendix, Supplementary Results, etc. (Step 36)
     token_count: int = 0
 
 
@@ -155,6 +156,7 @@ class SummaryDraft:
     limitations: str
     reproducibility: dict[str, str]  # {"code": ..., "data": ...}
     anchors: tuple[Anchor, ...]
+    truncated: bool = False  # Set when LLM output was truncated (Step 33)
 
 
 @dataclass(frozen=True, slots=True)

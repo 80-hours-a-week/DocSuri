@@ -93,9 +93,14 @@ class SummarizationOrchestrationService:
         if source is None:
             return SourceUnavailableDTO(reason="no_full_text_or_abstract")
 
-        # 3. refine (structure-aware) → 5. length route (shape; over-cap → abstain).
+        # 3. refine (structure-aware) → 5. length route (shape; over-cap or map-reduce → abstain).
         refined = self._refiner.refine(source.raw)
-        if self._length.route(refined.token_count) == LengthRoute.OVER_CAP:
+        route = self._length.route(refined.token_count)
+        # OVER_CAP always abstains. MAP_REDUCE (CONTEXT_BUDGET~INPUT_CAP, ~40K-120K tok) also
+        # abstains: async map-reduce is deferred (TD-S9, tracked in #135), so honestly returning
+        # "too long" beats a wrong single over-budget call. Large papers see input_too_long until
+        # the deferred map-reduce job lands.
+        if route == LengthRoute.OVER_CAP or route == LengthRoute.MAP_REDUCE:
             return AbstainDTO(reason="input_too_long")
 
         # 4. glossary
