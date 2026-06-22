@@ -47,7 +47,13 @@ def test_module_registry_complete_and_disjoint() -> None:
     assert readyz["status"] == "ready"
     mounted, skipped = set(readyz["mounted"]), set(readyz["skipped"])
     assert mounted.isdisjoint(skipped)
-    assert mounted | skipped == {"accounts", "discovery", "library", "ops", "citation_graph"}
+    assert mounted | skipped == {
+        "accounts",
+        "discovery",
+        "library",
+        "ops",
+        "citation_graph",
+    }
 
 
 def test_discovery_and_accounts_actually_mount() -> None:
