@@ -42,10 +42,12 @@ import {
   mockListHistory,
   mockClearHistory,
 } from '@/mocks/libraryFixtures';
+import { mockCitationTree } from '@/mocks/citationGraphFixtures';
 import type {
   SavedSearchCreateDTO,
   LibraryItemCreateDTO,
 } from '@/types/generated';
+import type { CitationNode } from '@/types/citationGraph';
 
 function matches(q: string, ...needles: string[]): boolean {
   const lower = q.toLowerCase();
@@ -107,6 +109,37 @@ export class MockTransport implements Transport {
     }
     if (/^\/api\/papers\/[^/]+\/full-text$/.test(path) && req.method === 'GET') {
       return { status: 200, body: fullTextResponse };
+    }
+    const citationTree = path.match(/^\/api\/papers\/([^/]+)\/citation-tree$/);
+    if (citationTree && req.method === 'GET') {
+      return {
+        status: 200,
+        body: mockCitationTree(
+          decodeURIComponent(citationTree[1]),
+          sp.get('expandNodeId') ?? undefined,
+        ),
+      };
+    }
+    const citationSave = path.match(/^\/api\/papers\/([^/]+)\/citation-tree\/save$/);
+    if (citationSave && req.method === 'POST') {
+      const node = ((req.body ?? {}) as { node?: CitationNode }).node;
+      if (!node?.saveable || !node.arxivId) {
+        return { status: 422, body: { message: '저장할 수 없는 인용입니다.' } };
+      }
+      return {
+        status: 201,
+        body: mockAddLibrary({
+          arXivId: node.arxivId,
+          meta: {
+            title: node.title,
+            authors: [],
+            year: node.year ?? null,
+            arxivId: node.arxivId,
+            abstractSnippet: null,
+            arxivUrl: node.url ?? null,
+          },
+        }),
+      };
     }
     const metaMatch = path.match(/^\/api\/papers\/([^/]+)$/);
     if (metaMatch && req.method === 'GET') {
