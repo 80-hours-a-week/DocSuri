@@ -1007,3 +1007,11 @@
 **AI Response**: U1 멀티모달 Build & Test. `uv run --extra assets pytest` 42 passed(자산 신규: caption_kind·finalize PBT P7·ImageNormalizer[bomb 가드·undecodable 거부·WebP]·best-effort 비차단 wiring + 인덱스 경로 회귀). 린트 B904(raise-from)·E501(line len) 정정 후 `ruff check` All checks passed. 실 추출(_page_crop/_structured)·S3RdsAssetStore는 env-gated 통합으로 이연(P8는 store write-order로 보장). 산출물 `construction/u1-ingestion/build-and-test/`(build-instructions·unit-test-instructions·build-and-test-summary). 코드 정정 커밋(lint fix). **U1 생산자 멀티모달 슬라이스 종결.**
 **Files Generated**: build-instructions.md, unit-test-instructions.md, build-and-test-summary.md
 **Context**: CONSTRUCTION — U1 멀티모달 트랙 종결. 다음: 공유계약(shared/dtos + paper_asset 노출) → U7(읽기·서명 URL·갭 3건) → U5(렌더). 미커밋(리뷰 대기).
+
+---
+
+## 멀티모달 표시 — U7 Summarization Functional Design (읽기 측 + 정합 갭)
+**Timestamp**: 2026-06-22T00:00:00Z
+**User Input(원문)**: "너의 판단을 믿고 승인할게 알아서 진행해줘" (트랙 위임 진행).
+**AI Response**: U7 멀티모달 FD(읽기 측 자산 노출 + 정합 갭 3건) — 위임 진행으로 게이트 결정 D1~D5 확정·계획서 작성. 기존 U7 FD 확장: **`domain-entities.md` §9**(AssetRef[서명 URL만·SEC-9]·PaperAssetsResponse union[ok/license_unavailable/unauthorized]·**`GET /api/papers/{id}/assets`** 독립 엔드포인트·AssetManifestReadPort/AssetUrlSigner[paper_asset 읽기+presign]·앵커↔자산 프론트 매칭·갭#1 SSOT `summarization.schema.json` 승격·갭#2/#3 상태 매핑), **`business-rules.md`**(BR-S15 자산 읽기·OA 게이트 BR-SF-11 재사용·presign, BR-S16 계약 SSOT, BR-S17 unauthorized/validation_error 상태, PBT-S6 자산 라운드트립·비노출). U7은 읽기 측(생산=U1)·요약/번역 생성·근거화·캐시 **불변**. **앱 코드 미생성.**
+**Context**: CONSTRUCTION — U7 멀티모달 FD 완료. 다음: U7 Code Generation(shared schema·/assets 엔드포인트·갭 수정·frontend types/classify). 미커밋(리뷰 대기).

@@ -174,3 +174,42 @@
 | `PaperId`·`Version`·`stored_full_text_ref` | U1/shared | read capability(코드 의존 아님) |
 
 > **신규 DTO 계약(`shared/dtos/summarization`)은 PROVISIONAL** — 정제 스펙은 별도 shared PR(Track 사인오프)로 승격. 본 FD 코드 검증과는 무관하게 진행 가능(U4 library 선례).
+
+---
+
+## 9. 멀티모달 자산 읽기 계약 (FR-17 — 표시 전용, 2026-06-22 확장)
+
+> 근거: `requirements.md` FR-17·FR-12(앵커 자산 연결) · U1 FD/Infra(`paper_asset` RDS·S3 `assets/`). **U7은 읽기·노출 측**(생산=U1). 요약/번역 생성·근거화·캐시 로직 **불변**.
+
+### 9.1 자산 읽기 DTO (소유·생산 — SEC-9)
+
+| 엔티티 | 필드 | 비고 |
+|---|---|---|
+| **`AssetRef`** | `assetId` · `type`(figure\|table) · `ordinal` · `caption` · `sourceMode`(structured\|page-crop) · **`url`**(단기 만료 **서명 URL**) · `pageRef?` · `bbox?` | **SEC-9**: `object_ref`·내부 메타 비노출 — **서명 URL만**. `ordinal`=표시 순서. (D2) |
+| **`PaperAssetsResponse`** (union) | `AssetsOkDTO{status:'ok', assets: AssetRef[]}` · `AssetsLicenseDTO{status:'license_unavailable'}` · `UnauthorizedDTO{status:'unauthorized'}` | OA 미허용 → `license_unavailable`(BR-SF-11 재사용); 비인증 → `unauthorized`(갭#3). OA·자산 0 = `ok`+빈 배열. |
+
+### 9.2 엔드포인트 (D1)
+
+- **`GET /api/papers/{paperId}/assets?version=N`** (U7 라우터, full-text와 병렬·독립). 인증 필수(principal, SEC-8). OA 라이선스 게이트(BR-SF-11). 매니페스트 조회 → 각 `object_ref` 서명 URL 발급 → `AssetRef[]`(ordinal 정렬).
+- 독립 엔드포인트 = 전문 뷰어 미오픈에도 상세 그림·도표 표시 가능(관심사 분리).
+
+### 9.3 읽기 포트 (참조 — U1 생산 `paper_asset` 소비)
+
+| 포트 | 시그니처(개념) | 비고 |
+|---|---|---|
+| **`AssetManifestReadPort`** | `read_assets(paperId, version) -> StoredAssetMeta[]` | 공유 RDS `paper_asset` 조회(읽기 전용, owner 무관 공개 코퍼스). |
+| **`AssetUrlSigner`** | `presign(objectRef, ttl) -> url` | S3 `assets/` GetObject 서명(단기 만료). 내부 키 비노출. |
+
+> U7은 `paper_asset`을 **읽기만**(U1이 단일 writer). 서명 URL TTL·정책은 NFR/Infra.
+
+### 9.4 앵커 ↔ 자산 연결 (D3 / 인셉션 Q5 · FR-12)
+
+- 요약 `Anchor{ target: figure|table, label, span }`은 **불변**(백엔드 변경 없음). 프론트(U5)가 `label`("Figure 1")·순서를 `AssetRef`(`caption`·`ordinal`)에 매칭해 "출처 보기 → 해당 도표" 연결.
+
+### 9.5 계약 SSOT 수립 (갭 #1 — D4, §8 예고 이행)
+
+- 기존 **수기 `frontend/types/generated/summarize.ts`** → **`shared/dtos/summarization.schema.json` SSOT 승격**: SummarizeRequest/Response·AnchorVM·FullText* + 신규 `AssetRef`/`PaperAssetsResponse`. 프론트는 스키마에서 **생성**(드리프트 0). SEC-9 비노출 불변.
+
+### 9.6 상태 매핑 정합 (갭 #2/#3 — D5)
+
+- summarize·full-text·assets 응답 union에 **`unauthorized`**(401) 명시; **`validation_error`는 `message` 포함**(프론트 'invalid'(입력 확인) 분기 동작). 프론트 분류기가 일반 'error' 뭉개기 대신 **상태로 판정**.
