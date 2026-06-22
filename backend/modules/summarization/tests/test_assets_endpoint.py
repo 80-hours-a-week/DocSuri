@@ -12,6 +12,7 @@ from typing import Any
 from summarization.adapters.rds_assets import RdsS3AssetReader, _split_s3_ref
 from summarization.api.router import build_router
 from summarization.domain.models import AssetRef, StoredAsset
+from summarization.service.orchestrator import SummarizationOrchestrationService
 
 
 class _FakeState:
@@ -178,6 +179,28 @@ def test_reader_lists_and_presigns() -> None:
     assert url.startswith("https://signed/assets/2401.00001/v1/a0.webp")
     assert s3.calls[0]["params"] == {"Bucket": "bkt", "Key": "assets/2401.00001/v1/a0.webp"}
     assert s3.calls[0]["ttl"] == 300
+
+
+class _PartialFakeReader:
+    """Lists two assets; only the s3:// one is presignable (the other returns None)."""
+
+    def list_assets(self, paper_id: str, version: int):
+        return [
+            StoredAsset("a1", "figure", 0, "F1", "page-crop", "s3://bkt/ok.webp", 1, None),
+            StoredAsset("a2", "table", 1, "T1", "page-crop", "/internal/leak.webp", 2, None),
+        ]
+
+    def presign(self, object_ref: str):
+        return f"https://signed/{object_ref}" if object_ref.startswith("s3://") else None
+
+
+def test_orchestrator_skips_non_presignable_assets() -> None:
+    # SEC-9: a row whose object_ref can't be presigned is dropped, not leaked as a raw url.
+    orch = SummarizationOrchestrationService.__new__(SummarizationOrchestrationService)
+    orch._asset_reader = _PartialFakeReader()
+    refs = orch.list_assets("2401.00001", 1)
+    assert [r.asset_id for r in refs] == ["a1"]  # a2 dropped (non-s3 ref)
+    assert all(r.url.startswith("https://") for r in refs)
 
 
 def test_split_s3_ref() -> None:

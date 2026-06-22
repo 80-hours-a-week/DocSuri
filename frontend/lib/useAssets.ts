@@ -27,6 +27,9 @@ export function useAssets() {
         setState({ status: 'done', outcome });
       } catch {
         if (activeKey.current !== key) return;
+        // Clear the dedup key so retry (onRetry → load(same paper,version)) can re-fetch;
+        // the key only guards in-flight / successfully-loaded requests, not failed ones.
+        activeKey.current = null;
         setState({
           status: 'done',
           outcome: { kind: 'error', message: '그림·도표를 불러올 수 없어요.' },

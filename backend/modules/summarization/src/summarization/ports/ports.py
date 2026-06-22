@@ -87,8 +87,9 @@ class AssetReadPort(Protocol):
         """Return stored asset metadata in display order (ordinal). Empty when none."""
         ...
 
-    def presign(self, object_ref: str) -> str:
-        """Return a short-lived signed GET URL for an S3 object ref (SEC-9)."""
+    def presign(self, object_ref: str) -> str | None:
+        """Return a short-lived signed GET URL for an S3 object ref, or ``None`` for a
+        non-S3 ref so the caller skips it — the raw object_ref is never exposed (SEC-9)."""
         ...
 
 

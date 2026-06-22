@@ -63,12 +63,13 @@ class RdsS3AssetReader:
                 for row in cur.fetchall()
             ]
 
-    def presign(self, object_ref: str) -> str:
-        """Presign an ``s3://bucket/key`` ref. Falls back to the raw ref only if it is not
-        an S3 URI (defensive — never raises onto the response path)."""
+    def presign(self, object_ref: str) -> str | None:
+        """Presign an ``s3://bucket/key`` ref. Returns ``None`` for a non-S3 ref so the
+        caller skips the asset — the raw ``object_ref`` (internal path/identifier) must never
+        leave U7 (SEC-9). Stays off the raising path so one bad row can't fail the whole list."""
         bucket, key = _split_s3_ref(object_ref)
         if bucket is None:
-            return object_ref
+            return None
         return self._client().generate_presigned_url(
             "get_object",
             Params={"Bucket": bucket, "Key": key},

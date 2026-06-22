@@ -187,6 +187,11 @@ class SummarizationOrchestrationService:
             return None
         refs: list[AssetRef] = []
         for a in self._asset_reader.list_assets(paper_id, version):
+            url = self._asset_reader.presign(a.object_ref)
+            if url is None:
+                # Non-presignable ref (not an S3 URI): skip rather than leak the raw
+                # object_ref to the response (SEC-9). One bad row drops only its asset.
+                continue
             refs.append(
                 AssetRef(
                     asset_id=a.asset_id,
@@ -194,7 +199,7 @@ class SummarizationOrchestrationService:
                     ordinal=a.ordinal,
                     caption=a.caption,
                     source_mode=a.source_mode,
-                    url=self._asset_reader.presign(a.object_ref),
+                    url=url,
                     page_ref=a.page_ref,
                     bbox=a.bbox,
                 )

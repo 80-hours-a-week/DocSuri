@@ -76,9 +76,9 @@ def test_list_assets_maps_rows_in_display_order(seeded):
     assert tbl.page_ref is None and tbl.bbox is None  # nullable columns
 
 
-def test_presign_signs_s3_ref_and_passes_through_non_s3():
+def test_presign_signs_s3_ref_and_drops_non_s3():
     reader = RdsS3AssetReader(dsn=DSN, s3_client=_FakeS3(), signed_url_ttl_seconds=900)
     url = reader.presign(f"s3://bkt/assets/{_PAPER}/v1/fig.webp")
     assert "bkt" in url and f"assets/{_PAPER}/v1/fig.webp" in url and "900" in url
-    # Defensive: a non-s3 ref is returned unchanged (never raises onto the response path).
-    assert reader.presign("https://arxiv.org/abs/2401.00001") == "https://arxiv.org/abs/2401.00001"
+    # SEC-9: a non-s3 ref must never be returned raw — None so the caller skips the asset.
+    assert reader.presign("https://arxiv.org/abs/2401.00001") is None
