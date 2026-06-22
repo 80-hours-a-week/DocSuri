@@ -19,7 +19,6 @@
 
 .bookmark[data-state='saved'] {
   color: var(--color-accent);
-  cursor: default;
 }
 
 .bookmark[data-state='error'] {

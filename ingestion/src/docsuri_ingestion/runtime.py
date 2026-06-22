@@ -81,6 +81,28 @@ def build_production_runtime(settings: IngestionSettings) -> RuntimeServices:
         timeout_seconds=settings.request_timeout_seconds,
     )
     failure_handler = IngestFailureHandler(queue, observability)
+    # FR-17 multimodal assets (display-only). Wired only when the flag is on — the three
+    # adapters are injected together (the pipeline gates extraction on all three being
+    # present), so the base worker is unaffected when off. Best-effort: never blocks indexing.
+    asset_extractor = asset_store = asset_source = None
+    if settings.multimodal_assets_enabled:
+        from .adapters.assets import ArxivAssetSource, S3RdsAssetStore
+        from .asset_extraction import AssetExtractor, ImageNormalizer
+
+        asset_extractor = AssetExtractor(
+            normalizer=ImageNormalizer(
+                max_longest_side=settings.asset_max_longest_side,
+                max_pixels=settings.asset_max_pixels,
+                webp_quality=settings.asset_webp_quality,
+            )
+        )
+        asset_source = ArxivAssetSource(timeout_seconds=settings.asset_fetch_timeout_seconds)
+        asset_store = S3RdsAssetStore(
+            bucket=settings.s3_bucket or "",
+            control_plane_dsn=settings.control_plane_dsn or "",
+            prefix=settings.asset_s3_prefix,
+            kms_key_id=settings.asset_kms_key_id,
+        )
     pipeline = IngestionPipelineService(
         arxiv=arxiv,
         full_text_store=S3FullTextStore(bucket=settings.s3_bucket or ""),
@@ -97,6 +119,9 @@ def build_production_runtime(settings: IngestionSettings) -> RuntimeServices:
         observability=observability,
         resilience=resilience,
         failure_handler=failure_handler,
+        asset_extractor=asset_extractor,
+        asset_store=asset_store,
+        asset_source=asset_source,
     )
     refresh = RefreshOrchestrationService(
         arxiv=arxiv,
