@@ -4,7 +4,7 @@
 - **프로젝트명**: DocSuri (연구 지원 애플리케이션)
 - **프로젝트 유형**: Greenfield(그린필드)
 - **시작일**: 2026-06-15T04:36:30Z
-- **현재 단계**: CONSTRUCTION - US-R4 구현 완료. **[2026-06-18: U6 관측성 텔레메트리 연동(US-R4) 피처 구현, 대시보드 및 인시던트 API 엔드포인트 구현, 단위 및 통합 테스트 검증 및 린트 통과 완료]** **[2026-06-18: U7(요약/번역) CONSTRUCTION 진입 — Functional Design 계획·질문 게이트(17문) 작성, 브랜치 `feature/u7-v2`·PR #115, 리뷰/답변 대기. 산출물·코드 미생성.]**
+- **현재 단계**: CONSTRUCTION - U8 Citation Graph Code Generation/Build&Test 완료, Cross-Review 반영 중. **[2026-06-22: 브랜치 `feature/u8-v1`; depth 쿼리 제거, in-memory snapshot seam 문서 정정, 저장 year 방어, telemetry 방어 보강.]**
 - **문서 언어**: 한국어(`aidlc-docs/` 산출물). 업스트림 룰셋(`AGENTS.md`, `.aidlc-rule-details/`)은 영어 유지.
 
 ## ⚠️ 검증 재기준선 (Verification Re-baseline) — 2026-06-16
@@ -76,6 +76,9 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - [ ] Units Generation — **EXECUTE** (예비 유닛: U1 인제스천, U2 디스커버리 API, U3 계정/인증, U4 검색저장/라이브러리, U5 모바일 웹, U6 신뢰성/운영)
 - [x] **사용자 스토리 개정 — U7(요약/번역) 에픽 추가 (2026-06-18, 팀 합의·`feature/u7`·PR #108)**: `stories.md`에 **에픽 6 — 요약/번역**(US-S1 구조화 요약·US-S2 한국어 번역·US-S3 출처보기+기권·US-S4 개인화·US-S5 온디맨드 응답·US-S6 비용게이트+근거화 운영) 6 스토리 추가 → 총 27 스토리/7 에픽. P1(US-S1..S5)·OP(US-S6) 매핑, FR-12..14·NFR-P2·QT-5 전수 커버. 페르소나 무변경(P1·OP가 U7 커버).
 - [x] **Units Generation 개정 — U7 정식 등재 (2026-06-18, 팀 합의·`feature/u7`·PR #108)**: `unit-of-work.md`(U7 Summarization 유닛 정의·배포 단위 ①+③옵션·코드트리 `backend/modules/summarization/`·확장 트랙)·`unit-of-work-dependency.md`(U7 행/열 추가, U7→U1 capability read·U7→U6 `shared/ports` lib·U5→U7/U6→U7 sync, **코드 DAG 비순환 유지 검증**, 온디맨드 요약 ASCII 흐름)·`unit-of-work-story-map.md`(US-S1..S5 Owner=U7·US-S6 Owner=U6 기여=U7, 전수 27 스토리 검증) 갱신. **7 유닛·4 배포 단위(U7=API 모듈, 초장문만 비동기 잡 옵션).** 리뷰 게이트 대기. **다음: U7 Construction 유닛 루프(Functional Design부터).**
+- [x] **요구사항 개정 — 신규 유닛 U8(인용 그래프/각주 트리) 편입 (2026-06-19)**: 명확화 `requirement-verification-questions-citation-graph.md` 22문 답변 확정(Q3/Q10=X, Q4/Q14=B, 나머지 권장안) → `requirements.md`에 **FR-15(각주 트리/backward references)·FR-16(노드 저장/연동)·NFR-P3(온디맨드 비-SLA)·QT-6(인용 엣지 정확도+그래프 불변식)·§12 카브아웃** 등재. v1은 논문 상세보기 페이지의 backward references 각주 트리로 한정, FE 구현·forward citations·3-hop 이상은 제외.
+- [x] **사용자 스토리 개정 — U8 에픽 추가 (2026-06-19)**: `stories.md`에 **에픽 7 — 인용 그래프 / 각주 트리**(US-CG1 상세보기 각주 트리·US-CG2 깊이/노드 메타·US-CG3 unresolved 분리·US-CG4 라이브러리 저장·US-CG5 실패/쿼터 저하·US-CG6 운영 관측성) 6 스토리 추가 → 총 33 스토리/8 에픽. P1(US-CG1..CG5)·OP(US-CG6) 매핑, FR-15..16·NFR-P3·QT-6 커버.
+- [x] **Units Generation 개정 — U8 정식 등재 (2026-06-19)**: `unit-of-work.md`(U8 Citation Graph 유닛 정의·배포 단위 ① API 모듈·코드트리 `backend/modules/citation_graph/`)·`unit-of-work-dependency.md`(U8 행/열 추가, U8→U3/U6 로그인·게이트웨이, U8→U4 저장 계약, U7→U8 출처 연동, 코드 DAG 비순환 검증, 각주 트리 ASCII 흐름)·`unit-of-work-story-map.md`(US-CG1..CG5 Owner=U8·US-CG6 Owner=U6 기여=U8, 전수 33 스토리 검증) 갱신. **8 유닛·4 배포 단위(U8=API 모듈).** **후속: U8 Construction Functional Design 질문 게이트 진입 완료, 답변 대기.**
 
 ### 🟢 CONSTRUCTION 단계 (유닛별 루프)
 
@@ -127,6 +130,11 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - [x] **개인 용어집 편집 후속 (2026-06-22, 브랜치 `feature/u5-frontend-ux`·PR #121)**: BR-S4의 "사용자 용어 수정→upsert"를 사용자 경로로 노출. 백엔드 **`GET/POST /api/glossary`**(owner-scoped·입력 검증·fail-closed, 저장 시 `glossary_ver++`→해당 사용자 캐시 무효화) + 프론트 `TranslationView` keptTerms 배지 탭→저장·미리채우기(**BR-SF-17**). 후치환을 함수 치환으로 보강(사용자 입력의 정규식 역참조 해석 차단). 문서 정합: `nfr-design/logical-components`·`infrastructure-design/deployment-architecture`·프론트 `functional-design/frontend-components`·`business-rules` 갱신. **검증: 프론트 68·백엔드(summarization) 42 통과·lint/ruff clean.** 후속(Phase 2-b): 마이페이지 "내 용어집" 보기·수정·삭제 + `DELETE` 엔드포인트.
 - [x] **프론트 카드·내비 UX 패스 (Phase A) (2026-06-22, 브랜치 `feature/u5-card-nav-ux`)**: 프론트 로컬 UX 정리(계약·DTO 불변). ① 상세 요약 단락명 `기여/방법/결과`→`핵심 기여/연구 방법/주요 결과`(+tldr 라벨 `한 줄 요약`). ② **카드 [요약]/tldr 피크 기능 폐지**(`SummaryAction`/`SummaryInline` 제거 — 요약은 상세로 일원화; **Q1·Q2 카드 인라인 결정 대체**). ③ 담기 버튼→카드 **우상단 북마크 아이콘** + 상세 제목 옆 북마크(저장 계약 불변·멱등). ④ 카드 `relevance` **표시 제거**(계약엔 유지) + **클라 정렬 토글(관련도순/최신순)**. ⑤ **하단 고정 탭바(`BottomNav`)** 검색/마이페이지(모바일 우선; 상단 `AppHeader`는 브랜드+로그아웃만 유지. 에이전트 탭은 기능 생길 때·인용수 표시는 U8 머지 후 보류). 추가 미세조정(검색 '논문 검색' 라벨 제거→aria-label·'검색 저장'→'검색어 저장'·저장/정렬 한 툴바·상세 헤더 간격·구분선 축소). 문서 정합: u5 `functional-design/business-rules`(BR-U5-4/5/23)·`domain-entities`·`frontend-components`, u7-frontend `functional-design/frontend-components`·`nfr-design`. **검증: `tsc` 0·`next lint` clean·`vitest` 70 passed·`next build` OK.** 보류 트랙(별건): 그림·도표(멀티모달=요구사항 개정)·필터.
 
+**U8 Citation Graph** (인용 그래프/각주 트리 — 2026-06-19 편입 유닛, FE 구현 제외 API 모듈):
+- [x] Functional Design — **완료·승인 (2026-06-19)**. 계획서 `construction/plans/u8-citation-graph-functional-design-plan.md` Q1~Q12 전부 권장안(A) 반영 및 체크박스 완료. 산출물 `construction/u8-citation-graph/functional-design/` 3문서(`domain-entities.md`, `business-logic-model.md`, `business-rules.md`) 생성. **앱 코드·FE 미생성.**
+- [x] NFR Requirements / NFR Design / Infrastructure Design / Code Generation / Build&Test — **완료 (2026-06-21)**. U8 backend-only citation graph slice 생성 및 검증 완료.
+- [~] Cross-Review 반영 — **진행 (2026-06-22)**. 브랜치명은 `feature/u8-v1`로 CI prefix 조건 충족. 코드 수정: 죽은 `depth` 쿼리 제거, provider/cache key 중복 제거, save year 범위 밖 값 null 처리, telemetry `emit_log` 방어 및 `depthRequested` 분리. 문서 수정: Redis 단언을 현재 process-local in-memory snapshot seam + production Redis target으로 정정.
+
 **공통 후속 단계** (per-unit 또는 횡단):
 - [x] 병렬 개발 조율 (2026-06-16 반영) — `shared/` 공용 규약 선행 작성 및 3개 독립 트랙 병렬 진행 확정
 - [x] `shared/` 규약 작성 (vector-spec·DTOs·events·ports) — **완료 (2026-06-16)**. `construction/shared/`(5문서). vector-spec 🔒FROZEN(Cohere 1024·코사인·input_type 비대칭·IndexRecord); DTOs/events/ports SSOT 정합·적대적 검증(ship); **63 tests pass·드리프트 스크립트(`tools/generate.py --check`) 동작**. **3 트랙 unblocked.** ⚠️ **드리프트 가드는 수동 스크립트일 뿐 CI 미연결**(`.github/workflows/` 부재); **U3 accounts는 docsuri_shared 미소비(SSOT 포크)** — U1·U2만 실소비.
@@ -148,3 +156,77 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 ## 비고
 - 이번 사이클은 클린 재시작이다. 폐기된 사이클 1(U1·U2·U4 데모)은 AWS Bedrock(Claude Haiku), Amazon Comprehend, S3 Vectors 기반 Bedrock Knowledge Base, Amplify 호스팅, Python 백엔드, Next.js 프런트엔드를 사용했다. 그중 어느 선택도 기본 계승하지 않으며 선행 사례(prior art)로만 참조한다.
 - 브랜치: `develop` (4 트랙 PR + 후속 크리티컬 패스 ①~⑦ PR 전부 머지 완료). **2026-06-18 기준: CONSTRUCTION 코드·인프라 종결·AWS 프로덕션 배포 완료(§크리티컬 패스 종결). 잔여 = 문서 정합·루트 `tests/` 린트 사각(F401 9건)·Operations 런북 결정.**
+## U8 Citation Graph — NFR Requirements Complete / NFR Design In Progress
+
+- Date: 2026-06-21
+- Unit: U8 Citation Graph
+- Completed: NFR Requirements answers Q1~Q12 all set to recommended option A.
+- Completed artifacts:
+  - `aidlc-docs/construction/u8-citation-graph/nfr-requirements/nfr-requirements.md`
+  - `aidlc-docs/construction/u8-citation-graph/nfr-requirements/tech-stack-decisions.md`
+- Next stage entered:
+  - `aidlc-docs/construction/plans/u8-citation-graph-nfr-design-plan.md`
+- Current gate: U8 NFR Design questions Q1~Q5 awaiting answers.
+- Code/FE generated: no.
+
+## U8 Citation Graph — NFR Design Complete / Infrastructure Design In Progress
+
+- Date: 2026-06-21
+- Unit: U8 Citation Graph
+- Completed: NFR Design answers Q1~Q5 all set to recommended option A.
+- Completed artifacts:
+  - `aidlc-docs/construction/u8-citation-graph/nfr-design/logical-components.md`
+  - `aidlc-docs/construction/u8-citation-graph/nfr-design/patterns.md`
+  - `aidlc-docs/construction/u8-citation-graph/nfr-design/runtime-architecture.md`
+  - `aidlc-docs/construction/u8-citation-graph/nfr-design/test-strategy.md`
+- Next stage entered:
+  - `aidlc-docs/construction/plans/u8-citation-graph-infrastructure-design-plan.md`
+- Current gate: U8 Infrastructure Design questions Q1~Q3 awaiting answers.
+- Code/FE generated: no.
+
+## U8 Citation Graph — Infrastructure Design Complete / Code Generation Plan Ready
+
+- Date: 2026-06-21
+- Unit: U8 Citation Graph
+- Completed: Infrastructure Design answers Q1~Q3 all set to recommended option A.
+- Completed artifacts:
+  - `aidlc-docs/construction/u8-citation-graph/infrastructure-design/infrastructure-components.md`
+  - `aidlc-docs/construction/u8-citation-graph/infrastructure-design/deployment-topology.md`
+  - `aidlc-docs/construction/u8-citation-graph/infrastructure-design/configuration.md`
+- Next gate:
+  - `aidlc-docs/construction/plans/u8-citation-graph-code-generation-plan.md`
+- Current gate: Code Generation approval question awaiting answer.
+- Code/FE generated: no.
+
+## U8 Citation Graph — Code Generation and Build/Test Complete
+
+- Date: 2026-06-21
+- Unit: U8 Citation Graph
+- Completed: Code Generation plan approved as option A.
+- Code generated:
+  - `backend/modules/citation_graph/__init__.py`
+  - `backend/modules/citation_graph/controller.py`
+  - `backend/wiring.py`
+  - `backend/tests/test_citation_graph.py`
+  - `backend/tests/test_app_shell.py`
+- Verification:
+  - `python -m pytest backend/tests/test_citation_graph.py backend/tests/test_app_shell.py -q` -> 15 passed
+  - `python -m pytest backend/tests -q` -> 33 passed, 1 skipped
+  - `python -m ruff check backend/modules/citation_graph backend/wiring.py backend/tests/test_citation_graph.py backend/tests/test_app_shell.py` -> pass
+  - `python -m compileall backend/modules/citation_graph backend/wiring.py` -> pass
+- FE generated: no.
+- Current gate: user review/approval, commit, or PR direction required.
+
+## U8 Citation Graph — Cross-Review Follow-up
+
+- Date: 2026-06-22
+- Branch: `feature/u8-v1` (branch-name CI prefix compliant)
+- Code changes:
+  - removed dead `depth` query from citation tree API and cache key
+  - kept lazy 2-hop controlled by `expandNodeId`
+  - nulls out-of-range library save year values before U4 validation
+  - guards telemetry against observability objects without `emit_log`
+  - keeps `depthRequested` distinct from `depthReturned`
+- Documentation changes:
+  - corrected Redis wording: current implementation is process-local in-memory TTL seam; Redis remains production adapter target
+- Current gate: user review/approval, commit, or PR direction required.
