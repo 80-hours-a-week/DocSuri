@@ -13,7 +13,13 @@ from ..domain.ranker import RelevanceRanker
 from ..domain.retriever import HybridRetriever
 from ..domain.validator import QueryValidator
 from ..service.orchestrator import SearchOrchestrationService
-from .adapters import MockEmbeddingAdapter, MockLexicalIndexAdapter, MockVectorStoreAdapter
+from ..service.paper_metadata import PaperMetadataService
+from .adapters import (
+    MockEmbeddingAdapter,
+    MockLexicalIndexAdapter,
+    MockPaperLookupAdapter,
+    MockVectorStoreAdapter,
+)
 from .port_stubs import (
     InMemoryEventPublisher,
     NoopObservabilityHub,
@@ -27,6 +33,7 @@ class MockBundle:
     orchestrator: SearchOrchestrationService
     grounding_hook: StubGroundingHook
     event_publisher: InMemoryEventPublisher
+    paper_service: PaperMetadataService
 
 
 def build_mock_orchestrator(
@@ -61,4 +68,5 @@ def build_mock_orchestrator(
         orchestrator=orchestrator,
         grounding_hook=StubGroundingHook(verdict=grounding_verdict),
         event_publisher=publisher,
+        paper_service=PaperMetadataService(MockPaperLookupAdapter()),
     )

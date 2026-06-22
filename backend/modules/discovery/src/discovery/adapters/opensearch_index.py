@@ -73,6 +73,39 @@ class OpenSearchVectorStoreAdapter:
         return _to_scored(hits)
 
 
+class OpenSearchPaperLookupAdapter:
+    """Single-document reader over the shared OpenSearch index — one record for a paper id
+    (matched on ``paperId`` or display ``arxivId``). Powers the paper-detail metadata endpoint."""
+
+    def __init__(self, client: Any, index_name: str) -> None:
+        self._client = client
+        self._index = index_name
+
+    def fetch_paper(self, paper_id: str) -> IndexRecord | None:
+        # Match either the version-less paperId or the display arxivId (the detail route id is
+        # the arxivId). size=1: any chunk carries the paper-level metadata.
+        body = {
+            "size": 1,
+            "query": {
+                "bool": {
+                    "should": [
+                        {"term": {"paperId": paper_id}},
+                        {"term": {"arxivId": paper_id}},
+                    ],
+                    "minimum_should_match": 1,
+                }
+            },
+        }
+        try:
+            response = self._client.search(index=self._index, body=body)
+            hits = response["hits"]["hits"]
+        except Exception as exc:  # noqa: BLE001 — one store; any failure → fail-closed (INV-3)
+            raise IndexUnavailable("OpenSearch paper lookup failed") from exc
+        if not hits:
+            return None
+        return IndexRecord.model_validate(hits[0]["_source"])
+
+
 class OpenSearchLexicalIndexAdapter:
     """BM25 lexical reader over the shared OpenSearch index (``lexicalTerms``; FR-2)."""
 

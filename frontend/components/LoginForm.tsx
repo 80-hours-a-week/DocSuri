@@ -6,6 +6,7 @@ import styles from './AuthForm.module.css';
 import { getApiClient, UserFacingError } from '@/lib/api';
 import { useSession } from './session/SessionContext';
 import { validateEmail, validateRequiredPassword } from '@/lib/api/validate';
+import { AuthField } from './AuthField';
 
 // LoginForm (LC-1, US-A2, BR-U5-16) — generalized auth errors (credential
 // existence not disclosed). On success, refresh the session and return to the
@@ -62,36 +63,26 @@ export function LoginForm() {
           {formError}
         </p>
       ) : null}
-      <div className={styles.field}>
-        <label className={styles.label} htmlFor="login-email">
-          이메일
-        </label>
-        <input
-          id="login-email"
-          className={styles.input}
-          type="email"
-          autoComplete="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          data-testid="login-email"
-        />
-        {fieldErrors.email ? <p className={styles.fieldError}>{fieldErrors.email}</p> : null}
-      </div>
-      <div className={styles.field}>
-        <label className={styles.label} htmlFor="login-password">
-          비밀번호
-        </label>
-        <input
-          id="login-password"
-          className={styles.input}
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          data-testid="login-password"
-        />
-        {fieldErrors.password ? <p className={styles.fieldError}>{fieldErrors.password}</p> : null}
-      </div>
+      <AuthField
+        id="login-email"
+        label="이메일"
+        type="email"
+        autoComplete="email"
+        value={email}
+        onChange={setEmail}
+        error={fieldErrors.email}
+        testId="login-email"
+      />
+      <AuthField
+        id="login-password"
+        label="비밀번호"
+        type="password"
+        autoComplete="current-password"
+        value={password}
+        onChange={setPassword}
+        error={fieldErrors.password}
+        testId="login-password"
+      />
       <button type="submit" className={styles.submit} disabled={submitting} data-testid="login-submit">
         로그인
       </button>

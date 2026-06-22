@@ -1,0 +1,80 @@
+.wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Matches the former TranslationView .term, plus affordances that it is tappable. */
+.term {
+  font-size: 0.75rem;
+  padding: 0.1875rem 0.5rem;
+  color: var(--color-accent);
+  background: var(--color-accent-soft-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.term:hover,
+.term[aria-expanded='true'] {
+  border-color: var(--color-accent);
+}
+
+.popover {
+  position: absolute;
+  top: calc(100% + 0.375rem);
+  left: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  /* Comfortable width on mobile so the input and the "저장됨…" note read on one line,
+     while staying inside the viewport on narrow screens. */
+  min-width: 15rem;
+  max-width: min(22rem, 85vw);
+  padding: 0.625rem 0.75rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
+}
+
+.input {
+  flex: 1 1 8rem;
+  min-width: 0;
+  font-size: 0.8125rem;
+  padding: 0.375rem 0.5rem;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 0.375rem;
+}
+
+.save {
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.625rem;
+  color: var(--color-accent-contrast);
+  background: var(--color-accent);
+  border: none;
+  border-radius: 0.375rem;
+  cursor: pointer;
+}
+
+.save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.savedNote {
+  flex: 1 1 100%;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-accent);
+  white-space: nowrap;
+}
+
+.error {
+  flex-basis: 100%;
+  font-size: 0.75rem;
+  color: var(--color-danger);
+}

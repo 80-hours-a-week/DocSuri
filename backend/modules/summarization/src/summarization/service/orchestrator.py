@@ -142,11 +142,33 @@ class SummarizationOrchestrationService:
                 if attempt == 2:
                     return AbstainDTO(reason="empty_translation")
                 continue
-            result = self._assembler.assemble_translation(draft, glossary)
+            result = self._assembler.assemble_translation(draft, glossary, source)
             self._store.put(key, result.to_dict())
             self._emit("u7.translate.ok", 1.0, request)
             return result
         return AbstainDTO(reason="empty_translation")
+
+    # --- personal glossary (Q8 / §9.1) ---------------------------------------
+    def list_glossary_terms(self, user_id: str) -> list[dict]:
+        """The user's saved personal terms as ``{termFrom, termTo}`` (owner-scoped). Used to
+        pre-fill the badge editor; exposes only the two display fields (no internal flags)."""
+        return [
+            {"termFrom": m.term_from, "termTo": m.term_to}
+            for m in self._glossary.list_user_terms(user_id)
+        ]
+
+    def upsert_glossary_term(self, user_id: str, term_from: str, term_to: str) -> int:
+        """Persist a personal term override; return the bumped ``glossary_ver`` (Phase 1:
+        simple-noun, applied to translation via post-substitution). The version bump folds
+        into ``build_cache_key``, invalidating the user's cached results so the next request
+        reflects the new term."""
+        return self._glossary.upsert_term(user_id, term_from, term_to)
+
+    # --- full-text viewer (Q5=C) ---------------------------------------------
+    def full_text(self, paper_id: str, version: int) -> str | None:
+        """Normalized full text for the in-app viewer. None → unavailable. OA license
+        gating is applied at the router (the source port has no license signal)."""
+        return self._source.fetch_full_text(paper_id, version)
 
     # --- helpers -------------------------------------------------------------
     def _glossary_version(self, user_id: str) -> int:

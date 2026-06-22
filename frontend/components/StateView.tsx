@@ -9,10 +9,16 @@ export type StateViewKind =
   | 'empty'
   | 'abstain'
   | 'invalid'
-  | 'error';
+  | 'error'
+  // U7 summarization additions (BR-SF-7/11):
+  | 'degraded'
+  | 'sourceUnavailable'
+  | 'licenseUnavailable';
 
 interface StateViewProps {
   kind: StateViewKind;
+  /** Optional title override (e.g. U7 reuses `loading` with a summarize-specific title). */
+  title?: string;
   message?: string;
   onRetry?: () => void;
 }
@@ -26,9 +32,23 @@ const COPY: Record<StateViewKind, { title: string; body: string }> = {
   },
   invalid: { title: '입력을 확인해 주세요', body: '검색어를 다시 확인해 주세요.' },
   error: { title: '문제가 발생했습니다', body: '잠시 후 다시 시도해 주세요.' },
+  // 비용 게이트(일시 중단) — 재시도 가능.
+  degraded: { title: 'AI 요약이 일시 중단됐어요', body: '잠시 후 다시 시도해 주세요.' },
+  // 원문 부재 — 처리 불가(정상 동작, 자동 재시도 없음).
+  sourceUnavailable: {
+    title: '원문을 가져올 수 없어요',
+    body: '이 논문은 원문을 불러올 수 없어 요약/번역을 만들지 못했어요.',
+  },
+  // OA 라이선스 미허용 — 앱 내 전문 보기 불가, arXiv 안내.
+  licenseUnavailable: {
+    title: '원문은 arXiv에서 볼 수 있어요',
+    body: '이 논문은 앱에서 전문 보기를 제공하지 않아요. arXiv 원문을 확인해 주세요.',
+  },
 };
 
-export function StateView({ kind, message, onRetry }: StateViewProps) {
+const RETRYABLE: ReadonlySet<StateViewKind> = new Set(['error', 'degraded']);
+
+export function StateView({ kind, title, message, onRetry }: StateViewProps) {
   const copy = COPY[kind];
   return (
     <div
@@ -41,9 +61,9 @@ export function StateView({ kind, message, onRetry }: StateViewProps) {
       {kind === 'loading' ? (
         <div className={styles.spinner} aria-hidden="true" />
       ) : null}
-      <p className={styles.title}>{copy.title}</p>
+      <p className={styles.title}>{title ?? copy.title}</p>
       <p className={styles.body}>{message ?? copy.body}</p>
-      {onRetry && kind === 'error' ? (
+      {onRetry && RETRYABLE.has(kind) ? (
         <button type="button" className={styles.retry} onClick={onRetry} data-testid="state-view-retry">
           다시 시도
         </button>
