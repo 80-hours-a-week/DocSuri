@@ -76,6 +76,11 @@ SessionContext (AppShell 제공) ── useSession()
 - **상호작용**: `arxivUrl` 외부 링크(http/https + noopener, BR-U5-7); **우상단 북마크 아이콘 = 라이브러리 저장**(`SaveToLibraryButton`, 멱등 add, BR-U5-23). 카드의 tldr 요약 피크 기능은 폐지(요약은 상세로 일원화 — u7-frontend FD §0 참조).
 - **규칙**: BR-U5-4/5/6/23. 근거: FR-4, FR-5, NFR-U1, SEC-9, US-L2.
 
+### 2.8a BottomNav (하단 탭바, 2026-06-22 UX 패스)
+- **책임**: 인증 상태에서만 노출되는 **모바일 우선 하단 고정 탭바**. 화면 이동(검색/마이페이지) 담당. 상단 `AppHeader`는 브랜드+로그아웃만.
+- **탭**: `검색`(/search) · `마이페이지`(/library). 현재 경로로 활성 표시(`aria-current`). "에이전트" 탭은 해당 기능이 생긴 뒤 추가(빈 목적지 탭 금지).
+- **규칙**: 인증(`status==='authenticated'`)에서만 렌더. 콘텐츠가 바에 가리지 않도록 in-flow 스페이서로 공간 확보. 근거: US-H1, 모바일 우선.
+
 ### 2.8 StateView
 - **책임**: 빈/기권/저하/로딩/에러 비기술 공유 표시.
 - **props**: `kind: 'loading'|'empty'|'abstain'|'degraded'|'invalid'|'error'`, `message?`, `field?`.

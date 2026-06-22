@@ -16,25 +16,17 @@ export function AppHeader({ title }: { title: string }) {
       <Link href={brandHref} className={styles.brand} data-testid="app-header-brand">
         {title}
       </Link>
+      {/* 화면 이동(검색/마이페이지)은 하단 탭바(BottomNav)가 담당한다.
+          상단은 브랜드 + 로그아웃만 유지한다. */}
       {status === 'authenticated' ? (
-        <nav className={styles.nav} aria-label="주요 메뉴">
-          <Link href="/search" className={styles.navLink} data-testid="app-header-search">
-            검색
-          </Link>
-          {/* 마이페이지는 현재 라이브러리로 진입한다(별도 계정 페이지 추가 시 그쪽으로 이동).
-              "에이전트" 탭은 해당 기능이 생긴 뒤 추가한다 — 빈 목적지로 가는 탭은 두지 않는다. */}
-          <Link href="/library" className={styles.navLink} data-testid="app-header-mypage">
-            마이페이지
-          </Link>
-          <button
-            type="button"
-            className={styles.signout}
-            onClick={() => void signOut()}
-            data-testid="app-header-signout"
-          >
-            로그아웃
-          </button>
-        </nav>
+        <button
+          type="button"
+          className={styles.signout}
+          onClick={() => void signOut()}
+          data-testid="app-header-signout"
+        >
+          로그아웃
+        </button>
       ) : null}
     </header>
   );

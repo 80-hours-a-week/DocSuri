@@ -2,6 +2,7 @@ import styles from '../../page.module.css';
 import header from './paper.module.css';
 import { RouteGuard } from '@/components/RouteGuard';
 import { AppHeader } from '@/components/AppHeader';
+import { BottomNav } from '@/components/BottomNav';
 import { PaperDetailIsland } from '@/components/PaperDetailIsland';
 
 // Detail route /paper/[id] (Q1=A) — SSR shell (AppHeader) + client island. The
@@ -21,6 +22,7 @@ export default async function PaperPage({ params }: { params: Promise<{ id: stri
         <main className={header.main}>
           <PaperDetailIsland paperId={id} version={1} arxivUrl={arxivUrl} />
         </main>
+        <BottomNav />
       </div>
     </RouteGuard>
   );
