@@ -31,8 +31,8 @@
 | **CategoryFilter** | `categories[]`, `from`/`to`(기간) | **Q1=D: `categories=[cs.LG,cs.AI,cs.CL,cs.CV,stat.ML]`, 최근 5년(수십만 건).** `resolveSliceCategories()` 산출. |
 | **PageCursor** | 불투명 페이지/하베스트 커서 | 대량 시드 하베스트 + 증분 조회 페이지네이션 상태(프로토콜=NFR Q2). |
 | **MetadataPage** | `records[]`(원천 메타), `nextCursor`, `hasMore` | 슬라이스 페이지 단위 조회 결과. |
-| **RawDocument** | `rawBody`(OA 전문 **활성**), `sourceMeta`, `oaStatus` | **Q2=C: `fetchFullText` 활성** — 전문 본문 취득. 원천은 ObjectRef로 보관(SEC-9). |
-| **ParsedPaper** | `paperId`, `version`, `title`, `authors[]`, `year`, `abstract`, **`body`/`sections[]`(전문)**, `categories[]`, `arxivUrl`, `updatedAt`, `objectRef?` | **Q2=C: 본문 전문 포함.** FetchParseProcessor.parse 산출. FR-4 카드 필드 + 전문 청킹 원천. |
+| **RawDocument** | `text`(정규화 평문), `sourceMeta`, `oaStatus` | **BR-29**: 취득 = arXiv HTML 우선(평문 변환의 최선 소스) → PDF 폴백. 산출은 **평문 1종**(뷰어·AI 공통). |
+| **ParsedPaper** | `paperId`, `version`, `title`, `authors[]`, `year`, `abstract`, **`full_text`(정규화 평문)**, `categories[]`, `arxivUrl`, `updatedAt`, `objectRef?` | **Q2=C/BR-29: 본문 전문(평문).** FetchParseProcessor.parse 산출. 요약/번역 입력 + 뷰어 렌더(평문, 앵커 하이라이트). |
 | **RejectedRecord** | `reason`(RejectReason), `sourceRef` | parse/validate 거부. **§4 RejectReason 분류.** |
 | **ValidationResult** | `ok`(bool), `violations[]` | FetchParseProcessor.validate 산출(SEC-5). ok=false → `VALIDATION_VIOLATION` / PERMANENT(BR-15). |
 | **WithdrawalMarker** | `paperId`, `detectedAt`, `signal`(철회 근거) | **Q13=B 활성.** 탐지원(프로덕션): arXiv 메타데이터 철회 표시 **+ 전문 withdrawal 공지**(BR-14). → tombstone 라우팅. |

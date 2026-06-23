@@ -56,11 +56,13 @@
 - LLM 호출 **직전**(캐시 MISS 후·생성 전) `get_budget_state()`. `OPEN/LEXICAL_ONLY/저하` → `CostDegradedDTO`. **U7은 비용 판정 재구현 없음**(U6 단일 권위, INV-2).
 
 ### 3.3 `SourceSelector` (Q1)
-- `summary` → `FullTextSourceAdapter`로 `stored_full_text_ref` read(전문). `translate` → 초록(보유). 전문 부재/라이선스X → 초록 폴백 + `fallbackReason`(NFR-R2), 둘 다 부재 → `SourceUnavailableDTO`.
+- `summary` → `FullTextSourceAdapter`로 **doc-model read**(전문; cache miss 시 U1 doc-model lazy 생성 트리거 — BR-30/U1 §7). `translate` → 초록(보유). 전문 부재/라이선스X → 초록 폴백 + `fallbackReason`(NFR-R2), 둘 다 부재 → `SourceUnavailableDTO`.
+- **(D2)** 입력 소스만 `.txt`→doc-model 교체 — 선택·폴백·DTO 로직 불변.
 
 ### 3.4 `InputRefiner` (Q2=B / Q6=A)
-- **제거**: 참고문헌/인용목록 · Header/Footer · 페이지번호 · 저작권 · 저자정보. **보존**: 표/그림 캡션 · Appendix · Supplementary Results · 수식(LaTeX, 번역 금지).
-- **섹션 도출**: 헤딩 패턴(예: `INTRODUCTION`, `5.2`, `Table 3`, `Figure 2`) 인식 → `Section{label, span}`. 실패 시 span-only.
+- **(D2 입력 업그레이드)** 입력 = doc-model(구조화). 섹션·캡션·수식·**표(=데이터)**를 doc-model에서 직접 취득(신뢰) — 아래 헤딩-정규식 도출은 doc-model 부재(레거시 `.txt`) 시 폴백.
+- **제거**: 참고문헌/인용목록 · Header/Footer · 페이지번호 · 저작권 · 저자정보. **보존**: 표(=데이터 rows/cols) · 표/그림 캡션 · Appendix · Supplementary Results · 수식(LaTeX, 번역 금지).
+- **섹션 도출(폴백)**: doc-model 부재 시 헤딩 패턴(예: `INTRODUCTION`, `5.2`, `Table 3`, `Figure 2`) 인식 → `Section{label, span}`. 실패 시 span-only.
 - SANITIZE: 제어문자 제거 · 본문 격리(injection 대비) · 토큰 카운트.
 
 ### 3.5 `GlossaryResolver` (Q8)
@@ -72,7 +74,7 @@
 
 ### 3.7 `LlmSummarizer` / `LlmTranslator` (생성, §6 stage 6)
 - 모델 자동 선택(task→역량 등급; 요약=고역량/번역=경량, 선택기 비노출 — Q14). **구체 모델(Sonnet/Haiku)·Bedrock 바인딩은 NFR/Infra.**
-- 프롬프트: 영역 분리(`[지시] ┃ [데이터]<paper>…</paper>`, injection 방어) · grounding 지시(제공 텍스트 내에서만·항목별 근거 위치·근거 없으면 기권) · persona 분기(expert/beginner) · 용어집 강제 · 초록 밖 디테일(결과·한계·재현성) · 출력 §3 JSON 계약.
+- 프롬프트: 영역 분리(`[지시] ┃ [데이터]<paper>…</paper>`, injection 방어) · **(D8) 표는 구조화 데이터로 직렬화(`<table>` rows/cols + 캡션·앵커)·수식은 LaTeX로 주입 → 표 숫자·수식이 요약·근거화에 가시** · grounding 지시(제공 텍스트 내에서만·항목별 근거 위치·근거 없으면 기권) · persona 분기(expert/beginner) · 용어집 강제 · 초록 밖 디테일(결과·한계·재현성) · 출력 §3 JSON 계약.
 - 스트리밍 생성(§4). 복원력 정책(§5).
 
 ### 3.8 `GroundingValidator` (Q4=A / Q15=A)
