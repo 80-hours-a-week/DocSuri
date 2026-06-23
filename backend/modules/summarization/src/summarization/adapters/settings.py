@@ -36,6 +36,10 @@ class SummarizationSettings:
     assets_enabled: bool = False
     # Presigned GET URL lifetime for asset images (SEC-9 — short-lived).
     asset_url_ttl_seconds: int = 600
+    # doc-model rich-view gate (BR-30). OFF by default, same OA-license rationale as the
+    # full-text viewer: until a license signal is wired the endpoint returns
+    # ``license_unavailable`` (arXiv link-out). Read-only — U1 builds/caches lazily (D6).
+    docmodel_viewer_enabled: bool = False
 
     @property
     def summarization_enabled(self) -> bool:
@@ -60,4 +64,6 @@ class SummarizationSettings:
             assets_enabled=os.environ.get("DOCSURI_MULTIMODAL_ASSETS_ENABLED", "").lower()
             in ("1", "true", "yes"),
             asset_url_ttl_seconds=int(os.environ.get("DOCSURI_ASSET_URL_TTL_SECONDS", "600")),
+            docmodel_viewer_enabled=os.environ.get("DOCSURI_DOCMODEL_VIEWER_ENABLED", "").lower()
+            in ("1", "true", "yes"),
         )

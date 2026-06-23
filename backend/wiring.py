@@ -266,13 +266,15 @@ def _mount_summarization(app: FastAPI, settings: Settings, result: MountResult) 
             bundle.orchestrator,
             fulltext_enabled=sm_settings.fulltext_viewer_enabled,
             assets_enabled=sm_settings.assets_enabled,
+            docmodel_enabled=sm_settings.docmodel_viewer_enabled,
         )
     )
     result.mounted.append("summarization")
     log.info(
-        "app-shell: summarization mounted (fulltext_viewer=%s, assets=%s)",
+        "app-shell: summarization mounted (fulltext_viewer=%s, assets=%s, docmodel=%s)",
         sm_settings.fulltext_viewer_enabled,
         sm_settings.assets_enabled,
+        sm_settings.docmodel_viewer_enabled,
     )
 
 

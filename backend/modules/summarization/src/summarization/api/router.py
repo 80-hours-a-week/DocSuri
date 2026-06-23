@@ -31,6 +31,7 @@ def build_router(
     *,
     fulltext_enabled: bool = False,
     assets_enabled: bool = False,
+    docmodel_enabled: bool = False,
 ) -> Any:
     router = APIRouter()
 
@@ -105,6 +106,34 @@ def build_router(
         if text is None:
             return JSONResponse({"status": "source_unavailable"})
         return JSONResponse({"status": "ok", "text": text})
+
+    @router.get("/api/papers/{paper_id}/doc-model")
+    def doc_model(request: Request, paper_id: str) -> Any:
+        """Structured doc-model for the rich view / summary input (BR-30, D4). OA-license-gated
+        like full-text (BR-SF-11): disabled by default → ``license_unavailable`` (arXiv
+        link-out) until a license signal is wired. Read-only — returns the lazily-built cached
+        artifact (D6); a miss / not-yet-built surfaces ``source_unavailable``. The doc-model is
+        url-free (SEC-9): figure signed URLs come from the parallel ``/assets`` manifest,
+        joined by ``assetId`` on the client."""
+        user_id = _principal_user_id(request)
+        if not user_id:
+            return JSONResponse({"status": "unauthorized"}, status_code=401)
+        if not docmodel_enabled:
+            return JSONResponse({"status": "license_unavailable"})
+        try:
+            version = int(request.query_params.get("version", "1"))
+        except (TypeError, ValueError):
+            version = 1
+        doc = orchestrator.doc_model(paper_id, version)
+        if doc is None:
+            return JSONResponse({"status": "source_unavailable"})
+        return JSONResponse(
+            {
+                "status": "ok",
+                "cached": True,
+                "docModel": doc.model_dump(mode="json", exclude_none=True),
+            }
+        )
 
     @router.get("/api/papers/{paper_id}/assets")
     def paper_assets(request: Request, paper_id: str) -> Any:
