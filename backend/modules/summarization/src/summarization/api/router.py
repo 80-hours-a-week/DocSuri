@@ -91,8 +91,10 @@ def build_router(
     @router.get("/api/papers/{paper_id}/doc-model")
     def doc_model(request: Request, paper_id: str) -> Any:
         """Structured doc-model for the rich view / summary input (BR-30, D4). OA-license-gated
-        like full-text (BR-SF-11): disabled by default → ``license_unavailable`` (arXiv
-        link-out) until a license signal is wired. Returns the cached artifact when present; a
+        (BR-SF-11): the OA signal is the U1 ingestion gate — only OA papers (CC-BY/CC-BY-SA/CC0,
+        BR-1) are stored, so any corpus paper is license-safe to render and this flag is an
+        operational toggle (OFF by default → ``license_unavailable`` arXiv link-out until the team
+        enables it at deploy). Returns the cached artifact when present; a
         miss (re)triggers U1's lazy build and surfaces ``building`` (client polls) when a build
         queue is wired, else ``source_unavailable`` (D6, boundary B). The doc-model is
         url-free (SEC-9): figure signed URLs come from the parallel ``/assets`` manifest,

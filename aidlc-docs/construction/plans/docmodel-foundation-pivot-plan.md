@@ -104,7 +104,7 @@
 - [x] FD `business-logic-model.md` — BR-29 확장: 보관=평문 1종 → **+doc-model**; `ingestOne`에 doc-model 생성/캐시 단계(lazy) → **§7 신설 + §6.3 무효화 연동**
 - [x] FD `business-rules.md` — 표=데이터·수식=LaTeX 규칙; 그림 webp 참조 연결 → **BR-29 carve-out 뒤집기 + BR-30 신설(doc-model 구조·생성)**
 - [x] NFR `tech-stack-decisions.md` — **TD-12 재검토**(표=PDF크롭 → HTML 표=데이터); HTML 파서 의존성(lxml/BeautifulSoup·MathML→LaTeX) → **TD-12 재작성 + TD-16 신설 + TD-11 최후폴백 강등**
-- [ ] Infra `infrastructure-design.md` — S3 `doc-model/` prefix(SSE) + 캐시 라이프사이클 + **doc-model 빌드 큐·요약 잡 큐·요약 워커 배포 단위 + IAM**(PR-1 slice 6 CDK와 함께)
+- [x] Infra `infrastructure-design.md` — S3 `doc-model/` prefix(단일 버킷) + **요약 잡 큐·요약 워커 배포 단위 ④ + IAM 3역할**(빌드 큐=ingestion 재사용). PR-1 slice 6 CDK(`compute_stack`·신규 `summarization_stack`·app.py, `cdk synth` 검증·배포 X)와 함께 완료.
 
 **U7 Summarization (소비자 — 입력 교체)**
 - [x] FD `domain-entities.md`·`business-logic-model.md` — SourceSelector/full-text 어댑터 입력 = doc-model; 프롬프트가 표·수식 인지 → **SourceText/RefinedSource(+tables[]) · SourceSelector·InputRefiner·프롬프트(표=데이터·수식 LaTeX)**
@@ -123,7 +123,8 @@
 - [x] U1 FD `business-logic-model.md` §7.2 — lazy 빌드 **트리거(경계 B·`BUILD_DOC_MODEL` 큐 잡·building)** 구체화
 - [x] U7 FD `business-rules.md`·`business-logic-model.md` — BR-S6(3단계 맵리듀스)·BR-S9(pending)·BR-S12(비동기 잡 구현)·BLM §3.6
 - [x] U7 NFR `tech-stack-decisions.md` — TD-S9 비동기 잡 구현 반영
-- [ ] Infra `infrastructure-design.md` — slice 6(CDK)와 함께
+- [x] Infra `infrastructure-design.md` + CDK(slice 6) — 단일 버킷 prefix·요약 큐·워커 배포 단위 ④·IAM, `cdk synth` 검증(배포 X)
+- [x] OA 게이트(slice 7) — OA 신호 = U1 인제스션 검증(BR-1); 게이트=운영 토글(논문별 조회 불요), 주석·문서 정합
 
 ---
 

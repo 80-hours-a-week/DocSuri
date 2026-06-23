@@ -26,15 +26,21 @@ class SummarizationSettings:
     region_name: str | None
     redis_ttl_seconds: int
     model_ver: str
-    # FR-17 figure/table assets gate. OFF by default: the read path needs the `paper_asset`
-    # manifest (written by U1) + S3 presign IAM provisioned. While off, the orchestrator gets
-    # no asset_reader so the endpoint returns ``license_unavailable`` (no assets shown).
+    # FR-17 figure/table assets gate (BR-SF-11). The OA-license SIGNAL is the U1 ingestion gate:
+    # only papers whose license is on OPEN_ACCESS_LICENSE_ALLOWLIST (CC-BY/CC-BY-SA/CC0) are stored
+    # (BR-1 — non-OA rejected at ingestion), so every corpus paper is safe to render in-app and no
+    # per-paper license lookup is needed. This flag is therefore an OPERATIONAL toggle (enable once
+    # the `paper_asset` manifest + S3 presign IAM are provisioned), not a per-paper gate. OFF by
+    # default → ``license_unavailable`` (no assets shown) until the team enables it at deploy.
     assets_enabled: bool = False
     # Presigned GET URL lifetime for asset images (SEC-9 — short-lived).
     asset_url_ttl_seconds: int = 600
-    # doc-model rich-view gate (BR-30). OFF by default, same OA-license rationale as the
-    # full-text viewer: until a license signal is wired the endpoint returns
-    # ``license_unavailable`` (arXiv link-out). Read-only — U1 builds/caches lazily (D6).
+    # doc-model rich-view gate (BR-30 / BR-SF-11). OA-license SIGNAL = the U1 ingestion gate: the
+    # corpus only holds OA papers (CC-BY/CC-BY-SA/CC0 — BR-1, non-OA rejected at ingestion), so
+    # in-app rich rendering is license-safe for any stored paper and no per-paper license check is
+    # needed. This is an OPERATIONAL toggle (enable once the doc-model build queue + reader IAM are
+    # provisioned — slice 6). OFF by default → ``license_unavailable`` (arXiv link-out) until the
+    # team enables it at deploy. Read-only — U1 builds/caches lazily (D6).
     docmodel_viewer_enabled: bool = False
     # U1 ingestion queue URL for the lazy doc-model build trigger (BR-30/D6, boundary B). When
     # set (and the viewer is enabled), a read miss enqueues a BUILD_DOC_MODEL job and returns

@@ -192,6 +192,18 @@ class ComputeStack(Stack):
             "OPENSEARCH_ENDPOINT": Fn.join("", [
                 "https://", opensearch_domain.domain_endpoint,
             ]),
+            # --- U7 summarization + doc-model (피벗) — queue URLs (deploy-ready config) ---
+            # The IAM below is provisioned ahead of activation. ACTIVATION is a deploy-time step the
+            # team owns: set DOCSURI_SUMMARY_BUCKET (papers bucket) + DATABASE_URL(+PGPASSWORD) [+
+            # DOCSURI_REDIS_URL] to mount the real path (summarization_enabled = bool(bucket)); the
+            # OA-license + map-reduce gates stay OFF by default. Referenced by name to avoid a
+            # cross-stack export coupling deploys (repo pattern).
+            "DOCSURI_DOCMODEL_BUILD_QUEUE_URL": (  # doc-model lazy build (BR-30, boundary B)
+                f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-ingestion-queue"
+            ),
+            "DOCSURI_SUMMARY_JOB_QUEUE_URL": (  # long-summary async job (BR-S12)
+                f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-summary-job-queue"
+            ),
         }
 
         # DB password injected from the RDS-generated secret (JSON key "password"); CDK grants
@@ -372,6 +384,44 @@ class ComputeStack(Stack):
                 # pre-created group above is harmless.
                 actions=["logs:CreateLogGroup"],
                 resources=[ops_log_group.log_group_arn],
+            )
+        )
+
+        # --- U7 summarization + doc-model IAM (피벗, infra-design §4·§7) ---
+        # Single papers bucket (Docsuri-Ingestion owns it) — referenced by ARN-by-name to avoid a
+        # cross-stack export. API reads the built doc-model and read/writes the summary cache.
+        _papers_bucket = f"arn:aws:s3:::docsuri-papers-fulltext-{self.account}"
+        self.service.task_definition.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["s3:GetObject"],
+                resources=[f"{_papers_bucket}/doc-model/*"],
+            )
+        )
+        self.service.task_definition.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["s3:GetObject", "s3:PutObject"],
+                resources=[f"{_papers_bucket}/summary/*"],
+            )
+        )
+        # SendMessage: doc-model build (ingestion queue, boundary B) + long-summary job queue.
+        self.service.task_definition.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["sqs:SendMessage"],
+                resources=[
+                    f"arn:aws:sqs:{self.region}:{self.account}:docsuri-ingestion-queue",
+                    f"arn:aws:sqs:{self.region}:{self.account}:docsuri-summary-job-queue",
+                ],
+            )
+        )
+        # Bedrock InvokeModel for the U7 summary/translate models (Anthropic on Bedrock). Scoped to
+        # Anthropic foundation models + inference profiles in-region (concrete ids are app config).
+        self.service.task_definition.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+                resources=[
+                    f"arn:aws:bedrock:{self.region}::foundation-model/anthropic.*",
+                    f"arn:aws:bedrock:{self.region}:{self.account}:inference-profile/*",
+                ],
             )
         )
 
