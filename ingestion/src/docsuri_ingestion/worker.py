@@ -45,6 +45,15 @@ def main(argv: list[str] | None = None) -> int:
 
 def process_message(runtime, message) -> None:
     queue = runtime.queue
+
+    # EventBridge schedule-tick: dispatch to the refresh orchestrator which fetches
+    # incremental arXiv updates and enqueues individual INCREMENTAL jobs.
+    if message.body.get("action") == "schedule_tick":
+        queued = runtime.refresh.on_schedule_tick()
+        log.info("schedule_tick completed, queued %d papers", queued)
+        queue.ack(message)
+        return
+
     try:
         job = job_from_payload(message.body)
     except IngestionError as exc:
