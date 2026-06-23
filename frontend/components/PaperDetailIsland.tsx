@@ -19,10 +19,10 @@ interface PaperDetailIslandProps {
   arxivUrl?: string;
 }
 
+// Top action bar (modal openers). 본문 / 본문 번역 live below the metadata instead.
 const ACTIONS: { view: DetailView; label: string }[] = [
   { view: 'summary', label: '요약' },
   { view: 'abstractTrans', label: '초록 번역' },
-  { view: 'fullTrans', label: '전문 번역' },
 ];
 
 export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIslandProps) {
@@ -34,6 +34,7 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
   // The doc-model rich view opens in its own window (not inline). A summary source anchor
   // opens that window scrolled to the matching block (carried by label via the query).
   const bodyHref = `/paper/${encodeURIComponent(paperId)}/doc-model?version=${version}`;
+  const translateHref = `/paper/${encodeURIComponent(paperId)}/translate?version=${version}`;
   const openBody = (anchor?: AnchorVM | null) => {
     const sp = new URLSearchParams({ version: String(version) });
     if (anchor?.label) {
@@ -63,15 +64,6 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
             {a.label}
           </button>
         ))}
-        <a
-          className={styles.action}
-          href={bodyHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          data-testid="open-doc-model"
-        >
-          본문
-        </a>
         <button
           type="button"
           className={styles.action}
@@ -124,6 +116,29 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
           논문 정보를 불러오는 중…
         </p>
       ) : null}
+
+      {/* Body access — below the metadata. Both open in their own window (not a modal):
+          본문 = the doc-model rich view, 본문 번역 = the full-text translation. */}
+      <div className={styles.bodyActions} role="group" aria-label="본문">
+        <a
+          className={styles.action}
+          href={bodyHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="open-doc-model"
+        >
+          본문
+        </a>
+        <a
+          className={styles.action}
+          href={translateHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="open-full-translation"
+        >
+          본문 번역
+        </a>
+      </div>
 
       {modalView ? (
         <SummaryModal

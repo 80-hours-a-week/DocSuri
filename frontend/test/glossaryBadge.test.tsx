@@ -17,7 +17,7 @@ const translation: TranslationVM = {
 function renderView() {
   return render(
     <div>
-      <TranslationView translation={translation} />
+      <TranslationView translation={translation} showGlossary />
       <button type="button" data-testid="outside">바깥</button>
     </div>,
   );

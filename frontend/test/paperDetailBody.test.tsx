@@ -14,6 +14,11 @@ describe('PaperDetailIsland — body opens in a new window', () => {
     expect(bodyLink.getAttribute('target')).toBe('_blank');
     expect(bodyLink.getAttribute('rel')).toContain('noopener');
 
+    // 본문 번역 also opens in its own window (not a modal).
+    const transLink = screen.getByTestId('open-full-translation');
+    expect(transLink.getAttribute('href')).toBe('/paper/2401.00001/translate?version=1');
+    expect(transLink.getAttribute('target')).toBe('_blank');
+
     // No inline rich view and no standalone figure/table gallery on the detail page.
     expect(screen.queryByTestId('docmodel-viewer')).toBeNull();
     expect(screen.queryByTestId('asset-item')).toBeNull();
