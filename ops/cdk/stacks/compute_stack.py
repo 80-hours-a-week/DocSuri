@@ -192,6 +192,16 @@ class ComputeStack(Stack):
             "OPENSEARCH_ENDPOINT": Fn.join("", [
                 "https://", opensearch_domain.domain_endpoint,
             ]),
+            # U2 discovery reader real-path wiring. DiscoverySettings.from_env reads the
+            # DOCSURI_-prefixed names, and search_enabled requires BOTH the endpoint AND the
+            # model — without these the reader silently falls back to the mock orchestrator.
+            # The model MUST match the writer's (Cohere v4) so query and corpus share one
+            # embedding space (vector-spec §4). Index defaults to the docsuri-corpus alias.
+            "DOCSURI_OPENSEARCH_ENDPOINT": Fn.join("", [
+                "https://", opensearch_domain.domain_endpoint,
+            ]),
+            "DOCSURI_BEDROCK_MODEL_ID": "cohere.embed-v4:0",
+            "DOCSURI_AWS_REGION": self.region,
         }
 
         # DB password injected from the RDS-generated secret (JSON key "password"); CDK grants
@@ -372,6 +382,18 @@ class ComputeStack(Stack):
                 # pre-created group above is harmless.
                 actions=["logs:CreateLogGroup"],
                 resources=[ops_log_group.log_group_arn],
+            )
+        )
+
+        # U2 reader query-embedding: Bedrock invoke on the SAME model the writer uses (Cohere
+        # v4). Must match DOCSURI_BEDROCK_MODEL_ID above and ingestion_stack._BEDROCK_MODEL_ID.
+        # Without this the real read path 500s on the first search (AccessDenied at embed time).
+        self.service.task_definition.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["bedrock:InvokeModel"],
+                resources=[
+                    f"arn:aws:bedrock:{self.region}::foundation-model/cohere.embed-v4:0"
+                ],
             )
         )
 
