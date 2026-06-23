@@ -114,7 +114,10 @@ class IngestionStack(Stack):
             schedule=events.Schedule.cron(hour="6", minute="0"),  # 06:00 UTC = 15:00 KST
             targets=[
                 targets.SqsQueue(
-                    self.queue, message=events.RuleTargetInput.from_text("on_schedule_tick")
+                    self.queue,
+                    message=events.RuleTargetInput.from_object(
+                        {"action": "schedule_tick"}
+                    ),
                 )
             ],
         )
