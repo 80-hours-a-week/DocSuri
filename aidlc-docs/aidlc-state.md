@@ -44,6 +44,7 @@
 
 - **U1 전문 추출 결함 정정 (2026-06-23, #139·커밋 `0ced380`·브랜치 `fix/summarization-pipeline`)**: arXiv e-print(gzip/tar) 미해제 디코딩으로 전문 ~44% 깨짐(�) → **arXiv HTML(native→ar5iv) 우선 + PDF 폴백**으로 교체(결정 D = U1 FD plan Q18 · BR-29). 보관=정규화 평문 1종, 뷰어=평문(앵커 유지). 리치 HTML 렌더/보관은 에셋 패널(FR-17)과 그림·표 겹쳐 에이전트 단계로 분리. `pdfplumber` 코어 승격.
 - **U7 번역 입력 정렬 (2026-06-23, P2·커밋 `4039bde`·브랜치 `fix/summarization-pipeline`)**: 전문 번역(scope=full)이 정제 안 한 원문을 초록 프롬프트에 전송 + 길이판정(`refined`)↔전송(`raw`) 불일치 → 번역 입력=`refined.body` 통일·프롬프트 scope 분기(결정 A = U7 FD plan Q18 · BR-S2).
+- **🧭 DocModel 기반 전환 — 결정 게이트 수립 (2026-06-23, 미착수·브랜치 예정 `feat/docmodel-foundation`)**: "요약/번역 입력을 평문→구조화 문서모델(doc-model)로 전환 + 자체 리치뷰 + 에이전트 준비" 피벗의 단일 진실원천 게이트 작성 → `construction/plans/docmodel-foundation-pivot-plan.md`. **확정 결정 D1~D8**: doc-model=arXiv HTML 결정적 파싱 JSON(표=데이터·수식=LaTeX·그림=webp 참조)·U7 입력 평문→doc-model 교체(로직 불변)·PDF 원문 미저장(다운로드 버튼 없음)·자체 리치뷰=doc-model 콘텐츠 재렌더(PDF.js 아님)·비전=batch 아닌 에이전트 on-demand 툴·생성 lazy+`(paperId,ver)` 캐시·소스 무관 설계·TD-12(표=PDF크롭) 재검토. **저장**: `doc-model/{id}/v{ver}.json`(구조화 통합) + 기존 `assets/*.webp`(이미지 분리·참조) + 기존 `paper_asset` RDS. **열린 Q1~Q8**(코드 전 확정): ⚠️Q1 arXiv HTML 커버리지 스파이크(배포 확정 선결)·Q3 doc-model 스키마·Q7 요구사항 재진입 여부·Q8 P3(맵리듀스)=doc-model 후속. `:159-162` 비전 항목은 본 doc-model 기반으로 흡수. **blast-radius=기존 U1/U7/U5 FD·TD-12·requirements *편집*(신규 문서는 게이트뿐)**.
 
 ## 워크스페이스 상태
 - **기존 코드**: 없음(워킹 트리 블랭크 슬레이트; 이전 데모 사이클 폐기, git `ba3b6a9`로 복구 가능)
