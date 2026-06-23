@@ -31,7 +31,6 @@ ingestion = IngestionStack(
     app, "Docsuri-Ingestion",
     vpc=network.vpc,
     opensearch_domain=search.domain,
-    database=compute.db,  # control-plane RDS (same instance the API uses)
     env=env,
 )
 # Deploy unit ④ — U5 frontend. The BFF (server-side) calls the backend gateway over its

@@ -4,7 +4,6 @@ infra-design.md §2 (worker) + §3 (EventBridge) + §4 (S3)."""
 
 from aws_cdk import (
     Duration,
-    Fn,
     RemovalPolicy,
     Stack,
 )
@@ -30,10 +29,10 @@ from aws_cdk import (
     aws_opensearchservice as opensearch,
 )
 from aws_cdk import (
-    aws_rds as rds,
+    aws_s3 as s3,
 )
 from aws_cdk import (
-    aws_s3 as s3,
+    aws_secretsmanager as secretsmanager,
 )
 from aws_cdk import (
     aws_sqs as sqs,
@@ -44,6 +43,19 @@ from constructs import Construct
 # matches the discovery/search side). Region-scoped ARN built from this id below.
 _BEDROCK_MODEL_ID = "cohere.embed-multilingual-v3"
 
+# Existing control-plane RDS (created by Docsuri-Compute) referenced by concrete id rather than
+# a CFN cross-stack import. Importing compute's L2 construct would force a compute redeploy, which
+# regenerates the per-synth X-Origin-Verify secret and briefly 403s the live API during CloudFront
+# propagation. RDS is RemovalPolicy.RETAIN so these ids are stable.
+# ponytail: hardcoded infra ids; only revisit if the RDS instance or its secret is recreated.
+_RDS_ENDPOINT = "docsuri-compute-postgres9dc8bb04-7ajkntsj0ouu.cpegcaqmu01d.ap-northeast-2.rds.amazonaws.com"
+_RDS_PORT = 5432
+_RDS_SECURITY_GROUP_ID = "sg-0633ac0c0b8c7a052"
+_RDS_SECRET_ARN = (
+    "arn:aws:secretsmanager:ap-northeast-2:028317349537:secret:"
+    "DocsuriComputePostgresSecre-9qclXydED0pl-30WA1V"
+)
+
 
 class IngestionStack(Stack):
     def __init__(
@@ -53,7 +65,6 @@ class IngestionStack(Stack):
         *,
         vpc: ec2.IVpc,
         opensearch_domain: opensearch.IDomain,
-        database: rds.IDatabaseInstance,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -119,14 +130,10 @@ class IngestionStack(Stack):
         # Control-plane DSN WITHOUT the password — libpq reads PGPASSWORD (injected as a secret
         # below) for any field absent from the conninfo. Keeps the DB credential out of the
         # plaintext task-def env, mirroring how the API injects DB_PASSWORD.
-        control_plane_dsn = Fn.join("", [
-            "postgresql://docsuri_admin@",
-            database.db_instance_endpoint_address,
-            ":",
-            database.db_instance_endpoint_port,
-            "/docsuri",
-        ])
-        assert database.secret is not None  # from_generated_secret always creates one
+        control_plane_dsn = f"postgresql://docsuri_admin@{_RDS_ENDPOINT}:{_RDS_PORT}/docsuri"
+        db_secret = secretsmanager.Secret.from_secret_complete_arn(
+            self, "DbSecret", _RDS_SECRET_ARN
+        )
 
         task_def.add_container(
             "worker",
@@ -147,7 +154,7 @@ class IngestionStack(Stack):
                 "DOCSURI_MULTIMODAL_ASSETS_ENABLED": "true",
             },
             secrets={
-                "PGPASSWORD": ecs.Secret.from_secrets_manager(database.secret, "password"),
+                "PGPASSWORD": ecs.Secret.from_secrets_manager(db_secret, "password"),
             },
         )
 
@@ -177,10 +184,14 @@ class IngestionStack(Stack):
             adjustment_type=appscaling.AdjustmentType.CHANGE_IN_CAPACITY,
         )
 
-        # SG: worker → OpenSearch (HTTPS) + RDS (Postgres). Add egress on the worker side rather
-        # than ingress on the other stack (avoids a cross-stack dependency cycle).
+        # SG: worker → OpenSearch (HTTPS) + RDS (Postgres). Egress is added on the worker side;
+        # the RDS SG is imported by id (mutable) so the ingress rule lands in THIS stack — no
+        # change to the compute stack that owns it.
         self.service.connections.allow_to(opensearch_domain.connections, ec2.Port.tcp(443))
-        self.service.connections.allow_to(database.connections, ec2.Port.tcp(5432))
+        rds_sg = ec2.SecurityGroup.from_security_group_id(
+            self, "RdsSg", _RDS_SECURITY_GROUP_ID, mutable=True
+        )
+        self.service.connections.allow_to(rds_sg, ec2.Port.tcp(_RDS_PORT))
 
         # Grant SQS consume + S3 read/write + Bedrock embed-model invoke to the task role
         self.queue.grant_consume_messages(task_def.task_role)
