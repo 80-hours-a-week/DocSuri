@@ -30,11 +30,12 @@ def test_html_to_text_idempotent_on_plain_text() -> None:
 
 
 @given(st.text())
-def test_html_to_text_never_raises_and_has_no_replacement_chars(text: str) -> None:
-    out = html_to_text(text)
-    # The #139 defect was decoding a compressed payload into replacement chars; the HTML
-    # path must never emit U+FFFD from arbitrary text input.
-    assert "�" not in out
+def test_html_to_text_is_pure_and_introduces_no_replacement_chars(text: str) -> None:
+    out = html_to_text(text)  # must never raise (purity)
+    # html_to_text never DECODES bytes, so it must not *introduce* U+FFFD that the input
+    # lacked (the #139 defect lived in the fetch/decode layer, not here). It may faithfully
+    # preserve a U+FFFD that the input already contained — st.text() can emit that codepoint.
+    assert "�" not in out or "�" in text
 
 
 class _FakeSource:
@@ -68,3 +69,42 @@ def test_fetch_falls_back_to_pdf_when_no_html() -> None:
     raw = _FakeSource(html=None, pdf_text="Extracted PDF body").fetch_full_text(meta)
     assert raw.text == "Extracted PDF body"
     assert raw.source_url == "pdf://x"
+
+
+def test_html_to_text_separates_adjacent_table_cells() -> None:
+    # Adjacent cells must not collapse into a single token ("0.920.88"); the row stays one line.
+    out = html_to_text("<table><tr><td>0.92</td><td>0.88</td></tr></table>")
+    assert out == "0.92 0.88"
+    assert "0.920.88" not in out
+
+
+def test_pdf_to_text_raises_extraction_error_on_non_pdf_payload() -> None:
+    # A 200 HTML stub / corrupt bytes served at a PDF URL must surface as a classifiable
+    # FullTextExtractionError, not a raw pdfminer exception (Finding 2 — resilience bypass).
+    import pytest
+
+    from docsuri_ingestion.full_text_extraction import FullTextExtractionError, pdf_to_text
+
+    with pytest.raises(FullTextExtractionError):
+        pdf_to_text(b"<html>not a pdf</html>")
+
+
+def test_fetch_full_text_classifies_unparseable_pdf_as_permanent(monkeypatch) -> None:
+    # End-to-end of Finding 2: HTML absent → PDF fallback → a 200 non-PDF payload must be
+    # classified (PermanentIngestionError / PARSE_FAILURE), never escape as a raw exception.
+    import pytest
+
+    from docsuri_ingestion.adapters.arxiv import ArxivHttpSource
+    from docsuri_ingestion.domain.enums import FailureReason
+    from docsuri_ingestion.domain.errors import PermanentIngestionError
+
+    src = ArxivHttpSource()
+    monkeypatch.setattr(src, "_try_get_html", lambda arxiv_id: (None, "html://x"))
+    monkeypatch.setattr(
+        src, "_get_bytes", lambda url, *, params, stage: b"<html>200 stub, not a pdf</html>"
+    )
+
+    with pytest.raises(PermanentIngestionError) as excinfo:
+        src.fetch_full_text(sample_metadata())
+    assert excinfo.value.reason == FailureReason.PARSE_FAILURE
+    assert excinfo.value.stage == "fetch_full_text"

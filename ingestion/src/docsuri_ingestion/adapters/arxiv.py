@@ -7,7 +7,11 @@ from datetime import datetime
 from docsuri_ingestion.domain.enums import FailureReason
 from docsuri_ingestion.domain.errors import PermanentIngestionError, RetriableIngestionError
 from docsuri_ingestion.domain.models import CategoryFilter, MetadataRecord, RawDocument
-from docsuri_ingestion.full_text_extraction import html_to_text, pdf_to_text
+from docsuri_ingestion.full_text_extraction import (
+    FullTextExtractionError,
+    html_to_text,
+    pdf_to_text,
+)
 from docsuri_ingestion.resilience import TokenBucket
 
 ATOM_NS = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
@@ -87,7 +91,14 @@ class ArxivHttpSource:
 
         pdf_url = f"{self._pdf_base_url}/{arxiv_id}"
         pdf = self._get_bytes(pdf_url, params=None, stage="fetch_full_text")
-        text = pdf_to_text(pdf)
+        try:
+            text = pdf_to_text(pdf)
+        except FullTextExtractionError as exc:
+            raise PermanentIngestionError(
+                "full text extraction could not parse the PDF payload",
+                reason=FailureReason.PARSE_FAILURE,
+                stage="fetch_full_text",
+            ) from exc
         if not text:
             raise PermanentIngestionError(
                 "full text extraction yielded empty text",
