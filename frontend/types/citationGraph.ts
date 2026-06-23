@@ -8,7 +8,6 @@ export interface CitationNode {
   depth: number;
   arxivId?: string | null;
   url?: string | null;
-  inCorpus?: boolean;
   saveable: boolean;
   alreadyShown: boolean;
 }

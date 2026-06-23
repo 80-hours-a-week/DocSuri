@@ -33,7 +33,6 @@ class CitationNode(BaseModel):
     depth: int = Field(ge=1, le=2)
     arxivId: str | None = None
     url: str | None = None
-    inCorpus: bool = False
     saveable: bool = False
     alreadyShown: bool = False
 
@@ -86,35 +85,6 @@ class InMemorySnapshotStore:
         self._items[key] = (time.time() + _snapshot_ttl_seconds(), value)
 
 
-class RedisSnapshotStore:
-    def __init__(self, url: str, prefix: str = "citation_graph:v1:") -> None:
-        import redis
-
-        self._redis = redis.Redis.from_url(url)
-        self._prefix = prefix
-
-    def get(self, key: str) -> CitationTreeResponse | None:
-        try:
-            raw = self._redis.get(self._prefix + key)
-            if raw is None:
-                return None
-            return CitationTreeResponse.model_validate_json(raw).model_copy(
-                update={"cacheHit": True}
-            )
-        except Exception:  # noqa: BLE001 - cache miss on Redis/JSON failure, provider remains source
-            return None
-
-    def set(self, key: str, value: CitationTreeResponse) -> None:
-        try:
-            self._redis.set(
-                self._prefix + key,
-                value.model_dump_json(),
-                ex=max(1, _snapshot_ttl_seconds()),
-            )
-        except Exception:  # noqa: BLE001 - cache write is advisory
-            pass
-
-
 class SemanticScholarProvider:
     def __init__(self, api_key: str | None = None) -> None:
         self._api_key = api_key
@@ -153,25 +123,7 @@ router = APIRouter(
     tags=["CitationGraph"],
     dependencies=[Depends(_feature_enabled)],
 )
-def _redis_url() -> str | None:
-    if url := os.getenv("CITATION_GRAPH_REDIS_URL") or os.getenv("DOCSURI_REDIS_URL"):
-        return url
-    host = os.getenv("REDIS_HOST")
-    if not host:
-        return None
-    tls = os.getenv("REDIS_TLS", "").lower() in {"1", "true", "yes", "on"}
-    scheme = "rediss" if tls else "redis"
-    return f"{scheme}://{host}:{os.getenv('REDIS_PORT', '6379')}/{os.getenv('REDIS_DB', '0')}"
-
-
-def _build_snapshot_store() -> Any:
-    if url := _redis_url():
-        prefix = os.getenv("CITATION_GRAPH_CACHE_PREFIX", "citation_graph:v1:")
-        return RedisSnapshotStore(url, prefix)
-    return InMemorySnapshotStore()
-
-
-_store = _build_snapshot_store()
+_store = InMemorySnapshotStore()
 _provider = SemanticScholarProvider(os.getenv("SEMANTIC_SCHOLAR_API_KEY"))
 
 
@@ -196,21 +148,7 @@ PROVIDER_DEP = Depends(get_provider)
 LIBRARY_DEP = Depends(get_library_service)
 
 
-def _in_corpus(paper_service: Any, arxiv_id: str | None) -> bool:
-    if not paper_service or not arxiv_id:
-        return False
-    try:
-        return paper_service.get_paper_meta(arxiv_id) is not None
-    except Exception:  # noqa: BLE001 - corpus lookup must not break citation display
-        return False
-
-
-def _node(
-    raw: dict[str, Any],
-    depth: int,
-    seen: set[str],
-    paper_service: Any = None,
-) -> CitationNode | UnresolvedCitation:
+def _node(raw: dict[str, Any], depth: int, seen: set[str]) -> CitationNode | UnresolvedCitation:
     external = raw.get("externalIds") or {}
     node_id = external.get("ArXiv") or external.get("DOI") or raw.get("paperId") or raw.get("url")
     title = (raw.get("title") or "").strip()
@@ -227,7 +165,6 @@ def _node(
         depth=depth,
         arxivId=arxiv_id,
         url=raw.get("url"),
-        inCorpus=_in_corpus(paper_service, arxiv_id),
         saveable=bool(arxiv_id) and not already,
         alreadyShown=already,
     )
@@ -239,12 +176,7 @@ def _library_year(year: int | None) -> int | None:
     return None
 
 
-def _build_tree(
-    root: str,
-    parent: str,
-    raw_items: list[dict[str, Any]],
-    paper_service: Any = None,
-) -> CitationTreeResponse:
+def _build_tree(root: str, parent: str, raw_items: list[dict[str, Any]]) -> CitationTreeResponse:
     target_depth = 2 if parent != root else 1
     seen = {root}
     nodes: list[CitationNode] = []
@@ -259,7 +191,7 @@ def _build_tree(
         ),
     )
     for raw in sorted_items:
-        item = _node(raw, target_depth, seen, paper_service)
+        item = _node(raw, target_depth, seen)
         if isinstance(item, UnresolvedCitation):
             unresolved.append(item)
             continue
@@ -329,12 +261,7 @@ async def get_citation_tree(
             depthReturned=0,
             providerStatus=provider_status,
         )
-    paper_service = getattr(
-        getattr(request.app.state, "discovery_bundle", None),
-        "paper_service",
-        None,
-    )
-    response = _build_tree(paper_id, parent, items, paper_service).model_copy(
+    response = _build_tree(paper_id, parent, items).model_copy(
         update={"providerStatus": provider_status}
     )
     store.set(key, response)

@@ -409,7 +409,6 @@ function GraphNodeCard({
   const year = node.year ? String(node.year) : '연도 미상';
   const citations = typeof node.citationCount === 'number' ? `${node.citationCount.toLocaleString()}회 인용` : '인용수 미상';
   const canExpand = depth < 2;
-  const link = citationLink(node);
 
   return (
     <article
@@ -439,16 +438,6 @@ function GraphNodeCard({
             {expanding ? '확장 중' : expanded ? '축소' : '확장'}
           </button>
         ) : null}
-        {link ? (
-          <a
-            className={`${styles.button} ${styles.nodeLink}`}
-            href={link.href}
-            target={link.external ? '_blank' : undefined}
-            rel={link.external ? 'noopener noreferrer' : undefined}
-          >
-            열기
-          </a>
-        ) : null}
         <button
           type="button"
           className={styles.button}
@@ -461,13 +450,4 @@ function GraphNodeCard({
       </div>
     </article>
   );
-}
-
-function citationLink(node: CitationNode): { href: string; external: boolean } | null {
-  if (node.inCorpus && node.arxivId) {
-    return { href: `/paper/${encodeURIComponent(node.arxivId)}`, external: false };
-  }
-  const href = node.arxivId ? `https://arxiv.org/abs/${encodeURIComponent(node.arxivId)}` : node.url;
-  if (!href || !/^https?:\/\//i.test(href)) return null;
-  return { href, external: true };
 }
