@@ -50,6 +50,8 @@ class IngestionPipelineService:
         parser: FetchParseProcessor | None = None,
         assembler: IndexRecordAssembler | None = None,
         clock: ClockPort | None = None,
+        embedding_v2: EmbeddingPort | None = None,
+        vector_index_v2: VectorIndexPort | None = None,
     ) -> None:
         assert_writer_embedding_role()
         self._arxiv = arxiv
@@ -64,6 +66,8 @@ class IngestionPipelineService:
         self._parser = parser or FetchParseProcessor()
         self._assembler = assembler or IndexRecordAssembler()
         self._clock = clock or SystemClock()
+        self._embedding_v2 = embedding_v2
+        self._vector_index_v2 = vector_index_v2
 
     def ingest_one(self, job: IngestionJob) -> DedupDecision:
         if not job.arxiv_ref:
@@ -150,6 +154,38 @@ class IngestionPipelineService:
                     {record.chunkId for record in batch.records},
                 ),
             )
+            if self._embedding_v2 and self._vector_index_v2:
+                try:
+                    vectors_v2 = self._resilience.dependency_call(
+                        "bedrock_v2",
+                        "embed",
+                        lambda: self._embedding_v2.embed_documents(
+                            [chunk.text for chunk in chunks.chunks],
+                            correlation_id=job.correlation_id,
+                        ),
+                    )
+                    embeddings_v2 = EmbeddingBatch(
+                        chunk_ids=tuple(chunk.chunk_id for chunk in chunks.chunks),
+                        vectors=tuple(tuple(vector) for vector in vectors_v2),
+                    )
+                    batch_v2 = self._assembler.assemble(paper, chunks, embeddings_v2)
+                    self._resilience.dependency_call(
+                        "opensearch_v2",
+                        "bulk_upsert",
+                        lambda: self._vector_index_v2.bulk_upsert(batch_v2),
+                    )
+                    self._resilience.dependency_call(
+                        "opensearch_v2",
+                        "delete_stale_chunks",
+                        lambda: self._vector_index_v2.delete_stale_chunks(
+                            paper.paper_id,
+                            {record.chunkId for record in batch_v2.records},
+                        ),
+                    )
+                except Exception as e:
+                    self._observability.emit_log(
+                        {"type": "dual_write_v2_failed", "jobId": job.job_id, "error": str(e)}
+                    )
             dedup.mark_ingested(paper)
             self._control_plane.advance_watermark("arxiv", paper.updated_at)
             self._control_plane.record_job_finished(job.job_id, success=True)
@@ -192,6 +228,15 @@ class IngestionPipelineService:
             "tombstone",
             lambda: self._vector_index.tombstone_paper(tombstone),
         )
+        if self._vector_index_v2:
+            try:
+                self._resilience.dependency_call(
+                    "opensearch_v2",
+                    "tombstone",
+                    lambda: self._vector_index_v2.tombstone_paper(tombstone),
+                )
+            except Exception as e:
+                self._observability.emit_log({"type": "dual_write_v2_tombstone_failed", "error": str(e)})
         self._control_plane.advance_watermark("arxiv", paper.updated_at)
         self._control_plane.record_job_finished(job.job_id, success=True, detail="tombstoned")
         self._observability.emit_metric("ingestion.paper.tombstoned", 1.0, {"kind": job.kind.value})

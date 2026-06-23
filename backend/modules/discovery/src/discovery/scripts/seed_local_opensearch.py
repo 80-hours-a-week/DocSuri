@@ -58,11 +58,17 @@ INDEX_BODY: dict[str, Any] = {
 }
 
 
-def create_index(client: Any, index_name: str, *, recreate: bool = True) -> None:
-    if recreate and client.indices.exists(index=index_name):
-        client.indices.delete(index=index_name)
-    if not client.indices.exists(index=index_name):
-        client.indices.create(index=index_name, body=INDEX_BODY)
+def create_indices_and_alias(client: Any, alias_name: str, *, recreate: bool = True) -> None:
+    v1_index = f"{alias_name}-v1"
+    v2_index = f"{alias_name}-v2"
+    for index_name in [v1_index, v2_index]:
+        if recreate and client.indices.exists(index=index_name):
+            client.indices.delete(index=index_name)
+        if not client.indices.exists(index=index_name):
+            client.indices.create(index=index_name, body=INDEX_BODY)
+    
+    # Create or update alias to point to v1
+    client.indices.put_alias(index=v1_index, name=alias_name)
 
 
 def bulk_index(client: Any, index_name: str, records: Iterable[IndexRecord]) -> int:
@@ -89,8 +95,10 @@ def seed(settings: DiscoverySettings | None = None) -> int:
         use_ssl=settings.opensearch_use_ssl,
         verify_certs=settings.opensearch_verify_certs,
     )
-    create_index(client, settings.opensearch_index)
-    n = bulk_index(client, settings.opensearch_index, fixtures.RECORDS)
+    alias_name = settings.opensearch_index
+    v1_index = f"{alias_name}-v1"
+    create_indices_and_alias(client, alias_name)
+    n = bulk_index(client, v1_index, fixtures.RECORDS)
     return n
 
 
