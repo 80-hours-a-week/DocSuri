@@ -39,9 +39,11 @@ from aws_cdk import (
 )
 from constructs import Construct
 
-# Bedrock text-embedding model for the worker (Cohere Embed multilingual, 1024-dim —
-# matches the discovery/search side). Region-scoped ARN built from this id below.
-_BEDROCK_MODEL_ID = "cohere.embed-multilingual-v3"
+# Bedrock text-embedding model for the worker (Cohere Embed v4, 1024-dim — matches the
+# discovery/search side). Region-scoped ARN built from this id below. Reflects live prod,
+# which already runs cohere.embed-v4:0; v2 dual-write below targets the same model so the
+# backfilled docsuri-corpus-v2 index is a clean, uniform v4 rebuild.
+_BEDROCK_MODEL_ID = "cohere.embed-v4:0"
 
 # Existing control-plane RDS (created by Docsuri-Compute) referenced by concrete id rather than
 # a CFN cross-stack import. Importing compute's L2 construct would force a compute redeploy, which
@@ -152,6 +154,10 @@ class IngestionStack(Stack):
                 "DOCSURI_BEDROCK_MODEL_ID": _BEDROCK_MODEL_ID,
                 "DOCSURI_OPENSEARCH_ENDPOINT": f"https://{opensearch_domain.domain_endpoint}",
                 "DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus-v1",
+                # FR-21 v4 dual-write: setting *_V2 flips runtime.build_production_runtime to
+                # fan writes into the clean v2 index (Fail-Open — v2 errors never block v1).
+                "DOCSURI_BEDROCK_MODEL_ID_V2": _BEDROCK_MODEL_ID,
+                "DOCSURI_OPENSEARCH_INDEX_V2": "docsuri-corpus-v2",
                 "DOCSURI_CONTROL_PLANE_DSN": control_plane_dsn,
                 "DOCSURI_SQS_QUEUE_URL": self.queue.queue_url,
                 "DOCSURI_SQS_DLQ_URL": dlq.queue_url,
