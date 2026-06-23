@@ -61,8 +61,9 @@ def provision(settings: IngestionSettings | None = None) -> int:
         client.indices.create(index=v2, body=papers_index_body(on_disk=on_disk))
         log.info("created index %s (on_disk=%s)", v2, on_disk)
 
-    existing = client.indices.get_alias(name=_ALIAS, ignore=[404])
-    if isinstance(existing, dict) and existing:
+    # exists_alias returns a clean bool; get_alias(ignore=[404]) returns a *truthy* 404
+    # error-dict when the alias is absent, which silently skips creation (the original bug).
+    if client.indices.exists_alias(name=_ALIAS):
         log.info("alias %s already exists", _ALIAS)
     else:
         client.indices.put_alias(index=v1, name=_ALIAS)
