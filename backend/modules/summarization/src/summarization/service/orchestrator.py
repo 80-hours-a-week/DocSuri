@@ -111,7 +111,7 @@ class SummarizationOrchestrationService:
 
         # 6-7. generate (buffer) → grounding validate, with ONE retry (BR-S7).
         if request.task == Task.TRANSLATE:
-            response = self._run_translate(request, source, glossary, key)
+            response = self._run_translate(request, source, refined, glossary, key)
         else:
             response = self._run_summary(request, source, refined, glossary, key)
         return response
@@ -138,10 +138,13 @@ class SummarizationOrchestrationService:
         return AbstainDTO(reason="insufficient_grounding")  # unreachable; satisfies type checker
 
     # --- translate path ------------------------------------------------------
-    def _run_translate(self, request, source, glossary, key) -> SummaryResponse:
+    def _run_translate(self, request, source, refined, glossary, key) -> SummaryResponse:
+        # BR-S3/Q18(P2): translate consumes the refined body (same as summary) — references/
+        # boilerplate stripped, control chars sanitized, and the length route (computed on
+        # refined.token_count) now matches the text actually sent. Prompt is scope-aware.
         for attempt in (1, 2):
             try:
-                draft = self._llm.translate(source.raw, request, glossary)
+                draft = self._llm.translate(refined.body, request, glossary)
             except LlmUnavailable:
                 if attempt == 2:
                     return AbstainDTO(reason="generation_unavailable")
