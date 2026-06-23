@@ -21,12 +21,21 @@ OAI_NS = {
 }
 
 
+def _oai_set(category: str) -> str:
+    """Map an arXiv category to its OAI-PMH setSpec. arXiv OAI sets use a colon hierarchy
+    ``<archive>:<archive>:<CATEGORY>`` (e.g. ``cs.LG`` → ``cs:cs:LG``), NOT the dotted code —
+    a dotted ``set=cs.LG`` returns ``badArgument: Set does not exist`` (HTTP 200, 0 records),
+    which silently harvested nothing."""
+    archive, _, sub = category.partition(".")
+    return f"{archive}:{archive}:{sub}" if sub else archive
+
+
 class ArxivHttpSource:
     def __init__(
         self,
         *,
         atom_base_url: str = "https://export.arxiv.org/api/query",
-        oai_base_url: str = "https://export.arxiv.org/oai2",
+        oai_base_url: str = "https://oaipmh.arxiv.org/oai",
         pdf_base_url: str = "https://arxiv.org/pdf",
         html_base_urls: Sequence[str] = (
             "https://arxiv.org/html",
@@ -142,7 +151,7 @@ class ArxivHttpSource:
         params = {
             "verb": "ListRecords",
             "metadataPrefix": "arXiv",
-            "set": category,
+            "set": _oai_set(category),
             "from": category_filter.updated_after.date().isoformat(),
             "until": category_filter.updated_before.date().isoformat(),
         }
