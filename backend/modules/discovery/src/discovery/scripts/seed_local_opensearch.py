@@ -26,43 +26,63 @@ from ..adapters.opensearch_index import OpenSearchClientFactory
 from ..adapters.settings import DiscoverySettings
 from ..mocks import fixtures
 
-# Mirrors the U1 writer's index shape (vector-spec §2/§3): k-NN cosine vector + BM25 text.
-INDEX_BODY: dict[str, Any] = {
-    "settings": {"index": {"knn": True}},
-    "mappings": {
-        "properties": {
-            "chunkId": {"type": "keyword"},
-            "paperId": {"type": "keyword"},
-            "version": {"type": "integer"},
-            "vector": {
-                "type": "knn_vector",
-                "dimension": DIMENSIONS,
-                "method": {
-                    "name": "hnsw",
-                    "space_type": "cosinesimil",
-                    "engine": "lucene",
-                },
-            },
-            "section": {"type": "keyword"},
-            "lexicalTerms": {"type": "text"},
-            "title": {"type": "text"},
-            "authors": {"type": "keyword"},
-            "year": {"type": "integer"},
-            "arxivId": {"type": "keyword"},
-            "abstract": {"type": "text"},
-            "abstractSnippet": {"type": "text"},
-            "arxivUrl": {"type": "keyword"},
-            "categories": {"type": "keyword"},
+
+def papers_index_body(*, on_disk: bool = False) -> dict[str, Any]:
+    """k-NN cosine vector + BM25 text mapping for the U1 writer's records (vector-spec §2/§3).
+
+    ``on_disk=True`` (production, OpenSearch >= 2.17) keeps full-precision vectors on disk and a
+    4x-compressed copy in RAM — ~4x k-NN RAM cut for full-body multi-chunk papers. on_disk implies
+    the faiss engine + hnsw defaults. The local/default path stays plain lucene HNSW so the manual
+    integration test runs on any OpenSearch version (on_disk would be rejected pre-2.17).
+    """
+    if on_disk:
+        vector: dict[str, Any] = {
+            "type": "knn_vector",
+            "dimension": DIMENSIONS,
+            "space_type": "cosinesimil",
+            "mode": "on_disk",
+            "compression_level": "4x",
         }
-    },
-}
+    else:
+        vector = {
+            "type": "knn_vector",
+            "dimension": DIMENSIONS,
+            "method": {"name": "hnsw", "space_type": "cosinesimil", "engine": "lucene"},
+        }
+    return {
+        "settings": {"index": {"knn": True}},
+        "mappings": {
+            "properties": {
+                "chunkId": {"type": "keyword"},
+                "paperId": {"type": "keyword"},
+                "version": {"type": "integer"},
+                "vector": vector,
+                "section": {"type": "keyword"},
+                "lexicalTerms": {"type": "text"},
+                "title": {"type": "text"},
+                "authors": {"type": "keyword"},
+                "year": {"type": "integer"},
+                "arxivId": {"type": "keyword"},
+                "abstract": {"type": "text"},
+                "abstractSnippet": {"type": "text"},
+                "arxivUrl": {"type": "keyword"},
+                "categories": {"type": "keyword"},
+            }
+        },
+    }
 
 
-def create_index(client: Any, index_name: str, *, recreate: bool = True) -> None:
+# Local seed mapping (lucene, in-memory). Production uses papers_index_body(on_disk=True).
+INDEX_BODY: dict[str, Any] = papers_index_body()
+
+
+def create_index(
+    client: Any, index_name: str, *, recreate: bool = True, body: dict[str, Any] | None = None
+) -> None:
     if recreate and client.indices.exists(index=index_name):
         client.indices.delete(index=index_name)
     if not client.indices.exists(index=index_name):
-        client.indices.create(index=index_name, body=INDEX_BODY)
+        client.indices.create(index=index_name, body=body or INDEX_BODY)
 
 
 def bulk_index(client: Any, index_name: str, records: Iterable[IndexRecord]) -> int:
