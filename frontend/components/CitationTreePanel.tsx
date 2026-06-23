@@ -231,10 +231,20 @@ function CitationGraph({
   onSave: (node: CitationNode) => void;
 }) {
   const [zoom, setZoom] = useState(1);
+  const [horizontalScroll, setHorizontalScroll] = useState({ left: 0, max: 0 });
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollCenterRef = useRef<{ x: number; y: number } | null>(null);
   const graph = layoutGraph(tree, expandedById);
   const byId = new Map(graph.nodes.map((item) => [item.node.nodeId, item]));
+
+  const syncHorizontalScroll = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    setHorizontalScroll({
+      left: viewport.scrollLeft,
+      max: Math.max(0, viewport.scrollWidth - viewport.clientWidth),
+    });
+  }, []);
 
   useEffect(() => {
     const target = pendingScrollCenterRef.current;
@@ -243,7 +253,14 @@ function CitationGraph({
     pendingScrollCenterRef.current = null;
     viewport.scrollLeft = target.x * zoom - viewport.clientWidth / 2;
     viewport.scrollTop = target.y * zoom - viewport.clientHeight / 2;
-  }, [zoom]);
+    syncHorizontalScroll();
+  }, [syncHorizontalScroll, zoom]);
+
+  useEffect(() => {
+    syncHorizontalScroll();
+    window.addEventListener('resize', syncHorizontalScroll);
+    return () => window.removeEventListener('resize', syncHorizontalScroll);
+  }, [graph.width, graph.height, syncHorizontalScroll, zoom]);
 
   function changeZoom(nextZoom: number) {
     const viewport = viewportRef.current;
@@ -255,6 +272,15 @@ function CitationGraph({
     };
     setZoom(nextZoom);
   }
+
+  function moveHorizontal(nextLeft: number) {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    viewport.scrollLeft = nextLeft;
+    setHorizontalScroll((prev) => ({ ...prev, left: nextLeft }));
+  }
+
+  const horizontalMax = Math.max(1, horizontalScroll.max);
 
   return (
     <div className={styles.graph} data-testid="citation-graph">
@@ -278,7 +304,7 @@ function CitationGraph({
         </button>
       </div>
 
-      <div className={styles.graphViewport} ref={viewportRef}>
+      <div className={styles.graphViewport} ref={viewportRef} onScroll={syncHorizontalScroll}>
         <div
           className={styles.graphWorld}
           style={{ width: graph.width * zoom, height: graph.height * zoom }}
@@ -344,6 +370,18 @@ function CitationGraph({
           </div>
         </div>
       </div>
+      <label className={styles.horizontalScroller}>
+        <span>좌우 이동</span>
+        <input
+          aria-label="그래프 좌우 이동"
+          type="range"
+          min={0}
+          max={horizontalMax}
+          value={Math.min(horizontalScroll.left, horizontalMax)}
+          disabled={horizontalScroll.max <= 0}
+          onChange={(event) => moveHorizontal(Number(event.currentTarget.value))}
+        />
+      </label>
     </div>
   );
 }
@@ -464,9 +502,6 @@ function GraphNodeCard({
 }
 
 function citationLink(node: CitationNode): { href: string; external: boolean } | null {
-  if (node.inCorpus && node.arxivId) {
-    return { href: `/paper/${encodeURIComponent(node.arxivId)}`, external: false };
-  }
   const href = node.arxivId ? `https://arxiv.org/abs/${encodeURIComponent(node.arxivId)}` : node.url;
   if (!href || !/^https?:\/\//i.test(href)) return null;
   return { href, external: true };

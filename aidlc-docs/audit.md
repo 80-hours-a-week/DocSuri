@@ -1089,3 +1089,27 @@
 
 ---
 
+## U8 Citation Graph Node Link Fix
+**Timestamp**: 2026-06-23T01:36:18Z
+**User Input**: "프론트에서 테스트를 해봤는데, 노드의 `열기` 버튼을 누르면 로그인 화면으로 쫒겨나요."
+**AI Response**: "`/paper/[id]`가 RouteGuard 보호 라우트라 dev/mock anonymous 세션에서 내부 링크가 로그인으로 리다이렉트되는 문제를 확인함. Citation node `열기` 링크를 내부 상세 링크 대신 arXiv/provider 외부 원문 링크로 열도록 수정하고, 외부 링크에 `target=\"_blank\"`와 `rel=\"noopener noreferrer\"`를 유지함. 검증: `npx vitest run test/citationTreePanel.test.tsx --reporter=verbose`, `npx tsc --noEmit`, `npm run lint` 통과."
+**Context**: Frontend implementation — U8 Citation Graph node open action.
+
+---
+
+## U8 Citation Graph Horizontal Scrollbar
+**Timestamp**: 2026-06-23T01:40:17Z
+**User Input**: "아 별견 아닌데 각주 트리 캔버스에서, 스크롤바가 상하 이동만 있는데, 좌우 이동 스크롤바도 추가해 줄 수 있나요?"
+**AI Response**: "`CitationTreePanel.module.css`에서 graph viewport의 `overflow-x`를 `scroll`로 변경하고 `scrollbar-gutter: stable`을 추가해 가로 스크롤바 공간을 항상 확보함. 검증: `npm run lint`, `npx vitest run test/citationTreePanel.test.tsx --reporter=verbose` 통과."
+**Context**: Frontend implementation — U8 Citation Graph canvas scrolling.
+
+---
+
+## U8 Citation Graph Visible Horizontal Slider
+**Timestamp**: 2026-06-23T02:10:08Z
+**User Input**: "안보이는데요..."
+**AI Response**: "브라우저/OS가 네이티브 가로 스크롤바를 숨길 수 있어 graph viewport 아래에 항상 보이는 `그래프 좌우 이동` range control을 추가함. 컨트롤을 `scrollLeft`, resize, zoom 상태와 동기화하고 테스트에 노출 여부를 추가함. 검증: `npx vitest run test/citationTreePanel.test.tsx --reporter=verbose`, `npx tsc --noEmit`, `npm run lint` 통과."
+**Context**: Frontend implementation — U8 Citation Graph visible horizontal navigation.
+
+---
+
