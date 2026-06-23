@@ -4,6 +4,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
+from docsuri_shared.dtos import DocModel, SourceTier
 from docsuri_shared.events import NewArxivEvent
 
 from .domain.assets import AssetManifest, ExtractedAsset
@@ -135,6 +136,33 @@ class AssetStorePort(Protocol):
     ) -> AssetManifest: ...
 
     def remove_assets(self, paper_id: str) -> None: ...
+
+
+@runtime_checkable
+class DocModelSourcePort(Protocol):
+    """BR-30 doc-model source: fetch deterministic-parseable HTML across the fallback ladder.
+
+    Returns ``(html, source_tier)`` for the first rung that yields HTML (native arXiv HTML →
+    ar5iv), or ``None`` when no rung produced HTML (→ source_unavailable). Q6's e-print/PDF
+    rungs are an additive extension behind the same port.
+    """
+
+    def fetch_html_source(self, arxiv_id: str) -> tuple[str, SourceTier] | None: ...
+
+
+@runtime_checkable
+class DocModelStorePort(Protocol):
+    """BR-30 doc-model cache: lazy-built JSON keyed (paperId, version) at the doc-model/ prefix.
+
+    ``put`` derives its key from ``doc.meta`` (paperId/version); ``remove`` drops every cached
+    version for a paper (tombstone/version-change invalidation, BLM §7).
+    """
+
+    def get(self, paper_id: str, version: int) -> DocModel | None: ...
+
+    def put(self, doc: DocModel) -> str: ...
+
+    def remove(self, paper_id: str) -> None: ...
 
 
 @runtime_checkable

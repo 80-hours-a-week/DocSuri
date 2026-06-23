@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from docsuri_shared.dtos import DocModel
 from docsuri_shared.vector_spec import DIMENSIONS, EMBEDDING_SPEC
 
 from docsuri_ingestion.domain.enums import FailureReason
@@ -46,6 +47,73 @@ class S3FullTextStore:
             kwargs["SSEKMSKeyId"] = self._kms_key_id
         self._client.put_object(**kwargs)
         return f"s3://{self._bucket}/{key}"
+
+
+class S3DocModelStore:
+    """BR-30 doc-model cache on S3 (Infra §1.1b): ``doc-model/{paperId}/v{version}.json``.
+
+    Same single bucket as full-text/assets, separate ``doc-model/`` prefix; image bytes are
+    NOT stored here (the JSON references webp assets by assetId). SSE-KMS when a key is set,
+    else SSE-S3. ``get`` returns ``None`` on a cache miss; ``remove`` drops every cached
+    version for a paper (version-change / tombstone invalidation).
+    """
+
+    def __init__(
+        self, *, bucket: str, prefix: str = "doc-model", kms_key_id: str | None = None
+    ) -> None:
+        import boto3
+
+        self._client = boto3.client("s3")
+        self._bucket = bucket
+        self._prefix = prefix.strip("/")
+        self._kms_key_id = kms_key_id
+
+    def _key(self, paper_id: str, version: int) -> str:
+        return f"{self._prefix}/{paper_id}/v{version}.json"
+
+    def get(self, paper_id: str, version: int) -> DocModel | None:
+        from botocore.exceptions import ClientError
+
+        try:
+            response = self._client.get_object(
+                Bucket=self._bucket, Key=self._key(paper_id, version)
+            )
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") in {"NoSuchKey", "404", "NotFound"}:
+                return None
+            raise
+        return DocModel.model_validate_json(response["Body"].read())
+
+    def put(self, doc: DocModel) -> str:
+        key = self._key(doc.meta.paperId, doc.meta.version)
+        kwargs: dict[str, Any] = {
+            "Bucket": self._bucket,
+            "Key": key,
+            # exclude_none keeps optional fields off the wire; consumers ignore unknowns.
+            "Body": doc.model_dump_json(exclude_none=True).encode("utf-8"),
+            "ContentType": "application/json; charset=utf-8",
+            "ServerSideEncryption": "aws:kms" if self._kms_key_id else "AES256",
+            "Metadata": {
+                "paper-id": doc.meta.paperId,
+                "version": str(doc.meta.version),
+                "parser-version": doc.meta.provenance.parserVersion,
+                "schema-version": doc.meta.provenance.schemaVersion,
+            },
+        }
+        if self._kms_key_id:
+            kwargs["SSEKMSKeyId"] = self._kms_key_id
+        self._client.put_object(**kwargs)
+        return f"s3://{self._bucket}/{key}"
+
+    def remove(self, paper_id: str) -> None:
+        paginator = self._client.get_paginator("list_objects_v2")
+        keys: list[dict[str, str]] = []
+        for page in paginator.paginate(Bucket=self._bucket, Prefix=f"{self._prefix}/{paper_id}/"):
+            keys.extend({"Key": obj["Key"]} for obj in page.get("Contents", []))
+        for start in range(0, len(keys), 1000):  # DeleteObjects caps at 1000 keys per call
+            self._client.delete_objects(
+                Bucket=self._bucket, Delete={"Objects": keys[start : start + 1000]}
+            )
 
 
 class BedrockCohereEmbeddingPort:

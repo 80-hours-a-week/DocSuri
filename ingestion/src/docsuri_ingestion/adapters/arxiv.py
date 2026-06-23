@@ -4,6 +4,8 @@ import xml.etree.ElementTree as ET
 from collections.abc import Iterable, Sequence
 from datetime import datetime
 
+from docsuri_shared.dtos import SourceTier
+
 from docsuri_ingestion.domain.enums import FailureReason
 from docsuri_ingestion.domain.errors import PermanentIngestionError, RetriableIngestionError
 from docsuri_ingestion.domain.models import CategoryFilter, MetadataRecord, RawDocument
@@ -39,6 +41,11 @@ class ArxivHttpSource:
         self._oai_base_url = oai_base_url
         self._pdf_base_url = pdf_base_url.rstrip("/")
         self._html_base_urls = tuple(base.rstrip("/") for base in html_base_urls)
+        # Map each HTML base to its doc-model source tier (Q6 ladder): ar5iv vs native arXiv HTML.
+        self._html_source_tiers = tuple(
+            (base, SourceTier.ar5iv if "ar5iv" in base else SourceTier.native_html)
+            for base in self._html_base_urls
+        )
         self._timeout_seconds = timeout_seconds
         self._rate_limiter = rate_limiter or TokenBucket(rate_per_second=0.33)
 
@@ -109,30 +116,48 @@ class ArxivHttpSource:
             metadata=metadata, text=text, source_url=pdf_url, content_type="text/plain"
         )
 
+    def fetch_html_source(self, arxiv_id: str) -> tuple[str, SourceTier] | None:
+        """Fetch deterministic-parseable HTML for the doc-model (BR-30, Q6 ladder).
+
+        Walks the configured HTML bases (native arXiv HTML → ar5iv) and returns the first
+        ``(html, source_tier)`` that yields HTML, or ``None`` when no rung produced HTML
+        (the builder maps that to ``source_unavailable``). e-print/PDF rungs are additive.
+        """
+        for base, tier in self._html_source_tiers:
+            html = self._get_html_at(base, arxiv_id)
+            if html:
+                return html, tier
+        return None
+
     def _try_get_html(self, arxiv_id: str) -> tuple[str | None, str]:
         """Best-effort HTML fetch across configured bases (arXiv native → ar5iv).
 
         HTML is preferred-but-optional — not every paper compiles to HTML — so any non-200,
         non-HTML, or transport error degrades to ``None`` (→ PDF fallback) rather than raising.
         """
-        import httpx
-
         last_url = ""
         for base in self._html_base_urls:
-            url = f"{base}/{arxiv_id}"
-            last_url = url
-            self._rate_limiter.acquire()
-            try:
-                with httpx.Client(
-                    timeout=self._timeout_seconds, follow_redirects=True
-                ) as client:
-                    response = client.get(url)
-            except httpx.HTTPError:
-                continue
-            content_type = response.headers.get("content-type", "").lower()
-            if response.status_code == 200 and "html" in content_type:
-                return response.text, url
+            last_url = f"{base}/{arxiv_id}"
+            html = self._get_html_at(base, arxiv_id)
+            if html is not None:
+                return html, last_url
         return None, last_url
+
+    def _get_html_at(self, base: str, arxiv_id: str) -> str | None:
+        """GET one HTML base; ``None`` on any non-200, non-HTML, or transport error."""
+        import httpx
+
+        url = f"{base}/{arxiv_id}"
+        self._rate_limiter.acquire()
+        try:
+            with httpx.Client(timeout=self._timeout_seconds, follow_redirects=True) as client:
+                response = client.get(url)
+        except httpx.HTTPError:
+            return None
+        content_type = response.headers.get("content-type", "").lower()
+        if response.status_code == 200 and "html" in content_type:
+            return response.text
+        return None
 
     def _oai_list_records(
         self,
