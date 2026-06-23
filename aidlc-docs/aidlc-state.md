@@ -4,7 +4,7 @@
 - **프로젝트명**: DocSuri (연구 지원 애플리케이션)
 - **프로젝트 유형**: Greenfield(그린필드)
 - **시작일**: 2026-06-15T04:36:30Z
-- **현재 단계**: CONSTRUCTION - U8 Citation Graph Code Generation/Build&Test 완료, Cross-Review 반영 중. **[2026-06-22: 브랜치 `feature/u8-v1`; depth 쿼리 제거, in-memory snapshot seam 문서 정정, 저장 year 방어, telemetry 방어 보강.]**
+- **현재 단계**: INCEPTION - Cohere Embed v4.0 마이그레이션 Workflow Planning 완료. 다음: NFR Design.
 - **문서 언어**: 한국어(`aidlc-docs/` 산출물). 업스트림 룰셋(`AGENTS.md`, `.aidlc-rule-details/`)은 영어 유지.
 
 ## ⚠️ 검증 재기준선 (Verification Re-baseline) — 2026-06-16
@@ -77,6 +77,8 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - [x] **사용자 스토리 개정 — U7(요약/번역) 에픽 추가 (2026-06-18, 팀 합의·`feature/u7`·PR #108)**: `stories.md`에 **에픽 6 — 요약/번역**(US-S1 구조화 요약·US-S2 한국어 번역·US-S3 출처보기+기권·US-S4 개인화·US-S5 온디맨드 응답·US-S6 비용게이트+근거화 운영) 6 스토리 추가 → 총 27 스토리/7 에픽. P1(US-S1..S5)·OP(US-S6) 매핑, FR-12..14·NFR-P2·QT-5 전수 커버. 페르소나 무변경(P1·OP가 U7 커버).
 - [x] **Units Generation 개정 — U7 정식 등재 (2026-06-18, 팀 합의·`feature/u7`·PR #108)**: `unit-of-work.md`(U7 Summarization 유닛 정의·배포 단위 ①+③옵션·코드트리 `backend/modules/summarization/`·확장 트랙)·`unit-of-work-dependency.md`(U7 행/열 추가, U7→U1 capability read·U7→U6 `shared/ports` lib·U5→U7/U6→U7 sync, **코드 DAG 비순환 유지 검증**, 온디맨드 요약 ASCII 흐름)·`unit-of-work-story-map.md`(US-S1..S5 Owner=U7·US-S6 Owner=U6 기여=U7, 전수 27 스토리 검증) 갱신. **7 유닛·4 배포 단위(U7=API 모듈, 초장문만 비동기 잡 옵션).** 리뷰 게이트 대기. **다음: U7 Construction 유닛 루프(Functional Design부터).**
 - [x] **요구사항 개정 — 신규 유닛 U8(인용 그래프/각주 트리) 편입 (2026-06-19)**: 명확화 `requirement-verification-questions-citation-graph.md` 22문 답변 확정(Q3/Q10=X, Q4/Q14=B, 나머지 권장안) → `requirements.md`에 **FR-15(각주 트리/backward references)·FR-16(노드 저장/연동)·NFR-P3(온디맨드 비-SLA)·QT-6(인용 엣지 정확도+그래프 불변식)·§12 카브아웃** 등재. v1은 논문 상세보기 페이지의 backward references 각주 트리로 한정, FE 구현·forward citations·3-hop 이상은 제외.
+- [x] **요구사항 개정 — Cohere Embed v4.0 마이그레이션 편입 (2026-06-23)**: 명확화 `requirement-verification-questions-v4-migration.md` 4문 전수 답변(A) 반영 → `requirements.md`에 **FR-17(듀얼 라이트)·NFR-M2(Blue/Green 마이그레이션)·NFR-S2(v4 모델 컷오버)** 등재. 기존 v3 인덱스와의 비호환성을 무중단으로 해결하기 위해 신규 인덱스 백필, 듀얼 라이트, 그리고 Instant Cutover 전략을 확정.
+- [x] **Workflow Planning — Cohere Embed v4.0 마이그레이션 (2026-06-23)**: `execution-plan.md` 업데이트 완료. 리버스 엔지니어링, 애플리케이션 설계, 유닛 생성, 기능 설계, NFR 요구사항 SKIP. **NFR 설계, 인프라 설계, 코드 생성, 빌드 & 테스트 EXECUTE 확정**.
 - [x] **사용자 스토리 개정 — U8 에픽 추가 (2026-06-19)**: `stories.md`에 **에픽 7 — 인용 그래프 / 각주 트리**(US-CG1 상세보기 각주 트리·US-CG2 깊이/노드 메타·US-CG3 unresolved 분리·US-CG4 라이브러리 저장·US-CG5 실패/쿼터 저하·US-CG6 운영 관측성) 6 스토리 추가 → 총 33 스토리/8 에픽. P1(US-CG1..CG5)·OP(US-CG6) 매핑, FR-15..16·NFR-P3·QT-6 커버.
 - [x] **Units Generation 개정 — U8 정식 등재 (2026-06-19)**: `unit-of-work.md`(U8 Citation Graph 유닛 정의·배포 단위 ① API 모듈·코드트리 `backend/modules/citation_graph/`)·`unit-of-work-dependency.md`(U8 행/열 추가, U8→U3/U6 로그인·게이트웨이, U8→U4 저장 계약, U7→U8 출처 연동, 코드 DAG 비순환 검증, 각주 트리 ASCII 흐름)·`unit-of-work-story-map.md`(US-CG1..CG5 Owner=U8·US-CG6 Owner=U6 기여=U8, 전수 33 스토리 검증) 갱신. **8 유닛·4 배포 단위(U8=API 모듈).** **후속: U8 Construction Functional Design 질문 게이트 진입 완료, 답변 대기.**
 
@@ -159,7 +161,13 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 **U8 Citation Graph** (인용 그래프/각주 트리 — 2026-06-19 편입 유닛, FE 구현 제외 API 모듈):
 - [x] Functional Design — **완료·승인 (2026-06-19)**. 계획서 `construction/plans/u8-citation-graph-functional-design-plan.md` Q1~Q12 전부 권장안(A) 반영 및 체크박스 완료. 산출물 `construction/u8-citation-graph/functional-design/` 3문서(`domain-entities.md`, `business-logic-model.md`, `business-rules.md`) 생성. **앱 코드·FE 미생성.**
 - [x] NFR Requirements / NFR Design / Infrastructure Design / Code Generation / Build&Test — **완료 (2026-06-21)**. U8 backend-only citation graph slice 생성 및 검증 완료.
-- [~] Cross-Review 반영 — **진행 (2026-06-22)**. 브랜치명은 `feature/u8-v1`로 CI prefix 조건 충족. 코드 수정: 죽은 `depth` 쿼리 제거, provider/cache key 중복 제거, save year 범위 밖 값 null 처리, telemetry `emit_log` 방어 및 `depthRequested` 분리. 문서 수정: Redis 단언을 현재 process-local in-memory snapshot seam + production Redis target으로 정정.
+- [~] Cross-Review 반영 — **진행 (2026-06-22)**. 브랜치명은 `feature/u8-v1`로 CI prefix 조건 충족. 코드 수정: 죽은 `depth` 쿼리 제거, provider/cache 중복 제거, save year 범위 밖 값 null 처리, telemetry `emit_log` 방어 및 `depthRequested` 분리. 문서 수정: Redis 단언을 현재 process-local in-memory snapshot seam + production Redis target으로 정정.
+
+**v4-migration** (Cohere Embed v4.0 Migration):
+- [x] NFR Design — **완료·승인 (2026-06-23)**. `nfr-design-patterns.md`, `logical-components.md` 생성 완료. Fail-Open 듀얼 라이트 및 arXiv API 기반 Idempotent 백필 전략 승인.
+- [x] Infrastructure Design — **완료·승인 (2026-06-23)**. `infrastructure-design.md`, `deployment-architecture.md` 생성 완료. Local execution 및 Automated Cutover 맵핑 확정.
+- [x] Code Generation — **완료 (2026-06-23)**. U1 Ingestion 듀얼 라이트 로직, U2 Discovery alias 설정 및 Ops 백필/컷오버 스크립트 작성 완료.
+- [x] Build & Test — **완료 (2026-06-23)**. 빌드 및 테스트 가이드 산출 완료.
 
 **공통 후속 단계** (per-unit 또는 횡단):
 - [x] 병렬 개발 조율 (2026-06-16 반영) — `shared/` 공용 규약 선행 작성 및 3개 독립 트랙 병렬 진행 확정

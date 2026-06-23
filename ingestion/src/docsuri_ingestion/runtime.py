@@ -122,6 +122,15 @@ def build_production_runtime(settings: IngestionSettings) -> RuntimeServices:
         asset_extractor=asset_extractor,
         asset_store=asset_store,
         asset_source=asset_source,
+        embedding_v2=BedrockCohereEmbeddingPort(
+            model_id=settings.bedrock_model_id_v2,
+            region_name=settings.aws_region,
+        ) if settings.bedrock_model_id_v2 else None,
+        vector_index_v2=OpenSearchVectorIndex(
+            endpoint=settings.opensearch_endpoint or "",
+            index_name=settings.opensearch_index_v2,
+            stats_ttl_seconds=settings.index_stats_ttl_seconds,
+        ) if settings.bedrock_model_id_v2 else None,
     )
     refresh = RefreshOrchestrationService(
         arxiv=arxiv,
