@@ -67,6 +67,15 @@ export function DocModelViewer({ paperId, version, anchor, arxivUrl }: DocModelV
       : undefined;
 
   switch (outcome.kind) {
+    case 'building':
+      // Lazy build in flight (BR-30/D6): the hook is polling — show a "preparing" loader.
+      return (
+        <StateView
+          kind="loading"
+          title="본문 준비 중…"
+          message="처음 여는 논문이라 본문을 만들고 있어요. 잠시만 기다려 주세요."
+        />
+      );
     case 'licenseUnavailable':
       return (
         <div className={styles.gate} data-testid="docmodel-license">
