@@ -24,13 +24,13 @@
 
 답변 확정 후 아래 산출물을 `aidlc-docs/construction/u9-personalization/nfr-requirements/`에 작성한다.
 
-- [ ] **nfr-requirements.md**
+- [x] **nfr-requirements.md**
   - performance/degradation requirements
   - security/privacy requirements
   - retention/delete/reset requirements
   - observability requirements
   - QT-7 test requirements
-- [ ] **tech-stack-decisions.md**
+- [x] **tech-stack-decisions.md**
   - API/runtime placement
   - persistence choice
   - event/profile schema ownership
@@ -52,7 +52,7 @@ C) OpenSearch에 저장한다.
 
 X) 기타.
 
-[Answer]: 
+[Answer]: A
 
 ### Q2 — API Runtime
 U9 API는 어디에 붙일까요?
@@ -63,7 +63,7 @@ B) 별도 API service로 분리한다.
 
 X) 기타.
 
-[Answer]: 
+[Answer]: A
 
 ### Q3 — Event Recording Latency
 이벤트 기록이 본 요청 latency에 미치는 영향은?
@@ -76,7 +76,7 @@ C) 항상 별도 큐에만 넣고 API에서는 전혀 기록하지 않는다.
 
 X) 기타.
 
-[Answer]: 
+[Answer]: A
 
 ### Q4 — Profile Aggregation Trigger
 관심 프로필 집계는 어떻게 실행할까요?
@@ -89,7 +89,7 @@ C) 실시간 ML pipeline을 만든다.
 
 X) 기타.
 
-[Answer]: 
+[Answer]: A
 
 ### Q5 — Retention Enforcement
 raw event 90일 보관은 어떻게 강제할까요?
@@ -102,7 +102,7 @@ C) raw event를 영구 보관한다.
 
 X) 기타.
 
-[Answer]: 
+[Answer]: A
 
 ### Q6 — Security Boundary
 U9 metadata 보안 경계는?
@@ -113,7 +113,7 @@ B) 분석 편의를 위해 자유 JSON을 허용한다.
 
 X) 기타.
 
-[Answer]: 
+[Answer]: A
 
 ### Q7 — Delete/Reset SLA
 사용자 삭제/초기화 요청의 처리 기대치는?
@@ -126,7 +126,7 @@ C) 운영자가 수동 처리한다.
 
 X) 기타.
 
-[Answer]: 
+[Answer]: X) 백업용 테이블을 따로 생성하고 본 테이블은 삭제한다. 백업 테이블은 개인화 조회/집계에서 제외하고 별도 보관·삭제 정책 대상이다.
 
 ### Q8 — Search Personalization Budget
 검색 개인화 조회의 성능 예산은?
@@ -139,7 +139,7 @@ C) 검색 결과를 U9가 직접 재계산한다.
 
 X) 기타.
 
-[Answer]: 
+[Answer]: A
 
 ### Q9 — Observability
 U9 관측은 어디로 보낼까요?
@@ -150,7 +150,7 @@ B) U9 전용 관측 pipeline을 만든다.
 
 X) 기타.
 
-[Answer]: 
+[Answer]: A
 
 ### Q10 — Shared Contracts
 U9 DTO/schema는 어떻게 관리할까요?
@@ -161,7 +161,7 @@ B) 지금 바로 모든 U9 DTO를 shared schema로 만든다.
 
 X) 기타.
 
-[Answer]: 
+[Answer]: A
 
 ### Q11 — Test Strategy
 U9 테스트 경계는?
@@ -174,7 +174,7 @@ C) 수동 테스트 중심.
 
 X) 기타.
 
-[Answer]: 
+[Answer]: A
 
 ### Q12 — PBT Framework
 QT-7 PBT는 무엇을 쓸까요?
@@ -185,12 +185,13 @@ B) PBT 없이 예시 테스트만 둔다.
 
 X) 기타.
 
-[Answer]: 
+[Answer]: A
 
 ---
 
 ## 4. 다음 절차
 
-1. Q1~Q12의 `[Answer]:`를 채운다.
-2. 모호 답변이 없으면 `u9-personalization/nfr-requirements/` 산출물 2개를 생성한다.
-3. NFR Requirements 승인 후 **NFR Design**에서 timeout, lazy aggregation, repository boundary, cleanup, telemetry patterns를 확정한다.
+1. Q1~Q6, Q8~Q12는 권장안(A)으로 확정했다.
+2. Q7은 X로 확정했다: 백업용 테이블을 따로 생성하고 본 테이블은 삭제한다. 백업 테이블은 개인화 조회/집계에서 제외하고 별도 보관·삭제 정책 대상이다.
+3. `u9-personalization/nfr-requirements/` 산출물 2개를 생성했다.
+4. NFR Requirements 승인 후 **NFR Design**에서 timeout, lazy aggregation, repository boundary, cleanup, telemetry patterns를 확정한다.

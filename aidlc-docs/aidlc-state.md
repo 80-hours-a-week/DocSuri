@@ -327,5 +327,36 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - Plan created:
   - `aidlc-docs/construction/plans/u9-personalization-nfr-requirements-plan.md`
 - Decision: execute NFR Requirements because U9 stores user behavior data and must define persistence, privacy, latency, degradation, observability, and QT-7 test boundaries.
-- Current gate: NFR Requirements questions Q1~Q12 awaiting answer/approval. Recommended answers: A for all.
+- Completed: Q1~Q6 and Q8~Q12 set to recommended answer A; Q7 set to X (backup table plus active-table delete).
+- Generated artifacts:
+  - `aidlc-docs/construction/u9-personalization/nfr-requirements/nfr-requirements.md`
+  - `aidlc-docs/construction/u9-personalization/nfr-requirements/tech-stack-decisions.md`
+- NFR summary: existing RDS/backend/U6 reuse, best-effort non-blocking recording, lazy/on-demand aggregation, allowlisted metadata, active-table delete plus backup-table boundary, U6 observability, Hypothesis QT-7 tests.
+- Current gate: NFR Requirements review/approval. Next recommended stage: U9 NFR Design.
+- Code generated: no.
+
+## U9 Personalization — NFR Design Plan Ready
+
+- Date: 2026-06-23
+- Stage: CONSTRUCTION / U9 NFR Design Part 1
+- Plan created:
+  - `aidlc-docs/construction/plans/u9-personalization-nfr-design-plan.md`
+- Decision: execute NFR Design because U9 needs concrete fail-open, lazy aggregation, active/backup repository, metadata validation, and U6 observability patterns.
+- Completed: NFR Design questions Q1~Q5 set to recommended answer A.
+- Generated artifacts:
+  - `aidlc-docs/construction/u9-personalization/nfr-design/logical-components.md`
+  - `aidlc-docs/construction/u9-personalization/nfr-design/nfr-design-patterns.md`
+- Design summary: fail-open personalization, bounded profile read, read-through lazy aggregation, active-table delete with backup isolation, recorder-level metadata allowlist, and U6 operational telemetry.
+- Current gate: NFR Design review/approval. Next recommended stage: U9 Infrastructure Design assessment.
+- Code generated: no.
+
+## U9 Personalization — Infrastructure Design Plan Ready
+
+- Date: 2026-06-23
+- Stage: CONSTRUCTION / U9 Infrastructure Design Part 1
+- Plan created:
+  - `aidlc-docs/construction/plans/u9-personalization-infrastructure-design-plan.md`
+- Decision: execute Infrastructure Design because U9 adds RDS tables, a backup-table lifecycle, deletion/retention cleanup, API deployment mapping, and U6 observability integration.
+- Recommended direction: reuse existing backend ECS/API deployment, RDS PostgreSQL, U6 gateway/observability, and CloudWatch; avoid a new service, queue, cache, analytics lake, or ML pipeline for v1.
+- Current gate: U9 Infrastructure Design questions Q1~Q6 awaiting answers.
 - Code generated: no.
