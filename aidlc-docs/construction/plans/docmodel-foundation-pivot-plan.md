@@ -62,7 +62,7 @@
 |---|---|---|---|
 | **Q1 ✅실행** | arXiv HTML/LaTeX **커버리지 스파이크** | **완료(2026-06-23) — §2.1 결과** | 결론: HTML-기반 doc-model 유효(either 90%), ar5iv 필수, e-print/PDF 폴백 ~10% 실필요 |
 | **Q2** | 리치뷰 형태 | **(a) 콘텐츠 재렌더**(arXiv HTML 방식, doc-model로 충분·PDF 불필요) | (b) PDF.js 픽셀 재현은 PDF 필요(저장 없이 on-demand 프록시 가능) — 원하면 D3/D4 재검토 |
-| **Q3** | **doc-model JSON 스키마** 확정 — 블록 타입·표 구조·수식 표현·앵커·webp 참조·소스 메타(provenance) | 별도 설계 산출물(아래 §4 1순위) | 리치뷰 렌더 + 요약 입력 + 에이전트 toolschema의 계약 |
+| **Q3 ✅완료** | **doc-model JSON 스키마** 확정 — 블록 타입·표 구조·수식 표현·앵커·webp 참조·소스 메타(provenance) | **완료(2026-06-23)**: 중첩 섹션 트리 + 결정적 블록 id 앵커. 스펙=`construction/shared/docmodel.md`, 스키마=`shared/dtos/docmodel.schema.json`(검증 통과) | 리치뷰 렌더 + 요약 입력 + 에이전트 toolschema의 계약 |
 | **Q4** | `.txt` 보존 여부 | **doc-model을 진실원천, `.txt`는 파생 평문 투영(검색·청킹용)으로 유지** | 또는 `.txt` 폐기하고 필요 시 doc-model에서 평문 도출 |
 | **Q5** | 생성 트리거 | **첫 요약/열람/에이전트 사용 시 lazy 생성 + 캐시**; version 변경 시 무효화 | 인제스션 일부 eager는 인기 논문에 한해 후속 고려 |
 | **Q6** | 폴백 사다리 동작 정의 | `arXiv HTML → e-print LaTeX → (최후) PDF 파싱(Grobid/Docling류)` | PDF 파싱단은 비-arXiv 대비 최후 폴백(현재 거의 미발동) |
@@ -98,7 +98,7 @@
 
 **요구사항/계약**
 - [ ] `requirements.md` — FR-12(요약 입력 = 구조화 doc-model), 리치뷰 1급화, §12 카브아웃 정합 (Q7 결과 반영)
-- [ ] `shared/dtos/` — doc-model 스키마 SSOT 신설(Q3)
+- [x] `shared/dtos/` — doc-model 스키마 SSOT 신설(Q3) → **`shared/dtos/docmodel.schema.json` + 스펙 `construction/shared/docmodel.md` + overview/README 포인터**(중첩 트리·블록 id·표=데이터·수식=LaTeX·webp 참조·provenance; 양성/음성 검증 통과)
 
 **U1 Ingestion (생산자)**
 - [x] FD `business-logic-model.md` — BR-29 확장: 보관=평문 1종 → **+doc-model**; `ingestOne`에 doc-model 생성/캐시 단계(lazy) → **§7 신설 + §6.3 무효화 연동**
