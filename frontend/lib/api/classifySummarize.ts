@@ -8,6 +8,7 @@ import type { SummaryVM, TranslationVM, SummaryMeta, AssetRef, DocModel } from '
 export type SummarizeOutcome =
   | { kind: 'summary'; summary: SummaryVM; meta: SummaryMeta; cached: boolean }
   | { kind: 'translation'; translation: TranslationVM; meta: SummaryMeta; cached: boolean }
+  | { kind: 'pending'; retryAfterMs?: number }
   | { kind: 'abstain'; reason: unknown }
   | { kind: 'degraded'; message: string }
   | { kind: 'sourceUnavailable'; reason: unknown }
@@ -34,6 +35,12 @@ export function classifySummarizeResponse(body: unknown): SummarizeOutcome {
       }
       return { kind: 'error', message: '결과를 해석할 수 없습니다.' };
     }
+    case 'pending':
+      // Long summary running as a background job (BR-S6/BR-S8): caller polls again after the hint.
+      return {
+        kind: 'pending',
+        retryAfterMs: typeof body.retryAfterMs === 'number' ? body.retryAfterMs : undefined,
+      };
     case 'abstain':
       return { kind: 'abstain', reason: body.reason };
     case 'cost_degraded':

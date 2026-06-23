@@ -76,6 +76,12 @@ export interface TranslationOkDTO {
   scope?: SummarizeScope;
 }
 
+/** Long summary running as a background job (BR-S6/BR-S8): client polls again after the hint. */
+export interface SummaryPendingDTO {
+  status: 'pending';
+  retryAfterMs?: number;
+}
+
 export interface SummaryAbstainDTO {
   status: 'abstain';
   reason: unknown;
@@ -107,6 +113,7 @@ export interface UnauthorizedDTO {
 export type SummarizeResponseDTO =
   | SummaryOkDTO
   | TranslationOkDTO
+  | SummaryPendingDTO
   | SummaryAbstainDTO
   | CostDegradedDTO
   | SourceUnavailableDTO

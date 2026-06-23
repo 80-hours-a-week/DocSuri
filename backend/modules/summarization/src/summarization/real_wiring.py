@@ -87,6 +87,24 @@ def build_real_orchestrator(
                 region_name=settings.region_name,
             )
 
+    # Long-input map-reduce summarizer (BR-S6, #135). Wired only when enabled — otherwise the
+    # MAP_REDUCE band abstains (``input_too_long``), unchanged. Reuses the same LLM gateway.
+    map_reduce_summarizer = None
+    summary_job_queue = None
+    if settings.map_reduce_enabled:
+        from .domain.map_reduce import MapReduceSummarizer
+
+        map_reduce_summarizer = MapReduceSummarizer(llm)
+        # Async long-summary (BR-S8): when a queue URL is set, the API enqueues + returns pending
+        # and the summarization worker produces the result. Unset → map-reduce runs inline.
+        if settings.summary_job_queue_url:
+            from .adapters.sqs_summary_job import SqsSummaryJobQueue
+
+            summary_job_queue = SqsSummaryJobQueue(
+                queue_url=settings.summary_job_queue_url,
+                region_name=settings.region_name,
+            )
+
     orchestrator = SummarizationOrchestrationService(
         store=store,
         source_selector=SourceSelector(
@@ -104,5 +122,7 @@ def build_real_orchestrator(
         asset_reader=asset_reader,
         doc_model_reader=doc_model_reader,
         doc_model_build_queue=doc_model_build_queue,
+        map_reduce_summarizer=map_reduce_summarizer,
+        summary_job_queue=summary_job_queue,
     )
     return SummarizationBundle(orchestrator=orchestrator, settings=settings)

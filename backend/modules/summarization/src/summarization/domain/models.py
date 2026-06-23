@@ -270,6 +270,20 @@ class AbstainDTO:
 
 
 @dataclass(frozen=True, slots=True)
+class PendingDTO:
+    """A long-input summary (MAP_REDUCE band) is being produced by a background job (BR-S6/BR-S8);
+    the client re-requests after ``retry_after_ms`` and gets the result on a cache hit."""
+
+    retry_after_ms: int | None = None
+
+    def to_dict(self) -> dict:
+        body: dict = {"status": "pending"}
+        if self.retry_after_ms is not None:
+            body["retryAfterMs"] = self.retry_after_ms
+        return body
+
+
+@dataclass(frozen=True, slots=True)
 class CostDegradedDTO:
     message: str = "AI 요약 일시 중단"
 
@@ -285,7 +299,9 @@ class SourceUnavailableDTO:
         return {"status": "source_unavailable", "reason": self.reason}
 
 
-SummaryResponse = SummaryResultDTO | AbstainDTO | CostDegradedDTO | SourceUnavailableDTO
+SummaryResponse = (
+    SummaryResultDTO | PendingDTO | AbstainDTO | CostDegradedDTO | SourceUnavailableDTO
+)
 
 
 # --- FR-17 multimodal asset read DTOs (display-only; produced by U1, read by U7) ----

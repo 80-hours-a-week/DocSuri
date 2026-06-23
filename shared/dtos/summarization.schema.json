@@ -2,9 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://docsuri.dev/shared/dtos/summarization.schema.json",
   "title": "SummaryResponse",
-  "description": "U7 Summarization DTO contract. The ROOT schema describes SummaryResponse — the union (oneOf) returned by on-demand actions (FR-12/13/14) and branched by U5 ApiClient to surface status. All named DTOs (SummaryRequest, SummaryResultDTO, SummaryDraft, Anchor, TranslationDraft, AbstainDTO, CostDegradedDTO, SourceUnavailableDTO) are defined in $defs for type generation.",
+  "description": "U7 Summarization DTO contract. The ROOT schema describes SummaryResponse — the union (oneOf) returned by on-demand actions (FR-12/13/14) and branched by U5 ApiClient to surface status. All named DTOs (SummaryRequest, SummaryResultDTO, SummaryDraft, Anchor, TranslationDraft, PendingDTO, AbstainDTO, CostDegradedDTO, SourceUnavailableDTO) are defined in $defs for type generation.",
   "oneOf": [
     { "$ref": "#/$defs/SummaryResultDTO" },
+    { "$ref": "#/$defs/PendingDTO" },
     { "$ref": "#/$defs/AbstainDTO" },
     { "$ref": "#/$defs/CostDegradedDTO" },
     { "$ref": "#/$defs/SourceUnavailableDTO" }
@@ -210,6 +211,23 @@
         }
       },
       "required": ["status", "task", "meta", "cached"],
+      "additionalProperties": false
+    },
+    "PendingDTO": {
+      "type": "object",
+      "title": "PendingDTO",
+      "description": "A long-input summary (LengthRouter MAP_REDUCE band) is being produced asynchronously as a background job (BR-S6/BR-S8): a cache miss enqueued a summary job. The client re-requests the same action after retryAfterMs and gets the result on a cache hit once the worker finishes. Trace: BR-S6, BR-S8, #135.",
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "pending"
+        },
+        "retryAfterMs": {
+          "type": "integer",
+          "description": "Suggested client poll backoff in milliseconds before re-requesting."
+        }
+      },
+      "required": ["status"],
       "additionalProperties": false
     },
     "AbstainDTO": {

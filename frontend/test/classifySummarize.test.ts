@@ -46,6 +46,13 @@ describe('classifySummarizeResponse — exhaustive status mapping (BR-SF-14)', (
     );
   });
 
+  it('pending -> pending with the poll-backoff hint (long summary background job)', () => {
+    const out = classifySummarizeResponse({ status: 'pending', retryAfterMs: 3000 });
+    expect(out.kind).toBe('pending');
+    if (out.kind === 'pending') expect(out.retryAfterMs).toBe(3000);
+    expect(classifySummarizeResponse({ status: 'pending' }).kind).toBe('pending');
+  });
+
   it('validation error (message) -> invalid', () => {
     expect(classifySummarizeResponse({ field: 'task', message: 'bad' }).kind).toBe('invalid');
   });

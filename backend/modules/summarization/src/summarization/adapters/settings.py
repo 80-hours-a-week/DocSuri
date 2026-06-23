@@ -40,6 +40,14 @@ class SummarizationSettings:
     # set (and the viewer is enabled), a read miss enqueues a BUILD_DOC_MODEL job and returns
     # ``building``; when unset, a miss stays ``source_unavailable`` (no build triggered).
     docmodel_build_queue_url: str | None = None
+    # Long-input map-reduce summary gate (BR-S6, #135). OFF by default: the MAP_REDUCE band
+    # abstains (``input_too_long``) as before. When ON, long papers (40K~120K tok) are
+    # section-chunked → mapped → reduced. OVER_CAP still rejects.
+    map_reduce_enabled: bool = False
+    # Async long-summary job queue URL (BR-S8). When set (and map-reduce is on), the API enqueues
+    # a background job on the MAP_REDUCE band and returns ``pending`` (the summarization worker
+    # produces the result). When unset, map-reduce runs inline on the request (timeout risk).
+    summary_job_queue_url: str | None = None
 
     @property
     def summarization_enabled(self) -> bool:
@@ -65,4 +73,7 @@ class SummarizationSettings:
             docmodel_viewer_enabled=os.environ.get("DOCSURI_DOCMODEL_VIEWER_ENABLED", "").lower()
             in ("1", "true", "yes"),
             docmodel_build_queue_url=os.environ.get("DOCSURI_DOCMODEL_BUILD_QUEUE_URL"),
+            map_reduce_enabled=os.environ.get("DOCSURI_MAP_REDUCE_ENABLED", "").lower()
+            in ("1", "true", "yes"),
+            summary_job_queue_url=os.environ.get("DOCSURI_SUMMARY_JOB_QUEUE_URL"),
         )
