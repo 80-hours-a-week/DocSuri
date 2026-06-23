@@ -1346,3 +1346,27 @@
 **Context**: CONSTRUCTION — U9 Code Generation Part 1 planning, stop before code generation.
 
 ---
+
+## U9 Personalization — Code Generation
+**Timestamp**: 2026-06-23T10:00:00Z
+**User Input**: "좋아요. 코드 실제 구현을 진행해 주세요."
+**AI Response**: "U9 Code Generation Part 2를 실행함. `backend/modules/personalization/` 모듈, DTO/metadata allowlist, in-memory/SQL repository, lazy aggregation service, FastAPI endpoints, direct raw-log delete, idempotent retention purge command, RDS migration, app-shell wiring, startup/CLI migration path, scheduled ECS cleanup CDK wiring, purge failure CloudWatch alarm, `backend/tests/test_personalization.py`, code summary를 생성/수정함. 검증: U9 테스트 11 passed, ruff pass, compileall pass. `backend/tests/test_app_shell.py` 포함 combined run은 현재 로컬 shell에 기존 `docsuri_shared`, `discovery`, `docsuri_ops` import가 없어 pre-existing app-shell mount assertions가 실패함."
+**Context**: CONSTRUCTION — U9 Code Generation Part 2 implementation and verification.
+
+---
+
+## Build and Test Stage
+**Timestamp**: 2026-06-23T10:19:39Z
+**User Input**: "좋아요, 빌드와 테스트를 진행해 주세요."
+**AI Response**: "U9 Build and Test를 실행함. U9 unit tests 11 passed, U9+app-shell tests 25 passed, backend tests 57 passed/1 skipped, ruff pass, compileall pass. CDK synth는 현재 shell에 `aws_cdk` Python package가 없어 실행하지 못함. `build-and-test/` 지침 파일과 summary에 U9 결과를 추가하고 `aidlc-state.md`를 Build and Test review/approval 게이트로 갱신함."
+**Context**: CONSTRUCTION — U9 Build and Test execution and documentation.
+
+---
+
+## Build and Test Stage
+**Timestamp**: 2026-06-23T10:29:21Z
+**User Input**: "AWS CDK를 설치했으니 CDK 부분의 빌드 & 테스트도 진행해 줄래요?"
+**AI Response**: "CDK 검증을 재실행함. `ops/cdk/requirements.txt`로 CDK Python dependencies를 설치하고, `jsii`가 사용할 Node 실행 파일을 Scoop `nodejs-lts` 경로로 지정한 뒤 `cdk synth`를 실행함. `python -c \"import aws_cdk\"` 및 `cdk synth`가 통과했고 템플릿이 `ops/cdk/cdk.out`에 생성됨. 기존 CDK construct warning은 출력되었으나 U9 synth blocker는 없음. Build and Test 문서, U9 code summary, `aidlc-state.md`를 실제 CDK 결과로 갱신함."
+**Context**: CONSTRUCTION — U9 CDK build and test follow-up.
+
+---

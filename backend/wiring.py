@@ -295,6 +295,42 @@ def _mount_citation_graph(app: FastAPI, settings: Settings, result: MountResult)
     result.mounted.append("citation_graph")
 
 
+def _mount_personalization(app: FastAPI, settings: Settings, result: MountResult) -> None:
+    from backend.modules.personalization import controller as personalization
+    from backend.modules.personalization.repository import (
+        InMemoryPersonalizationRepository,
+        SqlPersonalizationRepository,
+    )
+
+    if _is_postgres(settings.database_url):
+        from .db import make_engine, make_session_factory
+
+        engine = getattr(app.state, "db_engine", None) or make_engine(settings.database_url)
+        app.state.db_engine = engine
+        session_factory = make_session_factory(engine)
+
+        def get_personalization_repo():
+            session = session_factory()
+            try:
+                yield SqlPersonalizationRepository(session)
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
+            finally:
+                session.close()
+    else:
+        repo = InMemoryPersonalizationRepository()
+
+        def get_personalization_repo():
+            return repo
+
+    app.dependency_overrides[personalization.get_repo] = get_personalization_repo
+    for router in personalization.routers:
+        app.include_router(router)
+    result.mounted.append("personalization")
+
+
 # The real registry. Each entry is a `(app, settings, result) -> None` mounter whose name
 # (minus the `_mount_` prefix) labels it in MountResult / `/readyz`.
 _INTEGRATIONS = (
@@ -303,5 +339,6 @@ _INTEGRATIONS = (
     _mount_library,
     _mount_ops,
     _mount_citation_graph,
+    _mount_personalization,
     _mount_summarization,
 )

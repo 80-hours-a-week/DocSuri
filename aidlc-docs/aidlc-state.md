@@ -401,3 +401,51 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
   - No frontend UI, no queue, no new always-on service, no analytics lake, no ML pipeline, and no `user_behavior_event_backup` table.
 - Current gate: Code Generation plan approval. Actual app code has not been generated.
 - Code generated: no.
+
+## U9 Personalization — Code Generation Complete
+
+- Date: 2026-06-23
+- Stage: CONSTRUCTION / U9 Code Generation
+- Completed plan:
+  - `aidlc-docs/construction/plans/u9-personalization-code-generation-plan.md`
+- Created application code:
+  - `backend/modules/personalization/`
+  - `backend/modules/personalization/migrations/001_create_personalization_tables.sql`
+  - `backend/tests/test_personalization.py`
+- Modified application/infrastructure code:
+  - `backend/app.py`
+  - `backend/migrations/__main__.py`
+  - `backend/wiring.py`
+  - `backend/tests/test_app_shell.py`
+  - `ops/cdk/stacks/compute_stack.py`
+- Code summary:
+  - `aidlc-docs/construction/u9-personalization/code/summary.md`
+- Verification:
+  - `python -m pytest backend/tests/test_personalization.py -q` -> 11 passed
+  - `python -m ruff check backend/modules/personalization backend/wiring.py backend/app.py backend/migrations/__main__.py backend/tests/test_personalization.py backend/tests/test_app_shell.py ops/cdk/stacks/compute_stack.py` -> pass
+  - `python -m compileall backend/modules/personalization backend/wiring.py backend/app.py ops/cdk/stacks/compute_stack.py` -> pass
+  - Combined `backend/tests/test_personalization.py backend/tests/test_app_shell.py` attempted but local shell lacks existing `docsuri_shared`, `discovery`, and `docsuri_ops` imports required by pre-existing app-shell assertions.
+- Current gate: Code Generation review/approval. Next recommended stage: Build and Test after approval.
+- Code generated: yes.
+
+## U9 Personalization — Build and Test Complete
+
+- Date: 2026-06-23
+- Stage: CONSTRUCTION / Build and Test
+- Build/test documents updated:
+  - `aidlc-docs/construction/build-and-test/build-instructions.md`
+  - `aidlc-docs/construction/build-and-test/unit-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/integration-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/performance-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/contract-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/security-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/build-and-test-summary.md`
+- Verification:
+  - `python -m pytest backend/tests/test_personalization.py -q` -> 11 passed
+  - `$env:PYTHONPATH='shared/python/src;ops/src;backend/modules/discovery/src'; python -m pytest backend/tests/test_personalization.py backend/tests/test_app_shell.py -q` -> 25 passed
+  - `$env:PYTHONPATH='shared/python/src;ops/src;backend/modules/discovery/src'; python -m pytest backend/tests -q` -> 57 passed, 1 skipped
+  - `python -m ruff check backend/modules/personalization backend/wiring.py backend/app.py backend/migrations/__main__.py backend/tests/test_personalization.py backend/tests/test_app_shell.py ops/cdk/stacks/compute_stack.py` -> pass
+  - `python -m compileall backend/modules/personalization backend/wiring.py backend/app.py ops/cdk/stacks/compute_stack.py` -> pass
+  - `python -m pip install -r ops/cdk/requirements.txt` -> pass
+  - `$env:JSII_NODE="$env:USERPROFILE\scoop\apps\nodejs-lts\current\node.exe"; cdk synth` from `ops/cdk` -> pass, synthesized to `ops/cdk/cdk.out`
+- Current gate: Build and Test review/approval. Next stage per AI-DLC is Operations placeholder.
