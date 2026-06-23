@@ -63,6 +63,9 @@ from aws_cdk import (
     aws_route53 as route53,
 )
 from aws_cdk import (
+    aws_secretsmanager as secretsmanager,
+)
+from aws_cdk import (
     aws_ses as ses,
 )
 from aws_cdk import (
@@ -176,6 +179,10 @@ class ComputeStack(Stack):
             "REDIS_PORT": redis_port,
             "REDIS_TLS": "1",  # ElastiCache transit_encryption_enabled=True → client TLS required
             "SES_SENDER_EMAIL": "no-reply@docsuri.org",  # via the SES domain identity below
+            # Email provider toggle. "resend" → ResendEmailClient (no SES sandbox review gate;
+            # delivers to any recipient once docsuri.org is DNS-verified in Resend). Requires the
+            # RESEND_API_KEY secret below. If the key is missing the app falls back to SES.
+            "EMAIL_PROVIDER": "resend",
             # Public apex used to build clickable verification links in emails. Behind
             # CloudFront/BFF/ALB the request host is internal, so the link must use this
             # public URL pointing at the frontend verify page (controller._verification_link_base
@@ -193,6 +200,14 @@ class ComputeStack(Stack):
         container_secrets = {
             "DB_PASSWORD": ecs.Secret.from_secrets_manager(self.db.secret, "password"),
         }
+        # Resend API key for transactional email (EMAIL_PROVIDER=resend). Referenced by name —
+        # the secret "docsuri/resend-api-key" (raw key as the secret value) MUST be created in
+        # Secrets Manager BEFORE deploying this stack, or the API task fails to start. CDK grants
+        # the task execution role read on it automatically via ecs.Secret.from_secrets_manager.
+        resend_secret = secretsmanager.Secret.from_secret_name_v2(
+            self, "ResendApiKey", "docsuri/resend-api-key",
+        )
+        container_secrets["RESEND_API_KEY"] = ecs.Secret.from_secrets_manager(resend_secret)
 
         # --- TLS for the origin: Route53 zone + ACM cert for origin.docsuri.org ---
         zone = route53.HostedZone.from_hosted_zone_attributes(

@@ -27,7 +27,10 @@ from ..service.orchestrator import SummarizationOrchestrationService
 
 
 def build_router(
-    orchestrator: SummarizationOrchestrationService, *, fulltext_enabled: bool = False
+    orchestrator: SummarizationOrchestrationService,
+    *,
+    fulltext_enabled: bool = False,
+    assets_enabled: bool = False,
 ) -> Any:
     router = APIRouter()
 
@@ -39,7 +42,12 @@ def build_router(
 
         parsed = _parse_request(payload)
         if parsed is None:
-            return JSONResponse({"status": "validation_error"}, status_code=400)
+            # Gap #2: carry a message so the client maps this to the "check your input"
+            # path instead of a generic error (BR-S17).
+            return JSONResponse(
+                {"status": "validation_error", "message": "요청을 확인해 주세요."},
+                status_code=400,
+            )
 
         ctx = RequestContext(
             auth_session=AuthSession(user_id=user_id),
@@ -97,6 +105,25 @@ def build_router(
         if text is None:
             return JSONResponse({"status": "source_unavailable"})
         return JSONResponse({"status": "ok", "text": text})
+
+    @router.get("/api/papers/{paper_id}/assets")
+    def paper_assets(request: Request, paper_id: str) -> Any:
+        """FR-17 figure/table manifest for the detail/viewer. OA-license-gated like
+        full-text (BR-SF-11): disabled by default → ``license_unavailable``. Returns
+        signed URLs only (SEC-9). Independent of the full-text viewer (D1)."""
+        user_id = _principal_user_id(request)
+        if not user_id:
+            return JSONResponse({"status": "unauthorized"}, status_code=401)
+        if not assets_enabled:
+            return JSONResponse({"status": "license_unavailable"})
+        try:
+            version = int(request.query_params.get("version", "1"))
+        except (TypeError, ValueError):
+            version = 1
+        refs = orchestrator.list_assets(paper_id, version)
+        if refs is None:
+            return JSONResponse({"status": "license_unavailable"})
+        return JSONResponse({"status": "ok", "assets": [r.to_dict() for r in refs]})
 
     return router
 

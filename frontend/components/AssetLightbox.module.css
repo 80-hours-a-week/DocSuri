@@ -1,0 +1,93 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 100;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 960px;
+  max-height: 92vh;
+  outline: none;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  color: #fff;
+}
+
+.counter {
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.close {
+  border: 0;
+  background: none;
+  color: #fff;
+  font-size: 1.25rem;
+  line-height: 1;
+  width: 2.75rem;
+  height: 2.75rem;
+  cursor: pointer;
+}
+
+.stage {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Full-size view keeps the source aspect ratio (contain), unlike the cover thumbnails. */
+.img {
+  flex: 1;
+  min-width: 0;
+  max-height: 78vh;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 4px;
+}
+
+.nav {
+  flex: none;
+  border: 0;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 1.75rem;
+  line-height: 1;
+  width: 2.75rem;
+  height: 3.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.nav:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.caption {
+  margin-top: 0.5rem;
+  color: #e5e7eb;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.nav:focus-visible,
+.close:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}

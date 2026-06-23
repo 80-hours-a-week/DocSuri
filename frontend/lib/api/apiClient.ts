@@ -9,8 +9,10 @@ import { classifySearchResponse, type SearchOutcome } from './classify';
 import {
   classifySummarizeResponse,
   classifyFullTextResponse,
+  classifyAssetsResponse,
   type SummarizeOutcome,
   type FullTextOutcome,
+  type AssetsOutcome,
 } from './classifySummarize';
 import { recordPath } from '../observability';
 import type {
@@ -79,7 +81,7 @@ export class ApiClient {
     if (res.status === 200 || res.status === 400) {
       return classifySearchResponse(res.body);
     }
-    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+    throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
   // ---- summarization slice (US-S1/S2/S3/S5, FR-12~14) ------------------
@@ -96,7 +98,7 @@ export class ApiClient {
     if (res.status === 200 || res.status === 400) {
       return classifySummarizeResponse(res.body);
     }
-    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+    throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
   /** Paper header metadata (title/authors/abstract) for the detail route. Backed by the
@@ -112,7 +114,7 @@ export class ApiClient {
     });
     if (res.status === 200) return res.body as PaperMetaVM;
     if (res.status === 404) return null;
-    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+    throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
   /** U8 citation tree for the paper detail page. GET is idempotent and can be cached by
@@ -131,7 +133,7 @@ export class ApiClient {
       idempotent: true,
     });
     if (res.status === 200) return res.body as CitationTreeResponse;
-    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+    throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
   async saveCitationNode(paperId: string, node: CitationNode): Promise<LibraryItemDTO> {
@@ -142,7 +144,7 @@ export class ApiClient {
       idempotent: false,
     });
     if (res.status === 200 || res.status === 201) return res.body as LibraryItemDTO;
-    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+    throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
   /** Normalized full text for the in-app viewer (Q5=C; OA license-gated). PROVISIONAL
@@ -155,6 +157,19 @@ export class ApiClient {
     if (res.status === 200 || res.status === 400) {
       return classifyFullTextResponse(res.body);
     }
+    throw normalizeHttpError(res.status, serverMessage(res.body));
+  }
+
+  /** Figure/table assets for the detail/viewer (FR-17, display-only; OA license-gated).
+   * Returns signed URLs only (SEC-9). Independent of the full-text viewer. */
+  async getAssets(paperId: string, version: number): Promise<AssetsOutcome> {
+    const path = `/api/papers/${encodeURIComponent(paperId)}/assets?version=${encodeURIComponent(
+      String(version),
+    )}`;
+    const res = await this.request({ method: 'GET', path, idempotent: true });
+    if (res.status === 200 || res.status === 401) {
+      return classifyAssetsResponse(res.body);
+    }
     throw normalizeHttpError(res.status, pick(res.body, 'message'));
   }
 
@@ -163,7 +178,7 @@ export class ApiClient {
   async listGlossaryTerms(): Promise<GlossaryTermDTO[]> {
     const res = await this.request({ method: 'GET', path: '/api/glossary', idempotent: true });
     if (res.status === 200) return (res.body as GlossaryListDTO).terms ?? [];
-    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+    throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
   /** Add/override a personal glossary term (Phase 1, badge-tap). State-changing, so
@@ -178,7 +193,7 @@ export class ApiClient {
       idempotent: false,
     });
     if (res.status === 200 || res.status === 201) return res.body as GlossaryUpsertResultDTO;
-    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+    throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
   async signup(req: SignupRequest): Promise<SignupResult> {
@@ -189,7 +204,7 @@ export class ApiClient {
       idempotent: false,
     });
     if (res.status === 200 || res.status === 201) return res.body as SignupResult;
-    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+    throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
   /**
@@ -207,7 +222,7 @@ export class ApiClient {
       idempotent: false,
     });
     if (res.status === 200 || res.status === 204) return;
-    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+    throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
   /**
@@ -222,7 +237,7 @@ export class ApiClient {
       idempotent: true,
     });
     if (res.status === 200) return;
-    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+    throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
   /**
@@ -239,7 +254,7 @@ export class ApiClient {
       idempotent: false,
     });
     if (res.status === 200 || res.status === 204) return;
-    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+    throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
   async logout(): Promise<void> {
@@ -264,7 +279,7 @@ export class ApiClient {
       idempotent: true,
     });
     if (res.status === 200) return res.body as SavedSearchPageDTO;
-    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+    throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
   async saveSearch(req: SavedSearchCreateDTO): Promise<SavedSearchDTO> {
@@ -275,7 +290,7 @@ export class ApiClient {
       idempotent: false,
     });
     if (res.status === 200 || res.status === 201) return res.body as SavedSearchDTO;
-    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+    throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
   async deleteSavedSearch(id: string): Promise<void> {
@@ -285,7 +300,7 @@ export class ApiClient {
       idempotent: false,
     });
     if (res.status === 204 || res.status === 200) return;
-    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+    throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
   /** Re-run a saved search through the gateway (U6 -> U2); classified like search. */
@@ -303,7 +318,7 @@ export class ApiClient {
       idempotent: true,
     });
     if (res.status === 200) return res.body as LibraryPageDTO;
-    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+    throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
   /** Idempotent add; returns the same item shape whether new or already present. */
@@ -315,7 +330,7 @@ export class ApiClient {
       idempotent: false,
     });
     if (res.status === 200 || res.status === 201) return res.body as LibraryItemDTO;
-    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+    throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
   async removeFromLibrary(id: string): Promise<void> {
@@ -325,7 +340,7 @@ export class ApiClient {
       idempotent: false,
     });
     if (res.status === 204 || res.status === 200) return;
-    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+    throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
   // ---- search history (US-L3/FR-10) -----------------------------------
@@ -338,7 +353,7 @@ export class ApiClient {
       idempotent: true,
     });
     if (res.status === 200) return res.body as HistoryPageDTO;
-    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+    throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
   /** Re-run a history entry through the gateway (U6 -> U2); classified like search. */
@@ -354,7 +369,7 @@ export class ApiClient {
       idempotent: false,
     });
     if (res.status === 204 || res.status === 200) return;
-    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+    throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
   // ---- internals ------------------------------------------------------
@@ -365,7 +380,7 @@ export class ApiClient {
     if (res.status === 200 || res.status === 400) {
       return classifySearchResponse(res.body);
     }
-    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+    throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
   private async request(req: TransportRequest): Promise<TransportResponse> {
@@ -433,4 +448,13 @@ function pick(body: unknown, key: string): unknown {
   return typeof body === 'object' && body !== null
     ? (body as Record<string, unknown>)[key]
     : undefined;
+}
+
+// Backend error envelopes disagree on the key: the U6 gateway/middleware emit {message}
+// (errors.ts, auth.py, gateway.py), but FastAPI module HTTPExceptions serialize the curated,
+// user-safe reason as {detail} (e.g. "이미 등록된 이메일 주소입니다.", the BR-A1 password rules).
+// Reading only `message` swallowed every module 4xx reason into the generic "문제가 발생했습니다."
+// Read both — message first, then detail. (5xx still maps to a generic message in normalizeHttpError.)
+function serverMessage(body: unknown): unknown {
+  return pick(body, 'message') ?? pick(body, 'detail');
 }

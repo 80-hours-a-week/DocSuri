@@ -21,6 +21,7 @@ import {
   abstractTranslationResponse,
   fullTranslationResponse,
   fullTextResponse,
+  assetsResponse,
   mockUpsertGlossaryTerm,
   mockListGlossaryTerms,
 } from '@/mocks/summarizeFixtures';
@@ -102,6 +103,9 @@ export class MockTransport implements Transport {
       const termTo = String(body.termTo ?? '').trim();
       if (!termFrom || !termTo) return { status: 400, body: { message: '용어를 입력해 주세요.' } };
       return { status: 201, body: mockUpsertGlossaryTerm(termFrom, termTo) };
+    }
+    if (/^\/api\/papers\/[^/]+\/assets$/.test(path) && req.method === 'GET') {
+      return { status: 200, body: assetsResponse };
     }
     if (/^\/api\/papers\/[^/]+\/full-text$/.test(path) && req.method === 'GET') {
       return { status: 200, body: fullTextResponse };

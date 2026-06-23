@@ -24,6 +24,7 @@ from ..domain.grounding import GroundingValidator
 from ..domain.length_router import LengthRoute, LengthRouter
 from ..domain.models import (
     AbstainDTO,
+    AssetRef,
     CostDegradedDTO,
     GroundingInput,
     RequestContext,
@@ -34,7 +35,7 @@ from ..domain.models import (
 )
 from ..domain.refiner import InputRefiner
 from ..domain.source_selector import SourceSelector
-from ..ports.ports import LlmGatewayPort, LlmUnavailable, SummaryStorePort
+from ..ports.ports import AssetReadPort, LlmGatewayPort, LlmUnavailable, SummaryStorePort
 
 
 def _is_cost_degraded(budget) -> bool:
@@ -59,6 +60,7 @@ class SummarizationOrchestrationService:
         cost_guard: CostGuardCircuitBreaker,
         observability: ObservabilityHub,
         model_ver: str,
+        asset_reader: AssetReadPort | None = None,
     ) -> None:
         self._store = store
         self._source = source_selector
@@ -71,6 +73,7 @@ class SummarizationOrchestrationService:
         self._cost_guard = cost_guard
         self._obs = observability
         self._model_ver = model_ver
+        self._asset_reader = asset_reader
 
     def run(self, request: SummaryRequest, ctx: RequestContext) -> SummaryResponse:
         user_id = ctx.auth_session.user_id
@@ -174,6 +177,34 @@ class SummarizationOrchestrationService:
         """Normalized full text for the in-app viewer. None → unavailable. OA license
         gating is applied at the router (the source port has no license signal)."""
         return self._source.fetch_full_text(paper_id, version)
+
+    # --- figure/table assets (FR-17, BR-S15) ---------------------------------
+    def list_assets(self, paper_id: str, version: int) -> list[AssetRef] | None:
+        """Read the paper's asset manifest and presign each object ref (SEC-9: only the
+        signed URL leaves U7). None when the reader is not configured; OA license gating
+        is applied at the router (parallel to full_text)."""
+        if self._asset_reader is None:
+            return None
+        refs: list[AssetRef] = []
+        for a in self._asset_reader.list_assets(paper_id, version):
+            url = self._asset_reader.presign(a.object_ref)
+            if url is None:
+                # Non-presignable ref (not an S3 URI): skip rather than leak the raw
+                # object_ref to the response (SEC-9). One bad row drops only its asset.
+                continue
+            refs.append(
+                AssetRef(
+                    asset_id=a.asset_id,
+                    type=a.type,
+                    ordinal=a.ordinal,
+                    caption=a.caption,
+                    source_mode=a.source_mode,
+                    url=url,
+                    page_ref=a.page_ref,
+                    bbox=a.bbox,
+                )
+            )
+        return refs
 
     # --- helpers -------------------------------------------------------------
     def _glossary_version(self, user_id: str) -> int:

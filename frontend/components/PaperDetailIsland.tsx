@@ -10,6 +10,7 @@ import { useState } from 'react';
 import type { AnchorVM } from '@/types/generated';
 import { usePaperMeta } from '@/lib/usePaperMeta';
 import { FullTextViewer } from './FullTextViewer';
+import { AssetGallery } from './AssetGallery';
 import { SummaryModal, type DetailView } from './SummaryModal';
 import { SaveToLibraryButton } from './SaveToLibraryButton';
 import { CitationTreePanel } from './CitationTreePanel';
@@ -102,6 +103,10 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
           논문 정보를 불러오는 중…
         </p>
       ) : null}
+
+      {/* Figure/table assets (FR-17). A figure/table summary anchor scrolls to its asset;
+          license-disallowed / empty renders nothing. */}
+      <AssetGallery paperId={paperId} version={version} anchor={anchor} />
 
       {/* Body-first: the normalized S3 full text, with anchor highlight when set. */}
       <section className={styles.bodySection} aria-label="원문 전문">

@@ -17,6 +17,16 @@ dependencies = [
     "structlog>=24.1,<25",
 ]
 
+[project.optional-dependencies]
+# FR-17 multimodal figure/table extraction (permissive licenses only — TD-11/13 amended,
+# PyMuPDF/AGPL avoided): pypdfium2 (Apache-2.0/BSD-3), pdfplumber+pdfminer.six (MIT),
+# Pillow (HPND). Only required when MULTIMODAL_ASSETS_ENABLED=true.
+assets = [
+    "pypdfium2>=4.30,<5",
+    "pdfplumber>=0.11,<1",
+    "Pillow>=10.3,<12",
+]
+
 [dependency-groups]
 dev = [
     "hypothesis>=6.100",

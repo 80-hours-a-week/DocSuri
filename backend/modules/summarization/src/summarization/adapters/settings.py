@@ -30,6 +30,12 @@ class SummarizationSettings:
     # confirmed OA-license signal, which the current source has no metadata for. Until
     # license gating is wired, the endpoint returns ``license_unavailable`` (arXiv link-out).
     fulltext_viewer_enabled: bool = False
+    # FR-17 figure/table assets gate. OFF by default: the read path needs the `paper_asset`
+    # manifest (written by U1) + S3 presign IAM provisioned. While off, the orchestrator gets
+    # no asset_reader so the endpoint returns ``license_unavailable`` (no assets shown).
+    assets_enabled: bool = False
+    # Presigned GET URL lifetime for asset images (SEC-9 — short-lived).
+    asset_url_ttl_seconds: int = 600
 
     @property
     def summarization_enabled(self) -> bool:
@@ -51,4 +57,7 @@ class SummarizationSettings:
             model_ver=MODEL_VER,
             fulltext_viewer_enabled=os.environ.get("DOCSURI_FULLTEXT_VIEWER_ENABLED", "").lower()
             in ("1", "true", "yes"),
+            assets_enabled=os.environ.get("DOCSURI_MULTIMODAL_ASSETS_ENABLED", "").lower()
+            in ("1", "true", "yes"),
+            asset_url_ttl_seconds=int(os.environ.get("DOCSURI_ASSET_URL_TTL_SECONDS", "600")),
         )
