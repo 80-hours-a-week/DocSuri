@@ -13,13 +13,15 @@
 - 개인화 분기는 `glossaryVer`가 흡수(별도 `userId` 미사용). 무효화 = 키(경로) 변경에 의한 신규 객체. 수동 flush 없음.
 
 ### BR-S2 — 소스 선택·초록 폴백 (§5 / Q1=A)
-- `summary` → 전문(`stored_full_text_ref`), `translate` → 초록.
+- `summary` → 전문(**doc-model read**; `.txt`→doc-model 입력 교체, D2 — 선택 로직 불변), `translate` → 초록(기본) 또는 **전문(scope=full, 프론트 노출 기능)**.
 - 전문 부재/OA 라이선스 미허용 → **초록 폴백 + "전문 부재" 메타 표기**(NFR-R2). 전문·초록 모두 부재 → `SourceUnavailableDTO`.
+- **(Q18/P2) 번역 입력 정렬**: 요약·번역 **모두 정제본(`refined.body`)을 LLM에 전달**(대칭). 번역도 BR-S3 정제·SANITIZE 적용(노이즈/인젝션 무해화), 길이 분기(BR-S6)는 `refined.token_count` 기준과 **전송 입력이 일치**. `translate` 프롬프트는 scope별 분기(초록=`<abstract>`·"초록 번역", 전문=`<paper>`·"본문 번역"). 초록 번역은 `refine(abstract)≈abstract`라 무영향.
 
 ### BR-S3 — 입력 정제 경계 (§4 / Q2=B · Q6=A)
+- **(D2 입력 업그레이드)** 입력 = doc-model(구조화). 섹션·캡션·수식·**표(=데이터)**는 doc-model에서 직접 취득(신뢰); 헤딩-정규식 도출은 doc-model 부재 시 폴백. 정제 경계·SANITIZE 로직은 불변.
 - **제거**: 참고문헌/인용목록 · Header/Footer · 페이지번호 · 저작권 문구 · 저자 정보(소속).
-- **보존(제거 금지)**: 표/그림 캡션 · Appendix · Supplementary Results 등 **실험 정보 가능 콘텐츠** · 수식(LaTeX, 번역 금지).
-- **섹션 도출**: 헤딩 패턴 인식 → `Section{label, span}`; 실패 시 span-only. (구체 패턴 목록은 코드/NFR.)
+- **보존(제거 금지)**: **표=구조화 데이터(rows/cols)** · 표/그림 캡션 · Appendix · Supplementary Results 등 **실험 정보 가능 콘텐츠** · 수식(LaTeX, 번역 금지).
+- **섹션 도출(폴백)**: doc-model 부재 시 헤딩 패턴 인식 → `Section{label, span}`; 실패 시 span-only. (구체 패턴 목록은 코드/NFR.)
 - SANITIZE: 제어문자 제거 · 본문 격리(injection 대비) · 토큰 캡(수치=NFR).
 
 ### BR-S4 — 용어집 적용 (§9.1 / Q8=A)

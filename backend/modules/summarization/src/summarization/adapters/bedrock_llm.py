@@ -102,9 +102,9 @@ class BedrockLlmGateway:
         return _to_summary_draft(payload)
 
     def translate(
-        self, abstract: str, request: SummaryRequest, glossary: Glossary
+        self, text: str, request: SummaryRequest, glossary: Glossary
     ) -> TranslationDraft:
-        system, user = build_translate_prompt(abstract, request, glossary)
+        system, user = build_translate_prompt(text, request, glossary)
         payload = self._invoke_json(self._translate_model, system, user)
         return TranslationDraft(
             korean_text=str(payload.get("koreanText", "")),
