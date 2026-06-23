@@ -71,20 +71,23 @@
 
 ## 3. 소스 · 정제 (§4·§6 / Q1·Q2·Q6)
 
+> **피벗(2026-06-23, doc-model)**: 요약 입력 = 평문 `.txt` → **구조화 doc-model**(SSOT=`construction/plans/docmodel-foundation-pivot-plan.md`, D2). **입력 업그레이드일 뿐 생성·근거화·캐시·길이분기 로직은 불변.** 섹션·캡션·수식·표를 U7이 정규식으로 추정하던 것을 doc-model에서 직접·신뢰성 있게 받고, **표가 데이터(rows/cols)로 들어와** 표 숫자가 LLM·근거화에 가시화(D8).
+
 ### `SourceText` (원문, 소유)
 | 필드 | 의미 |
 |---|---|
-| `kind` | `enum{full_text, abstract}` — 요약=전문(`stored_full_text_ref` read), 번역=초록 |
-| `raw` | 원문 텍스트(전문은 U1 정제 보관본; PDF 재파싱 없음) |
+| `kind` | `enum{full_text, abstract}` — 요약=전문(**doc-model** read), 번역=초록 |
+| `raw` | 전문 = **U1 doc-model**(구조화: 섹션/블록·앵커 · 표=데이터(rows/cols) · 수식=LaTeX · 그림=webp 참조). 평문 `.txt` 재파싱 아님(D2). 초록 = 메타 초록 텍스트 |
 | `fallbackReason?` | 전문 부재/라이선스X로 초록 폴백 시 사유(Q1=A·NFR-R2) |
 
 ### `RefinedSource` (정제 결과, 소유)
 | 필드 | 의미 | 근거 |
 |---|---|---|
 | `body` | 정제 본문(노이즈 제거 후) | Q2=B |
-| `sections[]` | `Section{label, span}` — **U7이 헤딩 패턴으로 도출**(U1 미영속), 실패 시 빈 라벨+span-only | Q6=A |
-| `captions[]` | 표/그림 캡션(**보존** — 결과 수치 원천) | Q2=B |
-| `formulas[]` | LaTeX 수식(**보존·번역 금지**) | §4 |
+| `sections[]` | `Section{label, span}` — **doc-model 섹션/앵커에서 직접 취득**(신뢰; 헤딩-정규식 도출은 doc-model 부재 시 폴백). 실패 시 빈 라벨+span-only | Q6=A, D2 |
+| `tables[]` | `Table{label, rows/cols 데이터, caption, anchor}` — **doc-model 구조화 표(보존)**. 표 숫자가 LLM·근거화에 가시(D8 — 크롭 이미지 깜깜이 해소) | D8 |
+| `captions[]` | 표/그림 캡션(**보존** — 결과 수치 원천; doc-model 캡션·앵커 연결) | Q2=B |
+| `formulas[]` | LaTeX 수식(**보존·번역 금지**; doc-model이 LaTeX로 직접 제공 — MathML 추정 불필요) | §4, D1 |
 | `preserved[]` | Appendix·Supplementary Results 등 실험 정보 콘텐츠(**제거 금지**) | Q2=B |
 
 > Q2=B 정제 경계: **제거** = Header/Footer·페이지번호·저작권·저자정보·참고문헌. **보존** = 캡션·Appendix·Supplementary·수식·섹션 구조.
@@ -171,7 +174,7 @@
 |---|---|---|
 | `SummaryRequest`/`SummaryResponse`·`Anchor` 등 | **U7 신규 생산** | **신규 `shared/dtos/summarization.schema.json`** 신설(현재 부재). SEC-9: 내부 필드(토큰·비용·캐시키·모델/프롬프트 식별자) 외부 DTO 비노출 |
 | `BudgetState`·`GroundingDecision`·`CandidateResponse` | U6 (`shared/ports`) | 참조만 — U7 비용/관측 재구현 없음(INV-2) |
-| `PaperId`·`Version`·`stored_full_text_ref` | U1/shared | read capability(코드 의존 아님) |
+| `PaperId`·`Version`·`stored_full_text_ref`·**`docModelRef`** | U1/shared | read capability(코드 의존 아님). **요약 입력 = `docModelRef`**(lazy 생성·캐시 — U1 BR-30); `.txt`는 검색·청킹 투영(D2) |
 
 > **신규 DTO 계약(`shared/dtos/summarization`)은 PROVISIONAL** — 정제 스펙은 별도 shared PR(Track 사인오프)로 승격. 본 FD 코드 검증과는 무관하게 진행 가능(U4 library 선례).
 

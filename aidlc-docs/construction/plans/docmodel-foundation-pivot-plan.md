@@ -101,19 +101,19 @@
 - [ ] `shared/dtos/` — doc-model 스키마 SSOT 신설(Q3)
 
 **U1 Ingestion (생산자)**
-- [ ] FD `business-logic-model.md` — BR-29 확장: 보관=평문 1종 → **+doc-model**; `ingestOne`에 doc-model 생성/캐시 단계(lazy)
-- [ ] FD `business-rules.md` — 표=데이터·수식=LaTeX 규칙; 그림 webp 참조 연결
-- [ ] NFR `tech-stack-decisions.md` — **TD-12 재검토**(표=PDF크롭 → HTML 표=데이터); HTML 파서 의존성(lxml/BeautifulSoup·MathML→LaTeX)
+- [x] FD `business-logic-model.md` — BR-29 확장: 보관=평문 1종 → **+doc-model**; `ingestOne`에 doc-model 생성/캐시 단계(lazy) → **§7 신설 + §6.3 무효화 연동**
+- [x] FD `business-rules.md` — 표=데이터·수식=LaTeX 규칙; 그림 webp 참조 연결 → **BR-29 carve-out 뒤집기 + BR-30 신설(doc-model 구조·생성)**
+- [x] NFR `tech-stack-decisions.md` — **TD-12 재검토**(표=PDF크롭 → HTML 표=데이터); HTML 파서 의존성(lxml/BeautifulSoup·MathML→LaTeX) → **TD-12 재작성 + TD-16 신설 + TD-11 최후폴백 강등**
 - [ ] Infra `infrastructure-design.md` — S3 `doc-model/` prefix(SSE) + 캐시 라이프사이클
 
 **U7 Summarization (소비자 — 입력 교체)**
-- [ ] FD `domain-entities.md`·`business-logic-model.md` — SourceSelector/full-text 어댑터 입력 = doc-model; 프롬프트가 표·수식 인지
-- [ ] FD `business-rules.md` — 입력 계약 갱신(로직 불변 명시)
-- [ ] NFR/Infra — 입력 어댑터 경량 정합
+- [x] FD `domain-entities.md`·`business-logic-model.md` — SourceSelector/full-text 어댑터 입력 = doc-model; 프롬프트가 표·수식 인지 → **SourceText/RefinedSource(+tables[]) · SourceSelector·InputRefiner·프롬프트(표=데이터·수식 LaTeX)**
+- [x] FD `business-rules.md` — 입력 계약 갱신(로직 불변 명시) → **BR-S2/BR-S3 doc-model 입력 + 로직 불변 명시**
+- [ ] NFR/Infra — 입력 어댑터 경량 정합 (U1 Infra 배치와 함께 마무리)
 
 **U5 Frontend (리치뷰)**
-- [ ] `functional-design/frontend-components.md` — 자체 리치뷰 컴포넌트(doc-model 렌더: KaTeX·표·그림·목차/앵커 점프)
-- [ ] 기존 `AssetGallery`/앵커 매처 재사용 연결
+- [x] 자체 리치뷰 컴포넌트(doc-model 렌더: KaTeX·표·그림·목차/앵커 점프) → **실제 위치는 상세 표면 소유한 `u7-summarization-frontend` `FullTextViewer`→`DocModelViewer`(§2.10)에 본문화**(U5 frontend-components는 히어로/검색 슬라이스 전용). `getFullText`→`getDocModel`·union 매핑·계층도 갱신
+- [x] 기존 `AssetGallery`/앵커 매처 재사용 연결 → **U5 `frontend-components.md` §6 신설**: 그림=AssetGallery webp 재사용, **표=크롭 폐기→DocModelViewer 표 컴포넌트(D8)**, AssetGallery 스코프=그림 전용 축소
 
 **원장**
 - [ ] `aidlc-state.md` — 사후 결정/핫픽스 절에 본 피벗 entry + `:159-162` 비전 항목이 본 doc-model 기반으로 흡수됨 명시
