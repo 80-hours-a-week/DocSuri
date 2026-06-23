@@ -77,6 +77,12 @@
   opacity: 0.55;
 }
 
+.nodeLink {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
 .close {
   width: 2rem;
   padding: 0;

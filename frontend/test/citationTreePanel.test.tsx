@@ -16,6 +16,12 @@ describe('CitationTreePanel', () => {
     expect(screen.getByRole('button', { name: '축소' })).toBeInTheDocument();
     expect(screen.getByText(/OpenReview workshop record/)).toBeInTheDocument();
 
+    const links = screen.getAllByRole('link', { name: '열기' });
+    expect(links[0]).toHaveAttribute('href', '/paper/1706.03762');
+    expect(links[1]).toHaveAttribute('href', 'https://doi.org/10.5555/3295222.3295349');
+    expect(links[1]).toHaveAttribute('target', '_blank');
+    expect(links[1]).toHaveAttribute('rel', 'noopener noreferrer');
+
     const zoomOut = screen.getByRole('button', { name: '축소' });
     await user.click(zoomOut);
     await user.click(zoomOut);

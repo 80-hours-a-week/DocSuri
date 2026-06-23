@@ -1065,3 +1065,27 @@
 
 ---
 
+## Multimodal Display Cross-Review
+**Timestamp**: 2026-06-22T09:20:38Z
+**User Input**: "202606221830_PR.md 은 현 브랜치에 대한 PR 메시지 입니다. 이 코드들을 리뷰하고, Cross-Review.md 를 작성해 주세요."
+**AI Response**: "현 브랜치 `feature/multimodal-display`의 PR 문서와 U1/U7/U5 멀티모달 자산 표시 코드를 리뷰하고 `Cross-Review.md`를 작성함. Must-Fix로 비-S3 `object_ref` raw 응답 노출 가능성을 지적하고, Should-Fix로 `useAssets` 실패 후 같은 paper/version 재시도 no-op 문제를 기록함."
+**Context**: Code review — multimodal display PR cross-review.
+
+---
+
+## U8 Citation Graph Issue Follow-up
+**Timestamp**: 2026-06-23T00:41:05Z
+**User Input**: "u8-인용그래프 기능에 대한 이슈 u8_issue.md 피드백을 받았습니다. 이 피드백을 기반으로 기능을 개선해 주세요."
+**AI Response**: "`u8_issue.md`를 반영해 U8 citation snapshot store에 Redis-backed shared TTL cache를 추가하고, Redis URL/host env가 없으면 기존 in-memory store로 폴백하도록 구현함. CitationNode에 `inCorpus`를 추가하고 U2 discovery paper service를 재사용해 코퍼스 존재 여부를 표시함. 프론트 노드 카드에 내부 상세 페이지 또는 안전한 외부 링크를 추가하고 저장/확장 버튼은 유지함. 검증: backend U8 pytest/ruff/compileall, app-shell pytest, frontend citation panel vitest/lint/tsc 통과."
+**Context**: Implementation — U8 Citation Graph cache and node navigation improvements.
+
+---
+
+## U8 Citation Graph PR Draft
+**Timestamp**: 2026-06-23T00:46:06Z
+**User Input**: "이 수정에 대한 202606231000_PR.md를 작성해 주세요."
+**AI Response**: "`.github/PULL_REQUEST_TEMPLATE.md` 형식에 맞춰 `202606231000_PR.md`를 작성함. Redis shared cache 승격, `inCorpus` 기반 내부/외부 링크, 기존 저장 버튼 유지, 검증 명령을 PR 설명에 반영함."
+**Context**: Documentation — PR draft for U8 citation graph issue follow-up.
+
+---
+
