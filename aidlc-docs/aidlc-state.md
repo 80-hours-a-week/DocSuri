@@ -343,5 +343,69 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - Plan created:
   - `aidlc-docs/construction/plans/u9-personalization-nfr-requirements-plan.md`
 - Decision: execute NFR Requirements because U9 stores user behavior data and must define persistence, privacy, latency, degradation, observability, and QT-7 test boundaries.
-- Current gate: NFR Requirements questions Q1~Q12 awaiting answer/approval. Recommended answers: A for all.
+- Completed: Q1~Q12 set to recommended answer A after plan_feedback.md correction; Q7 now uses direct active-table delete with no backup table.
+- Generated artifacts:
+  - `aidlc-docs/construction/u9-personalization/nfr-requirements/nfr-requirements.md`
+  - `aidlc-docs/construction/u9-personalization/nfr-requirements/tech-stack-decisions.md`
+- NFR summary: existing RDS/backend/U6 reuse, best-effort non-blocking recording, lazy/on-demand aggregation, allowlisted metadata, direct active-table delete with no backup table, scheduled purge requirement, U6 observability, Hypothesis QT-7 tests.
+- Current gate: NFR Requirements review/approval. Next recommended stage: U9 NFR Design.
+- Code generated: no.
+
+## U9 Personalization — NFR Design Plan Ready
+
+- Date: 2026-06-23
+- Stage: CONSTRUCTION / U9 NFR Design Part 1
+- Plan created:
+  - `aidlc-docs/construction/plans/u9-personalization-nfr-design-plan.md`
+- Decision: execute NFR Design because U9 needs concrete fail-open, lazy aggregation, active repository, direct delete, retention cleanup, metadata validation, and U6 observability patterns.
+- Completed: NFR Design questions Q1~Q5 set to recommended answer A.
+- Generated artifacts:
+  - `aidlc-docs/construction/u9-personalization/nfr-design/logical-components.md`
+  - `aidlc-docs/construction/u9-personalization/nfr-design/nfr-design-patterns.md`
+- Design summary: fail-open personalization, bounded profile read, read-through lazy aggregation, direct active-table delete, scheduled idempotent retention cleanup, recorder-level metadata allowlist, and U6 operational telemetry.
+- Current gate: NFR Design review/approval. Next recommended stage: U9 Infrastructure Design assessment.
+- Code generated: no.
+
+## U9 Personalization — Infrastructure Design Plan Ready
+
+- Date: 2026-06-23
+- Stage: CONSTRUCTION / U9 Infrastructure Design Part 1
+- Plan created:
+  - `aidlc-docs/construction/plans/u9-personalization-infrastructure-design-plan.md`
+- Decision: execute Infrastructure Design because U9 adds RDS tables, deletion/retention cleanup, API deployment mapping, scheduled maintenance task mapping, and U6 observability integration.
+- Recommended direction: reuse existing backend ECS/API deployment, RDS PostgreSQL, U6 gateway/observability, and CloudWatch; avoid a new service, queue, cache, analytics lake, or ML pipeline for v1.
+- Current gate: U9 Infrastructure Design questions Q1~Q6 awaiting answers.
+- Code generated: no.
+
+## U9 Personalization — Infrastructure Design Complete / Code Generation Plan Next
+
+- Date: 2026-06-23
+- Stage: CONSTRUCTION / U9 Infrastructure Design
+- Feedback applied:
+  - `plan_feedback.md`
+- Corrected prior design:
+  - Removed U9 backup table for raw behavior log deletion.
+  - User raw-log deletion now directly deletes owner-scoped active rows.
+  - Retention cleanup is an idempotent daily EventBridge scheduled ECS task.
+  - Retention purge failure must emit U6 telemetry and trigger alerting.
+- Completed: Infrastructure Design questions Q1~Q6 resolved to the revised recommended path.
+- Generated artifacts:
+  - `aidlc-docs/construction/u9-personalization/infrastructure-design/infrastructure-design.md`
+  - `aidlc-docs/construction/u9-personalization/infrastructure-design/deployment-architecture.md`
+- Current gate: Infrastructure Design review/approval. Next recommended stage: U9 Code Generation planning.
+- Code generated: no.
+
+## U9 Personalization — Code Generation Plan Ready
+
+- Date: 2026-06-23
+- Stage: CONSTRUCTION / U9 Code Generation Part 1
+- Infrastructure Design approval:
+  - User requested progress up to just before code generation.
+- Plan created:
+  - `aidlc-docs/construction/plans/u9-personalization-code-generation-plan.md`
+- Planned scope:
+  - backend-only U9 module, RDS migrations, app-shell wiring, idempotent retention cleanup command, scheduled ECS cleanup infrastructure, tests, and code summary docs.
+- Guardrails:
+  - No frontend UI, no queue, no new always-on service, no analytics lake, no ML pipeline, and no `user_behavior_event_backup` table.
+- Current gate: Code Generation plan approval. Actual app code has not been generated.
 - Code generated: no.
