@@ -25,6 +25,7 @@ _PUBLIC_PREFIXES = (
     "/auth/signup",
     "/auth/login",
     "/auth/verify-email",
+    "/auth/resend-verification",  # PENDING-account recovery (resend mail) — public like signup/verify
     "/docs",
     "/openapi.json",
 )
