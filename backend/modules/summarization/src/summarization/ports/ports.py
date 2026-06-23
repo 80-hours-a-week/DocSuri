@@ -50,9 +50,10 @@ class LlmGatewayPort(Protocol):
         ...
 
     def translate(
-        self, abstract: str, request: SummaryRequest, glossary: Glossary
+        self, text: str, request: SummaryRequest, glossary: Glossary
     ) -> TranslationDraft:
-        """Translate the abstract to Korean. Raises ``LlmUnavailable`` on failure."""
+        """Translate the refined source text to Korean (scope: abstract|full — BR-S3/Q18).
+        Raises ``LlmUnavailable`` on failure."""
         ...
 
 

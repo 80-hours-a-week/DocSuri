@@ -7,6 +7,11 @@ from datetime import datetime
 from docsuri_ingestion.domain.enums import FailureReason
 from docsuri_ingestion.domain.errors import PermanentIngestionError, RetriableIngestionError
 from docsuri_ingestion.domain.models import CategoryFilter, MetadataRecord, RawDocument
+from docsuri_ingestion.full_text_extraction import (
+    FullTextExtractionError,
+    html_to_text,
+    pdf_to_text,
+)
 from docsuri_ingestion.resilience import TokenBucket
 
 ATOM_NS = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
@@ -22,13 +27,18 @@ class ArxivHttpSource:
         *,
         atom_base_url: str = "https://export.arxiv.org/api/query",
         oai_base_url: str = "https://export.arxiv.org/oai2",
-        eprint_base_url: str = "https://arxiv.org/e-print",
+        pdf_base_url: str = "https://arxiv.org/pdf",
+        html_base_urls: Sequence[str] = (
+            "https://arxiv.org/html",
+            "https://ar5iv.labs.arxiv.org/html",
+        ),
         timeout_seconds: float = 30.0,
         rate_limiter: TokenBucket | None = None,
     ) -> None:
         self._atom_base_url = atom_base_url
         self._oai_base_url = oai_base_url
-        self._eprint_base_url = eprint_base_url.rstrip("/")
+        self._pdf_base_url = pdf_base_url.rstrip("/")
+        self._html_base_urls = tuple(base.rstrip("/") for base in html_base_urls)
         self._timeout_seconds = timeout_seconds
         self._rate_limiter = rate_limiter or TokenBucket(rate_per_second=0.33)
 
@@ -65,15 +75,64 @@ class ArxivHttpSource:
         return records[0]
 
     def fetch_full_text(self, metadata: MetadataRecord) -> RawDocument:
-        identifier = metadata.identifier
-        url = f"{self._eprint_base_url}/{identifier.arxiv_id}"
-        body = self._get_bytes(url, params=None, stage="fetch_full_text")
+        """Acquire full-text plain text (BR-29): arXiv HTML first, PDF text fallback.
+
+        HTML is the preferred *source* — it converts to the cleanest plain text — and PDF
+        text extraction is the fallback when HTML is unavailable. Only normalized plain text
+        is produced/stored (the viewer renders plain text with anchor highlighting). Never
+        decodes a compressed payload as text (the #139 e-print defect).
+        """
+        arxiv_id = metadata.identifier.arxiv_id
+        html, html_url = self._try_get_html(arxiv_id)
+        if html is not None:
+            text = html_to_text(html)
+            if text:
+                return RawDocument(metadata=metadata, text=text, source_url=html_url)
+
+        pdf_url = f"{self._pdf_base_url}/{arxiv_id}"
+        pdf = self._get_bytes(pdf_url, params=None, stage="fetch_full_text")
+        try:
+            text = pdf_to_text(pdf)
+        except FullTextExtractionError as exc:
+            raise PermanentIngestionError(
+                "full text extraction could not parse the PDF payload",
+                reason=FailureReason.PARSE_FAILURE,
+                stage="fetch_full_text",
+            ) from exc
+        if not text:
+            raise PermanentIngestionError(
+                "full text extraction yielded empty text",
+                reason=FailureReason.PARSE_FAILURE,
+                stage="fetch_full_text",
+            )
         return RawDocument(
-            metadata=metadata,
-            text=body.decode("utf-8", errors="replace"),
-            source_url=url,
-            content_type="application/octet-stream",
+            metadata=metadata, text=text, source_url=pdf_url, content_type="text/plain"
         )
+
+    def _try_get_html(self, arxiv_id: str) -> tuple[str | None, str]:
+        """Best-effort HTML fetch across configured bases (arXiv native → ar5iv).
+
+        HTML is preferred-but-optional — not every paper compiles to HTML — so any non-200,
+        non-HTML, or transport error degrades to ``None`` (→ PDF fallback) rather than raising.
+        """
+        import httpx
+
+        last_url = ""
+        for base in self._html_base_urls:
+            url = f"{base}/{arxiv_id}"
+            last_url = url
+            self._rate_limiter.acquire()
+            try:
+                with httpx.Client(
+                    timeout=self._timeout_seconds, follow_redirects=True
+                ) as client:
+                    response = client.get(url)
+            except httpx.HTTPError:
+                continue
+            content_type = response.headers.get("content-type", "").lower()
+            if response.status_code == 200 and "html" in content_type:
+                return response.text, url
+        return None, last_url
 
     def _oai_list_records(
         self,

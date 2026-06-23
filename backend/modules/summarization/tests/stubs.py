@@ -70,7 +70,7 @@ class StubLlm:
             raise LlmUnavailable("stub outage")
         return self.draft or valid_draft()
 
-    def translate(self, abstract, request, glossary) -> TranslationDraft:
+    def translate(self, text, request, glossary) -> TranslationDraft:
         self._calls += 1
         if self._calls <= self.raise_n:
             raise LlmUnavailable("stub outage")
