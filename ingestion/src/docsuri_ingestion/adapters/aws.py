@@ -77,6 +77,9 @@ class BedrockCohereEmbeddingPort:
             "texts": list(texts),
             "input_type": EMBEDDING_SPEC.input_type_writer,
             "embedding_types": ["float"],
+            # Cohere Embed v4 defaults to 1536-dim; pin to the index/spec width so vectors
+            # match docsuri-corpus-v2's mapping (v3 returned EMBEDDING_SPEC.dimensions implicitly).
+            "output_dimension": EMBEDDING_SPEC.dimensions,
         }
         response = self._client.invoke_model(
             modelId=self._model_id,
