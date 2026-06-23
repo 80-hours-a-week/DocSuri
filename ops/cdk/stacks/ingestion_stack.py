@@ -154,7 +154,7 @@ class IngestionStack(Stack):
                 "DOCSURI_BEDROCK_MODEL_ID": _BEDROCK_MODEL_ID,
                 "DOCSURI_OPENSEARCH_ENDPOINT": f"https://{opensearch_domain.domain_endpoint}",
                 "DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus-v1",
-                # FR-18 v4 dual-write: setting *_V2 flips runtime.build_production_runtime to
+                # FR-21 v4 dual-write: setting *_V2 flips runtime.build_production_runtime to
                 # fan writes into the clean v2 index (Fail-Open — v2 errors never block v1).
                 "DOCSURI_BEDROCK_MODEL_ID_V2": _BEDROCK_MODEL_ID,
                 "DOCSURI_OPENSEARCH_INDEX_V2": "docsuri-corpus-v2",

@@ -15,15 +15,17 @@ dependencies = [
     "psycopg[binary]>=3.2,<4",
     "psycopg-pool>=3.2,<4",
     "structlog>=24.1,<25",
+    # BR-29 full-text PDF fallback (MIT, permissive) — core because the full-text path now
+    # depends on PDF text extraction when arXiv HTML is unavailable.
+    "pdfplumber>=0.11,<1",
 ]
 
 [project.optional-dependencies]
 # FR-17 multimodal figure/table extraction (permissive licenses only — TD-11/13 amended,
-# PyMuPDF/AGPL avoided): pypdfium2 (Apache-2.0/BSD-3), pdfplumber+pdfminer.six (MIT),
-# Pillow (HPND). Only required when MULTIMODAL_ASSETS_ENABLED=true.
+# PyMuPDF/AGPL avoided): pypdfium2 (Apache-2.0/BSD-3), Pillow (HPND). pdfplumber is now a
+# core dependency (BR-29). Only required when MULTIMODAL_ASSETS_ENABLED=true.
 assets = [
     "pypdfium2>=4.30,<5",
-    "pdfplumber>=0.11,<1",
     "Pillow>=10.3,<12",
 ]
 

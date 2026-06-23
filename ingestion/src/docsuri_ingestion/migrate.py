@@ -1,4 +1,4 @@
-"""In-VPC runner for the v4 embedding migration (FR-18): provision -> backfill -> cutover.
+"""In-VPC runner for the v4 embedding migration (FR-21): provision -> backfill -> cutover.
 
 One module, run from the ingestion image (the only image with the ingestion package AND
 Bedrock + OpenSearch network access). Invoked through the worker entrypoint with a step arg,

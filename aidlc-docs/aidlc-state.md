@@ -40,6 +40,14 @@
 - **테스트 수 드리프트 (Info·benign)**: 스위트 증가로 문서 수치 stale(U1 23→26·U6 31→34·U4 컴포넌트 분할·U2 42+1skip). 회귀 아님.
 - **Operations 프레임워크 갭**: AI-DLC 룰셋은 Build and Test에서 종료(Operations=placeholder)이나 실 AWS 프로덕션 배포가 프레임워크 밖에서 수행됨 — 운영 런북/롤백/모니터링 문서 미수립(§OPERATIONS 참조).
 
+## 사후 결정 / 핫픽스 (Post-Construction — 규범은 각 유닛 BR·plan `사후 결정` Q)
+
+- **U1 전문 추출 결함 정정 (2026-06-23, #139·커밋 `0ced380`·브랜치 `fix/summarization-pipeline`)**: arXiv e-print(gzip/tar) 미해제 디코딩으로 전문 ~44% 깨짐(�) → **arXiv HTML(native→ar5iv) 우선 + PDF 폴백**으로 교체(결정 D = U1 FD plan Q18 · BR-29). 보관=정규화 평문 1종, 뷰어=평문(앵커 유지). 리치 HTML 렌더/보관은 에셋 패널(FR-17)과 그림·표 겹쳐 에이전트 단계로 분리. `pdfplumber` 코어 승격.
+- **U7 번역 입력 정렬 (2026-06-23, P2·커밋 `4039bde`·브랜치 `fix/summarization-pipeline`)**: 전문 번역(scope=full)이 정제 안 한 원문을 초록 프롬프트에 전송 + 길이판정(`refined`)↔전송(`raw`) 불일치 → 번역 입력=`refined.body` 통일·프롬프트 scope 분기(결정 A = U7 FD plan Q18 · BR-S2).
+- **🧭 DocModel 기반 전환 — 결정 게이트 수립 (2026-06-23, 미착수·브랜치 예정 `feat/docmodel-foundation`)**: "요약/번역 입력을 평문→구조화 문서모델(doc-model)로 전환 + 자체 리치뷰 + 에이전트 준비" 피벗의 단일 진실원천 게이트 작성 → `construction/plans/docmodel-foundation-pivot-plan.md`. **확정 결정 D1~D8**: doc-model=arXiv HTML 결정적 파싱 JSON(표=데이터·수식=LaTeX·그림=webp 참조)·U7 입력 평문→doc-model 교체(로직 불변)·PDF 원문 미저장(다운로드 버튼 없음)·자체 리치뷰=doc-model 콘텐츠 재렌더(PDF.js 아님)·비전=batch 아닌 에이전트 on-demand 툴·생성 lazy+`(paperId,ver)` 캐시·소스 무관 설계·TD-12(표=PDF크롭) 재검토. **저장**: `doc-model/{id}/v{ver}.json`(구조화 통합) + 기존 `assets/*.webp`(이미지 분리·참조) + 기존 `paper_asset` RDS. **열린 Q1~Q8**(코드 전 확정): ⚠️Q1 arXiv HTML 커버리지 스파이크(배포 확정 선결)·Q3 doc-model 스키마·Q7 요구사항 재진입 여부·Q8 P3(맵리듀스)=doc-model 후속. `:159-162` 비전 항목은 본 doc-model 기반으로 흡수. **blast-radius=기존 U1/U7/U5 FD·TD-12·requirements *편집*(신규 문서는 게이트뿐)**.
+- **🧭 DocModel 전환 — blast-radius 기존 문서 편집 (2026-06-23, 브랜치 예정 `feat/docmodel-foundation`)**: 게이트 D1~D8·Q권장안 기준으로 §3 기존 유닛 문서 *편집* 진행(신규=게이트뿐). **U1**: BLM `business-logic-model`(스코프 피벗 노트·§7 doc-model lazy 생성·캐시 단계 신설·§6.3 철회 무효화 연동) · `business-rules`(BR-29 carve-out 뒤집기 — 리치 렌더 범위 안 + ar5iv 필수 / **BR-30 신설** doc-model 구조·생성) · `tech-stack-decisions`(**TD-12 재작성** 표=PDF크롭→HTML 데이터 · **TD-16 신설** HTML 파서 lxml/BeautifulSoup·MathML→LaTeX·입력 보안 · TD-11 최후폴백 강등) · `infrastructure-design`(§1.1b `doc-model/` prefix·SSE-KMS·lazy 캐시 라이프사이클 + IAM 빌더/읽기 역할). **U7**: `domain-entities`(SourceText=doc-model·RefinedSource **+tables[]**·docModelRef) · `business-logic-model`(SourceSelector·InputRefiner doc-model 직접 취득·프롬프트 표=데이터·수식 LaTeX) · `business-rules`(BR-S2/S3) — **로직 불변, 입력만 업그레이드(D2)**. **U5 리치뷰**: 실제 컴포넌트가 사는 `u7-summarization-frontend` `FullTextViewer`→**`DocModelViewer`** 본문화(목차·KaTeX·표 컴포넌트·webp 그림·앵커; `getFullText`→`getDocModel` lazy) + U5 `frontend-components §6`(AssetGallery=그림 전용 축소·**표 크롭 폐기→표 컴포넌트** D8·앵커 매처 재사용). **미편집(잔여)**: requirements.md(FR-12/리치뷰 1급화/§12 — Q7 재진입 결과 대기) · `shared/dtos/`(Q3 doc-model 스키마 SSOT) · U7 NFR/Infra 어댑터 경량 정합. **다음=코드**(`feat/docmodel-foundation`). _커밋·push 보류(사용자 승인 후)._
+- **🧭 DocModel 전환 — Q3 스키마 + Q7 요구사항 재진입 완료 (2026-06-23, `fix/summarization-pipeline`, 미푸시)**: **Q3(커밋 `ff258f7`)** — doc-model 계약 확정: **중첩 섹션 트리 + 결정적 블록 id 앵커**. `shared/dtos/docmodel.schema.json`(JSON Schema 2020-12·20 defs·양성/음성 검증) + 스펙 SSOT `construction/shared/docmodel.md` + overview/README 등재(계약 5번째). 루트=getDocModel 응답 union, 아티팩트=DocModel(meta+sections[]); 블록 6종(paragraph·table·formula·figure·list·code); 표=rows/cols·수식=latex·그림=AssetRef(assetId 참조, url 없음 SEC-9); provenance(sourceTier 사다리). **Q7(미커밋)** — 요구사항 재진입: 질문지 `inception/requirements/requirement-verification-questions-docmodel.md` Q1~Q7(전부 게이트 권장안 + 리치뷰=신규 FR-18) → `requirements.md` 등재: **FR-12 개정**(입력=doc-model·앵커=doc-model id)·**FR-17 개정**(그림=이미지·표=데이터 D8)·**FR-18 신설**(자체 리치뷰 1급 D4)·§12 doc-model 카브아웃(PDF 미저장 D3·비전 제외 유지 D5·외부소스 일괄캐시 제외 D7)·QT-5 앵커 보강·§13 추적성. **다음=코드**(`feat/docmodel-foundation`): U1 DocModelBuilder(ar5iv 사다리·lxml)·getDocModel API·U7 입력 어댑터·DocModelViewer + summarization.schema Anchor.target 의미 명확화. _push·PR 보류(승인 후)._
+
 ## 워크스페이스 상태
 - **기존 코드**: 없음(워킹 트리 블랭크 슬레이트; 이전 데모 사이클 폐기, git `ba3b6a9`로 복구 가능)
 - **리버스 엔지니어링 필요**: 아니오(Greenfield — 디스크에 소스 파일 없음)
@@ -264,3 +272,76 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - Documentation changes:
   - corrected Redis wording: current implementation is process-local in-memory TTL seam; Redis remains production adapter target
 - Current gate: user review/approval, commit, or PR direction required.
+
+## U9 Personalization — Requirements Questions Created
+
+- Date: 2026-06-23
+- Candidate unit: U9 Personalization / Behavior Intelligence
+- Trigger: 사용자 행동 로그를 기록하고 분석해 개인화 맞춤 서비스를 제공하는 기능.
+- Created artifact:
+  - `aidlc-docs/inception/requirements/requirement-verification-questions-u9-personalization.md`
+- Completed: questions Q1~Q20 set to recommended answers (Q13=B, all others A).
+- Requirements updated:
+  - `aidlc-docs/inception/requirements/requirements.md`
+  - Added FR-18 behavior event logging, FR-19 user interest profile, FR-20 personalization application, NFR-P4, QT-7, U9 scope exclusions, traceability.
+- Current gate: Requirements review/approval. Next recommended stage: User Stories revision for U9.
+- Code generated: no.
+
+## U9 Personalization — User Stories Plan Ready
+
+- Date: 2026-06-23
+- Stage: INCEPTION / User Stories Part 1
+- Assessment completed:
+  - `aidlc-docs/inception/plans/u9-personalization-user-stories-assessment.md`
+- Plan created:
+  - `aidlc-docs/inception/plans/u9-personalization-story-generation-plan.md`
+- Decision: execute User Stories for U9 because the change is user-facing, touches behavior data/privacy controls, and affects search/summary/translation workflows.
+- Completed: Story generation plan questions PQ1~PQ6 set to recommended answer A.
+- Generated artifacts:
+  - `aidlc-docs/inception/user-stories/stories.md`
+  - `aidlc-docs/inception/user-stories/personas.md`
+- Story update: added Epic 8 Personalization / Behavior Intelligence with US-P1..US-P7; updated persona map and FR/NFR/QT traceability.
+- Current gate: User Stories review/approval. Next recommended stage: Units Generation revision for U9.
+- Code generated: no.
+
+## U9 Personalization — Units Generation Plan Ready
+
+- Date: 2026-06-23
+- Stage: INCEPTION / Units Generation Part 1
+- Plan created:
+  - `aidlc-docs/inception/plans/u9-personalization-unit-of-work-plan.md`
+- Recommended decomposition: add U9 as `backend/modules/personalization/` in the existing API deployment; keep US-P1..P6 Owner=U9 and US-P7 Owner=U6 with U9 as signal source.
+- Completed: Unit decomposition questions UQ1~UQ5 set to recommended answer A.
+- Updated artifacts:
+  - `aidlc-docs/inception/application-design/unit-of-work.md`
+  - `aidlc-docs/inception/application-design/unit-of-work-dependency.md`
+  - `aidlc-docs/inception/application-design/unit-of-work-story-map.md`
+- Unit update: added U9 Personalization as an API module at `backend/modules/personalization/`; story map now covers 40 stories with unassigned=0.
+- Current gate: Units Generation review/approval. Next recommended stage: U9 Construction Functional Design.
+- Code generated: no.
+
+## U9 Personalization — Functional Design Plan Ready
+
+- Date: 2026-06-23
+- Stage: CONSTRUCTION / U9 Functional Design Part 1
+- Plan created:
+  - `aidlc-docs/construction/plans/u9-personalization-functional-design-plan.md`
+- Decision: execute Functional Design because U9 introduces behavior event entities, interest profile aggregation rules, user controls, and non-blocking personalization failure rules.
+- Completed: Functional Design questions Q1~Q12 set to recommended answer A.
+- Generated artifacts:
+  - `aidlc-docs/construction/u9-personalization/functional-design/domain-entities.md`
+  - `aidlc-docs/construction/u9-personalization/functional-design/business-logic-model.md`
+  - `aidlc-docs/construction/u9-personalization/functional-design/business-rules.md`
+- Design summary: defined BehaviorEvent envelope, 7 event types, owner-scoped UserInterestProfile, bounded personalization decisions, user controls, fail-open default behavior, and QT-7 property candidates.
+- Current gate: Functional Design review/approval. Next recommended stage: U9 NFR Requirements.
+- Code generated: no.
+
+## U9 Personalization — NFR Requirements Plan Ready
+
+- Date: 2026-06-23
+- Stage: CONSTRUCTION / U9 NFR Requirements Part 1
+- Plan created:
+  - `aidlc-docs/construction/plans/u9-personalization-nfr-requirements-plan.md`
+- Decision: execute NFR Requirements because U9 stores user behavior data and must define persistence, privacy, latency, degradation, observability, and QT-7 test boundaries.
+- Current gate: NFR Requirements questions Q1~Q12 awaiting answer/approval. Recommended answers: A for all.
+- Code generated: no.
