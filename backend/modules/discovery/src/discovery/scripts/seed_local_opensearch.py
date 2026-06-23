@@ -20,57 +20,16 @@ import sys
 from collections.abc import Iterable
 from typing import Any
 
-from docsuri_shared.vector_spec import DIMENSIONS, IndexRecord
+from docsuri_shared.index_spec import papers_index_body
+from docsuri_shared.vector_spec import IndexRecord
 
 from ..adapters.opensearch_index import OpenSearchClientFactory
 from ..adapters.settings import DiscoverySettings
 from ..mocks import fixtures
 
-
-def papers_index_body(*, on_disk: bool = False) -> dict[str, Any]:
-    """k-NN cosine vector + BM25 text mapping for the U1 writer's records (vector-spec §2/§3).
-
-    ``on_disk=True`` (production, OpenSearch >= 2.17) keeps full-precision vectors on disk and a
-    4x-compressed copy in RAM — ~4x k-NN RAM cut for full-body multi-chunk papers. on_disk implies
-    the faiss engine + hnsw defaults. The local/default path stays plain lucene HNSW so the manual
-    integration test runs on any OpenSearch version (on_disk would be rejected pre-2.17).
-    """
-    if on_disk:
-        vector: dict[str, Any] = {
-            "type": "knn_vector",
-            "dimension": DIMENSIONS,
-            "space_type": "cosinesimil",
-            "mode": "on_disk",
-            "compression_level": "4x",
-        }
-    else:
-        vector = {
-            "type": "knn_vector",
-            "dimension": DIMENSIONS,
-            "method": {"name": "hnsw", "space_type": "cosinesimil", "engine": "lucene"},
-        }
-    return {
-        "settings": {"index": {"knn": True}},
-        "mappings": {
-            "properties": {
-                "chunkId": {"type": "keyword"},
-                "paperId": {"type": "keyword"},
-                "version": {"type": "integer"},
-                "vector": vector,
-                "section": {"type": "keyword"},
-                "lexicalTerms": {"type": "text"},
-                "title": {"type": "text"},
-                "authors": {"type": "keyword"},
-                "year": {"type": "integer"},
-                "arxivId": {"type": "keyword"},
-                "abstract": {"type": "text"},
-                "abstractSnippet": {"type": "text"},
-                "arxivUrl": {"type": "keyword"},
-                "categories": {"type": "keyword"},
-            }
-        },
-    }
-
+# papers_index_body moved to docsuri_shared.index_spec (single source — the ingestion image
+# provisions from the same body). Re-exported here so existing callers keep importing it from
+# this module.
 
 # Local seed mapping (lucene, in-memory). Production uses papers_index_body(on_disk=True).
 INDEX_BODY: dict[str, Any] = papers_index_body()
