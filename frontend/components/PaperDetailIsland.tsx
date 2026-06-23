@@ -1,16 +1,13 @@
 'use client';
 
 // PaperDetailIsland (P3·P5) — the client island inside the SSR /paper/[id] shell.
-// Owns everything under the DocSuri header: a sticky 요약/초록번역/전문번역 action bar
-// (each opens SummaryModal at the matching tab), the paper metadata (title/authors/
-// abstract), and the normalized S3 full-text body. Choosing a summary anchor closes
-// the modal and highlights the span in the on-page body (Q5=C). real-first: real BFF
-// transport, mock in dev (NEXT_PUBLIC_… unset).
+// Owns everything under the DocSuri header: a sticky 요약/초록번역/전문번역/본문 action bar
+// and the paper metadata (title/authors/abstract). The structured doc-model body (D4) opens
+// in a SEPARATE window (the 본문 route), not inline — choosing a summary source anchor opens
+// that window scrolled to the matching block. real-first: real BFF transport, mock in dev.
 import { useState } from 'react';
 import type { AnchorVM } from '@/types/generated';
 import { usePaperMeta } from '@/lib/usePaperMeta';
-import { DocModelViewer } from './DocModelViewer';
-import { AssetGallery } from './AssetGallery';
 import { SummaryModal, type DetailView } from './SummaryModal';
 import { SaveToLibraryButton } from './SaveToLibraryButton';
 import { CitationTreePanel } from './CitationTreePanel';
@@ -30,10 +27,25 @@ const ACTIONS: { view: DetailView; label: string }[] = [
 
 export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIslandProps) {
   const safeArxivUrl = (arxivUrl && (arxivUrl.startsWith('http://') || arxivUrl.startsWith('https://'))) ? arxivUrl : undefined;
-  const [anchor, setAnchor] = useState<AnchorVM | null>(null);
   const [modalView, setModalView] = useState<DetailView | null>(null);
   const [citationOpen, setCitationOpen] = useState(false);
   const meta = usePaperMeta(paperId);
+
+  // The doc-model rich view opens in its own window (not inline). A summary source anchor
+  // opens that window scrolled to the matching block (carried by label via the query).
+  const bodyHref = `/paper/${encodeURIComponent(paperId)}/doc-model?version=${version}`;
+  const openBody = (anchor?: AnchorVM | null) => {
+    const sp = new URLSearchParams({ version: String(version) });
+    if (anchor?.label) {
+      sp.set('anchorLabel', anchor.label);
+      if (anchor.span) sp.set('anchorSpan', anchor.span);
+    }
+    window.open(
+      `/paper/${encodeURIComponent(paperId)}/doc-model?${sp.toString()}`,
+      '_blank',
+      'noopener',
+    );
+  };
 
   return (
     <div className={styles.root}>
@@ -51,6 +63,15 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
             {a.label}
           </button>
         ))}
+        <a
+          className={styles.action}
+          href={bodyHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="open-doc-model"
+        >
+          본문
+        </a>
         <button
           type="button"
           className={styles.action}
@@ -104,23 +125,13 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
         </p>
       ) : null}
 
-      {/* Figure/table assets (FR-17). A figure/table summary anchor scrolls to its asset;
-          license-disallowed / empty renders nothing. */}
-      <AssetGallery paperId={paperId} version={version} anchor={anchor} />
-
-      {/* Body-first: the structured doc-model rich view (D4), with anchor highlight when set. */}
-      <section className={styles.bodySection} aria-label="본문">
-        <h2 className={styles.bodyHeading}>본문</h2>
-        <DocModelViewer paperId={paperId} version={version} anchor={anchor} arxivUrl={safeArxivUrl} />
-      </section>
-
       {modalView ? (
         <SummaryModal
           paperId={paperId}
           version={version}
           view={modalView}
           onClose={() => setModalView(null)}
-          onAnchor={setAnchor}
+          onAnchor={openBody}
         />
       ) : null}
     </div>
