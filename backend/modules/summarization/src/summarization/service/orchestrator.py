@@ -105,8 +105,9 @@ class SummarizationOrchestrationService:
         if source is None:
             return SourceUnavailableDTO(reason="no_full_text_or_abstract")
 
-        # 3. refine (structure-aware) → 5. length route (shape; over-cap or map-reduce → abstain).
-        refined = self._refiner.refine(source.raw)
+        # 3. refine (structure-aware; doc-model direct or legacy .txt regex — D2) → 5. length
+        #    route (shape; over-cap or map-reduce → abstain).
+        refined = self._refiner.refine_source(source)
         route = self._length.route(refined.token_count)
         # OVER_CAP always abstains. MAP_REDUCE (CONTEXT_BUDGET~INPUT_CAP, ~40K-120K tok) also
         # abstains: async map-reduce is deferred (TD-S9, tracked in #135), so honestly returning

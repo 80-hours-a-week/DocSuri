@@ -1,17 +1,20 @@
-"""SourceSelector — task/scope→source with abstract fallback (BR-S2 / Q1).
+"""SourceSelector — task/scope→source with abstract fallback (BR-S2 / Q1 / D2).
 
-summary → full text (S3 ``stored_full_text_ref``); absent → abstract fallback (NFR-R2)
-with a reason; both absent → None (→ SourceUnavailableDTO).
-translate scope=full → full text (abstract fallback); scope=abstract → abstract.
+summary → full text; absent → abstract fallback (NFR-R2) with a reason; both absent → None
+(→ SourceUnavailableDTO). translate scope=full → full text (abstract fallback); scope=abstract
+→ abstract.
+
+(D2) The full-text input is the structured **doc-model** when a reader is wired and the
+artifact exists (built lazily by U1); it degrades to the legacy plain-text ``.txt`` and then
+the abstract. Selection/fallback/DTO logic is otherwise unchanged — only the input upgrades.
 """
 
 from __future__ import annotations
 
-from ..ports.ports import FullTextSourcePort
-from .models import Scope, SourceKind, SourceText, SummaryRequest, Task
-
-
 from collections.abc import Callable
+
+from ..ports.ports import DocModelReadPort, FullTextSourcePort
+from .models import Scope, SourceKind, SourceText, SummaryRequest, Task
 
 
 class SourceSelector:
@@ -19,9 +22,11 @@ class SourceSelector:
         self,
         full_text: FullTextSourcePort,
         abstract_lookup: Callable[[str], str | None] | None = None,
+        doc_model_reader: DocModelReadPort | None = None,
     ) -> None:
         self._full_text = full_text
         self._abstract_lookup = abstract_lookup
+        self._doc_model_reader = doc_model_reader
 
     def fetch_full_text(self, paper_id: str, version: int) -> str | None:
         """Raw normalized full text (or None). Used by the full-text viewer (Q5=C)."""
@@ -40,6 +45,12 @@ class SourceSelector:
             return None
 
         # summary, or translate scope=full → full text with abstract fallback (Q1/NFR-R2).
+        # (D2) Prefer the structured doc-model; degrade to legacy plain text, then abstract.
+        if self._doc_model_reader is not None:
+            doc = self._doc_model_reader.get_doc_model(request.paper_id, request.version)
+            if doc is not None:
+                return SourceText(kind=SourceKind.FULL_TEXT, doc_model=doc)
+
         raw = self._full_text.get_full_text(request.paper_id, request.version)
         if raw:
             return SourceText(kind=SourceKind.FULL_TEXT, raw=raw)

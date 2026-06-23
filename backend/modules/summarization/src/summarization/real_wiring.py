@@ -78,7 +78,9 @@ def build_real_orchestrator(
 
     orchestrator = SummarizationOrchestrationService(
         store=store,
-        source_selector=SourceSelector(full_text, abstract_lookup=abstract_lookup),
+        source_selector=SourceSelector(
+            full_text, abstract_lookup=abstract_lookup, doc_model_reader=doc_model_reader
+        ),
         refiner=InputRefiner(),
         glossary_resolver=GlossaryResolver(glossary_repo),
         length_router=LengthRouter(),
