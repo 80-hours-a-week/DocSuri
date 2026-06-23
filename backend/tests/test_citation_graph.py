@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
+from types import SimpleNamespace
 from uuid import uuid4
 
 import httpx
@@ -66,6 +68,73 @@ def test_citation_tree_bounds_and_unresolved(monkeypatch) -> None:
     assert body["nodes"][0]["nodeId"] == "2101.00001"
     assert body["nodes"][0]["saveable"] is True
     assert body["unresolved"][0]["title"] == "Unresolved paper"
+
+
+def test_citation_tree_marks_nodes_that_exist_in_corpus() -> None:
+    class PaperService:
+        def get_paper_meta(self, paper_id: str):
+            return object() if paper_id == "2101.00001" else None
+
+    body = controller._build_tree(
+        "root",
+        "root",
+        [
+            {
+                "paperId": "s2-a",
+                "title": "A paper",
+                "externalIds": {"ArXiv": "2101.00001"},
+            },
+            {
+                "paperId": "s2-b",
+                "title": "B paper",
+                "externalIds": {"ArXiv": "9999.99999"},
+            },
+        ],
+        PaperService(),
+    )
+
+    by_id = {node.arxivId: node.inCorpus for node in body.nodes}
+    assert by_id == {"2101.00001": True, "9999.99999": False}
+
+
+def test_redis_snapshot_store_roundtrips_with_ttl(monkeypatch) -> None:
+    class FakeClient:
+        def __init__(self) -> None:
+            self.values = {}
+            self.ttls = {}
+
+        def get(self, key: str):
+            return self.values.get(key)
+
+        def set(self, key: str, value: str, ex: int) -> None:
+            self.values[key] = value
+            self.ttls[key] = ex
+
+    fake_client = FakeClient()
+
+    class FakeRedis:
+        @staticmethod
+        def from_url(url: str):
+            assert url == "redis://cache"
+            return fake_client
+
+    monkeypatch.setitem(sys.modules, "redis", SimpleNamespace(Redis=FakeRedis))
+    monkeypatch.setenv("CITATION_GRAPH_SNAPSHOT_TTL_SECONDS", "30")
+
+    store = controller.RedisSnapshotStore("redis://cache", "cg:")
+    response = controller.CitationTreeResponse(
+        status="Success",
+        rootPaperId="root",
+        nodes=[],
+        edges=[],
+        depthReturned=1,
+    )
+    store.set("root:root", response)
+
+    cached = store.get("root:root")
+    assert cached is not None
+    assert cached.cacheHit is True
+    assert fake_client.ttls["cg:root:root"] == 30
 
 
 def test_feature_flag_blocks_endpoint_by_default() -> None:
