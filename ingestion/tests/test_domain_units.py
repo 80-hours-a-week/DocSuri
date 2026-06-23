@@ -38,7 +38,7 @@ def test_withdrawal_detection_uses_metadata_and_full_text() -> None:
     assert detect_withdrawal(metadata, "This paper has been withdrawn by the authors.")
 
 
-def test_chunker_produces_single_abstract_chunk() -> None:
+def test_chunker_produces_abstract_plus_body_chunks() -> None:
     processor = FetchParseProcessor()
     metadata = sample_metadata()
     raw = RawDocument(
@@ -50,10 +50,15 @@ def test_chunker_produces_single_abstract_chunk() -> None:
     chunker = Chunker()
     first = chunker.chunk(paper)
     second = chunker.chunk(paper)
-    assert first == second
-    assert len(first.chunks) == 1
+    assert first == second  # deterministic
+    # full-body chunking: many chunks per paper, not a single abstract chunk
+    assert len(first.chunks) > 1
     assert first.chunks[0].section == "abstract"
     assert first.chunks[0].ordinal == 0
+    # ordinals are dense 0..N-1
+    assert [c.ordinal for c in first.chunks] == list(range(len(first.chunks)))
+    # body chunks exist beyond the abstract
+    assert {c.section for c in first.chunks} > {"abstract"}
 
 
 def test_dedup_guard_decisions_and_mark_ingested() -> None:

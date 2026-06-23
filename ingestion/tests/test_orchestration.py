@@ -221,7 +221,7 @@ def test_rebuild_lock_defers_incremental_and_event_paths() -> None:
     assert not queue.jobs
 
 
-def test_changed_version_replaces_abstract_chunk() -> None:
+def test_changed_version_replaces_stale_chunks() -> None:
     v1_meta = sample_metadata("2401.00001v1")
     v2_meta = sample_metadata("2401.00001v2")
 
@@ -237,8 +237,13 @@ def test_changed_version_replaces_abstract_chunk() -> None:
 
     job1 = IngestionJob(job_id="job-1", kind=JobKind.EVENT, arxiv_ref="2401.00001v1")
     assert pipeline.ingest_one(job1) is DedupDecision.NEW
-    assert len(index.records) == 1
+    v1_count = len(index.records)
+    assert v1_count >= 1
+    assert all(record.version == 1 for record in index.records.values())
 
     job2 = IngestionJob(job_id="job-2", kind=JobKind.EVENT, arxiv_ref="2401.00001v2")
     assert pipeline.ingest_one(job2) is DedupDecision.CHANGED
-    assert len(index.records) == 1
+    # stale v1 chunks are deleted and the new version fully replaces them — no accumulation
+    # across versions, and identical body shape yields the same chunk count (not doubled).
+    assert all(record.version == 2 for record in index.records.values())
+    assert len(index.records) == v1_count

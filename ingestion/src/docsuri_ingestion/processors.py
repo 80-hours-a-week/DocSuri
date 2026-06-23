@@ -22,6 +22,7 @@ from .domain.models import (
 )
 from .ports import ControlPlaneStorePort
 
+_HEADING_RE = re.compile(r"^(?P<title>[A-Z][A-Za-z0-9 ,.()/_:-]{2,80})$", re.MULTILINE)
 _WHITESPACE_RE = re.compile(r"\s+")
 
 
@@ -75,20 +76,37 @@ class FetchParseProcessor:
 
 @dataclass(frozen=True, slots=True)
 class Chunker:
-    """Abstract-only chunking (issue #120: Q2=C→B 재스코핑, 논문당 1벡터)."""
+    """Full-text body chunking — abstract chunk + section-split body chunks (full-body search).
+
+    Reverses the issue-#120 abstract-only rescoping now that body semantic search is in scope.
+    """
+
+    max_chunk_chars: int = 2400
+    overlap_chars: int = 240
+    max_chunks_per_paper: int = 128
 
     def chunk(self, paper: ParsedPaper) -> ChunkSet:
-        text = normalize_text(paper.abstract)
-        if not text:
+        sections = [("abstract", paper.abstract), *split_sections(paper.full_text)]
+        chunks: list[Chunk] = []
+        for section, section_text in sections:
+            for text in split_text(section_text, self.max_chunk_chars, self.overlap_chars):
+                if len(chunks) >= self.max_chunks_per_paper:
+                    break
+                ordinal = len(chunks)
+                chunks.append(
+                    Chunk(
+                        paper_id=paper.paper_id,
+                        ordinal=ordinal,
+                        section=section,
+                        text=text,
+                        chunk_id=chunk_id(paper.paper_id, ordinal),
+                    )
+                )
+            if len(chunks) >= self.max_chunks_per_paper:
+                break
+        if not chunks:
             raise ValidationViolationError("paper produced no chunks", stage="chunk")
-        chunk = Chunk(
-            paper_id=paper.paper_id,
-            ordinal=0,
-            section="abstract",
-            text=text,
-            chunk_id=chunk_id(paper.paper_id, 0),
-        )
-        return ChunkSet(paper_id=paper.paper_id, version=paper.version, chunks=(chunk,))
+        return ChunkSet(paper_id=paper.paper_id, version=paper.version, chunks=tuple(chunks))
 
 
 class DeduplicationGuard:
@@ -131,7 +149,7 @@ class IndexRecordAssembler:
         chunk: Chunk,
         vector: Sequence[float],
     ) -> IndexRecord:
-        lexical_terms = normalize_text(f"{paper.title} {paper.abstract}")
+        lexical_terms = normalize_text(f"{paper.title} {paper.abstract} {chunk.text}")
         return IndexRecord(
             chunkId=chunk.chunk_id,
             paperId=paper.paper_id,
@@ -157,6 +175,53 @@ def normalize_text(text: str) -> str:
 def detect_withdrawal(metadata: MetadataRecord, text: str) -> bool:
     haystack = f"{metadata.title} {metadata.abstract} {text}".lower()
     return any(marker in haystack for marker in WITHDRAWAL_MARKERS)
+
+
+def split_sections(text: str) -> list[tuple[str, str]]:
+    normalized = normalize_text(text)
+    if not normalized:
+        return []
+    matches = list(_HEADING_RE.finditer(text))
+    if not matches:
+        return [("body", normalized)]
+
+    sections: list[tuple[str, str]] = []
+    for index, match in enumerate(matches):
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        title = normalize_text(match.group("title")).lower()
+        section_text = normalize_text(text[start:end])
+        if section_text:
+            sections.append((title, section_text))
+    return sections or [("body", normalized)]
+
+
+def split_text(text: str, max_chars: int, overlap_chars: int) -> list[str]:
+    normalized = normalize_text(text)
+    if not normalized:
+        return []
+    if max_chars <= 0:
+        raise ValueError("max_chars must be positive")
+    if overlap_chars < 0 or overlap_chars >= max_chars:
+        raise ValueError("overlap_chars must be non-negative and smaller than max_chars")
+    if len(normalized) <= max_chars:
+        return [normalized]
+
+    chunks: list[str] = []
+    cursor = 0
+    while cursor < len(normalized):
+        end = min(cursor + max_chars, len(normalized))
+        if end < len(normalized):
+            split_at = normalized.rfind(" ", cursor, end)
+            if split_at > cursor + max_chars // 2:
+                end = split_at
+        chunk = normalized[cursor:end].strip()
+        if chunk:
+            chunks.append(chunk)
+        if end == len(normalized):
+            break
+        cursor = max(0, end - overlap_chars)
+    return chunks
 
 
 def snippet(abstract: str, max_chars: int = 280) -> str:

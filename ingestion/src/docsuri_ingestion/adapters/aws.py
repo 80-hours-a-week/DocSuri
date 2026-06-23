@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -11,6 +12,9 @@ from docsuri_ingestion.domain.enums import FailureReason
 from docsuri_ingestion.domain.errors import RetriableIngestionError, ValidationViolationError
 from docsuri_ingestion.domain.models import IndexRecordBatch, IndexStats, ParsedPaper, Tombstone
 from docsuri_ingestion.ports import QueueMessage
+
+# Cohere Embed on Bedrock accepts at most 96 texts per invoke_model call.
+_BEDROCK_EMBED_BATCH_LIMIT = 96
 
 
 class S3FullTextStore:
@@ -60,6 +64,15 @@ class BedrockCohereEmbeddingPort:
         del correlation_id
         if EMBEDDING_SPEC.input_type_writer != "search_document":
             raise RuntimeError("Bedrock writer must use search_document input type")
+        # Cohere Embed on Bedrock caps a single request at 96 texts; a long paper can chunk
+        # past that (max_chunks_per_paper=128). Sub-batch and concatenate IN ORDER — the
+        # assembler zips chunk_ids↔vectors with strict=True, so order must be preserved.
+        vectors: list[list[float]] = []
+        for start in range(0, len(texts), _BEDROCK_EMBED_BATCH_LIMIT):
+            vectors.extend(self._embed_batch(texts[start : start + _BEDROCK_EMBED_BATCH_LIMIT]))
+        return vectors
+
+    def _embed_batch(self, texts: Sequence[str]) -> list[list[float]]:
         body = {
             "texts": list(texts),
             "input_type": EMBEDDING_SPEC.input_type_writer,
