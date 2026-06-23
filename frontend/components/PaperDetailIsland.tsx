@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import type { AnchorVM } from '@/types/generated';
 import { usePaperMeta } from '@/lib/usePaperMeta';
-import { FullTextViewer } from './FullTextViewer';
+import { DocModelViewer } from './DocModelViewer';
 import { AssetGallery } from './AssetGallery';
 import { SummaryModal, type DetailView } from './SummaryModal';
 import { SaveToLibraryButton } from './SaveToLibraryButton';
@@ -108,10 +108,10 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
           license-disallowed / empty renders nothing. */}
       <AssetGallery paperId={paperId} version={version} anchor={anchor} />
 
-      {/* Body-first: the normalized S3 full text, with anchor highlight when set. */}
-      <section className={styles.bodySection} aria-label="원문 전문">
-        <h2 className={styles.bodyHeading}>원문 전문</h2>
-        <FullTextViewer paperId={paperId} version={version} anchor={anchor} arxivUrl={safeArxivUrl} />
+      {/* Body-first: the structured doc-model rich view (D4), with anchor highlight when set. */}
+      <section className={styles.bodySection} aria-label="본문">
+        <h2 className={styles.bodyHeading}>본문</h2>
+        <DocModelViewer paperId={paperId} version={version} anchor={anchor} arxivUrl={safeArxivUrl} />
       </section>
 
       {modalView ? (

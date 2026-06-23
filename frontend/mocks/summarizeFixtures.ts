@@ -1,7 +1,13 @@
 // Dev-only summarize/translate/full-text fixtures (mock transport layer, same as
 // searchFixtures). Production is real-first (real BFF) — these are never shipped;
 // they let the U7 surface be previewed in dev (NEXT_PUBLIC_DOCSURI_REAL_API unset).
-import type { SummaryOkDTO, TranslationOkDTO, FullTextOkDTO, AssetsOkDTO } from '@/types/generated';
+import type {
+  SummaryOkDTO,
+  TranslationOkDTO,
+  FullTextOkDTO,
+  AssetsOkDTO,
+  DocModelOkDTO,
+} from '@/types/generated';
 import type { GlossaryUpsertResultDTO, GlossaryTermDTO } from '@/types/glossary';
 
 export const summaryResponse: SummaryOkDTO = {
@@ -119,6 +125,91 @@ export const assetsResponse: AssetsOkDTO = {
       url: _ph('Table 1', '#fef7e0'),
     },
   ],
+};
+
+// Doc-model rich-view fixture (D4). Figure assetIds match `assetsResponse` so the
+// DocModelViewer ↔ /assets join (by assetId) is exercised in the mock preview.
+export const docModelResponse: DocModelOkDTO = {
+  status: 'ok',
+  cached: false,
+  docModel: {
+    meta: {
+      paperId: '2401.00001',
+      version: 1,
+      title: 'Attention Is All You Need',
+      abstract: 'RNN·CNN 없이 어텐션만으로 시퀀스 변환을 수행하는 Transformer를 제안한다.',
+      provenance: {
+        sourceTier: 'ar5iv',
+        parserVersion: 'docmodel-parser@1',
+        schemaVersion: '1.0.0',
+        generatedAt: '2026-06-23T00:00:00Z',
+      },
+    },
+    sections: [
+      {
+        id: 's3',
+        title: 'Model Architecture',
+        blocks: [
+          {
+            id: 's3.p1',
+            type: 'paragraph',
+            text: 'The Transformer uses scaled dot-product attention \\(\\mathrm{Attention}(Q,K,V)\\) in place of recurrence.',
+          },
+          {
+            id: 's3.eq1',
+            type: 'formula',
+            latex: '\\mathrm{Attention}(Q,K,V)=\\mathrm{softmax}\\left(\\frac{QK^{T}}{\\sqrt{d_{k}}}\\right)V',
+            display: true,
+            anchorLabel: '(1)',
+          },
+          {
+            id: 's3.fig1',
+            type: 'figure',
+            assetRef: { assetId: '2401.00001:v1:figure:0', type: 'figure', ordinal: 0 },
+            caption: 'The Transformer — model architecture.',
+            anchorLabel: 'Figure 1',
+          },
+        ],
+        sections: [
+          {
+            id: 's3.2',
+            title: 'Why Self-Attention',
+            blocks: [
+              {
+                id: 's3.2.tbl1',
+                type: 'table',
+                caption: 'Maximum path lengths and per-layer complexity.',
+                anchorLabel: 'Table 1',
+                rows: [
+                  {
+                    cells: [
+                      { text: 'Layer Type', isHeader: true },
+                      { text: 'Complexity', isHeader: true },
+                      { text: 'Path Length', isHeader: true },
+                    ],
+                  },
+                  {
+                    cells: [
+                      { text: 'Self-Attention' },
+                      { text: '\\(O(n^{2}\\cdot d)\\)' },
+                      { text: '\\(O(1)\\)' },
+                    ],
+                  },
+                  {
+                    cells: [
+                      { text: 'Recurrent' },
+                      { text: '\\(O(n\\cdot d^{2})\\)' },
+                      { text: '\\(O(n)\\)' },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
 };
 
 export const fullTextResponse: FullTextOkDTO = {

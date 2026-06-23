@@ -3,7 +3,7 @@
 // Unlike the search response, the summarize union carries a `status` discriminant,
 // so we branch on it directly. Terminal outcomes only — progressive streaming is a
 // transport-seam extension (fast-follow); v1 classifies the completed body.
-import type { SummaryVM, TranslationVM, SummaryMeta, AssetRef } from '@/types/generated';
+import type { SummaryVM, TranslationVM, SummaryMeta, AssetRef, DocModel } from '@/types/generated';
 
 export type SummarizeOutcome =
   | { kind: 'summary'; summary: SummaryVM; meta: SummaryMeta; cached: boolean }
@@ -86,6 +86,33 @@ export function classifyFullTextResponse(body: unknown): FullTextOutcome {
       return { kind: 'sourceUnavailable' };
     default:
       return { kind: 'error', message: '원문을 불러올 수 없습니다.' };
+  }
+}
+
+// ---- Doc-model rich view (D4, replaces getFullText) ----
+
+export type DocModelOutcome =
+  | { kind: 'page'; docModel: DocModel; cached: boolean }
+  | { kind: 'licenseUnavailable' }
+  | { kind: 'sourceUnavailable' }
+  | { kind: 'error'; message: string };
+
+export function classifyDocModelResponse(body: unknown): DocModelOutcome {
+  if (!isRecord(body)) {
+    return { kind: 'error', message: '본문을 불러올 수 없습니다.' };
+  }
+  switch (body.status) {
+    case 'ok':
+      if (isRecord(body.docModel)) {
+        return { kind: 'page', docModel: body.docModel as unknown as DocModel, cached: Boolean(body.cached) };
+      }
+      return { kind: 'error', message: '본문을 불러올 수 없습니다.' };
+    case 'license_unavailable':
+      return { kind: 'licenseUnavailable' };
+    case 'source_unavailable':
+      return { kind: 'sourceUnavailable' };
+    default:
+      return { kind: 'error', message: '본문을 불러올 수 없습니다.' };
   }
 }
 

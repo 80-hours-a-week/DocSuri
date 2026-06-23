@@ -21,6 +21,7 @@ import {
   abstractTranslationResponse,
   fullTranslationResponse,
   fullTextResponse,
+  docModelResponse,
   assetsResponse,
   mockUpsertGlossaryTerm,
   mockListGlossaryTerms,
@@ -109,6 +110,9 @@ export class MockTransport implements Transport {
     }
     if (/^\/api\/papers\/[^/]+\/full-text$/.test(path) && req.method === 'GET') {
       return { status: 200, body: fullTextResponse };
+    }
+    if (/^\/api\/papers\/[^/]+\/doc-model$/.test(path) && req.method === 'GET') {
+      return { status: 200, body: docModelResponse };
     }
     const citationTree = path.match(/^\/api\/papers\/([^/]+)\/citation-tree$/);
     if (citationTree && req.method === 'GET') {
