@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+from dataclasses import replace
 from datetime import UTC, datetime
 
 from docsuri_shared.index_spec import papers_index_body
@@ -133,6 +134,10 @@ def backfill(settings: IngestionSettings | None = None) -> int:
     for metadata in arxiv.harvest_seed(filter_):
         try:
             full_metadata = arxiv.fetch_metadata(metadata.arxiv_ref)
+            # The Atom re-fetch omits the license; restore it from the OAI harvest record
+            # (else every paper fails the OA gate as "missing").
+            if not full_metadata.license_url and metadata.license_url:
+                full_metadata = replace(full_metadata, license_url=metadata.license_url)
             paper = parser.parse(arxiv.fetch_full_text(full_metadata))
             if paper.withdrawal_detected:
                 continue
