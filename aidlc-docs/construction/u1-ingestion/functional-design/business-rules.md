@@ -1,9 +1,9 @@
 # business-rules.md — U1 Ingestion 비즈니스 규칙·속성·추적성 (프로덕션)
 
 **단계**: CONSTRUCTION → Functional Design · **유닛**: U1 Ingestion · **일자**: 2026-06-16
-**근거**: 계획서(프로덕션 재스코핑) — Q1=D·Q2=C·Q12=B·Q13=B·그 외 A · `requirements.md`.
+**근거**: 계획서(프로덕션 재스코핑) — Q1=D·**Q2=B(제목+초록만 인덱싱, issue #120 결정 2026-06-18)**·Q12=B·Q13=B·그 외 A · `requirements.md`.
 **원칙**: 기술 무관 결정·검증·제약. 수치(백오프·동시성·타임아웃)는 정책+NFR Requirements 확정값(Q14).
-**프로덕션 스코프**: 전문 청킹·다중 청크·이벤트 경로·철회 tombstone·전문 오브젝트 보관 활성.
+**프로덕션 스코프**: **초록 단일 청크(논문당 1벡터)**·이벤트 경로·철회 tombstone·전문 오브젝트 보관 활성.
 
 ---
 
@@ -12,12 +12,12 @@
 | ID | 규칙 | 근거/답 |
 |---|---|---|
 | **BR-1 (엄격 OA 라이선스 검증)** | **팀 결정(2026-06-16): 엄격 OA 라이선스 검증.** 각 논문의 arXiv 라이선스를 검사해 **재배포 가능 라이선스만**(예 CC-BY/CC-BY-SA/CC0) 수집·전문 보관·인덱싱; **재배포 불가·미표기·불명(예 arXiv 비독점 라이선스) → NON_OA 배제**. 취득 실패도 제외. (Q5 A→엄격 검증 확정; A-5 가정 강화; 커버리지보다 정합 우선.) | C-1, A-5, **Q5=엄격** |
-| **BR-2 (콘텐츠 범위)** | **OA 전문(full-text) + 메타데이터** 수집·청킹(Q2=C). 전문 원천은 오브젝트 스토리지 보관(BR-20). | FR-6, **Q2=C** |
+| **BR-2 (콘텐츠 범위)** | **제목+초록만 임베딩·인덱싱**(Q2=B, issue #120). 전문은 수집·S3 보관(BR-20, U7 요약 용도)하되 **벡터 인덱스 대상이 아님**. | FR-6, **Q2=B** |
 | **BR-3 (논문 식별·버전)** | `PaperId=버전 없는 arXiv ID`. 최신 vN만 인덱스(latest-wins). NEW/CHANGED/DUPLICATE 의미(Q3=A). | Q3=A |
 | **BR-4 (디덥 지문)** | `ContentFingerprint=PaperId+PaperVersion` 파생(콘텐츠 해시 아님). 동일 지문 재수신→DUPLICATE 단락(재임베딩 0). | NFR-C1, PBT-08, Q6=A |
-| **BR-5 (청킹 결정성·전략)** | **섹션 인지 다중 청크**(초록·본문 섹션, 결정적 오버랩); `chunk`·`chunkId` 결정적·멱등(동일 입력→동일 ChunkSet/ChunkId). 빈/비정상 본문 안전(BR-21). | FR-6, QT-4, PBT-08, **Q2=C** |
-| **BR-6 (IndexRecord 구성)** | 청크당 레코드 = 카드 필드(FR-4) + category + version + section + abstract + lexicalTerms(제목+초록+본문 토큰). 해소 가능 arXiv ID/링크 필수(FR-5). | FR-2/4/5, Q4=A |
-| **BR-7 (논문 단위 원자성)** | 한 논문의 **전 청크**(다중) 임베딩·기록 성공 시에만 커밋(markIngested). 일부 실패=미커밋·재시도. **부분/조용한 인덱싱 금지.** | NFR-R1, **Q8=A** |
+| **BR-5 (청킹 결정성·전략)** | **논문당 단일 청크(초록 전문)**; `chunk`·`chunkId` 결정적·멱등(동일 입력→동일 ChunkSet/ChunkId). | FR-6, QT-4, PBT-08, **Q2=B** |
+| **BR-6 (IndexRecord 구성)** | 논문당 1 레코드 = 카드 필드(FR-4) + category + version + section("abstract") + abstract + lexicalTerms(**제목+초록** 토큰만). 해소 가능 arXiv ID/링크 필수(FR-5). | FR-2/4/5, Q4=A |
+| **BR-7 (논문 단위 원자성)** | 한 논문의 **단일 청크(초록)** 임베딩·기록 성공 시에만 커밋(markIngested). 실패=미커밋·재시도. **부분/조용한 인덱싱 금지.** | NFR-R1, **Q8=A** |
 | **BR-8 (커밋 순서 INV-1)** | **index write durable → markIngested → advanceWatermark**. upsert 후 markIngested 전 크래시→재분류·멱등 재upsert. | NFR-R1, INV-1 |
 | **BR-9 (멱등 upsert)** | upsert는 ChunkId 키 멱등(재실행·재전송이 중복 레코드 0). CHANGED는 덮어쓰기. | QT-4, PBT-08, Q3=A |
 | **BR-10 (워터마크·RPO)** | 기준 시각=arXiv updated. RPO=마지막 인제스천(RES-2, 별도 백업 없음). | RES-2, Q7=A |
@@ -31,7 +31,7 @@
 | **BR-18 (fail-closed)** | 모든 외부 호출(arXiv/오브젝트 스토리지/임베딩 게이트웨이/벡터 스토어) 타임아웃·서킷; 실패 fail closed. | SEC-15, RES-9, NFR-R1 |
 | **BR-19 (입력 검증)** | 파싱 산출 필수 필드·형식 검증·새니타이즈. | SEC-5 |
 | **BR-20 (전문 보관·공개 차단)** | **Q2=C 활성**: OA 전문 원천을 오브젝트 스토리지 보관(StoredFullText/ObjectRef), **공개 차단(SEC-9)**, 재구축·재처리 재사용. at-rest 암호화/TLS(SEC-1, NFR Q17). | **SEC-9**, SEC-1, RES-2 |
-| **BR-21 (본문 크기 정책)** | **Q2=C 활성**: 과대 본문 결정적 절단/청크 상한, 빈/손상 본문 PERMANENT 거부 또는 안전 처리. 임베딩 비용 통제(NFR-C1). | FR-6, NFR-C1 |
+| **BR-21 (본문 크기 정책)** | **Q2=B**: 인덱싱 대상=초록만이므로 본문 크기가 벡터 비용에 영향 없음. 전문은 S3 보관만(BR-20) — 과대 전문 취득 제한은 S3 스토리지 비용 관점에서만 적용. | FR-6, NFR-C1 |
 
 ---
 
@@ -53,9 +53,9 @@
 | 속성 | 진술 | 트레이스 |
 |---|---|---|
 | **P1 디덥 멱등성** | isNew 결정적·입력 의존; 동일 이벤트/논문 재전송이 추가 인덱싱·중복 0(Q15=A). | PBT-08, BR-4/9/12 |
-| **P2 청크 결정성** | 동일 ParsedPaper → 동일 ChunkSet·동일 ChunkId(섹션 인지 다중 청크 순서·내용 안정). | PBT-08, BR-5 |
+| **P2 청크 결정성** | 동일 ParsedPaper → 동일 ChunkSet·동일 ChunkId(초록 단일 청크, 결정적). | PBT-08, BR-5 |
 | **P3 upsert 멱등성** | 동일 IndexRecordBatch 재upsert가 인덱스 상태 불변; CHANGED는 덮어쓰기. | PBT-08, BR-8/9 |
-| **P4 무손실·무중복** | 주어진 ParsedPaper에 대해 `|upserted IndexRecords| == |ChunkSet|`(다중 청크 누락/중복 0). | NFR-R1, BR-7 |
+| **P4 무손실·무중복** | 주어진 ParsedPaper에 대해 `|upserted IndexRecords| == 1`(논문당 1벡터, 누락/중복 0). | NFR-R1, BR-7 |
 | **P5 임베딩 정렬 보존** | `EmbeddingBatch.vectors[i] ↔ chunks[i].chunkId`(재정렬/누락 0). | NFR-R1, BR-7 |
 | **P6 워터마크 단조성** | advanceWatermark는 BR-11 max-clamp(전진만); SEED_REBUILD 리셋만 예외. | RES-2, BR-11 |
 
@@ -68,7 +68,7 @@
 | 축 | 프로덕션 결정 | 비고 |
 |---|---|---|
 | 코퍼스 슬라이스 | cs.LG/cs.AI/cs.CL/cs.CV/stat.ML × 5년(수십만)(Q1=D) | FR-6 풀 슬라이스 |
-| 본문 깊이 | OA 전문 청킹·다중 청크(Q2=C) | 전문 보관(BR-20) |
+| 본문 깊이 | **제목+초록만 인덱싱(Q2=B, issue #120)** | 전문은 S3 보관만(BR-20); 벡터 인덱스 대상 아님 |
 | 트리거 표면 | 수동 rebuild + 스케줄 증분 + **new-arXiv 이벤트 활성**(Q12=B) | 3경로 |
 | 철회/tombstone | 탐지·tombstone 활성(Q13=B) | 메타+전문 신호(BR-14) |
 | 평가셋 코퍼스 | QT-1/QT-2 대상 논문 포함 보장(Q14=A FD) | U2/U6 FD가 평가셋 구축 |
