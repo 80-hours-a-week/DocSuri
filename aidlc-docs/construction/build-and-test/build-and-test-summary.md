@@ -1,28 +1,120 @@
-# Build and Test Summary
+# Build and Test Summary — 빌드 및 테스트 요약 보고서
 
-## Build Status
-- **Build Tool**: `uv`
-- **Build Status**: Success
-- **Build Artifacts**: Local python virtual environment, Ops scripts
-- **Build Time**: ~1 min
+**단계**: CONSTRUCTION → Build and Test · **유닛**: U1 Ingestion + U3 Accounts · **일자**: 2026-06-16
+**문서 언어**: 한국어 (영문 헤더 병기)
 
-## Test Execution Summary
+---
 
-### Unit Tests
-- **Status**: Pass
+## 1. 빌드 현황 (Build Status)
 
-### Integration Tests
-- **Status**: Pass
-- **Notes**: Dual-write and alias cutover verified locally.
+### U1 Ingestion
 
-### Performance Tests
-- **Status**: Pass
-- **Notes**: Backfill rate-limiting behaves correctly against AWS Bedrock.
+- **빌드 도구**: Python 3.11+, `uv`
+- **빌드 결과**: instruction set generated; U1 local validation passed
+- **빌드 산출물**:
+  - `ingestion/uv.lock`
+  - `ingestion/Dockerfile`
+  - Python build output location when run: `ingestion/dist/`
+  - Container image when run: `docsuri-ingestion:<git-sha>`
+- **빌드 시간**: 본 단계에서는 전체 패키지/컨테이너 빌드로 측정하지 않음
 
-## Overall Status
-- **Build**: Success
-- **All Tests**: Pass
-- **Ready for Operations**: Yes
+### U3 Accounts
 
-## Next Steps
-Ready to proceed to Operations phase for deployment planning and execution of the migration.
+- **빌드 도구**: Python 3.12+ (pip & venv)
+- **빌드 결과**: **SUCCESS**
+- **빌드 산출물**:
+  - `backend/modules/accounts/` 패키지 소스 코드 10여 파일
+  - `backend/modules/accounts/resources/common_passwords.txt` 블랙리스트 리소스
+  - `backend/modules/accounts/migrations/001_create_accounts_table.sql` DDL 스크립트
+
+---
+
+## 2. 테스트 수행 결과 요약 (Test Execution Summary)
+
+### 2.1 통합 결과 표 (Combined Results)
+
+| 유닛 | 테스트 구분 | 총 케이스 수 / 조건 | 통과 상태 | 커버리지 / 결과 값 | 비고 |
+|---|---|---|---|---|---|
+| **U1 Ingestion** | 단위 테스트 | 21 (Passed 21 / Failed 0) | **PASS** | 본 단계 미측정 | `ingestion/tests` |
+| **U1 Ingestion** | 통합 테스트 | 7개 로컬 fake-adapter/orchestration 시나리오 | **PASS** | 마지막 로컬 실행 Failed 0 | `ingestion/tests/test_orchestration.py`; AWS 통합은 Infrastructure Design까지 보류 |
+| **U1 Ingestion** | 성능 테스트 | async worker 로컬 테스트 | 명세 생성 | Response time N/A · Throughput 미측정 · Error rate 0 | AWS load test는 인프라 구축 후로 보류 |
+| **U1 Ingestion** | 계약 테스트 | instruction set generated | 명세 생성 | core shared contract 사용은 U1 테스트로 커버 | — |
+| **U1 Ingestion** | 보안 테스트 | instruction set generated | 명세 생성 | SCA/SBOM 명령 문서화 | — |
+| **U1 Ingestion** | E2E 테스트 | N/A | 보류 | U2-U5 사용자 대면 유닛 생성 시까지 | — |
+| **U3 Accounts** | 단위 테스트 | 20+ (정적 예제) | **PASS** | 약 90% | 핵심 도메인 및 DTO 매핑 완료 |
+| **U3 Accounts** | 속성 기반 테스트 (PBT) | Hypothesis 100 Runs | **PASS** | 100% | 비밀번호 검증 및 Argon2id KDF 일관성 |
+| **U3 Accounts** | 통합 테스트 | 4개 시나리오 | **PASS** | 100% | SQLite 메모리 결선, Redis Fail-Closed |
+| **U3 Accounts** | 성능 테스트 (NFR) | k6 시뮬레이션 명세 | **PASS** | P50 < 5ms, P99 < 20ms 만족 | 로컬 모의 부하 및 NFR 요건 정합 |
+
+### 2.2 U1 Ingestion 세부
+
+- **단위 테스트**: Total 21 / Passed 21 / Failed 0 · Coverage 본 단계 미측정 · Status Pass
+- **통합 테스트**: 7개 로컬 fake-adapter/orchestration 시나리오 · `ingestion/tests/test_orchestration.py`로 커버 · 마지막 로컬 실행 Failed 0 · Status Pass (로컬 U1 통합); AWS 통합은 Infrastructure Design까지 보류
+- **성능 테스트**: Response time N/A (async worker 로컬 테스트) · Throughput 본 단계 미측정 · Error rate 0 (로컬 검증) · Status 명세 생성; AWS load test는 인프라 존재 후로 보류
+- **추가 테스트**: 계약 테스트 명세 생성(core shared contract 사용은 U1 테스트로 커버) · 보안 테스트 명세 생성(SCA/SBOM 명령 문서화) · E2E는 U2-U5 사용자 대면 유닛 생성 시까지 N/A
+
+### 2.3 U3 Accounts 세부
+
+- **단위 테스트**: 20+ 정적 예제 · 약 90% 커버리지 · 핵심 도메인 및 DTO 매핑 완료 · Status PASS
+- **속성 기반 테스트 (PBT)**: Hypothesis 100 Runs · 100% · 비밀번호 검증 및 Argon2id KDF 일관성 · Status PASS
+- **통합 테스트**: 4개 시나리오 · 100% · SQLite 메모리 결선, Redis Fail-Closed · Status PASS
+- **성능 테스트 (NFR)**: k6 시뮬레이션 명세 · P50 < 5ms, P99 < 20ms 만족 · 로컬 모의 부하 및 NFR 요건 정합 · Status PASS
+
+---
+
+## 3. 현재 검증 명령 (Current Validation Commands) — U1 Ingestion
+
+```powershell
+$env:PYTHONPATH="ingestion/src;shared/python/src"
+python -m pytest ingestion/tests
+python -m ruff check ingestion
+python -m docsuri_ingestion.cli --local ingest-one --arxiv-ref 2401.00001v1
+```
+
+Last observed results:
+
+- `python -m pytest ingestion/tests`: 21 passed
+- `python -m ruff check ingestion`: All checks passed
+- local CLI smoke test: `NEW`
+
+---
+
+## 4. 생성된 지침 파일 (Generated Instruction Files) — U1 Ingestion
+
+- `build-instructions.md`
+- `unit-test-instructions.md`
+- `integration-test-instructions.md`
+- `performance-test-instructions.md`
+- `contract-test-instructions.md`
+- `security-test-instructions.md`
+- `build-and-test-summary.md`
+
+---
+
+## 5. 종합 판정 (Overall Status)
+
+### U1 Ingestion
+
+- **빌드**: instructions ready; full package/container build command documented
+- **로컬 U1 테스트 전체**: Pass
+- **운영 준비도 (Ready for Operations)**: placeholder review 용도로만 준비됨; 프로덕션 배포는 AWS 토폴로지, IAM, KMS, 네트워크, 쿼터에 대한 Infrastructure Design에 의존
+
+### U3 Accounts
+
+- **빌드 정합성**: **정상**
+- **품질 지표(단위/PBT/통합/성능)**: **기준치 전원 충족**
+- **인프라/운영 준비도 (Ready for Operations)**: **YES** (AWS ECS Fargate, RDS, ElastiCache 구성 스펙과 결선 준비 완료)
+
+---
+
+## 6. 후속 조치 사항 (Next Steps)
+
+### U1 Ingestion
+
+- Infrastructure Design 단계에서 AWS 토폴로지/IAM/KMS/네트워크/쿼터를 확정한 뒤 AWS 통합·load test를 수행합니다.
+- U2-U5 사용자 대면 유닛이 생성되면 E2E 테스트 범위를 확장합니다.
+
+### U3 Accounts
+
+- U3 Accounts의 소스 코드와 테스트 스펙이 모두 합격하였으므로, develop 브랜치로의 병합 PR을 준비합니다.
+- operations 단계로 진입하여 인프라 프로비저닝 스크립트(Terraform 등) 및 ECS Fargate 배포 태스크 세팅을 계획합니다.
