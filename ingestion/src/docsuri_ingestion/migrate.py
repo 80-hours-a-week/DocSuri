@@ -30,17 +30,17 @@ _BACKFILL_DELAY_SECONDS = 3.0
 
 
 def _admin_client(settings: IngestionSettings):
-    """Raw OpenSearch admin client matching the writer adapter (aws.OpenSearchVectorIndex):
-    TLS on in prod, basic-auth only if both creds are present. The prod domain is SG-gated
-    (no FGAC), so http_auth is None and access is by network reachability."""
-    from opensearchpy import OpenSearch
+    """OpenSearch admin client matching the writer adapter (aws.build_opensearch_client):
+    TLS on in prod and SigV4-signed (service ``es``) with the ECS task role, so the managed
+    VPC domain's resource policy authorizes the request. Unsigned only for local clusters."""
+    from .adapters.aws import build_opensearch_client
 
     if not settings.opensearch_endpoint:
         raise SystemExit("DOCSURI_OPENSEARCH_ENDPOINT is required")
     local = settings.env == "local"
-    return OpenSearch(
-        hosts=[settings.opensearch_endpoint],
-        http_auth=None,
+    return build_opensearch_client(
+        endpoint=settings.opensearch_endpoint,
+        region_name=None if local else settings.aws_region,
         use_ssl=not local,
         verify_certs=not local,
     )
@@ -106,7 +106,9 @@ def backfill(settings: IngestionSettings | None = None) -> int:
     arxiv = ArxivHttpSource(timeout_seconds=30.0)
     embedder = BedrockCohereEmbeddingPort(model_id=model_id, region_name=settings.aws_region)
     os_index = OpenSearchVectorIndex(
-        endpoint=settings.opensearch_endpoint or "", index_name=index_name
+        endpoint=settings.opensearch_endpoint or "",
+        index_name=index_name,
+        region_name=settings.aws_region,
     )
     parser, chunker, assembler = FetchParseProcessor(), Chunker(), IndexRecordAssembler()
     filter_ = CategoryFilter(

@@ -113,6 +113,7 @@ def build_production_runtime(settings: IngestionSettings) -> RuntimeServices:
         vector_index=OpenSearchVectorIndex(
             endpoint=settings.opensearch_endpoint or "",
             index_name=settings.opensearch_index,
+            region_name=settings.aws_region,
             stats_ttl_seconds=settings.index_stats_ttl_seconds,
         ),
         control_plane=control,
@@ -129,6 +130,7 @@ def build_production_runtime(settings: IngestionSettings) -> RuntimeServices:
         vector_index_v2=OpenSearchVectorIndex(
             endpoint=settings.opensearch_endpoint or "",
             index_name=settings.opensearch_index_v2,
+            region_name=settings.aws_region,
             stats_ttl_seconds=settings.index_stats_ttl_seconds,
         ) if settings.bedrock_model_id_v2 else None,
     )
