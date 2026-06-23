@@ -66,9 +66,21 @@ def build_real_orchestrator(
             signed_url_ttl_seconds=settings.asset_url_ttl_seconds,
         )
 
+    # doc-model rich-view (BR-30, read-only). Wired only when enabled — otherwise the
+    # orchestrator gets no reader and ``doc_model`` returns None → ``license_unavailable``.
+    doc_model_reader = None
+    if settings.docmodel_viewer_enabled:
+        from .adapters.s3_docmodel import S3DocModelReader
+
+        doc_model_reader = S3DocModelReader(
+            bucket=settings.s3_bucket, region_name=settings.region_name
+        )
+
     orchestrator = SummarizationOrchestrationService(
         store=store,
-        source_selector=SourceSelector(full_text, abstract_lookup=abstract_lookup),
+        source_selector=SourceSelector(
+            full_text, abstract_lookup=abstract_lookup, doc_model_reader=doc_model_reader
+        ),
         refiner=InputRefiner(),
         glossary_resolver=GlossaryResolver(glossary_repo),
         length_router=LengthRouter(),
@@ -79,5 +91,6 @@ def build_real_orchestrator(
         observability=observability,
         model_ver=settings.model_ver,
         asset_reader=asset_reader,
+        doc_model_reader=doc_model_reader,
     )
     return SummarizationBundle(orchestrator=orchestrator, settings=settings)

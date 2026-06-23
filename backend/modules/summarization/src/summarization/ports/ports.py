@@ -10,6 +10,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
+from docsuri_shared.dtos import DocModel
+
 from ..domain.models import (
     Glossary,
     RefinedSource,
@@ -26,6 +28,7 @@ __all__ = [
     "LlmGatewayPort",
     "SummaryStorePort",
     "FullTextSourcePort",
+    "DocModelReadPort",
     "GlossaryRepositoryPort",
     "AssetReadPort",
 ]
@@ -76,6 +79,20 @@ class FullTextSourcePort(Protocol):
 
     def get_full_text(self, paper_id: str, version: int) -> str | None:
         """Return the stored full text, or None when absent / license-disallowed (Q1)."""
+        ...
+
+
+@runtime_checkable
+class DocModelReadPort(Protocol):
+    """U1 doc-model read capability (S3 ``doc-model/{paperId}/v{version}.json``). Read-only.
+
+    U7 reads the lazily-built, cached structured doc-model (BR-30); building/caching is U1's
+    role (the read side never builds). The returned ``DocModel`` is url-free (SEC-9) — figure
+    signed URLs come from the parallel ``/assets`` manifest, joined by ``assetId`` on the client.
+    """
+
+    def get_doc_model(self, paper_id: str, version: int) -> DocModel | None:
+        """Return the cached doc-model, or None when absent / not yet built / license-disallowed."""
         ...
 
 

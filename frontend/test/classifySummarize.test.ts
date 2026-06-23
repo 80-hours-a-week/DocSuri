@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  classifySummarizeResponse,
-  classifyFullTextResponse,
-} from '@/lib/api/classifySummarize';
+import { classifySummarizeResponse } from '@/lib/api/classifySummarize';
 
 // Test-only literal fixtures (real-first: no production mock adapter).
 const summaryOk = {
@@ -58,14 +55,5 @@ describe('classifySummarizeResponse — exhaustive status mapping (BR-SF-14)', (
     expect(classifySummarizeResponse(42).kind).toBe('error');
     expect(classifySummarizeResponse({ status: 'ok' }).kind).toBe('error'); // ok without payload
     expect(classifySummarizeResponse({ status: 'weird' }).kind).toBe('error');
-  });
-});
-
-describe('classifyFullTextResponse (Q5=C)', () => {
-  it('maps ok / license / source / error', () => {
-    expect(classifyFullTextResponse({ status: 'ok', text: 'body' }).kind).toBe('page');
-    expect(classifyFullTextResponse({ status: 'license_unavailable' }).kind).toBe('licenseUnavailable');
-    expect(classifyFullTextResponse({ status: 'source_unavailable' }).kind).toBe('sourceUnavailable');
-    expect(classifyFullTextResponse(null).kind).toBe('error');
   });
 });

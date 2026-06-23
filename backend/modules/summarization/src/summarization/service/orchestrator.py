@@ -15,6 +15,7 @@ API/presentation concern; the domain returns a complete, validated result.
 
 from __future__ import annotations
 
+from docsuri_shared.dtos import DocModel
 from docsuri_shared.ports import CostGuardCircuitBreaker, ObservabilityHub
 
 from ..domain.assembler import ResultAssembler
@@ -35,7 +36,13 @@ from ..domain.models import (
 )
 from ..domain.refiner import InputRefiner
 from ..domain.source_selector import SourceSelector
-from ..ports.ports import AssetReadPort, LlmGatewayPort, LlmUnavailable, SummaryStorePort
+from ..ports.ports import (
+    AssetReadPort,
+    DocModelReadPort,
+    LlmGatewayPort,
+    LlmUnavailable,
+    SummaryStorePort,
+)
 
 
 def _is_cost_degraded(budget) -> bool:
@@ -61,6 +68,7 @@ class SummarizationOrchestrationService:
         observability: ObservabilityHub,
         model_ver: str,
         asset_reader: AssetReadPort | None = None,
+        doc_model_reader: DocModelReadPort | None = None,
     ) -> None:
         self._store = store
         self._source = source_selector
@@ -74,6 +82,7 @@ class SummarizationOrchestrationService:
         self._obs = observability
         self._model_ver = model_ver
         self._asset_reader = asset_reader
+        self._docmodel_reader = doc_model_reader
 
     def run(self, request: SummaryRequest, ctx: RequestContext) -> SummaryResponse:
         user_id = ctx.auth_session.user_id
@@ -96,8 +105,9 @@ class SummarizationOrchestrationService:
         if source is None:
             return SourceUnavailableDTO(reason="no_full_text_or_abstract")
 
-        # 3. refine (structure-aware) → 5. length route (shape; over-cap or map-reduce → abstain).
-        refined = self._refiner.refine(source.raw)
+        # 3. refine (structure-aware; doc-model direct or legacy .txt regex — D2) → 5. length
+        #    route (shape; over-cap or map-reduce → abstain).
+        refined = self._refiner.refine_source(source)
         route = self._length.route(refined.token_count)
         # OVER_CAP always abstains. MAP_REDUCE (CONTEXT_BUDGET~INPUT_CAP, ~40K-120K tok) also
         # abstains: async map-reduce is deferred (TD-S9, tracked in #135), so honestly returning
@@ -175,11 +185,14 @@ class SummarizationOrchestrationService:
         reflects the new term."""
         return self._glossary.upsert_term(user_id, term_from, term_to)
 
-    # --- full-text viewer (Q5=C) ---------------------------------------------
-    def full_text(self, paper_id: str, version: int) -> str | None:
-        """Normalized full text for the in-app viewer. None → unavailable. OA license
-        gating is applied at the router (the source port has no license signal)."""
-        return self._source.fetch_full_text(paper_id, version)
+    # --- structured doc-model (BR-30, rich-view + summary input) -------------
+    def doc_model(self, paper_id: str, version: int) -> DocModel | None:
+        """Read the lazily-built, cached structured doc-model (None → not yet built /
+        unavailable). Read-only — building is U1's role (D6). OA license gating is applied
+        at the router (parallel to full_text/list_assets)."""
+        if self._docmodel_reader is None:
+            return None
+        return self._docmodel_reader.get_doc_model(paper_id, version)
 
     # --- figure/table assets (FR-17, BR-S15) ---------------------------------
     def list_assets(self, paper_id: str, version: int) -> list[AssetRef] | None:

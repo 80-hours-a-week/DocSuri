@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from docsuri_shared.dtos import DocModel
+
 
 class Task(StrEnum):
     SUMMARY = "summary"
@@ -102,7 +104,10 @@ class SummaryCacheKey:
 @dataclass(frozen=True, slots=True)
 class SourceText:
     kind: SourceKind
-    raw: str
+    raw: str = ""  # plain text (abstract, or legacy .txt full text); empty when doc_model is set
+    # (D2) structured doc-model full-text input — preferred over plain `.txt` when available.
+    # The refiner takes sections/tables/formulas/captions from it directly (no regex guessing).
+    doc_model: DocModel | None = None
     fallback_reason: str | None = None  # set when summary fell back to abstract (Q1/NFR-R2)
 
 
@@ -114,9 +119,24 @@ class Section:
 
 
 @dataclass(frozen=True, slots=True)
+class Table:
+    """A doc-model table projected for the LLM input + grounding (D8 — numbers visible).
+
+    ``rows`` are the structured cell texts (row-major); ``label`` is the paper's anchor label
+    ("Table 3"); ``anchor`` is the doc-model block id. Carried on ``RefinedSource`` so the
+    grounding gate can resolve table anchors and numeric matches against real data."""
+
+    label: str
+    rows: tuple[tuple[str, ...], ...]
+    caption: str = ""
+    anchor: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class RefinedSource:
     body: str
     sections: tuple[Section, ...] = ()
+    tables: tuple[Table, ...] = ()  # doc-model structured tables — data visible to LLM (D8)
     captions: tuple[str, ...] = ()  # Table/Figure captions — preserved (Q2)
     formulas: tuple[str, ...] = ()  # LaTeX — preserved, never translated
     preserved: tuple[str, ...] = ()  # Appendix, Supplementary Results, etc. (Step 36)
