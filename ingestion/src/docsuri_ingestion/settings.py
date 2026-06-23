@@ -26,6 +26,21 @@ class IngestionSettings(BaseModel):
     request_timeout_seconds: float = Field(default=30.0, alias="DOCSURI_REQUEST_TIMEOUT_SECONDS")
     index_stats_ttl_seconds: float = Field(default=60.0, alias="DOCSURI_INDEX_STATS_TTL_SECONDS")
     arxiv_rate_per_second: float = Field(default=0.33, alias="DOCSURI_ARXIV_RATE_PER_SECOND")
+    max_chunks_per_paper: int = Field(default=128, alias="DOCSURI_MAX_CHUNKS_PER_PAPER")
+    max_chunk_chars: int = Field(default=2400, alias="DOCSURI_MAX_CHUNK_CHARS")
+    chunk_overlap_chars: int = Field(default=240, alias="DOCSURI_CHUNK_OVERLAP_CHARS")
+    # FR-17 multimodal assets (display-only). Safe default OFF — base worker unaffected.
+    multimodal_assets_enabled: bool = Field(
+        default=False, alias="DOCSURI_MULTIMODAL_ASSETS_ENABLED"
+    )
+    asset_s3_prefix: str = Field(default="assets", alias="DOCSURI_ASSET_S3_PREFIX")
+    asset_max_longest_side: int = Field(default=2048, alias="DOCSURI_ASSET_MAX_LONGEST_SIDE")
+    asset_max_pixels: int = Field(default=30_000_000, alias="DOCSURI_ASSET_MAX_PIXELS")
+    asset_webp_quality: int = Field(default=80, alias="DOCSURI_ASSET_WEBP_QUALITY")
+    asset_kms_key_id: str | None = Field(default=None, alias="DOCSURI_ASSET_KMS_KEY_ID")
+    asset_fetch_timeout_seconds: float = Field(
+        default=20.0, alias="DOCSURI_ASSET_FETCH_TIMEOUT_SECONDS"
+    )
 
     @classmethod
     def from_env(cls) -> IngestionSettings:

@@ -64,6 +64,16 @@
 - **SEC-11**: 레이트리밋·남용 방어 = U6 게이트웨이 강제.
 - **fail-closed(SEC-15)**: 근거화 미통과·LLM 장애·비용 OPEN → 기권으로 수렴(날조·빈화면·스택 비노출).
 
+### BR-S15 — 자산 읽기·노출 (FR-17, 2026-06-22) (표시 전용)
+- `GET /api/papers/{id}/assets`: 인증 필수(SEC-8) · **OA 라이선스 게이트(BR-SF-11 재사용)** — 비-OA → `license_unavailable`. 공유 RDS `paper_asset` **읽기 전용**(U1 단일 writer) → `object_ref` **단기 만료 서명 URL**로만 노출(**SEC-9** — object_ref·내부 메타 비노출). ordinal 정렬. OA·자산 0 = `ok`+빈 배열.
+- 요약 LLM·근거화·캐시 경로 **불변**(자산은 별도 읽기 경로).
+
+### BR-S16 — 계약 SSOT 수립 (갭 #1, §8 예고 이행)
+- 수기 `summarize.ts`를 **`shared/dtos/summarization.schema.json` SSOT**로 승격(요약/번역/full-text + 신규 `AssetRef`/`PaperAssetsResponse`). 프론트 타입은 스키마 **생성**(드리프트 0). SEC-9 비노출 불변.
+
+### BR-S17 — 상태 매핑 정합 (갭 #2/#3)
+- 응답 union에 `unauthorized`(401) 명시, `validation_error`는 `message` 포함. 프론트 분류기가 **상태로 판정**(검증오류→입력 확인 경로, 인증오류→인증 경로) — 일반 'error' 뭉개기 제거.
+
 ---
 
 ## 2. 속성 기반 테스트 속성 (QT-4 / PBT 범위)
@@ -75,6 +85,7 @@
 | **PBT-S3** | 후치환 멱등 — keep-as-is 용어 불변, 단순 명사 후치환 재적용 불변 | BR-S4 |
 | **PBT-S4** | `SummaryResponse` DTO 라운드트립 — 4 종단 상태 직렬화/역직렬화 보존 · 내부 필드 비노출 유지 | BR-S9·SEC-9 |
 | **PBT-S5** | 앵커 검증 건전성 — 앵커가 가리킨 섹션/span이 `RefinedSource`에 실재할 때만 통과(없으면 기권) | BR-S7 |
+| **PBT-S6** | 자산 응답 라운드트립·비노출 — `PaperAssetsResponse` 직렬화 보존; `AssetRef`에 `object_ref`·내부 메타 비노출(서명 URL만) | BR-S15·SEC-9 |
 
 > 차단성/권고 분류·Hypothesis 전략은 NFR Requirements(전역 PBT 정책 계승).
 

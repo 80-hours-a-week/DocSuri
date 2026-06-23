@@ -240,6 +240,100 @@ class SourceUnavailableDTO(BaseModel):
     )
 
 
+class Type(StrEnum):
+    """
+    Asset kind. Trace: FR-17.
+    """
+
+    figure = 'figure'
+    table = 'table'
+
+
+class SourceMode(StrEnum):
+    """
+    How the asset was extracted (hybrid). Trace: FR-17.
+    """
+
+    structured = 'structured'
+    page_crop = 'page-crop'
+
+
+class AssetRef(BaseModel):
+    """
+    FR-17 figure/table view-model (display-only). Produced by U1 ingestion (paper_asset), presigned by U7. SEC-9: a short-lived signed `url` only — the S3 object_ref and internal manifest columns are NEVER exposed.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    assetId: str = Field(..., description='Deterministic asset id. Trace: FR-17.')
+    type: Type = Field(..., description='Asset kind. Trace: FR-17.')
+    ordinal: int = Field(
+        ..., description='Display order within its type. Trace: FR-17.'
+    )
+    caption: str = Field(
+        ..., description='Figure/table caption (escaped on render). Trace: FR-17.'
+    )
+    sourceMode: SourceMode = Field(
+        ..., description='How the asset was extracted (hybrid). Trace: FR-17.'
+    )
+    url: str = Field(
+        ..., description='Short-lived signed GET URL (SEC-9). Trace: FR-17, SEC-9.'
+    )
+    pageRef: int | None = Field(
+        None, description='Source page (page-crop). Trace: FR-17.'
+    )
+    bbox: list[float] | None = Field(
+        None, description='Source bbox (page-crop). Trace: FR-17.'
+    )
+
+
+class AssetsOkDTO(BaseModel):
+    """
+    Successful asset manifest. Trace: FR-17.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    status: Literal['ok']
+    assets: list[AssetRef] = Field(
+        ..., description='Figure/table assets in display order. Trace: FR-17.'
+    )
+
+
+class AssetsLicenseUnavailableDTO(BaseModel):
+    """
+    OA license not permitted (or assets not configured) → no assets shown. Trace: FR-17, BR-SF-11.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    status: Literal['license_unavailable']
+
+
+class AssetsUnauthorizedDTO(BaseModel):
+    """
+    Authentication required (401). Trace: FR-17, SEC-8.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    status: Literal['unauthorized']
+
+
+class PaperAssetsResponse(
+    RootModel[AssetsOkDTO | AssetsLicenseUnavailableDTO | AssetsUnauthorizedDTO]
+):
+    root: AssetsOkDTO | AssetsLicenseUnavailableDTO | AssetsUnauthorizedDTO = Field(
+        ...,
+        description='GET /api/papers/{id}/assets terminal union (FR-17). OA-license-gated like full-text (BR-SF-11).',
+        title='PaperAssetsResponse',
+    )
+
+
 class SummaryResponse(
     RootModel[SummaryResultDTO | AbstainDTO | CostDegradedDTO | SourceUnavailableDTO]
 ):

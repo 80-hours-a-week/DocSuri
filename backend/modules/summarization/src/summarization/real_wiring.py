@@ -7,6 +7,7 @@ ships; tests build the orchestrator directly with Fixtures/Stubs.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from docsuri_shared.ports import CostGuardCircuitBreaker, ObservabilityHub
@@ -29,9 +30,6 @@ from .service.orchestrator import SummarizationOrchestrationService
 class SummarizationBundle:
     orchestrator: SummarizationOrchestrationService
     settings: SummarizationSettings
-
-
-from typing import Callable
 
 
 def build_real_orchestrator(
@@ -57,6 +55,17 @@ def build_real_orchestrator(
     full_text = S3FullTextSource(bucket=settings.s3_bucket, region_name=settings.region_name)
     glossary_repo = RdsGlossaryRepository(dsn=settings.database_url)
 
+    # FR-17 assets (display-only). Wired only when enabled AND a DSN is present — otherwise
+    # the orchestrator gets no reader and ``list_assets`` returns None → ``license_unavailable``.
+    asset_reader = None
+    if settings.assets_enabled and settings.database_url:
+        from .adapters.rds_assets import RdsS3AssetReader
+
+        asset_reader = RdsS3AssetReader(
+            dsn=settings.database_url,
+            signed_url_ttl_seconds=settings.asset_url_ttl_seconds,
+        )
+
     orchestrator = SummarizationOrchestrationService(
         store=store,
         source_selector=SourceSelector(full_text, abstract_lookup=abstract_lookup),
@@ -69,5 +78,6 @@ def build_real_orchestrator(
         cost_guard=cost_guard,
         observability=observability,
         model_ver=settings.model_ver,
+        asset_reader=asset_reader,
     )
     return SummarizationBundle(orchestrator=orchestrator, settings=settings)

@@ -944,6 +944,95 @@
 
 ---
 
+
+## 멀티모달 표시(그림·도표) — INCEPTION Requirements Analysis 재진입
+**Timestamp**: 2026-06-22T00:00:00Z
+**User Input(원문)**: "u7이 지금 s3에 정규화를 거친 그림이나 도표가 없는 텍스트 기반으로 요약/번역 … 근데 나는 그림이나 도표 등등 다 넣을거 … aidlc로 처음부터" → (스코핑) "표시 전용 먼저, 비전은 다음 사이클" → (브랜치 지시) "develop 말고 새 브랜치 파서 3개 갭·그림도표 모두 진행" → (확정) "a로 하고 Q2는 C로, 나머지 권장안 A로".
+**AI Response**: 보류 트랙 "그림·도표(멀티모달=요구사항 개정)"를 Requirements Analysis 재진입으로 착수(브랜치 `feature/multimodal-display`). 명확화 질문지 `inception/requirements/requirement-verification-questions-multimodal-display.md`(Q1~Q7) 작성·확정: **Q2=C(소스 가용성 혼합 추출 — LaTeX 구조화/PDF 크롭 폴백), 나머지 A**. 모순 점검 통과. `requirements.md` 등재: **FR-17**(그림·도표 자산 추출·저장·표시 — 표시 전용; 실재 자산만·생성 이미지 금지; OA 라이선스 게이트 재사용; 단기 만료 서명 URL; 앵커 자산 연결; 이미지 lazy-load), **FR-12 앵커 자산 연결 보강**, **§12 멀티모달 카브아웃**("그림·도표" 전면 제외 → "비전 LLM 추론만 제외"로 한정), §13 추적성 4행, 상단 개정노트(2026-06-22). `aidlc-state.md`에 멀티모달 표시 INCEPTION 항목 추가. **범위 경계**: 요약/번역 LLM 입력은 텍스트+캡션 유지(비전 추론=차기 사이클). 영향 유닛 U1·공유계약·U7(+백/프론트 정합 갭 3건 흡수: `summarization.schema.json` SSOT 수립·`validation_error`/`unauthorized` 상태 매핑)·U5. **앱 코드·FD 미생성.**
+**Context**: INCEPTION — 요구사항 등재 완료. 다음은 Construction per-unit Functional Design(U1부터) 승인 게이트. 미커밋(리뷰 대기).
+
+---
+
+## 멀티모달 표시 — U1 Ingestion Functional Design (자산 추출)
+**Timestamp**: 2026-06-22T00:00:00Z
+**User Input(원문)**: (계획서 게이트) "진행" — Q1~Q7 권장안 A 확정.
+**AI Response**: U1 멀티모달 자산 추출 FD 계획서(`construction/plans/u1-ingestion-multimodal-functional-design-plan.md`) Q1~Q7 전부 A 확정·체크박스 완료. 기존 U1 FD 3종 확장: **`domain-entities.md` §10**(AssetType·AssetSourceMode{structured|page-crop}·결정적 AssetId·**FigureTableAsset**·**AssetManifest**·**AssetStorePort**; ParsedPaper.assets[] 보강), **`business-logic-model.md` §6**(`ingestOne` 자산 추출·저장 삽입 — Q1=A parse 추출+dedup 후 NEW|CHANGED 저장, Q2=C 혼합 추출 `AssetExtractor`, Q4=A best-effort·인덱스 원자성과 분리, tombstone `remove_assets`·CHANGED `replace_assets`, 데이터 흐름 ASCII), **`business-rules.md` §7**(BR-22 dedup 게이팅·BR-23 혼합 추출·BR-24 실재 자산만(생성 금지)·BR-25 캡션 비중복·앵커 좌표·BR-26 OA 게이트 재사용·BR-27 best-effort 비차단·BR-28 멱등·정리; PBT P7/P8; FailureReason ASSET_*; 추적성). **핵심 경계**: 표시 전용 → 인덱싱·임베딩·IndexRecord·VectorSpec 경로 불변(자산은 검색 비대상). 읽기 측 계약·서명 URL·U5 렌더는 본 FD 밖(공유계약·U7·U5). **앱 코드 미생성.**
+**Context**: CONSTRUCTION — U1 멀티모달 FD 완료. 다음 게이트: U1 NFR Requirements(추출 라이브러리·이미지 포맷/해상도·서명 정책). 미커밋(리뷰 대기).
+
+---
+
+## 멀티모달 표시 — U1 Ingestion NFR Requirements (자산 추출 기술 스택)
+**Timestamp**: 2026-06-22T00:00:00Z
+**User Input(원문)**: (계획서 게이트) "진행" — Q1~Q7 권장안 A 확정.
+**AI Response**: U1 멀티모달 NFR Requirements 계획서(`construction/plans/u1-ingestion-multimodal-nfr-requirements-plan.md`) Q1~Q7 전부 A 확정·체크박스 완료. 기존 U1 NFR 2종 확장: **`tech-stack-decisions.md`** — TD-11(PDF 크롭=**PyMuPDF(fitz) 휴리스틱**, ML/GPU 없음·CPU 배치), TD-12(LaTeX 구조화=e-print tarball 그래픽 직접 추출 + 표는 PDF 크롭), TD-13(이미지=**WebP 재인코딩**+치수/픽셀 상한+메타 스트립), TD-14(자산 저장=**S3 별도 prefix(private·SSE) + 매니페스트/메타 공유 RDS PostgreSQL**, 신규 스토어 0), TD-15(이미지 보안=안전 디코더 재인코딩·decompression bomb 가드·원본 바이트 비서빙). **`nfr-requirements.md` §11** — 성능(오프라인 배치·CPU·결정성 버전핀), 보안(SEC-9 비공개·서명 URL·이미지 파싱 방어·SSRF), 복원력(best-effort 비차단·타임아웃·서킷), 비용(distinct×1회 bounded·$1600 내 흡수·자산 라인 계상). 상속: TD-1 Python·TD-7 S3·TD-8 Hypothesis. TD-3/4(임베딩·OpenSearch) 무관. **앱 코드 미생성.**
+**Context**: CONSTRUCTION — U1 멀티모달 NFR Requirements 완료. 다음 게이트: U1 NFR Design. 미커밋(리뷰 대기).
+
+---
+
+## 멀티모달 표시 — U1 Ingestion NFR Design (자산 추출 패턴·논리 컴포넌트)
+**Timestamp**: 2026-06-22T00:00:00Z
+**User Input(원문)**: (계획서 게이트) "진행" — Q1~Q5 권장안 A 확정.
+**AI Response**: U1 멀티모달 NFR Design 계획서(`construction/plans/u1-ingestion-multimodal-nfr-design-plan.md`) Q1~Q5 전부 A 확정·체크박스 완료. 기존 U1 NFR Design 2종 확장: **`logical-components.md` §5** — 신규 논리 컴포넌트 **AssetExtractor**(혼합 추출·캡션 매칭)·**Image Normalizer**(WebP·치수상한·메타스트립)·**AssetStore**(S3 prefix + 공유 RDS `paper_asset`) + 토폴로지 다이어그램(인덱스 경로와 독립) + `paper_asset` RDS 상태 설계((paper_id,version,asset_id) 키·write-order 정합). **`nfr-design-patterns.md` §7** — 7.1 page-crop 검출·캡션 정규식 근접 매칭 알고리즘((page,y,x) 결정성 P7), 7.2 이미지 정규화 파이프라인(safe_decode→픽셀상한 bomb 가드→다운스케일→WebP→메타스트립), 7.3 best-effort 격리(per-asset·인덱스 비차단·ASSET_*), 7.4 매니페스트 write-order 정합(S3 put→RDS upsert, P8 "행 있는데 객체 없음" 회피), 7.5 보안(공개차단·서명URL·최소권한 IAM·이미지 파싱 방어) + 추적성 4행. **기존 인덱스/원자성 토폴로지·패턴 불변.** **앱 코드 미생성.**
+**Context**: CONSTRUCTION — U1 멀티모달 NFR Design 완료. 다음 게이트: U1 Infrastructure Design. 미커밋(리뷰 대기).
+
+---
+
+## 멀티모달 표시 — U1 Ingestion Infrastructure Design (자산 인프라)
+**Timestamp**: 2026-06-22T00:00:00Z
+**User Input(원문)**: (계획서 게이트) "진행" — Q1~Q5 권장안 A 확정.
+**AI Response**: U1 멀티모달 Infrastructure Design 계획서(`construction/plans/u1-ingestion-multimodal-infrastructure-design-plan.md`) Q1~Q5 전부 A 확정·체크박스 완료. **U1 최초 Infra 산출물**을 멀티모달 범위로 신설: **`infrastructure-design/infrastructure-design.md`** — S3 자산(기존 전문 버킷 + `assets/{paperId}/{version}/{assetId}.webp` prefix·공개차단·SSE-KMS 재사용·만료없음), `paper_asset` 공유 RDS 스키마(키 (paper_id,version,asset_id)·마이그레이션·인덱스), presigned S3 전달(만료 ~10분, CloudFront 후속), 최소권한 IAM(워커 PUT/DELETE+RW / U7 GET·presign+RO), write-order 정합(P8), 비용($1600 내·자산 라인), 관측. **`deployment-architecture.md`** — 추출 co-location(기존 워커, 이미지 처리 메모리 헤드룸, ML/GPU 없음), 배포 토폴로지(쓰기 워커↔공유 S3/RDS↔U7 읽기 presign), 마이그레이션·워커 이미지 의존성(PyMuPDF) 다이제스트 핀, 기존 토폴로지 불변. **선결 상속(미결)**: 워커 런타임 타깃(ECS/Fargate vs Lambda)·리전·CD. 신규 버킷·DB 0. **앱 코드 미생성.**
+**Context**: CONSTRUCTION — U1 멀티모달 Infrastructure Design 완료. 다음 게이트: U1 Code Generation. 미커밋(리뷰 대기).
+
+---
+
+## 멀티모달 표시 — U1 Ingestion Code Generation PART 1 (계획·승인 프롬프트)
+**Timestamp**: 2026-06-22T00:00:00Z
+**AI Response**: U1 멀티모달 Code Generation 계획서(`construction/plans/u1-ingestion-multimodal-code-generation-plan.md`) 작성 — 브라운필드 `ingestion/src/docsuri_ingestion/` 12 스텝(의존성·도메인 모델·포트·AssetExtractor·ImageNormalizer·AssetStore 어댑터 S3/RDS·application 와이어링·`paper_asset` 마이그레이션·설정·테스트 PBT P7/P8·코드요약·배포). **선행 질문 Q1(라이브러리 라이선스)**: NFR TD-11의 **PyMuPDF는 AGPL-3.0** → 프로덕션·공개 앱 부적합 위험. 권장 A=permissive 스택(pypdfium2 Apache/BSD + pdfplumber/pdfminer.six MIT + Pillow HPND)로 TD-11/TD-13 정정. 인덱스 경로 불변·자산 best-effort·토글 안전 기본(off). **승인 프롬프트 — 사용자 승인 대기(Q1 확정 포함).** 앱 코드 미생성(PART 2 대기).
+**Context**: CONSTRUCTION — U1 Code Generation PART 1(계획) 완료. PART 2(코드 생성) 승인 게이트. 미커밋.
+
+---
+
+## 멀티모달 표시 — U1 Ingestion Code Generation PART 2 (코드 생성)
+**Timestamp**: 2026-06-22T00:00:00Z
+**User Input(원문)**: "A로 진행해줘" (Q1=A permissive 스택 확정 + PART 2 진행).
+**AI Response**: U1 멀티모달 자산 추출 코드 생성(브라운필드 `ingestion/`). **Q1=A**: PyMuPDF(AGPL) 대신 **pypdfium2(Apache/BSD)+pdfplumber(MIT)+Pillow(HPND)** — NFR TD-11/13 정정(라이선스 안전). 신규: `domain/assets.py`(asset_id·RawAssetCandidate·FigureTableAsset·ExtractedAsset·AssetManifest), `asset_extraction.py`(caption_kind·**finalize_assets P7 순수**·ImageNormalizer[bomb 가드·WebP·메타스트립]·AssetExtractor[혼합: e-print 그래픽/PDF page-crop 폴백, import-guarded]), `adapters/assets.py`(ArxivAssetSource httpx·**S3RdsAssetStore** write-order S3→RDS P8·CHANGED 교체·tombstone 삭제), `migrations/postgres/002_paper_asset.sql`. 수정: `enums.py`(AssetType·AssetSourceMode·ASSET_* FailureReason), `ports.py`(AssetSourcePort·AssetStorePort), `application.py`(자산 포트 주입 미주입=비활성·`_store_assets_best_effort` 인덱스 커밋 후·비차단 BR-27·`_remove_assets_best_effort` tombstone), `settings.py`(MULTIMODAL_ASSETS_ENABLED off 기본·상한·KMS·타임아웃), `pyproject.toml`(assets optional extra). 테스트: `test_assets.py`(caption·finalize·**PBT P7**·ImageNormalizer importorskip), `test_asset_wiring.py`(기본 off·성공 store·**실패 인덱싱 비차단**). **인덱스/임베딩/IndexRecord 경로 코드 불변.** **검증**: `compileall` 통과 + 순수 모듈 import·finalize/caption 로직 스모크 통과. 전체 테스트 실행은 Build & Test.
+**Context**: CONSTRUCTION — U1 Code Generation 완료. 다음 게이트: U1 Build & Test. 미커밋(리뷰 대기).
+
+---
+
+## 멀티모달 표시 — U1 Ingestion Build & Test
+**Timestamp**: 2026-06-22T00:00:00Z
+**Build Status**: Success (uv sync --extra assets — pypdfium2·pdfplumber·pdfminer.six·pillow)
+**Test Status**: Pass — pytest 42 passed/0 failed, ruff clean
+**AI Response**: U1 멀티모달 Build & Test. `uv run --extra assets pytest` 42 passed(자산 신규: caption_kind·finalize PBT P7·ImageNormalizer[bomb 가드·undecodable 거부·WebP]·best-effort 비차단 wiring + 인덱스 경로 회귀). 린트 B904(raise-from)·E501(line len) 정정 후 `ruff check` All checks passed. 실 추출(_page_crop/_structured)·S3RdsAssetStore는 env-gated 통합으로 이연(P8는 store write-order로 보장). 산출물 `construction/u1-ingestion/build-and-test/`(build-instructions·unit-test-instructions·build-and-test-summary). 코드 정정 커밋(lint fix). **U1 생산자 멀티모달 슬라이스 종결.**
+**Files Generated**: build-instructions.md, unit-test-instructions.md, build-and-test-summary.md
+**Context**: CONSTRUCTION — U1 멀티모달 트랙 종결. 다음: 공유계약(shared/dtos + paper_asset 노출) → U7(읽기·서명 URL·갭 3건) → U5(렌더). 미커밋(리뷰 대기).
+
+---
+
+## 멀티모달 표시 — U7 Summarization Functional Design (읽기 측 + 정합 갭)
+**Timestamp**: 2026-06-22T00:00:00Z
+**User Input(원문)**: "너의 판단을 믿고 승인할게 알아서 진행해줘" (트랙 위임 진행).
+**AI Response**: U7 멀티모달 FD(읽기 측 자산 노출 + 정합 갭 3건) — 위임 진행으로 게이트 결정 D1~D5 확정·계획서 작성. 기존 U7 FD 확장: **`domain-entities.md` §9**(AssetRef[서명 URL만·SEC-9]·PaperAssetsResponse union[ok/license_unavailable/unauthorized]·**`GET /api/papers/{id}/assets`** 독립 엔드포인트·AssetManifestReadPort/AssetUrlSigner[paper_asset 읽기+presign]·앵커↔자산 프론트 매칭·갭#1 SSOT `summarization.schema.json` 승격·갭#2/#3 상태 매핑), **`business-rules.md`**(BR-S15 자산 읽기·OA 게이트 BR-SF-11 재사용·presign, BR-S16 계약 SSOT, BR-S17 unauthorized/validation_error 상태, PBT-S6 자산 라운드트립·비노출). U7은 읽기 측(생산=U1)·요약/번역 생성·근거화·캐시 **불변**. **앱 코드 미생성.**
+**Context**: CONSTRUCTION — U7 멀티모달 FD 완료. 다음: U7 Code Generation(shared schema·/assets 엔드포인트·갭 수정·frontend types/classify). 미커밋(리뷰 대기).
+
+---
+
+## 멀티모달 표시 — U7 Summarization Code Generation + Build & Test (읽기 측 + 갭)
+**Timestamp**: 2026-06-22T00:00:00Z
+**User Input(원문)**: "u7코드까지 쌓고 올릴게 진행해줘" (위임 진행).
+**Build Status**: Success · **Test Status**: Pass (백엔드 summarization 48 passed/1skip·자산 7 passed·ruff clean; 프론트 tsc 0·next lint clean·vitest 75 passed)
+**AI Response**: U7 멀티모달 읽기 측 + 정합 갭 3건 코드. **공유 갭#1**: `shared/dtos/summarization.schema.json` SSOT 수립(요약/번역 + AssetRef/PaperAssetsResponse + unauthorized/validation_error). **백엔드**: `domain/models`(StoredAsset[내부·object_ref]·AssetRef[공개·서명 URL만·to_dict SEC-9])·`ports`(AssetReadPort)·`orchestrator`(asset_reader 주입·list_assets presign)·`api/router`(GET /api/papers/{id}/assets 인증·OA 게이트·서명 URL + 갭#2 validation_error message)·`adapters/rds_assets.py`(RdsS3AssetReader: paper_asset 읽기+S3 presign, object_ref 비노출)·`tests/test_assets_endpoint.py`(7). **프론트**: `summarize.ts`(AssetRef·PaperAssetsResponse·UnauthorizedDTO·SummarizeValidationErrorDTO[search 충돌 회피])·`classifySummarize`(classifyAssetsResponse + 갭#2/#3 매핑: validation_error→invalid·unauthorized→인증 메시지)·`apiClient.getAssets`·`test/classifyAssets.test.ts`(5). NFR/Infra 경량 폴드(읽기 포트·presign TTL·assets_enabled 게이트). 요약/번역 생성·근거화·캐시 불변. 코드 요약 `construction/u7-summarization/code/u7-multimodal-read-code-summary.md`. **U7 읽기 측 종결.**
+**Context**: CONSTRUCTION — U7 멀티모달 슬라이스 종결. 다음(마지막): U5 상세/뷰어 자산 렌더 컴포넌트. 미커밋(리뷰 대기).
+
+---
+
+## 멀티모달 표시 — U5 Frontend 자산 렌더 Code + Build & Test (트랙 종결)
+**Timestamp**: 2026-06-22T00:00:00Z
+**User Input(원문)**: "남은 것 진행부터해줘" (위임 진행).
+**Build Status**: Success (next build OK) · **Test Status**: Pass (tsc 0·next lint clean·vitest 80 passed)
+**AI Response**: U5 멀티모달 자산 렌더(마지막 유닛). 신규 `lib/assetAnchor.ts`(captionNumber·matchAssetForAnchor 순수 — figure/table 앵커↔자산 매칭, 인셉션 Q5)·`lib/useAssets.ts`(페치 훅)·`components/AssetGallery.tsx`(+css: lazy-load·치수 예약 프레임·캡션 React 이스케이프 BR-SF-9·서명 URL img SEC-9·로딩/에러 재시도/빈·라이선스 미허용/미인증 미표시·활성 앵커 스크롤 하이라이트). 수정 `PaperDetailIsland`(자산 섹션 + anchor 전달)·`lib/api/index`(AssetsOutcome export)·`mockTransport`+`summarizeFixtures`(/assets mock + 인라인 SVG data URL 픽스처). 테스트 `test/assetAnchor.test.ts`(매처)·`test/assetGallery.test.tsx`(렌더). **검증: tsc 0·next lint clean·vitest 80 passed(+5)·next build OK.** 코드 요약 `construction/u5-frontend/code/u5-multimodal-asset-render-code-summary.md`. **멀티모달 표시(FR-17) 트랙 완결**(U1→U7→U5; 비전 추론 차기 사이클).
+**Context**: CONSTRUCTION — 멀티모달 트랙 완결. 9커밋 `feature/multimodal-display`(미push). 다음: 사용자 push/PR·승인 후 Operations. 미커밋(본 U5 커밋 대기).
 ## U1 SQS 권장 수정 방안 정리
 **Timestamp**: 2026-06-22T05:44:45Z
 **User Input**: "좋아요. 권장 수정 방안을 U1_SQS.md 에 정리해 작성해 주세요."
