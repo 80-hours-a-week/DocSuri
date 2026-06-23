@@ -15,7 +15,10 @@ so the container runs ``python -m docsuri_ingestion.worker provision``. Every st
 from __future__ import annotations
 
 import logging
+import os
 import time
+from dataclasses import replace
+from datetime import UTC, datetime
 
 from docsuri_shared.index_spec import papers_index_body
 
@@ -30,17 +33,17 @@ _BACKFILL_DELAY_SECONDS = 3.0
 
 
 def _admin_client(settings: IngestionSettings):
-    """Raw OpenSearch admin client matching the writer adapter (aws.OpenSearchVectorIndex):
-    TLS on in prod, basic-auth only if both creds are present. The prod domain is SG-gated
-    (no FGAC), so http_auth is None and access is by network reachability."""
-    from opensearchpy import OpenSearch
+    """OpenSearch admin client matching the writer adapter (aws.build_opensearch_client):
+    TLS on in prod and SigV4-signed (service ``es``) with the ECS task role, so the managed
+    VPC domain's resource policy authorizes the request. Unsigned only for local clusters."""
+    from .adapters.aws import build_opensearch_client
 
     if not settings.opensearch_endpoint:
         raise SystemExit("DOCSURI_OPENSEARCH_ENDPOINT is required")
     local = settings.env == "local"
-    return OpenSearch(
-        hosts=[settings.opensearch_endpoint],
-        http_auth=None,
+    return build_opensearch_client(
+        endpoint=settings.opensearch_endpoint,
+        region_name=None if local else settings.aws_region,
         use_ssl=not local,
         verify_certs=not local,
     )
@@ -61,8 +64,9 @@ def provision(settings: IngestionSettings | None = None) -> int:
         client.indices.create(index=v2, body=papers_index_body(on_disk=on_disk))
         log.info("created index %s (on_disk=%s)", v2, on_disk)
 
-    existing = client.indices.get_alias(name=_ALIAS, ignore=[404])
-    if isinstance(existing, dict) and existing:
+    # exists_alias returns a clean bool; get_alias(ignore=[404]) returns a *truthy* 404
+    # error-dict when the alias is absent, which silently skips creation (the original bug).
+    if client.indices.exists_alias(name=_ALIAS):
         log.info("alias %s already exists", _ALIAS)
     else:
         client.indices.put_alias(index=v1, name=_ALIAS)
@@ -106,19 +110,34 @@ def backfill(settings: IngestionSettings | None = None) -> int:
     arxiv = ArxivHttpSource(timeout_seconds=30.0)
     embedder = BedrockCohereEmbeddingPort(model_id=model_id, region_name=settings.aws_region)
     os_index = OpenSearchVectorIndex(
-        endpoint=settings.opensearch_endpoint or "", index_name=index_name
+        endpoint=settings.opensearch_endpoint or "",
+        index_name=index_name,
+        region_name=settings.aws_region,
     )
     parser, chunker, assembler = FetchParseProcessor(), Chunker(), IndexRecordAssembler()
+    # Run-scoped window override (ISO date in DOCSURI_BACKFILL_START/END) lets a one-off
+    # backfill narrow the slice without redefining the corpus — CORPUS_START/END stay canonical.
+    def _window(env_name: str, default: datetime) -> datetime:
+        raw = os.getenv(env_name)
+        if not raw:
+            return default
+        dt = datetime.fromisoformat(raw)
+        return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+
     filter_ = CategoryFilter(
         categories=CORPUS_SLICE_CATEGORIES,
-        updated_after=CORPUS_START,
-        updated_before=CORPUS_END,
+        updated_after=_window("DOCSURI_BACKFILL_START", CORPUS_START),
+        updated_before=_window("DOCSURI_BACKFILL_END", CORPUS_END),
     )
 
     count = errors = 0
     for metadata in arxiv.harvest_seed(filter_):
         try:
             full_metadata = arxiv.fetch_metadata(metadata.arxiv_ref)
+            # The Atom re-fetch omits the license; restore it from the OAI harvest record
+            # (else every paper fails the OA gate as "missing").
+            if not full_metadata.license_url and metadata.license_url:
+                full_metadata = replace(full_metadata, license_url=metadata.license_url)
             paper = parser.parse(arxiv.fetch_full_text(full_metadata))
             if paper.withdrawal_detected:
                 continue
