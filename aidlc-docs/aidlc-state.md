@@ -256,3 +256,13 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - Documentation changes:
   - corrected Redis wording: current implementation is process-local in-memory TTL seam; Redis remains production adapter target
 - Current gate: user review/approval, commit, or PR direction required.
+
+## U9 Personalization — Requirements Questions Created
+
+- Date: 2026-06-23
+- Candidate unit: U9 Personalization / Behavior Intelligence
+- Trigger: 사용자 행동 로그를 기록하고 분석해 개인화 맞춤 서비스를 제공하는 기능.
+- Created artifact:
+  - `aidlc-docs/inception/requirements/requirement-verification-questions-u9-personalization.md`
+- Current gate: questions Q1~Q20 awaiting answers.
+- Code generated: no.
