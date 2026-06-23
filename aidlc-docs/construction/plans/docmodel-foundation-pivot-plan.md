@@ -66,7 +66,7 @@
 | **Q4** | `.txt` 보존 여부 | **doc-model을 진실원천, `.txt`는 파생 평문 투영(검색·청킹용)으로 유지** | 또는 `.txt` 폐기하고 필요 시 doc-model에서 평문 도출 |
 | **Q5** | 생성 트리거 | **첫 요약/열람/에이전트 사용 시 lazy 생성 + 캐시**; version 변경 시 무효화 | 인제스션 일부 eager는 인기 논문에 한해 후속 고려 |
 | **Q6** | 폴백 사다리 동작 정의 | `arXiv HTML → e-print LaTeX → (최후) PDF 파싱(Grobid/Docling류)` | PDF 파싱단은 비-arXiv 대비 최후 폴백(현재 거의 미발동) |
-| **Q7** | **요구사항 재진입 여부** — FR-12(요약 입력 형태) 변경 + 리치뷰 1급 기능화는 멀티모달/U8 선례처럼 Requirements Analysis 재진입 후보 | **재진입 권장**(명확화 질문지 → FR 갱신) | 미재진입 시 본 게이트가 사후결정 Q를 대체 |
+| **Q7 ✅완료** | **요구사항 재진입 여부** — FR-12(요약 입력 형태) 변경 + 리치뷰 1급 기능화는 멀티모달/U8 선례처럼 Requirements Analysis 재진입 후보 | **재진입 완료(2026-06-23)**: 질문지 `requirement-verification-questions-docmodel.md` Q1~Q7(전부 권장안 + 리치뷰=신규 FR-18) → requirements.md 등재(FR-12 개정·FR-17 개정·**FR-18 신설**·§12 카브아웃·QT-5·§13) | — |
 | **Q8** | **P3/P4/P5 선후** — P3(#135 맵리듀스 긴 입력·BR-S6)은 입력 형태가 doc-model로 바뀌므로 **doc-model 전환 후로**; P4(번역 품질 게이트)·P5(용어집 P2)는 독립 | **P3 = doc-model 후속**, P4·P5 = 병행 가능 | doc-model이 섹션 경계를 주면 맵리듀스 분할이 더 정확해짐 |
 
 ### 2.1 Q1 커버리지 스파이크 결과 (2026-06-23, 표본 41편 · 5cat×5yr)
@@ -97,7 +97,7 @@
 > 코드 세션에서 이 순서/대상으로 진행. 각 항목 완료 시 [x]. **대부분 새 문서가 아니라 기존 유닛 문서 *편집*.**
 
 **요구사항/계약**
-- [ ] `requirements.md` — FR-12(요약 입력 = 구조화 doc-model), 리치뷰 1급화, §12 카브아웃 정합 (Q7 결과 반영)
+- [x] `requirements.md` — FR-12(요약 입력 = 구조화 doc-model), 리치뷰 1급화, §12 카브아웃 정합 (Q7 결과 반영) → **FR-12 개정·FR-17 개정·FR-18 신설·§12 doc-model 카브아웃·QT-5 보강·§13 추적성 + 질문지 신설**
 - [x] `shared/dtos/` — doc-model 스키마 SSOT 신설(Q3) → **`shared/dtos/docmodel.schema.json` + 스펙 `construction/shared/docmodel.md` + overview/README 포인터**(중첩 트리·블록 id·표=데이터·수식=LaTeX·webp 참조·provenance; 양성/음성 검증 통과)
 
 **U1 Ingestion (생산자)**
