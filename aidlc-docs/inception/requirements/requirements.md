@@ -9,6 +9,8 @@
 
 > **개정 (2026-06-22) — 멀티모달 표시(그림·도표) 부분 편입**: 정규화 시 그림·도표를 이미지 자산으로 추출·저장해 상세보기/전문뷰어에 표시하는 기능을 Requirements Analysis 재진입으로 등재. 명확화 `requirement-verification-questions-multimodal-display.md` Q1~Q7(**Q2=C 혼합 추출, 나머지 A**, 2026-06-22) → **FR-17 등재 + FR-12 앵커 자산 연결 보강 + §12 "그림·도표" 제외를 "비전 추론만 제외"로 한정**. 요약/번역 LLM 입력은 **텍스트+캡션 유지**(이미지 비전 추론은 차기 사이클). 영향 유닛: U1(자산 추출·저장)·공유계약(`shared/dtos`)·U7(통과 + 기존 백/프론트 정합 갭 3건 흡수)·U5(렌더).
 
+> **개정 (2026-06-24) — doc-model 실데이터·비동기 (PR-1)**: doc-model 생성·요약을 **비동기**로 완성(구현 — FD/BR/NFR back-sync). 리치뷰(FR-18) 첫 열람 시 **lazy 빌드를 백그라운드 잡**으로 트리거하고 "준비 중"(building) 표시·폴링; 긴 논문 요약(FR-12)은 **map-reduce를 백그라운드 잡**으로 처리하고 진행(pending) 표시·폴링(게이트웨이 타임아웃 회피), **초극단(>입력상한)은 거절**. 게이트 기본 OFF(라이브 무변경). 상세 = `construction/plans/docmodel-foundation-pivot-plan.md` PR-1 절·BR-S6/S12·BR-30.
+>
 > **개정 (2026-06-23) — doc-model 기반 전환**: 요약/번역 입력을 평문(`.txt`) → **구조화 doc-model**(arXiv HTML 결정적 파싱; 표=데이터·수식=LaTeX·그림=webp 참조)로 전환하고, "전문뷰어 표시"를 **자체 리치뷰(FR-18) 1급**으로 격상한다. 명확화 `requirement-verification-questions-docmodel.md` Q1~Q7(**전부 게이트 권장안 D1~D8 + 리치뷰=신규 FR-18**, 2026-06-23) → **FR-12 개정(입력=doc-model·앵커=doc-model id) + FR-17 개정(그림=이미지·표=데이터) + FR-18 신설(자체 리치뷰) + §12 PDF 미저장(D3)·비전 추론 제외 유지(D5) + QT-5 앵커 보강**. 생성·근거화·캐시 **로직 불변**(입력 업그레이드). 게이트 SSOT `construction/plans/docmodel-foundation-pivot-plan.md`(D1~D8) · 스키마 `shared/dtos/docmodel.schema.json`. 영향 유닛: U1(doc-model 생산·캐시)·공유계약·U7(입력 교체)·U5/U7-frontend(리치뷰).
 
 > 정량 목표는 **(제안)** 으로 표기 — 리뷰 게이트에서 확정/조정한다. 요구사항 ID는 고정이며 후속 단계에서 참조된다.
