@@ -48,7 +48,10 @@ _BEDROCK_MODEL_ID = "cohere.embed-multilingual-v3"
 # regenerates the per-synth X-Origin-Verify secret and briefly 403s the live API during CloudFront
 # propagation. RDS is RemovalPolicy.RETAIN so these ids are stable.
 # ponytail: hardcoded infra ids; only revisit if the RDS instance or its secret is recreated.
-_RDS_ENDPOINT = "docsuri-compute-postgres9dc8bb04-7ajkntsj0ouu.cpegcaqmu01d.ap-northeast-2.rds.amazonaws.com"
+_RDS_ENDPOINT = (
+    "docsuri-compute-postgres9dc8bb04-7ajkntsj0ouu"
+    ".cpegcaqmu01d.ap-northeast-2.rds.amazonaws.com"
+)
 _RDS_PORT = 5432
 _RDS_SECURITY_GROUP_ID = "sg-0633ac0c0b8c7a052"
 _RDS_SECRET_ARN = (
