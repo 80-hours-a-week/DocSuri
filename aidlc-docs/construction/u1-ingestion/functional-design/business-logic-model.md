@@ -14,7 +14,7 @@
 
 ```
 ingestOne(record, job):
-  1. raw ← ArxivSourceClient.fetchFullText(arxivId)                  # Q2=C 전문 취득(활성)
+  1. raw ← ArxivSourceClient.fetchFullText(arxivId)                  # Q2=C 전문 취득 · BR-29: HTML 우선(native→ar5iv)→PDF 폴백; raw.text=정규화 평문
   2. parsed | rejected ← FetchParseProcessor.parse(raw)              # 메타+전문 본문 정규화
        rejected → IngestionResilienceService.handle(PERMANENT, reason)
   3. validation ← FetchParseProcessor.validate(parsed)              # SEC-5 필수필드/형식
@@ -24,7 +24,7 @@ ingestOne(record, job):
   5. decision ← DeduplicationGuard.isNew(parsed)                    # Q6=A paperId+version
        DUPLICATE → return SKIPPED (단락, 재임베딩 0 — NFR-C1)
        NEW | CHANGED → 계속
-  6. (Q2=C) 전문 원천 보관: StoredFullText(objectRef) ← ObjectStorage.put(raw)   # SEC-9 공개 차단, 재구축 재사용
+  6. (Q2=C) 전문 원천 보관: StoredFullText(objectRef) ← ObjectStorage.put(raw)   # SEC-9 공개 차단, 재구축 재사용 · BR-29: 정규화 평문(.txt) 1종
   7. chunkSet ← Chunker.chunk(parsed)                               # 섹션 인지 다중 청크, 결정적
   8. embeddings ← EmbeddingGatewayAdapter.embedBatch(chunkSet)      # 공유 VectorSpec(NFR PIN); 비용 텔레메트리
   9. records ← assemble IndexRecordBatch (IndexRecord[] = 논문 전 청크, Q4=A)   # 논문 단위 원자 커밋 단위
