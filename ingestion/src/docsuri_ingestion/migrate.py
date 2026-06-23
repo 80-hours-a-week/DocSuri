@@ -15,7 +15,9 @@ so the container runs ``python -m docsuri_ingestion.worker provision``. Every st
 from __future__ import annotations
 
 import logging
+import os
 import time
+from datetime import UTC, datetime
 
 from docsuri_shared.index_spec import papers_index_body
 
@@ -112,10 +114,19 @@ def backfill(settings: IngestionSettings | None = None) -> int:
         region_name=settings.aws_region,
     )
     parser, chunker, assembler = FetchParseProcessor(), Chunker(), IndexRecordAssembler()
+    # Run-scoped window override (ISO date in DOCSURI_BACKFILL_START/END) lets a one-off
+    # backfill narrow the slice without redefining the corpus — CORPUS_START/END stay canonical.
+    def _window(env_name: str, default: datetime) -> datetime:
+        raw = os.getenv(env_name)
+        if not raw:
+            return default
+        dt = datetime.fromisoformat(raw)
+        return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+
     filter_ = CategoryFilter(
         categories=CORPUS_SLICE_CATEGORIES,
-        updated_after=CORPUS_START,
-        updated_before=CORPUS_END,
+        updated_after=_window("DOCSURI_BACKFILL_START", CORPUS_START),
+        updated_before=_window("DOCSURI_BACKFILL_END", CORPUS_END),
     )
 
     count = errors = 0
