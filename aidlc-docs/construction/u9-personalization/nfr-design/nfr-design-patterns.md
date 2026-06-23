@@ -32,16 +32,25 @@ U2/U7 must not wait long enough for U9 to dominate search or generation latency.
 
 No v1 aggregation worker is required.
 
-## Active-Table Delete With Backup Isolation
+## Direct Active-Table Delete
 
 Raw-log deletion follows this boundary:
 
 1. Select owner-scoped active rows.
-2. Copy or move rows to backup table for recovery/audit safety.
-3. Delete rows from active `user_behavior_events`.
-4. Emit operational status.
+2. Delete rows from active `user_behavior_events`.
+3. Emit operational status.
 
-The backup table is excluded from `ProfileAggregator`, `PersonalizationReadPort`, U2 boost, and U7 defaults. This preserves user-visible deletion from personalization even when backup retention exists.
+Deleted behavior rows are not copied to a U9 backup table. A backup table may be reconsidered only with an explicit legal/compliance retention requirement.
+
+## Scheduled Retention Cleanup
+
+Active raw events older than 90 days are purged by a clock-driven maintenance command, not by lazy cleanup alone. The command must be idempotent:
+
+- repeated runs after a successful purge delete zero additional rows,
+- partial failure can be safely retried,
+- row counts and failures are emitted through U6.
+
+Retention purge failure must raise a U6 alert because silent failure violates the privacy retention policy.
 
 ## Metadata Allowlist
 
@@ -65,7 +74,7 @@ U9 emits operational counters/status only:
 - degraded decision,
 - personalization disabled decision count,
 - delete/reset count,
-- backup copy/delete failure.
+- retention purge success/failure and purged row count.
 
 Telemetry does not include raw event metadata.
 
@@ -74,7 +83,7 @@ Telemetry does not include raw event metadata.
 | Pattern | Coverage |
 | --- | --- |
 | Property tests | DTO roundtrip, dedupe, owner isolation, deterministic aggregation, delete/reset effect, fail-open default. |
-| Repository integration | Active delete and backup isolation with lightweight DB test. |
+| Repository integration | Direct active delete and idempotent retention purge with lightweight DB test. |
 | Unit tests | Metadata allowlist and decision reason cases. |
 
 Default CI does not require external services.

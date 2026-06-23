@@ -118,7 +118,7 @@ X) 기타.
 ### Q7 — Delete/Reset SLA
 사용자 삭제/초기화 요청의 처리 기대치는?
 
-A) **동기 요청에서 즉시 반영 가능한 범위는 즉시 처리(권장)** — raw event delete/profile reset은 요청 성공 후 다음 decision부터 반영한다. 장기 백업 삭제는 운영/보관 정책 범위로 둔다.
+A) **동기 요청에서 즉시 반영 가능한 범위는 즉시 처리(권장)** — raw event delete/profile reset은 요청 성공 후 다음 decision부터 반영한다. U9는 삭제된 raw behavior log를 백업 테이블에 복사하지 않는다.
 
 B) 삭제/초기화 요청을 큐에 넣고 나중에만 처리한다.
 
@@ -126,7 +126,7 @@ C) 운영자가 수동 처리한다.
 
 X) 기타.
 
-[Answer]: X) 백업용 테이블을 따로 생성하고 본 테이블은 삭제한다. 백업 테이블은 개인화 조회/집계에서 제외하고 별도 보관·삭제 정책 대상이다.
+[Answer]: A (plan_feedback.md 반영: 백업 테이블을 만들지 않고 active raw event를 직접 삭제한다.)
 
 ### Q8 — Search Personalization Budget
 검색 개인화 조회의 성능 예산은?
@@ -191,7 +191,7 @@ X) 기타.
 
 ## 4. 다음 절차
 
-1. Q1~Q6, Q8~Q12는 권장안(A)으로 확정했다.
-2. Q7은 X로 확정했다: 백업용 테이블을 따로 생성하고 본 테이블은 삭제한다. 백업 테이블은 개인화 조회/집계에서 제외하고 별도 보관·삭제 정책 대상이다.
+1. Q1~Q12는 권장안(A)으로 확정했다.
+2. Q7은 plan_feedback.md 반영으로 A로 정정했다: 백업 테이블을 만들지 않고 active raw event를 직접 삭제한다.
 3. `u9-personalization/nfr-requirements/` 산출물 2개를 생성했다.
 4. NFR Requirements 승인 후 **NFR Design**에서 timeout, lazy aggregation, repository boundary, cleanup, telemetry patterns를 확정한다.

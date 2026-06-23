@@ -1330,3 +1330,19 @@
 **Context**: CONSTRUCTION — U9 Infrastructure Design Part 1 planning.
 
 ---
+
+## U9 Personalization — Infrastructure Design Feedback Applied
+**Timestamp**: 2026-06-23T09:48:45Z
+**User Input**: "plan_feedback.md 의 내용을 반영하여 다음 단계를 진행해 주세요."
+**AI Response**: "`plan_feedback.md`를 반영해 U9 백업 테이블 설계를 제거함. NFR Requirements/NFR Design/Infrastructure Plan에서 raw behavior log 삭제를 backup table copy가 아닌 owner-scoped active-table direct delete로 정정함. Q4 피드백에 따라 retention cleanup은 idempotent daily EventBridge scheduled ECS task로 명시하고 purge 실패 시 U6 telemetry/CloudWatch alert 대상임을 Infrastructure Design에 반영함. `infrastructure-design.md`와 `deployment-architecture.md`를 생성하고 `aidlc-state.md`를 Infrastructure Design review/approval 게이트로 갱신함. 앱 코드는 생성하지 않음."
+**Context**: CONSTRUCTION — U9 Infrastructure Design generation after plan feedback.
+
+---
+
+## U9 Personalization — Code Generation Planning
+**Timestamp**: 2026-06-23T09:53:05Z
+**User Input**: "코드 생성 직전까지 진행해 주세요"
+**AI Response**: "Infrastructure Design 승인을 받은 것으로 처리하고 U9 Code Generation Part 1을 실행함. Code Generation 규칙, U9 설계 산출물, 기존 backend module/wiring/migration/test/CDK 패턴을 검토하고 `u9-personalization-code-generation-plan.md`를 생성함. 계획은 backend-only U9 모듈, RDS migration, direct raw-log delete, idempotent retention purge command, scheduled ECS cleanup infrastructure, U6 telemetry, pytest/Hypothesis 검증, code summary를 포함함. 실제 앱 코드는 생성하지 않고 Code Generation Part 2 승인 게이트에서 중단함."
+**Context**: CONSTRUCTION — U9 Code Generation Part 1 planning, stop before code generation.
+
+---

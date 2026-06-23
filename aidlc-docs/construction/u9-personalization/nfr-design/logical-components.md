@@ -12,8 +12,8 @@
 | `ProfileAggregator` | Read-through lazy aggregation from active events into bounded `UserInterestProfile`. |
 | `PersonalizationReadPort` | Supplies bounded search boosts and summary/translation defaults to U2/U7. |
 | `ActiveBehaviorEventRepository` | Reads/writes active `user_behavior_events`; only active rows feed profile aggregation. |
-| `BehaviorEventBackupRepository` | Copy/move target for raw-log deletion safety; never used by read/aggregate/decision paths. |
 | `InterestProfileRepository` | Stores aggregate profile and defaults. |
+| `RetentionCleanupCommand` | Idempotent scheduled command that purges expired active behavior events and emits success/failure telemetry. |
 | `PersonalizationTelemetryPublisher` | Emits operational counters/status to U6 without raw behavior metadata. |
 
 ## API Surface
@@ -24,18 +24,12 @@
 | `GET /api/personalization/decision/search` | Return bounded search boost decision for U2. |
 | `GET /api/personalization/decision/summary-defaults` | Return summary/translation default suggestions for U7. |
 | `PATCH /api/personalization/settings` | Enable or disable personalization. |
-| `POST /api/personalization/delete-events` | Copy/move active raw events to backup path, then delete active rows. |
+| `POST /api/personalization/delete-events` | Delete owner-scoped active raw behavior events directly. |
 | `POST /api/personalization/reset-profile` | Clear aggregate profile/defaults. |
 
 ## Repository Boundary
 
-```text
-ActiveBehaviorEventRepository -> ProfileAggregator -> InterestProfileRepository -> PersonalizationReadPort
-              |
-              +--delete request--> BehaviorEventBackupRepository -> active delete
-```
-
-`BehaviorEventBackupRepository` is intentionally absent from the read/aggregate/decision path.
+`ProfileAggregator` and `PersonalizationReadPort` read only active `user_behavior_events` and aggregate profile rows. User raw-log deletion calls `ActiveBehaviorEventRepository.delete_for_user(userId)` directly; U9 does not create or read a backup table in v1.
 
 ## Integration Points
 

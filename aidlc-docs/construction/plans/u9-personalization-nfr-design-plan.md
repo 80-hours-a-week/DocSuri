@@ -12,9 +12,9 @@
 답변 확정 후 아래 산출물을 `aidlc-docs/construction/u9-personalization/nfr-design/`에 작성한다.
 
 - [x] **logical-components.md**
-  - `PersonalizationApi`, `BehaviorEventRecorder`, `ProfileAggregator`, active/backup repositories, settings service, read port, telemetry publisher
+  - `PersonalizationApi`, `BehaviorEventRecorder`, `ProfileAggregator`, active repository, settings service, read port, retention cleanup command, telemetry publisher
 - [x] **nfr-design-patterns.md**
-  - fail-open personalization, bounded profile read, lazy aggregation, active-table delete + backup isolation, metadata allowlist, U6 observability
+  - fail-open personalization, bounded profile read, lazy aggregation, direct active-table delete, scheduled retention cleanup, metadata allowlist, U6 observability
 
 ## 2. 명확화 질문
 
@@ -42,14 +42,14 @@ X) 기타.
 
 [Answer]: A
 
-### Q3 — Active/Delete/Backup Boundary
-Q7=X에 따른 삭제/백업 경계를 어떻게 강제할까요?
+### Q3 — Active/Delete Boundary
+plan feedback에 따라 삭제 경계를 어떻게 강제할까요?
 
-A) **active repository와 backup repository를 분리(권장)** — delete는 active rows를 backup table에 copy/move 후 active table에서 삭제한다. read/aggregate/decision 경로는 active repository만 의존하고 backup repository를 import하지 않는다.
+A) **active table에서 직접 삭제하고 backup table은 만들지 않는다(권장)** — delete는 owner-scoped active rows를 삭제한다. read/aggregate/decision 경로는 active repository와 aggregate profile만 의존한다.
 
-B) 같은 repository가 active와 backup을 모두 읽고 flag로 구분한다.
+B) backup table에 copy/move 후 active table에서 삭제한다.
 
-C) backup table도 집계 입력으로 허용한다.
+C) deleted_at flag만 두고 물리 삭제하지 않는다.
 
 X) 기타.
 
@@ -58,7 +58,7 @@ X) 기타.
 ### Q4 — Observability Pattern
 U9 관측 이벤트는 어떻게 설계할까요?
 
-A) **운영 카운터/상태만 U6로 emit(권장)** — record failure, aggregation failure, degraded decision, delete/reset, backup copy/delete failure만 보내고 raw event metadata는 보내지 않는다.
+A) **운영 카운터/상태만 U6로 emit(권장)** — record failure, aggregation failure, degraded decision, delete/reset, retention purge success/failure만 보내고 raw event metadata는 보내지 않는다.
 
 B) 디버깅을 위해 raw behavior event 일부를 U6 telemetry에 포함한다.
 

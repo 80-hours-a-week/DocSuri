@@ -14,7 +14,7 @@
 | TD-U9-4 | Use lazy/on-demand profile aggregation for v1, with optional later batch correction. | Avoids a speculative worker/ML pipeline. |
 | TD-U9-5 | Enforce 90-day active raw-event retention with timestamp purge/filter logic. | Simple and auditable. |
 | TD-U9-6 | Use metadata allowlists and reject free-form payloads. | Reduces privacy and injection risk. |
-| TD-U9-7 | For raw-log deletion, create a backup table path and delete from active tables. Backup rows are excluded from personalization reads and governed by separate purge policy. | Matches Q7=X while preserving user-visible deletion from active personalization. |
+| TD-U9-7 | For user-requested raw-log deletion, delete owner-scoped active rows directly and do not create a U9 backup table. | Simpler privacy model; "delete" means delete unless a future cited compliance requirement needs retention. |
 | TD-U9-8 | Search personalization reads only a bounded profile decision; timeout/failure falls back to default search. | Protects search latency and relevance. |
 | TD-U9-9 | Emit U9 operational signals through existing U6 ObservabilityHub/EventStore. | No separate telemetry pipeline. |
 | TD-U9-10 | Keep U9 DTOs backend-local first; promote to shared schema only when U2/U7/U5 integration requires it. | Avoids premature shared-contract churn. |
@@ -29,7 +29,7 @@ U9 owns three active logical stores:
 - `user_interest_profile`: bounded aggregate profile and defaults.
 - `personalization_settings`: on/off and delete/reset markers.
 
-If raw-log deletion uses a backup table, that table is outside the personalization read model. It is not used by `ProfileAggregator`, `PersonalizationReadPort`, U2 search boost, or U7 default suggestions.
+U9 does not own a backup table for deleted behavior logs in v1. Retention is enforced by direct active-table delete for user requests and a scheduled, idempotent 90-day purge command.
 
 ## API Boundary
 

@@ -43,25 +43,27 @@ U9 records meaningful user behavior events, aggregates owner-scoped interest pro
 | NFR-U9-SEC3 | Personalization data must remain separate from U6 operational telemetry; U6 receives only operational degradation metrics. |
 | NFR-U9-SEC4 | User controls must support personalization off, raw event deletion, and profile reset as separate actions. |
 | NFR-U9-SEC5 | Raw event deletion must remove active-table rows from personalization use immediately after request success. |
-| NFR-U9-SEC6 | If a backup table is used for delete safety, it must be excluded from personalization reads, aggregation, and decisions, and it must have a separate retention/purge policy. |
+| NFR-U9-SEC6 | U9 must not create a backup table for user-requested raw behavior log deletion unless a future legal/compliance requirement explicitly requires it. |
 
 ## Retention, Delete, and Reset
 
 | ID | Requirement |
 | --- | --- |
 | NFR-U9-D1 | Raw events in the active table are subject to a 90-day retention policy. |
-| NFR-U9-D2 | User raw-log deletion moves or copies active rows to a backup table when needed, then deletes them from the active table. |
-| NFR-U9-D3 | Backup-table rows are for recovery/audit safety only and are not a personalization input. |
+| NFR-U9-D2 | User raw-log deletion deletes owner-scoped active rows directly from `user_behavior_events`; deleted behavior rows are not copied to a U9 backup table. |
+| NFR-U9-D3 | Retention purge must run on a clock, not only lazily on user activity, so inactive users' expired events are also removed. |
 | NFR-U9-D4 | Profile reset deletes or clears aggregate profile/default rows so the next personalization decision returns `no_profile` or default behavior. |
 | NFR-U9-D5 | Delete/reset success must affect the next personalization decision. |
+| NFR-U9-D6 | The retention cleanup command must be idempotent and safe to retry. |
 
 ## Observability
 
 | ID | Requirement |
 | --- | --- |
 | NFR-U9-O1 | U9 must emit through existing U6 ObservabilityHub/EventStore. |
-| NFR-U9-O2 | Required metrics: event record failure rate, aggregation failure rate, degraded decision count, delete/reset count, and backup-table write/delete failures. |
+| NFR-U9-O2 | Required metrics: event record failure rate, aggregation failure rate, degraded decision count, delete/reset count, retention purge success/failure, and purged row count. |
 | NFR-U9-O3 | Observability events must not include raw behavior payloads beyond operational counts/status. |
+| NFR-U9-O4 | Retention purge failure must trigger U6 alerting because silent purge failure becomes a privacy retention violation. |
 
 ## Test Requirements
 
