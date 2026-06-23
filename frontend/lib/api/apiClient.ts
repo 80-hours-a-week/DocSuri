@@ -9,8 +9,10 @@ import { classifySearchResponse, type SearchOutcome } from './classify';
 import {
   classifySummarizeResponse,
   classifyFullTextResponse,
+  classifyAssetsResponse,
   type SummarizeOutcome,
   type FullTextOutcome,
+  type AssetsOutcome,
 } from './classifySummarize';
 import { recordPath } from '../observability';
 import type {
@@ -117,7 +119,10 @@ export class ApiClient {
 
   /** U8 citation tree for the paper detail page. GET is idempotent and can be cached by
    * the gateway/backend; save is a user-scoped library mutation. */
-  async getCitationTree(paperId: string, params: CitationTreeQuery = {}): Promise<CitationTreeResponse> {
+  async getCitationTree(
+    paperId: string,
+    params: CitationTreeQuery = {},
+  ): Promise<CitationTreeResponse> {
     const sp = new URLSearchParams();
     if (params.expandNodeId) sp.set('expandNodeId', params.expandNodeId);
     if (params.refresh) sp.set('refresh', 'true');
@@ -151,6 +156,19 @@ export class ApiClient {
     const res = await this.request({ method: 'GET', path, idempotent: true });
     if (res.status === 200 || res.status === 400) {
       return classifyFullTextResponse(res.body);
+    }
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+  }
+
+  /** Figure/table assets for the detail/viewer (FR-17, display-only; OA license-gated).
+   * Returns signed URLs only (SEC-9). Independent of the full-text viewer. */
+  async getAssets(paperId: string, version: number): Promise<AssetsOutcome> {
+    const path = `/api/papers/${encodeURIComponent(paperId)}/assets?version=${encodeURIComponent(
+      String(version),
+    )}`;
+    const res = await this.request({ method: 'GET', path, idempotent: true });
+    if (res.status === 200 || res.status === 401) {
+      return classifyAssetsResponse(res.body);
     }
     throw normalizeHttpError(res.status, pick(res.body, 'message'));
   }
@@ -201,6 +219,38 @@ export class ApiClient {
       method: 'POST',
       path: '/auth/login',
       body: req,
+      idempotent: false,
+    });
+    if (res.status === 200 || res.status === 204) return;
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+  }
+
+  /**
+   * Activate a PENDING account from the emailed link's token (US-A1, BR-A5). Hits the
+   * backend GET /auth/verify-email via the BFF; resolves on 200, throws a
+   * UserFacingError on an expired/invalid token (4xx) so the page can show a retry path.
+   */
+  async verifyEmail(token: string): Promise<void> {
+    const res = await this.request({
+      method: 'GET',
+      path: `/auth/verify-email?token=${encodeURIComponent(token)}`,
+      idempotent: true,
+    });
+    if (res.status === 200) return;
+    throw normalizeHttpError(res.status, pick(res.body, 'message'));
+  }
+
+  /**
+   * Resend the account-verification email (US-A1 recourse). The backend returns a
+   * generic success regardless of whether the address exists / is still PENDING
+   * (no account enumeration), so this resolves on 200 and only throws on transport
+   * or non-2xx failures.
+   */
+  async resendVerification(email: string): Promise<void> {
+    const res = await this.request({
+      method: 'POST',
+      path: '/auth/resend-verification',
+      body: { email },
       idempotent: false,
     });
     if (res.status === 200 || res.status === 204) return;
@@ -313,7 +363,11 @@ export class ApiClient {
 
   /** Clear the user's entire search history. */
   async clearHistory(): Promise<void> {
-    const res = await this.request({ method: 'DELETE', path: '/library/history', idempotent: false });
+    const res = await this.request({
+      method: 'DELETE',
+      path: '/library/history',
+      idempotent: false,
+    });
     if (res.status === 204 || res.status === 200) return;
     throw normalizeHttpError(res.status, pick(res.body, 'message'));
   }
@@ -328,7 +382,6 @@ export class ApiClient {
     }
     throw normalizeHttpError(res.status, pick(res.body, 'message'));
   }
-
 
   private async request(req: TransportRequest): Promise<TransportResponse> {
     const key = `${req.method} ${req.path} ${JSON.stringify(req.body ?? null)}`;
@@ -392,5 +445,7 @@ function delay(ms: number): Promise<void> {
 }
 
 function pick(body: unknown, key: string): unknown {
-  return typeof body === 'object' && body !== null ? (body as Record<string, unknown>)[key] : undefined;
+  return typeof body === 'object' && body !== null
+    ? (body as Record<string, unknown>)[key]
+    : undefined;
 }

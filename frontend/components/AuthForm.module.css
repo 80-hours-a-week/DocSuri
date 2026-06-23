@@ -103,3 +103,32 @@
   opacity: 0.6;
   cursor: default;
 }
+
+/* Text-style secondary action (e.g. "resend verification") under a form error. */
+.linkButton {
+  align-self: flex-start;
+  margin: 0;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  color: var(--color-accent);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.linkButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Neutral confirmation notice (distinct from the danger-styled formError). */
+.formNotice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--color-surface-alt, rgba(0, 0, 0, 0.04));
+  color: var(--color-text, inherit);
+  font-size: 13px;
+}

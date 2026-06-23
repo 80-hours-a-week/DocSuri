@@ -13,6 +13,7 @@ from typing import Protocol, runtime_checkable
 from ..domain.models import (
     Glossary,
     RefinedSource,
+    StoredAsset,
     SummaryCacheKey,
     SummaryDraft,
     SummaryRequest,
@@ -26,6 +27,7 @@ __all__ = [
     "SummaryStorePort",
     "FullTextSourcePort",
     "GlossaryRepositoryPort",
+    "AssetReadPort",
 ]
 
 
@@ -73,6 +75,21 @@ class FullTextSourcePort(Protocol):
 
     def get_full_text(self, paper_id: str, version: int) -> str | None:
         """Return the stored full text, or None when absent / license-disallowed (Q1)."""
+        ...
+
+
+@runtime_checkable
+class AssetReadPort(Protocol):
+    """FR-17 read side: list a paper's figure/table manifest (paper_asset, RDS, read-only —
+    U1 is the single writer) and presign its S3 object refs (BR-S15). Read capability only."""
+
+    def list_assets(self, paper_id: str, version: int) -> Sequence[StoredAsset]:
+        """Return stored asset metadata in display order (ordinal). Empty when none."""
+        ...
+
+    def presign(self, object_ref: str) -> str | None:
+        """Return a short-lived signed GET URL for an S3 object ref, or ``None`` for a
+        non-S3 ref so the caller skips it — the raw object_ref is never exposed (SEC-9)."""
         ...
 
 

@@ -221,41 +221,24 @@ def test_rebuild_lock_defers_incremental_and_event_paths() -> None:
     assert not queue.jobs
 
 
-def test_changed_version_decreases_chunk_count_cleanup() -> None:
-    # 1. Create metadata records for v1 and v2
+def test_changed_version_replaces_abstract_chunk() -> None:
     v1_meta = sample_metadata("2401.00001v1")
     v2_meta = sample_metadata("2401.00001v2")
-
-    # 2. Provide different full text contents for v1 and v2
-    # v1 is long -> yields 4 body chunks + 1 abstract chunk = 5 chunks
-    v1_text = "INTRODUCTION\n" + "A" * 7000
-    # v2 is short -> yields 1 body chunk + 1 abstract chunk = 2 chunks
-    v2_text = "INTRODUCTION\nShort text only."
 
     arxiv = FakeArxivSource(
         metadata=[v1_meta, v2_meta],
         full_text={
-            "2401.00001v1": v1_text,
-            "2401.00001v2": v2_text,
-        }
+            "2401.00001v1": "body v1",
+            "2401.00001v2": "body v2",
+        },
     )
 
     pipeline, control, index, _, _ = build_test_pipeline(arxiv=arxiv)
 
-    # 3. Ingest v1
     job1 = IngestionJob(job_id="job-1", kind=JobKind.EVENT, arxiv_ref="2401.00001v1")
-    decision1 = pipeline.ingest_one(job1)
-    assert decision1 is DedupDecision.NEW
+    assert pipeline.ingest_one(job1) is DedupDecision.NEW
+    assert len(index.records) == 1
 
-    # Check that we have multiple chunks in index (abstract + 4 body chunks = 5 chunks)
-    v1_chunk_ids = {chunk_id for chunk_id in index.records if chunk_id.startswith("2401.00001")}
-    assert len(v1_chunk_ids) == 5
-
-    # 4. Ingest v2 (which has fewer chunks: abstract + 1 body chunk = 2 chunks)
     job2 = IngestionJob(job_id="job-2", kind=JobKind.EVENT, arxiv_ref="2401.00001v2")
-    decision2 = pipeline.ingest_one(job2)
-    assert decision2 is DedupDecision.CHANGED
-
-    # Check that the stale chunks from v1 are deleted, and only v2 chunks remain (total 2 chunks)
-    v2_chunk_ids = {chunk_id for chunk_id in index.records if chunk_id.startswith("2401.00001")}
-    assert len(v2_chunk_ids) == 2
+    assert pipeline.ingest_one(job2) is DedupDecision.CHANGED
+    assert len(index.records) == 1

@@ -31,8 +31,25 @@ class FailureReason(StrEnum):
     DEPENDENCY_UNAVAILABLE = "DEPENDENCY_UNAVAILABLE"
     BULK_INDEX_PARTIAL_FAILURE = "BULK_INDEX_PARTIAL_FAILURE"
     POISON_EVENT = "POISON_EVENT"
+    # FR-17 multimodal assets — best-effort, NON-blocking (BR-27): never fail a paper.
+    ASSET_EXTRACT_FAILURE = "ASSET_EXTRACT_FAILURE"
+    ASSET_STORE_FAILURE = "ASSET_STORE_FAILURE"
 
 
 class DedupStateKind(StrEnum):
     INDEXED = "INDEXED"
     TOMBSTONED = "TOMBSTONED"
+
+
+class AssetType(StrEnum):
+    """FR-17 figure/table asset kind (display-only)."""
+
+    FIGURE = "figure"
+    TABLE = "table"
+
+
+class AssetSourceMode(StrEnum):
+    """How an asset was obtained (BR-23 hybrid extraction)."""
+
+    STRUCTURED = "structured"  # arXiv e-print (LaTeX) graphic, original quality
+    PAGE_CROP = "page-crop"  # rendered PDF region crop (fallback)

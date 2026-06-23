@@ -5,6 +5,16 @@ from enum import Enum
 from uuid import UUID
 
 
+def normalize_email(raw: str) -> str:
+    """Canonical email form for storage and lookup: trimmed + lowercased.
+
+    Email addresses are treated case-insensitively by every real provider, so we
+    normalize at the trust boundary (signup/login/verify/resend). Without this, an
+    account stored as ``Park@x.com`` is unreachable when the user later types
+    ``park@x.com`` — a silent "valid credentials rejected" 401. Idempotent."""
+    return raw.strip().lower() if raw else raw
+
+
 class DomainException(Exception):
     """Base domain exception for Accounts module"""
     pass

@@ -50,6 +50,8 @@ from ._generated.dtos.search_schema import (
 from ._generated.dtos.summarization_schema import (
     Anchor,
     AnchorTarget,
+    AssetRef,
+    PaperAssetsResponse,
     Persona,
     Reproducibility,
     SummarizeScope,
@@ -100,4 +102,7 @@ __all__ = [
     "SummarizeScope",
     "SummarizeTask",
     "Reproducibility",
+    # summarization — FR-17 figure/table assets
+    "AssetRef",
+    "PaperAssetsResponse",
 ]
