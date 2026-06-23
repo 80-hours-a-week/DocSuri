@@ -248,7 +248,9 @@ class IngestionPipelineService:
                     lambda: self._vector_index_v2.tombstone_paper(tombstone),
                 )
             except Exception as e:
-                self._observability.emit_log({"type": "dual_write_v2_tombstone_failed", "error": str(e)})
+                self._observability.emit_log(
+                    {"type": "dual_write_v2_tombstone_failed", "error": str(e)}
+                )
         self._control_plane.advance_watermark("arxiv", paper.updated_at)
         self._remove_assets_best_effort(paper.paper_id)
         self._control_plane.record_job_finished(job.job_id, success=True, detail="tombstoned")

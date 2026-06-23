@@ -1,8 +1,7 @@
 import sys
 
-from opensearchpy import OpenSearch
-
 from docsuri_ingestion.settings import IngestionSettings
+from opensearchpy import OpenSearch
 
 
 def main():

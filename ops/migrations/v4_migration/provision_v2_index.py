@@ -1,9 +1,8 @@
 import sys
 
-from opensearchpy import OpenSearch
-
 from docsuri_ingestion.settings import IngestionSettings
 from docsuri_shared.vector_spec import DIMENSIONS
+from opensearchpy import OpenSearch
 
 INDEX_BODY = {
     "settings": {"index": {"knn": True}},

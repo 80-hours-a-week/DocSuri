@@ -21,7 +21,9 @@ class IngestionSettings(BaseModel):
     bedrock_model_id_v2: str | None = Field(default=None, alias="DOCSURI_BEDROCK_MODEL_ID_V2")
     opensearch_endpoint: str | None = Field(default=None, alias="DOCSURI_OPENSEARCH_ENDPOINT")
     opensearch_index: str = Field(default="docsuri-corpus-v1", alias="DOCSURI_OPENSEARCH_INDEX")
-    opensearch_index_v2: str = Field(default="docsuri-corpus-v2", alias="DOCSURI_OPENSEARCH_INDEX_V2")
+    opensearch_index_v2: str = Field(
+        default="docsuri-corpus-v2", alias="DOCSURI_OPENSEARCH_INDEX_V2"
+    )
     control_plane_dsn: str | None = Field(default=None, alias="DOCSURI_CONTROL_PLANE_DSN")
     sqs_queue_url: str | None = Field(default=None, alias="DOCSURI_SQS_QUEUE_URL")
     sqs_dlq_url: str | None = Field(default=None, alias="DOCSURI_SQS_DLQ_URL")

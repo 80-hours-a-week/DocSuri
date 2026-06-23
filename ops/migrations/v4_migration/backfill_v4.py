@@ -1,12 +1,12 @@
 import sys
 import time
 
-from docsuri_ingestion.settings import IngestionSettings
 from docsuri_ingestion.adapters.arxiv import ArxivHttpSource
 from docsuri_ingestion.adapters.aws import BedrockCohereEmbeddingPort, OpenSearchVectorIndex
-from docsuri_ingestion.processors import FetchParseProcessor, Chunker, IndexRecordAssembler
-from docsuri_ingestion.domain.models import EmbeddingBatch, CategoryFilter
-from docsuri_ingestion.config import CORPUS_START, CORPUS_END, CORPUS_SLICE_CATEGORIES
+from docsuri_ingestion.config import CORPUS_END, CORPUS_SLICE_CATEGORIES, CORPUS_START
+from docsuri_ingestion.domain.models import CategoryFilter, EmbeddingBatch
+from docsuri_ingestion.processors import Chunker, FetchParseProcessor, IndexRecordAssembler
+from docsuri_ingestion.settings import IngestionSettings
 
 # ponytail: 1 req/3s matches arXiv politeness + Bedrock default TPS; tune up if quota allows
 BEDROCK_DELAY_SECONDS = 3.0
