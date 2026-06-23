@@ -272,5 +272,68 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - Trigger: 사용자 행동 로그를 기록하고 분석해 개인화 맞춤 서비스를 제공하는 기능.
 - Created artifact:
   - `aidlc-docs/inception/requirements/requirement-verification-questions-u9-personalization.md`
-- Current gate: questions Q1~Q20 awaiting answers.
+- Completed: questions Q1~Q20 set to recommended answers (Q13=B, all others A).
+- Requirements updated:
+  - `aidlc-docs/inception/requirements/requirements.md`
+  - Added FR-18 behavior event logging, FR-19 user interest profile, FR-20 personalization application, NFR-P4, QT-7, U9 scope exclusions, traceability.
+- Current gate: Requirements review/approval. Next recommended stage: User Stories revision for U9.
+- Code generated: no.
+
+## U9 Personalization — User Stories Plan Ready
+
+- Date: 2026-06-23
+- Stage: INCEPTION / User Stories Part 1
+- Assessment completed:
+  - `aidlc-docs/inception/plans/u9-personalization-user-stories-assessment.md`
+- Plan created:
+  - `aidlc-docs/inception/plans/u9-personalization-story-generation-plan.md`
+- Decision: execute User Stories for U9 because the change is user-facing, touches behavior data/privacy controls, and affects search/summary/translation workflows.
+- Completed: Story generation plan questions PQ1~PQ6 set to recommended answer A.
+- Generated artifacts:
+  - `aidlc-docs/inception/user-stories/stories.md`
+  - `aidlc-docs/inception/user-stories/personas.md`
+- Story update: added Epic 8 Personalization / Behavior Intelligence with US-P1..US-P7; updated persona map and FR/NFR/QT traceability.
+- Current gate: User Stories review/approval. Next recommended stage: Units Generation revision for U9.
+- Code generated: no.
+
+## U9 Personalization — Units Generation Plan Ready
+
+- Date: 2026-06-23
+- Stage: INCEPTION / Units Generation Part 1
+- Plan created:
+  - `aidlc-docs/inception/plans/u9-personalization-unit-of-work-plan.md`
+- Recommended decomposition: add U9 as `backend/modules/personalization/` in the existing API deployment; keep US-P1..P6 Owner=U9 and US-P7 Owner=U6 with U9 as signal source.
+- Completed: Unit decomposition questions UQ1~UQ5 set to recommended answer A.
+- Updated artifacts:
+  - `aidlc-docs/inception/application-design/unit-of-work.md`
+  - `aidlc-docs/inception/application-design/unit-of-work-dependency.md`
+  - `aidlc-docs/inception/application-design/unit-of-work-story-map.md`
+- Unit update: added U9 Personalization as an API module at `backend/modules/personalization/`; story map now covers 40 stories with unassigned=0.
+- Current gate: Units Generation review/approval. Next recommended stage: U9 Construction Functional Design.
+- Code generated: no.
+
+## U9 Personalization — Functional Design Plan Ready
+
+- Date: 2026-06-23
+- Stage: CONSTRUCTION / U9 Functional Design Part 1
+- Plan created:
+  - `aidlc-docs/construction/plans/u9-personalization-functional-design-plan.md`
+- Decision: execute Functional Design because U9 introduces behavior event entities, interest profile aggregation rules, user controls, and non-blocking personalization failure rules.
+- Completed: Functional Design questions Q1~Q12 set to recommended answer A.
+- Generated artifacts:
+  - `aidlc-docs/construction/u9-personalization/functional-design/domain-entities.md`
+  - `aidlc-docs/construction/u9-personalization/functional-design/business-logic-model.md`
+  - `aidlc-docs/construction/u9-personalization/functional-design/business-rules.md`
+- Design summary: defined BehaviorEvent envelope, 7 event types, owner-scoped UserInterestProfile, bounded personalization decisions, user controls, fail-open default behavior, and QT-7 property candidates.
+- Current gate: Functional Design review/approval. Next recommended stage: U9 NFR Requirements.
+- Code generated: no.
+
+## U9 Personalization — NFR Requirements Plan Ready
+
+- Date: 2026-06-23
+- Stage: CONSTRUCTION / U9 NFR Requirements Part 1
+- Plan created:
+  - `aidlc-docs/construction/plans/u9-personalization-nfr-requirements-plan.md`
+- Decision: execute NFR Requirements because U9 stores user behavior data and must define persistence, privacy, latency, degradation, observability, and QT-7 test boundaries.
+- Current gate: NFR Requirements questions Q1~Q12 awaiting answer/approval. Recommended answers: A for all.
 - Code generated: no.
