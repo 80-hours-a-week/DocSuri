@@ -35,6 +35,17 @@ from ..mocks import fixtures
 INDEX_BODY: dict[str, Any] = papers_index_body()
 
 
+def create_index(
+    client: Any, index_name: str, *, recreate: bool = True, body: dict[str, Any] | None = None
+) -> None:
+    """Create a single index (default ``INDEX_BODY``). Used by ``bootstrap_papers_index`` to
+    build the production on_disk index; ``recreate`` drops an existing one first."""
+    if recreate and client.indices.exists(index=index_name):
+        client.indices.delete(index=index_name)
+    if not client.indices.exists(index=index_name):
+        client.indices.create(index=index_name, body=body or INDEX_BODY)
+
+
 def create_indices_and_alias(client: Any, alias_name: str, *, recreate: bool = True) -> None:
     v1_index = f"{alias_name}-v1"
     v2_index = f"{alias_name}-v2"
