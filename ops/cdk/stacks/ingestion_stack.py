@@ -40,10 +40,12 @@ from aws_cdk import (
 from constructs import Construct
 
 # Bedrock text-embedding model for the worker (Cohere Embed v4, 1024-dim — matches the
-# discovery/search side). Region-scoped ARN built from this id below. Reflects live prod,
-# which already runs cohere.embed-v4:0; v2 dual-write below targets the same model so the
-# backfilled docsuri-corpus-v2 index is a clean, uniform v4 rebuild.
-_BEDROCK_MODEL_ID = "cohere.embed-v4:0"
+# discovery/search side). cohere.embed-v4:0 is NOT invokable on-demand by its bare id; it must
+# go through the global cross-region inference profile. The adapter pins output_dimension to the
+# 1024-dim spec (embed-v4 defaults to 1536). v2 dual-write targets the same profile so the
+# backfilled docsuri-corpus-v2 is a clean, uniform v4 rebuild.
+_BEDROCK_FOUNDATION_MODEL = "cohere.embed-v4:0"
+_BEDROCK_MODEL_ID = "global.cohere.embed-v4:0"  # inference profile id (used for InvokeModel)
 
 # Existing control-plane RDS (created by Docsuri-Compute) referenced by concrete id rather than
 # a CFN cross-stack import. Importing compute's L2 construct would force a compute redeploy, which
@@ -212,6 +214,11 @@ class IngestionStack(Stack):
         task_def.add_to_task_role_policy(
             iam.PolicyStatement(
                 actions=["bedrock:InvokeModel"],
-                resources=[f"arn:aws:bedrock:{self.region}::foundation-model/{_BEDROCK_MODEL_ID}"],
+                resources=[
+                    # Invocation goes through the global inference profile, which can route to
+                    # the foundation model in any region — grant both.
+                    f"arn:aws:bedrock:{self.region}:{self.account}:inference-profile/{_BEDROCK_MODEL_ID}",
+                    f"arn:aws:bedrock:*::foundation-model/{_BEDROCK_FOUNDATION_MODEL}",
+                ],
             )
         )

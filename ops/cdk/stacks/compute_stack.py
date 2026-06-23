@@ -200,7 +200,7 @@ class ComputeStack(Stack):
             "DOCSURI_OPENSEARCH_ENDPOINT": Fn.join("", [
                 "https://", opensearch_domain.domain_endpoint,
             ]),
-            "DOCSURI_BEDROCK_MODEL_ID": "cohere.embed-v4:0",
+            "DOCSURI_BEDROCK_MODEL_ID": "global.cohere.embed-v4:0",
             "DOCSURI_AWS_REGION": self.region,
         }
 
@@ -392,7 +392,10 @@ class ComputeStack(Stack):
             iam.PolicyStatement(
                 actions=["bedrock:InvokeModel"],
                 resources=[
-                    f"arn:aws:bedrock:{self.region}::foundation-model/cohere.embed-v4:0"
+                    # Invoked via the global inference profile (bare model id isn't on-demand
+                    # invokable); the profile can route the FM to any region — grant both.
+                    f"arn:aws:bedrock:{self.region}:{self.account}:inference-profile/global.cohere.embed-v4:0",
+                    "arn:aws:bedrock:*::foundation-model/cohere.embed-v4:0",
                 ],
             )
         )
