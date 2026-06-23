@@ -23,6 +23,21 @@ class DocModelRequest(BaseModel):
     )
 
 
+class BuildingDTO(BaseModel):
+    """
+    The doc-model is being built asynchronously (lazy on-demand, D6/BR-30): a cache miss enqueued a build job and the client should poll getDocModel again after retryAfterMs. Distinct from source_unavailable (a build that ran and failed every source tier) — building is transient/in-flight. Trace: BR-30, BR-S8 (async job), D6.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    status: Literal['building']
+    retryAfterMs: int | None = Field(
+        None,
+        description='Suggested client poll backoff in milliseconds before re-requesting.',
+    )
+
+
 class LicenseUnavailableDTO(BaseModel):
     """
     OA license does not permit in-app rich rendering of this paper; client links out to arXiv instead. Trace: BR-SF-11, SEC-9.
@@ -385,11 +400,15 @@ class DocModelResultDTO(BaseModel):
 
 
 class DocModelResponse(
-    RootModel[DocModelResultDTO | LicenseUnavailableDTO | SourceUnavailableDTO]
+    RootModel[
+        DocModelResultDTO | BuildingDTO | LicenseUnavailableDTO | SourceUnavailableDTO
+    ]
 ):
-    root: DocModelResultDTO | LicenseUnavailableDTO | SourceUnavailableDTO = Field(
+    root: (
+        DocModelResultDTO | BuildingDTO | LicenseUnavailableDTO | SourceUnavailableDTO
+    ) = Field(
         ...,
-        description='doc-model contract (DocModel pivot — SSOT spec: aidlc-docs/construction/shared/docmodel.md; gate: construction/plans/docmodel-foundation-pivot-plan.md, D1/D2/D4/D6/D8). The ROOT schema is DocModelResponse — the union (oneOf) returned by getDocModel and branched by U5 ApiClient to surface status (ok | license_unavailable | source_unavailable). The bare DocModel artifact (the JSON stored at doc-model/{paperId}/v{version}.json and consumed as the U7 summary input) is defined at #/$defs/DocModel. STATUS: PROVISIONAL (owning unit U1 FD in progress). Trace: FR-12, FR-17, BR-30, BR-S2.',
+        description='doc-model contract (DocModel pivot — SSOT spec: aidlc-docs/construction/shared/docmodel.md; gate: construction/plans/docmodel-foundation-pivot-plan.md, D1/D2/D4/D6/D8). The ROOT schema is DocModelResponse — the union (oneOf) returned by getDocModel and branched by U5 ApiClient to surface status (ok | building | license_unavailable | source_unavailable). The bare DocModel artifact (the JSON stored at doc-model/{paperId}/v{version}.json and consumed as the U7 summary input) is defined at #/$defs/DocModel. STATUS: PROVISIONAL (owning unit U1 FD in progress). Trace: FR-12, FR-17, BR-30, BR-S2.',
         title='DocModelResponse',
     )
 

@@ -16,6 +16,7 @@ from docsuri_shared.dtos import DocModel
 
 from summarization.adapters.s3_docmodel import S3DocModelReader
 from summarization.api.router import build_router
+from summarization.domain.models import DocModelLookup
 
 
 class _FakeState:
@@ -64,13 +65,13 @@ def _doc_model(paper_id: str = "2401.00001", version: int = 1) -> DocModel:
 
 
 class _FakeOrchestrator:
-    def __init__(self, doc: DocModel | None) -> None:
-        self._doc = doc
+    def __init__(self, lookup: DocModelLookup) -> None:
+        self._lookup = lookup
         self.calls: list[tuple] = []
 
-    def doc_model(self, paper_id: str, version: int) -> DocModel | None:
+    def doc_model(self, paper_id: str, version: int) -> DocModelLookup:
         self.calls.append((paper_id, version))
-        return self._doc
+        return self._lookup
 
 
 def _endpoint(orch, *, en: bool):
@@ -93,27 +94,37 @@ def _call(orch, *, principal, enabled, version="1"):
 
 
 def test_requires_principal() -> None:
-    status, body = _call(_FakeOrchestrator(_doc_model()), principal=None, enabled=True)
+    orch = _FakeOrchestrator(DocModelLookup(doc=_doc_model()))
+    status, body = _call(orch, principal=None, enabled=True)
     assert status == 401
     assert body == {"status": "unauthorized"}
 
 
 def test_license_gated_when_disabled() -> None:
-    orch = _FakeOrchestrator(_doc_model())
+    orch = _FakeOrchestrator(DocModelLookup(doc=_doc_model()))
     _, body = _call(orch, principal={"user_id": "u1"}, enabled=False)
     assert body == {"status": "license_unavailable"}
     assert orch.calls == []  # never touched the reader behind the gate
 
 
-def test_source_unavailable_when_not_built() -> None:
-    orch = _FakeOrchestrator(None)
+def test_source_unavailable_when_no_build_queue() -> None:
+    # Empty lookup (miss + no build queue wired) → source_unavailable (prior behavior).
+    orch = _FakeOrchestrator(DocModelLookup())
     _, body = _call(orch, principal={"user_id": "u1"}, enabled=True, version="2")
     assert body == {"status": "source_unavailable"}
     assert orch.calls == [("2401.00001", 2)]
 
 
+def test_building_when_lazy_build_triggered() -> None:
+    # Miss with a build queue wired → building + poll hint (client polls again).
+    orch = _FakeOrchestrator(DocModelLookup(building=True, retry_after_ms=2000))
+    status, body = _call(orch, principal={"user_id": "u1"}, enabled=True, version="2")
+    assert status == 200
+    assert body == {"status": "building", "retryAfterMs": 2000}
+
+
 def test_ok_returns_docmodel_union() -> None:
-    orch = _FakeOrchestrator(_doc_model(version=3))
+    orch = _FakeOrchestrator(DocModelLookup(doc=_doc_model(version=3)))
     status, body = _call(orch, principal={"user_id": "u1"}, enabled=True, version="3")
     assert status == 200
     assert body["status"] == "ok"

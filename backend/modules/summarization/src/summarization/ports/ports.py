@@ -97,6 +97,19 @@ class DocModelReadPort(Protocol):
 
 
 @runtime_checkable
+class DocModelBuildQueuePort(Protocol):
+    """Trigger U1's lazy doc-model build (BR-30/D6) on a read miss. The read side only enqueues
+    a ``BUILD_DOC_MODEL`` job onto U1's queue — it never imports/runs the builder (boundary B:
+    consumer enqueues, ingestion worker produces). Idempotent at the producer (a cache hit
+    short-circuits the build), so a duplicate enqueue is cheap."""
+
+    def enqueue_build(self, paper_id: str, version: int) -> None:
+        """Best-effort enqueue of a doc-model build for ``(paper_id, version)``. MUST NOT raise
+        on the read path — a failed enqueue degrades to ``source_unavailable``, not a 500."""
+        ...
+
+
+@runtime_checkable
 class AssetReadPort(Protocol):
     """FR-17 read side: list a paper's figure/table manifest (paper_asset, RDS, read-only —
     U1 is the single writer) and presign its S3 object refs (BR-S15). Read capability only."""

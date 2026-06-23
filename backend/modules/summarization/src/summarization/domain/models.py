@@ -112,6 +112,18 @@ class SourceText:
 
 
 @dataclass(frozen=True, slots=True)
+class DocModelLookup:
+    """Result of a doc-model read (BR-30/D6): the cached artifact on a hit, or ``building`` when
+    a lazy build was (re)triggered on a miss so the client polls again. ``building`` stays False
+    when no build queue is wired — the router then surfaces ``source_unavailable`` (prior
+    behavior preserved)."""
+
+    doc: DocModel | None = None
+    building: bool = False
+    retry_after_ms: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Section:
     label: str  # "" when only a span could be derived (Q6 span-only degrade)
     start: int

@@ -127,17 +127,24 @@ export interface DocModelOkDTO {
   docModel: DocModel;
 }
 
+/** Lazy build in flight (D6/BR-30): cache miss enqueued a build job; client polls again. */
+export interface DocModelBuildingDTO {
+  status: 'building';
+  retryAfterMs?: number;
+}
+
 /** OA license not permitted → rich view not opened; arXiv link-out instead (BR-SF-11). */
 export interface DocModelLicenseDTO {
   status: 'license_unavailable';
 }
 
-/** No source tier produced a doc-model (not yet built / unavailable). */
+/** No source tier produced a doc-model (built but every tier failed). */
 export interface DocModelSourceUnavailableDTO {
   status: 'source_unavailable';
 }
 
 export type DocModelResponseDTO =
   | DocModelOkDTO
+  | DocModelBuildingDTO
   | DocModelLicenseDTO
   | DocModelSourceUnavailableDTO;

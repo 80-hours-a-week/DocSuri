@@ -137,6 +137,8 @@ def make_orchestrator(
     full_text: StubFullText | None = None,
     cost_guard: StubCostGuard | None = None,
     observability: StubObservability | None = None,
+    doc_model_reader=None,
+    doc_model_build_queue=None,
 ) -> SummarizationOrchestrationService:
     return SummarizationOrchestrationService(
         store=store or StubStore(),
@@ -150,4 +152,6 @@ def make_orchestrator(
         cost_guard=cost_guard or StubCostGuard(),
         observability=observability or StubObservability(),
         model_ver="test-model",
+        doc_model_reader=doc_model_reader,
+        doc_model_build_queue=doc_model_build_queue,
     )

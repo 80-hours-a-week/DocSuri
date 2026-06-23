@@ -92,8 +92,9 @@ def build_router(
     def doc_model(request: Request, paper_id: str) -> Any:
         """Structured doc-model for the rich view / summary input (BR-30, D4). OA-license-gated
         like full-text (BR-SF-11): disabled by default → ``license_unavailable`` (arXiv
-        link-out) until a license signal is wired. Read-only — returns the lazily-built cached
-        artifact (D6); a miss / not-yet-built surfaces ``source_unavailable``. The doc-model is
+        link-out) until a license signal is wired. Returns the cached artifact when present; a
+        miss (re)triggers U1's lazy build and surfaces ``building`` (client polls) when a build
+        queue is wired, else ``source_unavailable`` (D6, boundary B). The doc-model is
         url-free (SEC-9): figure signed URLs come from the parallel ``/assets`` manifest,
         joined by ``assetId`` on the client."""
         user_id = _principal_user_id(request)
@@ -105,16 +106,22 @@ def build_router(
             version = int(request.query_params.get("version", "1"))
         except (TypeError, ValueError):
             version = 1
-        doc = orchestrator.doc_model(paper_id, version)
-        if doc is None:
-            return JSONResponse({"status": "source_unavailable"})
-        return JSONResponse(
-            {
-                "status": "ok",
-                "cached": True,
-                "docModel": doc.model_dump(mode="json", exclude_none=True),
-            }
-        )
+        result = orchestrator.doc_model(paper_id, version)
+        if result.doc is not None:
+            return JSONResponse(
+                {
+                    "status": "ok",
+                    "cached": True,
+                    "docModel": result.doc.model_dump(mode="json", exclude_none=True),
+                }
+            )
+        if result.building:
+            # Lazy build (re)triggered on a miss — client polls again after the hint (BR-30/D6).
+            body: dict[str, Any] = {"status": "building"}
+            if result.retry_after_ms is not None:
+                body["retryAfterMs"] = result.retry_after_ms
+            return JSONResponse(body)
+        return JSONResponse({"status": "source_unavailable"})
 
     @router.get("/api/papers/{paper_id}/assets")
     def paper_assets(request: Request, paper_id: str) -> Any:

@@ -15,6 +15,14 @@ describe('classifyDocModelResponse', () => {
     }
   });
 
+  it('maps building → building with the poll-backoff hint (lazy build in flight)', () => {
+    const out = classifyDocModelResponse({ status: 'building', retryAfterMs: 1500 });
+    expect(out.kind).toBe('building');
+    if (out.kind === 'building') expect(out.retryAfterMs).toBe(1500);
+    // hint is optional — absence must not break classification.
+    expect(classifyDocModelResponse({ status: 'building' }).kind).toBe('building');
+  });
+
   it('maps license_unavailable / source_unavailable to their states', () => {
     expect(classifyDocModelResponse({ status: 'license_unavailable' }).kind).toBe(
       'licenseUnavailable',

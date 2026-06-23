@@ -15,7 +15,6 @@ API/presentation concern; the domain returns a complete, validated result.
 
 from __future__ import annotations
 
-from docsuri_shared.dtos import DocModel
 from docsuri_shared.ports import CostGuardCircuitBreaker, ObservabilityHub
 
 from ..domain.assembler import ResultAssembler
@@ -27,6 +26,7 @@ from ..domain.models import (
     AbstainDTO,
     AssetRef,
     CostDegradedDTO,
+    DocModelLookup,
     GroundingInput,
     RequestContext,
     SourceUnavailableDTO,
@@ -38,11 +38,15 @@ from ..domain.refiner import InputRefiner
 from ..domain.source_selector import SourceSelector
 from ..ports.ports import (
     AssetReadPort,
+    DocModelBuildQueuePort,
     DocModelReadPort,
     LlmGatewayPort,
     LlmUnavailable,
     SummaryStorePort,
 )
+
+# Client poll backoff hint after a lazy build was (re)triggered on a miss (BR-30/D6).
+_BUILD_POLL_BACKOFF_MS = 2000
 
 
 def _is_cost_degraded(budget) -> bool:
@@ -69,6 +73,7 @@ class SummarizationOrchestrationService:
         model_ver: str,
         asset_reader: AssetReadPort | None = None,
         doc_model_reader: DocModelReadPort | None = None,
+        doc_model_build_queue: DocModelBuildQueuePort | None = None,
     ) -> None:
         self._store = store
         self._source = source_selector
@@ -83,6 +88,7 @@ class SummarizationOrchestrationService:
         self._model_ver = model_ver
         self._asset_reader = asset_reader
         self._docmodel_reader = doc_model_reader
+        self._docmodel_build_queue = doc_model_build_queue
 
     def run(self, request: SummaryRequest, ctx: RequestContext) -> SummaryResponse:
         user_id = ctx.auth_session.user_id
@@ -186,13 +192,24 @@ class SummarizationOrchestrationService:
         return self._glossary.upsert_term(user_id, term_from, term_to)
 
     # --- structured doc-model (BR-30, rich-view + summary input) -------------
-    def doc_model(self, paper_id: str, version: int) -> DocModel | None:
-        """Read the lazily-built, cached structured doc-model (None → not yet built /
-        unavailable). Read-only — building is U1's role (D6). OA license gating is applied
-        at the router (parallel to full_text/list_assets)."""
+    def doc_model(self, paper_id: str, version: int) -> DocModelLookup:
+        """Read the cached structured doc-model; on a miss, (re)trigger U1's lazy build and tell
+        the client to poll (BR-30/D6). Read-only — building is U1's role (boundary B: this only
+        enqueues a job, never runs the builder). OA license gating is applied at the router
+        (parallel to full_text/list_assets).
+
+        Returns a :class:`DocModelLookup`: ``doc`` set on a cache hit; ``building`` True when a
+        build was enqueued on a miss (a build queue is wired); otherwise empty → the router maps
+        it to ``source_unavailable`` (prior behavior when no queue is configured)."""
         if self._docmodel_reader is None:
-            return None
-        return self._docmodel_reader.get_doc_model(paper_id, version)
+            return DocModelLookup()
+        doc = self._docmodel_reader.get_doc_model(paper_id, version)
+        if doc is not None:
+            return DocModelLookup(doc=doc)
+        if self._docmodel_build_queue is not None:
+            self._docmodel_build_queue.enqueue_build(paper_id, version)
+            return DocModelLookup(building=True, retry_after_ms=_BUILD_POLL_BACKOFF_MS)
+        return DocModelLookup()
 
     # --- figure/table assets (FR-17, BR-S15) ---------------------------------
     def list_assets(self, paper_id: str, version: int) -> list[AssetRef] | None:

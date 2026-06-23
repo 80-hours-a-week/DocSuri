@@ -36,6 +36,10 @@ class SummarizationSettings:
     # full-text viewer: until a license signal is wired the endpoint returns
     # ``license_unavailable`` (arXiv link-out). Read-only — U1 builds/caches lazily (D6).
     docmodel_viewer_enabled: bool = False
+    # U1 ingestion queue URL for the lazy doc-model build trigger (BR-30/D6, boundary B). When
+    # set (and the viewer is enabled), a read miss enqueues a BUILD_DOC_MODEL job and returns
+    # ``building``; when unset, a miss stays ``source_unavailable`` (no build triggered).
+    docmodel_build_queue_url: str | None = None
 
     @property
     def summarization_enabled(self) -> bool:
@@ -60,4 +64,5 @@ class SummarizationSettings:
             asset_url_ttl_seconds=int(os.environ.get("DOCSURI_ASSET_URL_TTL_SECONDS", "600")),
             docmodel_viewer_enabled=os.environ.get("DOCSURI_DOCMODEL_VIEWER_ENABLED", "").lower()
             in ("1", "true", "yes"),
+            docmodel_build_queue_url=os.environ.get("DOCSURI_DOCMODEL_BUILD_QUEUE_URL"),
         )

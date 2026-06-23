@@ -14,6 +14,9 @@ class JobKind(StrEnum):
     SEED_REBUILD = "SEED_REBUILD"
     INCREMENTAL = "INCREMENTAL"
     EVENT = "EVENT"
+    # Lazy on-demand doc-model build (BR-30/D6), enqueued by a consumer (U7 viewer/summary)
+    # on a cache miss. Separate from the index pipeline — produces doc-model/{id}/v{ver}.json.
+    BUILD_DOC_MODEL = "BUILD_DOC_MODEL"
 
 
 class FailureClass(StrEnum):

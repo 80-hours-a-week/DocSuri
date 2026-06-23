@@ -69,6 +69,7 @@ export function classifySummarizeResponse(body: unknown): SummarizeOutcome {
 
 export type DocModelOutcome =
   | { kind: 'page'; docModel: DocModel; cached: boolean }
+  | { kind: 'building'; retryAfterMs?: number }
   | { kind: 'licenseUnavailable' }
   | { kind: 'sourceUnavailable' }
   | { kind: 'error'; message: string };
@@ -83,6 +84,12 @@ export function classifyDocModelResponse(body: unknown): DocModelOutcome {
         return { kind: 'page', docModel: body.docModel as unknown as DocModel, cached: Boolean(body.cached) };
       }
       return { kind: 'error', message: '본문을 불러올 수 없습니다.' };
+    case 'building':
+      // Lazy build in flight (D6/BR-30): caller polls again after the hint.
+      return {
+        kind: 'building',
+        retryAfterMs: typeof body.retryAfterMs === 'number' ? body.retryAfterMs : undefined,
+      };
     case 'license_unavailable':
       return { kind: 'licenseUnavailable' };
     case 'source_unavailable':
