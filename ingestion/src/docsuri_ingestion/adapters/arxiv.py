@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable, Sequence
 from datetime import datetime
@@ -13,6 +14,8 @@ from docsuri_ingestion.full_text_extraction import (
     pdf_to_text,
 )
 from docsuri_ingestion.resilience import TokenBucket
+
+_log = logging.getLogger("docsuri.ingestion.arxiv")
 
 ATOM_NS = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
 OAI_NS = {
@@ -251,6 +254,36 @@ def parse_atom_feed(body: str) -> list[MetadataRecord]:
     return records
 
 
+def _oai_authors(metadata: ET.Element) -> tuple[str, ...]:
+    """arXiv OAI authors are nested ``<authors><author><keyname>/<forenames>`` elements,
+    NOT a flat comma-joined text field — build "forenames keyname" per author."""
+    names: list[str] = []
+    for author in metadata.findall("arxiv:authors/arxiv:author", OAI_NS):
+        forenames = author.findtext("arxiv:forenames", default="", namespaces=OAI_NS).strip()
+        keyname = author.findtext("arxiv:keyname", default="", namespaces=OAI_NS).strip()
+        full = " ".join(part for part in (forenames, keyname) if part)
+        if full:
+            names.append(full)
+    return tuple(names)
+
+
+def _build_oai_record(metadata: ET.Element) -> MetadataRecord:
+    categories = tuple(_required_text(metadata, "arxiv:categories", OAI_NS).split())
+    created = datetime.fromisoformat(_required_text(metadata, "arxiv:created", OAI_NS))
+    updated_text = metadata.findtext("arxiv:updated", default=None, namespaces=OAI_NS)
+    return MetadataRecord(
+        arxiv_ref=_required_text(metadata, "arxiv:id", OAI_NS),
+        title=_required_text(metadata, "arxiv:title", OAI_NS),
+        authors=_oai_authors(metadata),
+        abstract=_required_text(metadata, "arxiv:abstract", OAI_NS),
+        categories=categories,
+        updated_at=datetime.fromisoformat(updated_text) if updated_text else created,
+        published_at=created,
+        license_url=metadata.findtext("arxiv:license", default=None, namespaces=OAI_NS),
+        primary_category=categories[0] if categories else None,
+    )
+
+
 def parse_oai_records(body: str) -> list[MetadataRecord]:
     try:
         root = ET.fromstring(body)
@@ -262,23 +295,14 @@ def parse_oai_records(body: str) -> list[MetadataRecord]:
         ) from e
     records: list[MetadataRecord] = []
     for metadata in root.findall(".//oai:metadata/arxiv:arXiv", OAI_NS):
-        arxiv_ref = _required_text(metadata, "arxiv:id", OAI_NS)
-        categories = tuple(_required_text(metadata, "arxiv:categories", OAI_NS).split())
-        created = datetime.fromisoformat(_required_text(metadata, "arxiv:created", OAI_NS))
-        updated_text = metadata.findtext("arxiv:updated", default=None, namespaces=OAI_NS)
-        records.append(
-            MetadataRecord(
-                arxiv_ref=arxiv_ref,
-                title=_required_text(metadata, "arxiv:title", OAI_NS),
-                authors=tuple(_required_text(metadata, "arxiv:authors", OAI_NS).split(", ")),
-                abstract=_required_text(metadata, "arxiv:abstract", OAI_NS),
-                categories=categories,
-                updated_at=datetime.fromisoformat(updated_text) if updated_text else created,
-                published_at=created,
-                license_url=metadata.findtext("arxiv:license", default=None, namespaces=OAI_NS),
-                primary_category=categories[0] if categories else None,
-            )
-        )
+        # A single malformed record must not abort the harvest: parse_oai_records runs inside
+        # the harvest_seed generator, so a raise here propagates past backfill's per-paper
+        # try/except and kills the whole run (the #authors crash). Skip-and-continue instead.
+        try:
+            records.append(_build_oai_record(metadata))
+        except (PermanentIngestionError, ValueError, KeyError) as exc:
+            _log.warning("skipping malformed OAI record: %s", exc)
+            continue
     return records
 
 
