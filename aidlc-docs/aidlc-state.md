@@ -40,6 +40,11 @@
 - **테스트 수 드리프트 (Info·benign)**: 스위트 증가로 문서 수치 stale(U1 23→26·U6 31→34·U4 컴포넌트 분할·U2 42+1skip). 회귀 아님.
 - **Operations 프레임워크 갭**: AI-DLC 룰셋은 Build and Test에서 종료(Operations=placeholder)이나 실 AWS 프로덕션 배포가 프레임워크 밖에서 수행됨 — 운영 런북/롤백/모니터링 문서 미수립(§OPERATIONS 참조).
 
+## 사후 결정 / 핫픽스 (Post-Construction — 규범은 각 유닛 BR·plan `사후 결정` Q)
+
+- **U1 전문 추출 결함 정정 (2026-06-23, #139·커밋 `0ced380`·브랜치 `fix/summarization-pipeline`)**: arXiv e-print(gzip/tar) 미해제 디코딩으로 전문 ~44% 깨짐(�) → **arXiv HTML(native→ar5iv) 우선 + PDF 폴백**으로 교체(결정 D = U1 FD plan Q18 · BR-29). 보관=정규화 평문 1종, 뷰어=평문(앵커 유지). 리치 HTML 렌더/보관은 에셋 패널(FR-17)과 그림·표 겹쳐 에이전트 단계로 분리. `pdfplumber` 코어 승격.
+- **U7 번역 입력 정렬 (2026-06-23, P2·진행 중·브랜치 `fix/summarization-pipeline`)**: 전문 번역(scope=full)이 정제 안 한 원문을 초록 프롬프트에 전송 + 길이판정(`refined`)↔전송(`raw`) 불일치 → 번역 입력=`refined.body` 통일·프롬프트 scope 분기(결정 A = U7 FD plan Q18).
+
 ## 워크스페이스 상태
 - **기존 코드**: 없음(워킹 트리 블랭크 슬레이트; 이전 데모 사이클 폐기, git `ba3b6a9`로 복구 가능)
 - **리버스 엔지니어링 필요**: 아니오(Greenfield — 디스크에 소스 파일 없음)
