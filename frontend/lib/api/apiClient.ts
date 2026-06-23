@@ -8,18 +8,15 @@ import { UserFacingError, normalizeHttpError } from './errors';
 import { classifySearchResponse, type SearchOutcome } from './classify';
 import {
   classifySummarizeResponse,
-  classifyFullTextResponse,
   classifyDocModelResponse,
   classifyAssetsResponse,
   type SummarizeOutcome,
-  type FullTextOutcome,
   type DocModelOutcome,
   type AssetsOutcome,
 } from './classifySummarize';
 import { recordPath } from '../observability';
 import type {
   SummarizeRequest,
-  FullTextRequest,
   DocModelRequest,
   SearchRequest,
   SignupRequest,
@@ -150,20 +147,7 @@ export class ApiClient {
     throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
-  /** Normalized full text for the in-app viewer (Q5=C; OA license-gated). PROVISIONAL
-   * contract — re-align when the backend full-text-return API is finalized (plan §6). */
-  async getFullText(req: FullTextRequest): Promise<FullTextOutcome> {
-    const path = `/api/papers/${encodeURIComponent(req.paperId)}/full-text?version=${encodeURIComponent(
-      String(req.version),
-    )}`;
-    const res = await this.request({ method: 'GET', path, idempotent: true });
-    if (res.status === 200 || res.status === 400) {
-      return classifyFullTextResponse(res.body);
-    }
-    throw normalizeHttpError(res.status, serverMessage(res.body));
-  }
-
-  /** Structured doc-model for the rich view (D4; replaces getFullText). OA license-gated.
+  /** Structured doc-model for the rich view (D4; replaces the old full-text viewer). OA license-gated.
    * url-free (SEC-9) — figures join the /assets signed urls by assetId. On a cache miss the
    * backend reads-only (lazy build is a separate step); a not-yet-built artifact → source_unavailable. */
   async getDocModel(req: DocModelRequest): Promise<DocModelOutcome> {

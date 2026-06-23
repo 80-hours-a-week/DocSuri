@@ -4,7 +4,7 @@
 // nested sections + TOC, KaTeX formulas, structured tables (DATA, not crops — D8), and
 // webp figures joined to the /assets signed urls by assetId (SEC-9 — the doc-model is
 // url-free). OA-license-gated: license_unavailable → arXiv link-out. External text is
-// escaped by React (BR-SF-9). Replaces the plain-text FullTextViewer.
+// escaped by React (BR-SF-9). Replaces the legacy plain-text full-text viewer.
 //
 // NOTE: anchor highlight matches the summary anchor's label ("Table 1"/"Figure 2") to a
 // block's anchorLabel (the AnchorVM still carries a label, not a doc-model id — the
@@ -52,7 +52,7 @@ export function DocModelViewer({ paperId, version, anchor, arxivUrl }: DocModelV
     if (!docModel || !anchor || !containerRef.current) return;
     const id = findBlockIdByLabel(docModel, anchor.label);
     if (!id) return;
-    const el = containerRef.current.querySelector<HTMLElement>(`[data-block="${cssEscape(id)}"]`);
+    const el = containerRef.current.querySelector<HTMLElement>(`[data-block="${CSS.escape(id)}"]`);
     if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }, [docModel, anchor]);
 
@@ -285,8 +285,4 @@ function findBlockIdByLabel(doc: DocModel, label: string): string | null {
     return null;
   };
   return walk(doc.sections);
-}
-
-function cssEscape(value: string): string {
-  return value.replace(/["\\]/g, '\\$&');
 }

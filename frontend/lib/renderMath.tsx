@@ -8,8 +8,19 @@
 import { Fragment } from 'react';
 import katex from 'katex';
 
+// Memoize rendered LaTeX — katex.renderToString is a synchronous parse and the same
+// expression re-renders on every parent re-render (e.g. when figure assets resolve, or a
+// results table with many math cells re-renders). Keyed by (displayMode, latex); the input
+// space is bounded by the paper's distinct expressions.
+const _cache = new Map<string, string>();
+
 function toHtml(latex: string, displayMode: boolean): string {
-  return katex.renderToString(latex, { displayMode, throwOnError: false, output: 'html' });
+  const cacheKey = `${displayMode ? 'd' : 'i'}:${latex}`;
+  const hit = _cache.get(cacheKey);
+  if (hit !== undefined) return hit;
+  const html = katex.renderToString(latex, { displayMode, throwOnError: false, output: 'html' });
+  _cache.set(cacheKey, html);
+  return html;
 }
 
 /** A display (block-level) equation. */

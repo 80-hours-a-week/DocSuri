@@ -65,31 +65,7 @@ export function classifySummarizeResponse(body: unknown): SummarizeOutcome {
   }
 }
 
-// ---- Full-text (Q5=C, provisional) ----
-
-export type FullTextOutcome =
-  | { kind: 'page'; text: string }
-  | { kind: 'licenseUnavailable' }
-  | { kind: 'sourceUnavailable' }
-  | { kind: 'error'; message: string };
-
-export function classifyFullTextResponse(body: unknown): FullTextOutcome {
-  if (!isRecord(body)) {
-    return { kind: 'error', message: '원문을 불러올 수 없습니다.' };
-  }
-  switch (body.status) {
-    case 'ok':
-      return { kind: 'page', text: typeof body.text === 'string' ? body.text : '' };
-    case 'license_unavailable':
-      return { kind: 'licenseUnavailable' };
-    case 'source_unavailable':
-      return { kind: 'sourceUnavailable' };
-    default:
-      return { kind: 'error', message: '원문을 불러올 수 없습니다.' };
-  }
-}
-
-// ---- Doc-model rich view (D4, replaces getFullText) ----
+// ---- Doc-model rich view (D4, replaces the old plain-text full-text viewer) ----
 
 export type DocModelOutcome =
   | { kind: 'page'; docModel: DocModel; cached: boolean }

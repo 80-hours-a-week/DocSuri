@@ -85,11 +85,13 @@
   color: var(--color-accent);
 }
 
-/* Body access row, placed below the metadata (본문 / 본문 번역). */
+/* Body access row, placed below the metadata (본문 / 본문 번역) with a clear gap from the
+   arXiv link-out line above it. */
 .bodyActions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+  margin-top: 0.75rem;
 }
 
 /* arXiv id + safe link-out, shown with the metadata. */

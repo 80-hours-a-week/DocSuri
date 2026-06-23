@@ -1,11 +1,13 @@
 'use client';
 
 // PaperDetailIsland (P3·P5) — the client island inside the SSR /paper/[id] shell.
-// Owns everything under the DocSuri header: a sticky 요약/초록번역/전문번역/본문 action bar
-// and the paper metadata (title/authors/abstract). The structured doc-model body (D4) opens
-// in a SEPARATE window (the 본문 route), not inline — choosing a summary source anchor opens
-// that window scrolled to the matching block. real-first: real BFF transport, mock in dev.
+// Owns the 요약/초록번역/각주트리 action bar and the paper metadata (title/authors/abstract).
+// 본문(doc-model rich view) and 본문 번역 open as full-screen IN-APP routes (Link / router.push,
+// same tab — each has its own ← back arrow), not a browser tab or inline. Choosing a summary
+// source anchor navigates to the 본문 route scrolled to the matching block. real-first.
 import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { AnchorVM } from '@/types/generated';
 import { usePaperMeta } from '@/lib/usePaperMeta';
 import { SummaryModal, type DetailView } from './SummaryModal';
@@ -30,9 +32,10 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
   const [modalView, setModalView] = useState<DetailView | null>(null);
   const [citationOpen, setCitationOpen] = useState(false);
   const meta = usePaperMeta(paperId);
+  const router = useRouter();
 
-  // The doc-model rich view opens in its own window (not inline). A summary source anchor
-  // opens that window scrolled to the matching block (carried by label via the query).
+  // 본문 / 본문 번역 are in-app routes (Link). A summary source anchor navigates to the 본문
+  // route scrolled to the matching block (label carried via the query).
   const bodyHref = `/paper/${encodeURIComponent(paperId)}/doc-model?version=${version}`;
   const translateHref = `/paper/${encodeURIComponent(paperId)}/translate?version=${version}`;
   const openBody = (anchor?: AnchorVM | null) => {
@@ -41,11 +44,7 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
       sp.set('anchorLabel', anchor.label);
       if (anchor.span) sp.set('anchorSpan', anchor.span);
     }
-    window.open(
-      `/paper/${encodeURIComponent(paperId)}/doc-model?${sp.toString()}`,
-      '_blank',
-      'noopener',
-    );
+    router.push(`/paper/${encodeURIComponent(paperId)}/doc-model?${sp.toString()}`);
   };
 
   return (
@@ -117,27 +116,15 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
         </p>
       ) : null}
 
-      {/* Body access — below the metadata. Both open in their own window (not a modal):
-          본문 = the doc-model rich view, 본문 번역 = the full-text translation. */}
+      {/* Body access — below the metadata. Both navigate in-app to a full-screen route (each
+          with its own ← back): 본문 = the doc-model rich view, 본문 번역 = the full-text translation. */}
       <div className={styles.bodyActions} role="group" aria-label="본문">
-        <a
-          className={styles.action}
-          href={bodyHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          data-testid="open-doc-model"
-        >
+        <Link className={styles.action} href={bodyHref} data-testid="open-doc-model">
           본문
-        </a>
-        <a
-          className={styles.action}
-          href={translateHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          data-testid="open-full-translation"
-        >
+        </Link>
+        <Link className={styles.action} href={translateHref} data-testid="open-full-translation">
           본문 번역
-        </a>
+        </Link>
       </div>
 
       {modalView ? (

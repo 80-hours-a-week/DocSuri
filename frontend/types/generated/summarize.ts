@@ -113,33 +113,6 @@ export type SummarizeResponseDTO =
   | SummarizeValidationErrorDTO
   | UnauthorizedDTO;
 
-// ---- Full-text return (Q5=C, provisional) ----
-
-export interface FullTextRequest {
-  paperId: string;
-  version: number;
-}
-
-export interface FullTextOkDTO {
-  status: 'ok';
-  /** Normalized full text (references/author info stripped — BR-SF-12). */
-  text: string;
-}
-
-/** OA license not permitted → viewer not opened; arXiv link-out instead (BR-SF-11). */
-export interface FullTextLicenseDTO {
-  status: 'license_unavailable';
-}
-
-export interface FullTextSourceUnavailableDTO {
-  status: 'source_unavailable';
-}
-
-export type FullTextResponseDTO =
-  | FullTextOkDTO
-  | FullTextLicenseDTO
-  | FullTextSourceUnavailableDTO;
-
 // ---- Figure/table assets (FR-17, display-only) ----
 
 /** A single figure/table for the detail/viewer. SEC-9: `url` is a short-lived signed URL;

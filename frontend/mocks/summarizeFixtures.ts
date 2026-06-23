@@ -4,7 +4,6 @@
 import type {
   SummaryOkDTO,
   TranslationOkDTO,
-  FullTextOkDTO,
   AssetsOkDTO,
   DocModelOkDTO,
 } from '@/types/generated';
@@ -210,10 +209,4 @@ export const docModelResponse: DocModelOkDTO = {
       },
     ],
   },
-};
-
-export const fullTextResponse: FullTextOkDTO = {
-  status: 'ok',
-  text:
-    'Attention Is All You Need\n\n3.2 Multi-Head Attention\nInstead of performing a single attention function with d_model-dimensional keys, values and queries, we found it beneficial to linearly project the queries, keys and values h times with different, learned linear projections…\n\n6.1 Training\nWe trained on the standard WMT 2014 English-German dataset consisting of about 4.5 million sentence pairs. Our implementation is available in the tensor2tensor repository.\n\n(데모용 정규화 발췌 — 참고문헌·저자 정보는 제거된 형태입니다.)',
 };

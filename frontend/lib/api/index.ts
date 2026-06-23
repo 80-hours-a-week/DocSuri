@@ -16,7 +16,6 @@ export { UserFacingError } from './errors';
 export type { SearchOutcome } from './classify';
 export type {
   SummarizeOutcome,
-  FullTextOutcome,
   DocModelOutcome,
   AssetsOutcome,
 } from './classifySummarize';

@@ -1,13 +1,15 @@
+import screen from '../../../page.module.css';
 import page from '../reading.module.css';
+import { RouteGuard } from '@/components/RouteGuard';
+import { AppHeader } from '@/components/AppHeader';
 import { DocModelViewer } from '@/components/DocModelViewer';
 import type { AnchorVM } from '@/types/generated';
 
-// Doc-model rich-view route /paper/[id]/doc-model (D4, FD §2.10) — opened in its own window
-// from the detail page's 본문 action. A clean reading surface: NO app header / bottom nav and
-// NO client RouteGuard (auth + OA license are enforced by the backend getDocModel call; an
-// anonymous/ungated request surfaces the unavailable state rather than redirecting). A summary
-// source anchor is carried via ?anchorLabel (and optional ?anchorSpan) so the window opens
-// scrolled to the matching block. version defaults to 1 (Q8=A).
+// Doc-model rich-view route /paper/[id]/doc-model (D4, FD §2.10) — a full-screen in-app route
+// reached from the detail page's 본문 action. The header's ← goes to a FIXED destination (the
+// detail page), not history back, so it is robust against an interleaved login redirect or a
+// deep link. protected (RouteGuard). A summary source anchor is carried via ?anchorLabel (and
+// optional ?anchorSpan) so the page scrolls to the matching block. version defaults to 1 (Q8=A).
 export default async function DocModelPage({
   params,
   searchParams,
@@ -25,8 +27,13 @@ export default async function DocModelPage({
   const anchor: AnchorVM | null = label ? { field: '', target: 'section', span, label } : null;
 
   return (
-    <main className={page.page}>
-      <DocModelViewer paperId={id} version={version} anchor={anchor} arxivUrl={arxivUrl} />
-    </main>
+    <RouteGuard redirectTo={`/paper/${id}/doc-model`}>
+      <div className={screen.screen}>
+        <AppHeader title="본문" backHref={`/paper/${id}`} />
+        <main className={page.page}>
+          <DocModelViewer paperId={id} version={version} anchor={anchor} arxivUrl={arxivUrl} />
+        </main>
+      </div>
+    </RouteGuard>
   );
 }

@@ -1,10 +1,10 @@
-/* Header-less, full-bleed reading surface for the doc-model window. Scrolls internally
-   with the scrollbar hidden (the content is not boxed). */
+/* Full-bleed reading surface (본문 / 본문 번역). Scrolls internally with the scrollbar hidden
+   (content is not boxed). Tight top padding so it sits close under the header divider. */
 .page {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 20px 16px 32px;
+  padding: 4px 16px 24px;
   background: var(--color-bg);
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* legacy Edge */

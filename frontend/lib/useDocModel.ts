@@ -1,7 +1,7 @@
 'use client';
 
 // useDocModel (D4, BR-SF-11) — fetches the structured doc-model for the rich view.
-// Mirrors useFullText: real-first transport, in-flight dedup, OA-license-gated. The
+// real-first transport, in-flight dedup, OA-license-gated (same shape as useAssets). The
 // backend reads the lazily-built cached artifact (a not-yet-built doc-model →
 // source_unavailable); the lazy build trigger is a separate backend step.
 import { useCallback, useRef, useState } from 'react';
@@ -29,6 +29,9 @@ export function useDocModel() {
         setState({ status: 'done', outcome });
       } catch {
         if (activeKey.current !== key) return;
+        // Clear the dedup key so a retry (StateView onRetry → load(same req)) can re-fetch;
+        // the key only guards in-flight / successfully-loaded requests, not failed ones.
+        activeKey.current = null;
         setState({ status: 'done', outcome: { kind: 'error', message: '본문을 불러올 수 없어요.' } });
       }
     },
