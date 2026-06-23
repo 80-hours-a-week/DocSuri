@@ -29,7 +29,6 @@ from ..service.orchestrator import SummarizationOrchestrationService
 def build_router(
     orchestrator: SummarizationOrchestrationService,
     *,
-    fulltext_enabled: bool = False,
     assets_enabled: bool = False,
     docmodel_enabled: bool = False,
 ) -> Any:
@@ -88,24 +87,6 @@ def build_router(
         except Exception:  # noqa: BLE001 — fail-closed: never surface internals (INV-4/SEC-15)
             return JSONResponse({"status": "unavailable"}, status_code=503)
         return JSONResponse({"status": "ok", "glossaryVer": glossary_ver}, status_code=201)
-
-    @router.get("/api/papers/{paper_id}/full-text")
-    def full_text(request: Request, paper_id: str) -> Any:
-        """In-app full-text viewer source (Q5=C). OA-license-gated: disabled by default
-        (``license_unavailable`` → arXiv link-out) until a license signal is wired."""
-        user_id = _principal_user_id(request)
-        if not user_id:
-            return JSONResponse({"status": "unauthorized"}, status_code=401)
-        if not fulltext_enabled:
-            return JSONResponse({"status": "license_unavailable"})
-        try:
-            version = int(request.query_params.get("version", "1"))
-        except (TypeError, ValueError):
-            version = 1
-        text = orchestrator.full_text(paper_id, version)
-        if text is None:
-            return JSONResponse({"status": "source_unavailable"})
-        return JSONResponse({"status": "ok", "text": text})
 
     @router.get("/api/papers/{paper_id}/doc-model")
     def doc_model(request: Request, paper_id: str) -> Any:

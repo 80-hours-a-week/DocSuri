@@ -60,6 +60,11 @@ def _estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
+def _clean(text: str) -> str:
+    """Strip control characters from a doc-model text value (parity with the regex path)."""
+    return _CONTROL_RE.sub("", text)
+
+
 def _render_table(label: str, caption: str, rows: tuple[tuple[str, ...], ...]) -> str:
     """Render a doc-model table as readable pipe-delimited data so its numbers are visible
     to the LLM and the grounding numeric-match (D8 — not a blind cropped image)."""
@@ -93,13 +98,17 @@ class InputRefiner:
         pos = 0
 
         def emit(text: str) -> None:
+            # Strip control chars (parity with the legacy regex path: parsed arXiv HTML can
+            # carry control bytes that must not reach the LLM prompt / summary cache). Done
+            # before measuring so section spans index into the sanitized body.
             nonlocal pos
-            parts.append(text)
-            pos += len(text)
+            clean = _CONTROL_RE.sub("", text)
+            parts.append(clean)
+            pos += len(clean)
 
         def walk(dsec: object) -> None:
             nonlocal pos
-            title = (getattr(dsec, "title", "") or "").strip()
+            title = _CONTROL_RE.sub("", (getattr(dsec, "title", "") or "").strip())
             if title:
                 start = pos
                 emit(title)
@@ -115,19 +124,19 @@ class InputRefiner:
             if kind == "paragraph":
                 emit(b.text.strip() + "\n\n")
             elif kind == "formula":
-                formulas.append(b.latex)
+                formulas.append(_clean(b.latex))
                 emit(b.latex + "\n\n")
             elif kind == "table":
-                label = b.anchorLabel or ""
-                caption = b.caption or ""
-                rows = tuple(tuple(c.text for c in row.cells) for row in b.rows)
+                label = _clean(b.anchorLabel or "")
+                caption = _clean(b.caption or "")
+                rows = tuple(tuple(_clean(c.text) for c in row.cells) for row in b.rows)
                 tables.append(Table(label=label, rows=rows, caption=caption, anchor=b.id))
                 if caption:
                     captions.append(f"{label}: {caption}".strip(": ").strip() or caption)
                 emit(_render_table(label, caption, rows) + "\n\n")
             elif kind == "figure":
-                label = b.anchorLabel or ""
-                caption = b.caption or ""
+                label = _clean(b.anchorLabel or "")
+                caption = _clean(b.caption or "")
                 line = f"{label}: {caption}".strip(": ").strip()
                 if caption:
                     captions.append(line or caption)

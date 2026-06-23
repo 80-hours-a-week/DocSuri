@@ -134,7 +134,9 @@ class _FakeS3:
     def get_object(self, *, Bucket: str, Key: str) -> dict:
         self.calls.append(Key)
         if Key not in self.objects:
-            raise KeyError("NoSuchKey")
+            from botocore.exceptions import ClientError
+
+            raise ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
         return {"Body": io.BytesIO(self.objects[Key])}
 
 

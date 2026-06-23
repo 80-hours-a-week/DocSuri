@@ -185,12 +185,6 @@ class SummarizationOrchestrationService:
         reflects the new term."""
         return self._glossary.upsert_term(user_id, term_from, term_to)
 
-    # --- full-text viewer (Q5=C) ---------------------------------------------
-    def full_text(self, paper_id: str, version: int) -> str | None:
-        """Normalized full text for the in-app viewer. None → unavailable. OA license
-        gating is applied at the router (the source port has no license signal)."""
-        return self._source.fetch_full_text(paper_id, version)
-
     # --- structured doc-model (BR-30, rich-view + summary input) -------------
     def doc_model(self, paper_id: str, version: int) -> DocModel | None:
         """Read the lazily-built, cached structured doc-model (None → not yet built /

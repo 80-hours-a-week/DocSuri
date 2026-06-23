@@ -28,10 +28,6 @@ class SourceSelector:
         self._abstract_lookup = abstract_lookup
         self._doc_model_reader = doc_model_reader
 
-    def fetch_full_text(self, paper_id: str, version: int) -> str | None:
-        """Raw normalized full text (or None). Used by the full-text viewer (Q5=C)."""
-        return self._full_text.get_full_text(paper_id, version)
-
     def select(self, request: SummaryRequest) -> SourceText | None:
         if request.task == Task.TRANSLATE and request.scope == Scope.ABSTRACT:
             abstract = request.abstract

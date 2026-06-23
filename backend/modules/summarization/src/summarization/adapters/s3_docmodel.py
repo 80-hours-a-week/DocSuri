@@ -7,12 +7,17 @@ router surfaces ``source_unavailable``. Read-only: building/caching is U1's role
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from docsuri_shared.dtos import DocModel
 
+logger = logging.getLogger(__name__)
+
 # Mirrors U1's doc-model object layout (read-only capability).
 _DOCMODEL_PREFIX = "doc-model"
+# S3 error codes that mean a genuine lazy-miss (not-yet-built) → source_unavailable.
+_MISS_CODES = {"NoSuchKey", "NoSuchBucket", "404"}
 
 
 class S3DocModelReader:
@@ -33,9 +38,21 @@ class S3DocModelReader:
         self._prefix = prefix.strip("/")
 
     def get_doc_model(self, paper_id: str, version: int) -> DocModel | None:
+        from botocore.exceptions import ClientError
+
         key = f"{self._prefix}/{paper_id}/v{version}.json"
         try:
             obj = self._s3.get_object(Bucket=self._bucket, Key=key)
             return DocModel.model_validate_json(obj["Body"].read())
-        except Exception:  # noqa: BLE001 — miss / not-yet-built / disallowed → source_unavailable
-            return None
+        except ClientError as exc:
+            # Only a genuine miss (not yet lazily built) is None → source_unavailable.
+            # AccessDenied / throttling etc. must NOT masquerade as a miss — log + propagate
+            # so a corpus-wide config failure is observable instead of silently degrading.
+            if exc.response.get("Error", {}).get("Code") in _MISS_CODES:
+                return None
+            logger.warning("doc-model read failed for %s", key, exc_info=True)
+            raise
+        except Exception:
+            # Parse / schema-version drift on a corrupt object — surface, don't mask as a miss.
+            logger.exception("doc-model parse failed for %s", key)
+            raise
