@@ -145,6 +145,9 @@ class BedrockCohereEmbeddingPort:
             "texts": list(texts),
             "input_type": EMBEDDING_SPEC.input_type_writer,
             "embedding_types": ["float"],
+            # Cohere Embed v4 defaults to 1536-dim; pin to the index/spec width so vectors
+            # match docsuri-corpus-v2's mapping (v3 returned EMBEDDING_SPEC.dimensions implicitly).
+            "output_dimension": EMBEDDING_SPEC.dimensions,
         }
         response = self._client.invoke_model(
             modelId=self._model_id,
@@ -165,21 +168,53 @@ class BedrockCohereEmbeddingPort:
         return vectors
 
 
+def build_opensearch_client(
+    *,
+    endpoint: str,
+    region_name: str | None = None,
+    username: str | None = None,
+    password: str | None = None,
+    use_ssl: bool = True,
+    verify_certs: bool = True,
+):
+    """Build an opensearch-py client. Auth order: basic-auth if both creds are given
+    (local/override), else SigV4 (``Urllib3AWSV4SignerAuth``, service ``es``) when a region
+    is set — the managed VPC domain authorizes the ECS task role by resource policy, so signed
+    requests are required — else unsigned (local clusters with an open policy)."""
+    from opensearchpy import OpenSearch
+
+    if username and password:
+        http_auth = (username, password)
+    elif region_name:
+        import boto3
+        from opensearchpy import Urllib3AWSV4SignerAuth
+
+        http_auth = Urllib3AWSV4SignerAuth(
+            boto3.Session().get_credentials(), region_name, "es"
+        )
+    else:
+        http_auth = None
+    return OpenSearch(
+        hosts=[endpoint], http_auth=http_auth, use_ssl=use_ssl, verify_certs=verify_certs
+    )
+
+
 class OpenSearchVectorIndex:
     def __init__(
         self,
         *,
         endpoint: str,
         index_name: str,
+        region_name: str | None = None,
         username: str | None = None,
         password: str | None = None,
         stats_ttl_seconds: float = 60.0,
     ) -> None:
-        from opensearchpy import OpenSearch
-
-        http_auth = (username, password) if username and password else None
-        self._client = OpenSearch(
-            hosts=[endpoint], http_auth=http_auth, use_ssl=True, verify_certs=True
+        self._client = build_opensearch_client(
+            endpoint=endpoint,
+            region_name=region_name,
+            username=username,
+            password=password,
         )
         self._index_name = index_name
         self._stats_cache = IndexStatsTtlCache(ttl_seconds=stats_ttl_seconds)

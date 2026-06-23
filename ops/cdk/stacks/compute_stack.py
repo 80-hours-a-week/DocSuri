@@ -192,6 +192,16 @@ class ComputeStack(Stack):
             "OPENSEARCH_ENDPOINT": Fn.join("", [
                 "https://", opensearch_domain.domain_endpoint,
             ]),
+            # U2 discovery reader real-path wiring. DiscoverySettings.from_env reads the
+            # DOCSURI_-prefixed names, and search_enabled requires BOTH the endpoint AND the
+            # model — without these the reader silently falls back to the mock orchestrator.
+            # The model MUST match the writer's (Cohere v4) so query and corpus share one
+            # embedding space (vector-spec §4). Index defaults to the docsuri-corpus alias.
+            "DOCSURI_OPENSEARCH_ENDPOINT": Fn.join("", [
+                "https://", opensearch_domain.domain_endpoint,
+            ]),
+            "DOCSURI_BEDROCK_MODEL_ID": "global.cohere.embed-v4:0",
+            "DOCSURI_AWS_REGION": self.region,
             # --- U7 summarization + doc-model (피벗) — queue URLs (deploy-ready config) ---
             # The IAM below is provisioned ahead of activation. ACTIVATION is a deploy-time step the
             # team owns: set DOCSURI_SUMMARY_BUCKET (papers bucket) + DATABASE_URL(+PGPASSWORD) [+
@@ -421,6 +431,20 @@ class ComputeStack(Stack):
                 resources=[
                     f"arn:aws:bedrock:{self.region}::foundation-model/anthropic.*",
                     f"arn:aws:bedrock:{self.region}:{self.account}:inference-profile/*",
+                ],
+            )
+        )
+        # U2 reader query-embedding: Bedrock invoke on the SAME model the writer uses (Cohere
+        # v4). Must match DOCSURI_BEDROCK_MODEL_ID above and ingestion_stack._BEDROCK_MODEL_ID.
+        # Without this the real read path 500s on the first search (AccessDenied at embed time).
+        self.service.task_definition.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["bedrock:InvokeModel"],
+                resources=[
+                    # Invoked via the global inference profile (bare model id isn't on-demand
+                    # invokable); the profile can route the FM to any region — grant both.
+                    f"arn:aws:bedrock:{self.region}:{self.account}:inference-profile/global.cohere.embed-v4:0",
+                    "arn:aws:bedrock:*::foundation-model/cohere.embed-v4:0",
                 ],
             )
         )

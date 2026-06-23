@@ -4,7 +4,7 @@
 - **프로젝트명**: DocSuri (연구 지원 애플리케이션)
 - **프로젝트 유형**: Greenfield(그린필드)
 - **시작일**: 2026-06-15T04:36:30Z
-- **현재 단계**: CONSTRUCTION - U8 Citation Graph Code Generation/Build&Test 완료, Cross-Review 반영 중. **[2026-06-22: 브랜치 `feature/u8-v1`; depth 쿼리 제거, in-memory snapshot seam 문서 정정, 저장 year 방어, telemetry 방어 보강.]**
+- **현재 단계**: INCEPTION - Cohere Embed v4.0 마이그레이션 Workflow Planning 완료. 다음: NFR Design.
 - **문서 언어**: 한국어(`aidlc-docs/` 산출물). 업스트림 룰셋(`AGENTS.md`, `.aidlc-rule-details/`)은 영어 유지.
 
 ## ⚠️ 검증 재기준선 (Verification Re-baseline) — 2026-06-16
@@ -85,6 +85,8 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - [x] **사용자 스토리 개정 — U7(요약/번역) 에픽 추가 (2026-06-18, 팀 합의·`feature/u7`·PR #108)**: `stories.md`에 **에픽 6 — 요약/번역**(US-S1 구조화 요약·US-S2 한국어 번역·US-S3 출처보기+기권·US-S4 개인화·US-S5 온디맨드 응답·US-S6 비용게이트+근거화 운영) 6 스토리 추가 → 총 27 스토리/7 에픽. P1(US-S1..S5)·OP(US-S6) 매핑, FR-12..14·NFR-P2·QT-5 전수 커버. 페르소나 무변경(P1·OP가 U7 커버).
 - [x] **Units Generation 개정 — U7 정식 등재 (2026-06-18, 팀 합의·`feature/u7`·PR #108)**: `unit-of-work.md`(U7 Summarization 유닛 정의·배포 단위 ①+③옵션·코드트리 `backend/modules/summarization/`·확장 트랙)·`unit-of-work-dependency.md`(U7 행/열 추가, U7→U1 capability read·U7→U6 `shared/ports` lib·U5→U7/U6→U7 sync, **코드 DAG 비순환 유지 검증**, 온디맨드 요약 ASCII 흐름)·`unit-of-work-story-map.md`(US-S1..S5 Owner=U7·US-S6 Owner=U6 기여=U7, 전수 27 스토리 검증) 갱신. **7 유닛·4 배포 단위(U7=API 모듈, 초장문만 비동기 잡 옵션).** 리뷰 게이트 대기. **다음: U7 Construction 유닛 루프(Functional Design부터).**
 - [x] **요구사항 개정 — 신규 유닛 U8(인용 그래프/각주 트리) 편입 (2026-06-19)**: 명확화 `requirement-verification-questions-citation-graph.md` 22문 답변 확정(Q3/Q10=X, Q4/Q14=B, 나머지 권장안) → `requirements.md`에 **FR-15(각주 트리/backward references)·FR-16(노드 저장/연동)·NFR-P3(온디맨드 비-SLA)·QT-6(인용 엣지 정확도+그래프 불변식)·§12 카브아웃** 등재. v1은 논문 상세보기 페이지의 backward references 각주 트리로 한정, FE 구현·forward citations·3-hop 이상은 제외.
+- [x] **요구사항 개정 — Cohere Embed v4.0 마이그레이션 편입 (2026-06-23)**: 명확화 `requirement-verification-questions-v4-migration.md` 4문 전수 답변(A) 반영 → `requirements.md`에 **FR-17(듀얼 라이트)·NFR-M2(Blue/Green 마이그레이션)·NFR-S2(v4 모델 컷오버)** 등재. 기존 v3 인덱스와의 비호환성을 무중단으로 해결하기 위해 신규 인덱스 백필, 듀얼 라이트, 그리고 Instant Cutover 전략을 확정.
+- [x] **Workflow Planning — Cohere Embed v4.0 마이그레이션 (2026-06-23)**: `execution-plan.md` 업데이트 완료. 리버스 엔지니어링, 애플리케이션 설계, 유닛 생성, 기능 설계, NFR 요구사항 SKIP. **NFR 설계, 인프라 설계, 코드 생성, 빌드 & 테스트 EXECUTE 확정**.
 - [x] **사용자 스토리 개정 — U8 에픽 추가 (2026-06-19)**: `stories.md`에 **에픽 7 — 인용 그래프 / 각주 트리**(US-CG1 상세보기 각주 트리·US-CG2 깊이/노드 메타·US-CG3 unresolved 분리·US-CG4 라이브러리 저장·US-CG5 실패/쿼터 저하·US-CG6 운영 관측성) 6 스토리 추가 → 총 33 스토리/8 에픽. P1(US-CG1..CG5)·OP(US-CG6) 매핑, FR-15..16·NFR-P3·QT-6 커버.
 - [x] **Units Generation 개정 — U8 정식 등재 (2026-06-19)**: `unit-of-work.md`(U8 Citation Graph 유닛 정의·배포 단위 ① API 모듈·코드트리 `backend/modules/citation_graph/`)·`unit-of-work-dependency.md`(U8 행/열 추가, U8→U3/U6 로그인·게이트웨이, U8→U4 저장 계약, U7→U8 출처 연동, 코드 DAG 비순환 검증, 각주 트리 ASCII 흐름)·`unit-of-work-story-map.md`(US-CG1..CG5 Owner=U8·US-CG6 Owner=U6 기여=U8, 전수 33 스토리 검증) 갱신. **8 유닛·4 배포 단위(U8=API 모듈).** **후속: U8 Construction Functional Design 질문 게이트 진입 완료, 답변 대기.**
 
@@ -169,7 +171,13 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 **U8 Citation Graph** (인용 그래프/각주 트리 — 2026-06-19 편입 유닛, FE 구현 제외 API 모듈):
 - [x] Functional Design — **완료·승인 (2026-06-19)**. 계획서 `construction/plans/u8-citation-graph-functional-design-plan.md` Q1~Q12 전부 권장안(A) 반영 및 체크박스 완료. 산출물 `construction/u8-citation-graph/functional-design/` 3문서(`domain-entities.md`, `business-logic-model.md`, `business-rules.md`) 생성. **앱 코드·FE 미생성.**
 - [x] NFR Requirements / NFR Design / Infrastructure Design / Code Generation / Build&Test — **완료 (2026-06-21)**. U8 backend-only citation graph slice 생성 및 검증 완료.
-- [~] Cross-Review 반영 — **진행 (2026-06-22)**. 브랜치명은 `feature/u8-v1`로 CI prefix 조건 충족. 코드 수정: 죽은 `depth` 쿼리 제거, provider/cache key 중복 제거, save year 범위 밖 값 null 처리, telemetry `emit_log` 방어 및 `depthRequested` 분리. 문서 수정: Redis 단언을 현재 process-local in-memory snapshot seam + production Redis target으로 정정.
+- [~] Cross-Review 반영 — **진행 (2026-06-22)**. 브랜치명은 `feature/u8-v1`로 CI prefix 조건 충족. 코드 수정: 죽은 `depth` 쿼리 제거, provider/cache 중복 제거, save year 범위 밖 값 null 처리, telemetry `emit_log` 방어 및 `depthRequested` 분리. 문서 수정: Redis 단언을 현재 process-local in-memory snapshot seam + production Redis target으로 정정.
+
+**v4-migration** (Cohere Embed v4.0 Migration):
+- [x] NFR Design — **완료·승인 (2026-06-23)**. `nfr-design-patterns.md`, `logical-components.md` 생성 완료. Fail-Open 듀얼 라이트 및 arXiv API 기반 Idempotent 백필 전략 승인.
+- [x] Infrastructure Design — **완료·승인 (2026-06-23)**. `infrastructure-design.md`, `deployment-architecture.md` 생성 완료. Local execution 및 Automated Cutover 맵핑 확정.
+- [x] Code Generation — **완료 (2026-06-23)**. U1 Ingestion 듀얼 라이트 로직, U2 Discovery alias 설정 및 Ops 백필/컷오버 스크립트 작성 완료.
+- [x] Build & Test — **완료 (2026-06-23)**. 빌드 및 테스트 가이드 산출 완료.
 
 **공통 후속 단계** (per-unit 또는 횡단):
 - [x] 병렬 개발 조율 (2026-06-16 반영) — `shared/` 공용 규약 선행 작성 및 3개 독립 트랙 병렬 진행 확정
@@ -274,5 +282,132 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - Trigger: 사용자 행동 로그를 기록하고 분석해 개인화 맞춤 서비스를 제공하는 기능.
 - Created artifact:
   - `aidlc-docs/inception/requirements/requirement-verification-questions-u9-personalization.md`
-- Current gate: questions Q1~Q20 awaiting answers.
+- Completed: questions Q1~Q20 set to recommended answers (Q13=B, all others A).
+- Requirements updated:
+  - `aidlc-docs/inception/requirements/requirements.md`
+  - Added FR-18 behavior event logging, FR-19 user interest profile, FR-20 personalization application, NFR-P4, QT-7, U9 scope exclusions, traceability.
+- Current gate: Requirements review/approval. Next recommended stage: User Stories revision for U9.
+- Code generated: no.
+
+## U9 Personalization — User Stories Plan Ready
+
+- Date: 2026-06-23
+- Stage: INCEPTION / User Stories Part 1
+- Assessment completed:
+  - `aidlc-docs/inception/plans/u9-personalization-user-stories-assessment.md`
+- Plan created:
+  - `aidlc-docs/inception/plans/u9-personalization-story-generation-plan.md`
+- Decision: execute User Stories for U9 because the change is user-facing, touches behavior data/privacy controls, and affects search/summary/translation workflows.
+- Completed: Story generation plan questions PQ1~PQ6 set to recommended answer A.
+- Generated artifacts:
+  - `aidlc-docs/inception/user-stories/stories.md`
+  - `aidlc-docs/inception/user-stories/personas.md`
+- Story update: added Epic 8 Personalization / Behavior Intelligence with US-P1..US-P7; updated persona map and FR/NFR/QT traceability.
+- Current gate: User Stories review/approval. Next recommended stage: Units Generation revision for U9.
+- Code generated: no.
+
+## U9 Personalization — Units Generation Plan Ready
+
+- Date: 2026-06-23
+- Stage: INCEPTION / Units Generation Part 1
+- Plan created:
+  - `aidlc-docs/inception/plans/u9-personalization-unit-of-work-plan.md`
+- Recommended decomposition: add U9 as `backend/modules/personalization/` in the existing API deployment; keep US-P1..P6 Owner=U9 and US-P7 Owner=U6 with U9 as signal source.
+- Completed: Unit decomposition questions UQ1~UQ5 set to recommended answer A.
+- Updated artifacts:
+  - `aidlc-docs/inception/application-design/unit-of-work.md`
+  - `aidlc-docs/inception/application-design/unit-of-work-dependency.md`
+  - `aidlc-docs/inception/application-design/unit-of-work-story-map.md`
+- Unit update: added U9 Personalization as an API module at `backend/modules/personalization/`; story map now covers 40 stories with unassigned=0.
+- Current gate: Units Generation review/approval. Next recommended stage: U9 Construction Functional Design.
+- Code generated: no.
+
+## U9 Personalization — Functional Design Plan Ready
+
+- Date: 2026-06-23
+- Stage: CONSTRUCTION / U9 Functional Design Part 1
+- Plan created:
+  - `aidlc-docs/construction/plans/u9-personalization-functional-design-plan.md`
+- Decision: execute Functional Design because U9 introduces behavior event entities, interest profile aggregation rules, user controls, and non-blocking personalization failure rules.
+- Completed: Functional Design questions Q1~Q12 set to recommended answer A.
+- Generated artifacts:
+  - `aidlc-docs/construction/u9-personalization/functional-design/domain-entities.md`
+  - `aidlc-docs/construction/u9-personalization/functional-design/business-logic-model.md`
+  - `aidlc-docs/construction/u9-personalization/functional-design/business-rules.md`
+- Design summary: defined BehaviorEvent envelope, 7 event types, owner-scoped UserInterestProfile, bounded personalization decisions, user controls, fail-open default behavior, and QT-7 property candidates.
+- Current gate: Functional Design review/approval. Next recommended stage: U9 NFR Requirements.
+- Code generated: no.
+
+## U9 Personalization — NFR Requirements Plan Ready
+
+- Date: 2026-06-23
+- Stage: CONSTRUCTION / U9 NFR Requirements Part 1
+- Plan created:
+  - `aidlc-docs/construction/plans/u9-personalization-nfr-requirements-plan.md`
+- Decision: execute NFR Requirements because U9 stores user behavior data and must define persistence, privacy, latency, degradation, observability, and QT-7 test boundaries.
+- Completed: Q1~Q12 set to recommended answer A after plan_feedback.md correction; Q7 now uses direct active-table delete with no backup table.
+- Generated artifacts:
+  - `aidlc-docs/construction/u9-personalization/nfr-requirements/nfr-requirements.md`
+  - `aidlc-docs/construction/u9-personalization/nfr-requirements/tech-stack-decisions.md`
+- NFR summary: existing RDS/backend/U6 reuse, best-effort non-blocking recording, lazy/on-demand aggregation, allowlisted metadata, direct active-table delete with no backup table, scheduled purge requirement, U6 observability, Hypothesis QT-7 tests.
+- Current gate: NFR Requirements review/approval. Next recommended stage: U9 NFR Design.
+- Code generated: no.
+
+## U9 Personalization — NFR Design Plan Ready
+
+- Date: 2026-06-23
+- Stage: CONSTRUCTION / U9 NFR Design Part 1
+- Plan created:
+  - `aidlc-docs/construction/plans/u9-personalization-nfr-design-plan.md`
+- Decision: execute NFR Design because U9 needs concrete fail-open, lazy aggregation, active repository, direct delete, retention cleanup, metadata validation, and U6 observability patterns.
+- Completed: NFR Design questions Q1~Q5 set to recommended answer A.
+- Generated artifacts:
+  - `aidlc-docs/construction/u9-personalization/nfr-design/logical-components.md`
+  - `aidlc-docs/construction/u9-personalization/nfr-design/nfr-design-patterns.md`
+- Design summary: fail-open personalization, bounded profile read, read-through lazy aggregation, direct active-table delete, scheduled idempotent retention cleanup, recorder-level metadata allowlist, and U6 operational telemetry.
+- Current gate: NFR Design review/approval. Next recommended stage: U9 Infrastructure Design assessment.
+- Code generated: no.
+
+## U9 Personalization — Infrastructure Design Plan Ready
+
+- Date: 2026-06-23
+- Stage: CONSTRUCTION / U9 Infrastructure Design Part 1
+- Plan created:
+  - `aidlc-docs/construction/plans/u9-personalization-infrastructure-design-plan.md`
+- Decision: execute Infrastructure Design because U9 adds RDS tables, deletion/retention cleanup, API deployment mapping, scheduled maintenance task mapping, and U6 observability integration.
+- Recommended direction: reuse existing backend ECS/API deployment, RDS PostgreSQL, U6 gateway/observability, and CloudWatch; avoid a new service, queue, cache, analytics lake, or ML pipeline for v1.
+- Current gate: U9 Infrastructure Design questions Q1~Q6 awaiting answers.
+- Code generated: no.
+
+## U9 Personalization — Infrastructure Design Complete / Code Generation Plan Next
+
+- Date: 2026-06-23
+- Stage: CONSTRUCTION / U9 Infrastructure Design
+- Feedback applied:
+  - `plan_feedback.md`
+- Corrected prior design:
+  - Removed U9 backup table for raw behavior log deletion.
+  - User raw-log deletion now directly deletes owner-scoped active rows.
+  - Retention cleanup is an idempotent daily EventBridge scheduled ECS task.
+  - Retention purge failure must emit U6 telemetry and trigger alerting.
+- Completed: Infrastructure Design questions Q1~Q6 resolved to the revised recommended path.
+- Generated artifacts:
+  - `aidlc-docs/construction/u9-personalization/infrastructure-design/infrastructure-design.md`
+  - `aidlc-docs/construction/u9-personalization/infrastructure-design/deployment-architecture.md`
+- Current gate: Infrastructure Design review/approval. Next recommended stage: U9 Code Generation planning.
+- Code generated: no.
+
+## U9 Personalization — Code Generation Plan Ready
+
+- Date: 2026-06-23
+- Stage: CONSTRUCTION / U9 Code Generation Part 1
+- Infrastructure Design approval:
+  - User requested progress up to just before code generation.
+- Plan created:
+  - `aidlc-docs/construction/plans/u9-personalization-code-generation-plan.md`
+- Planned scope:
+  - backend-only U9 module, RDS migrations, app-shell wiring, idempotent retention cleanup command, scheduled ECS cleanup infrastructure, tests, and code summary docs.
+- Guardrails:
+  - No frontend UI, no queue, no new always-on service, no analytics lake, no ML pipeline, and no `user_behavior_event_backup` table.
+- Current gate: Code Generation plan approval. Actual app code has not been generated.
 - Code generated: no.
