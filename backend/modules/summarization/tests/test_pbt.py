@@ -37,6 +37,11 @@ def test_pbt_cache_key_deterministic(paper, version, task, persona, gver) -> Non
     b = build_cache_key(req, glossary_ver=gver, model_ver="m")
     assert a == b
     assert a.object_path() == b.object_path()
+    # BR-S1: a glossaryVer bump must change the key (path) so the term change invalidates
+    # the cached artifact (new object), rather than serving the stale translation.
+    bumped = build_cache_key(req, glossary_ver=gver + 1, model_ver="m")
+    assert bumped.object_path() != a.object_path()
+    assert bumped.redis_key() != a.redis_key()
 
 
 # PBT-S2 — refine is a fixed point on already-refined body.

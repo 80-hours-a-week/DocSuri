@@ -88,11 +88,16 @@ class SummaryCacheKey:
     prompt_ver: str
 
     def object_path(self) -> str:
-        """S3 object path (infrastructure-design §2.1). Immutable → permanent (INV-5)."""
+        """S3 object path (infrastructure-design §2.1). Immutable → permanent (INV-5).
+
+        ``glossaryVer`` is part of the path so a personal-term change (glossaryVer++) yields a
+        new key → cache miss → re-translation (BR-S1: invalidation by key change, no manual
+        flush; personalization folds into the shared key space, so no separate userId).
+        """
         return (
             f"summaries/{self.paper_id}/v{self.version}/"
             f"{self.task}_{self.target_lang}_{self.scope}_{self.persona}"
-            f"_{self.model_ver}_{self.prompt_ver}.json"
+            f"_g{self.glossary_ver}_{self.model_ver}_{self.prompt_ver}.json"
         )
 
     def redis_key(self) -> str:
