@@ -1,19 +1,26 @@
 import os
+import secrets
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from .guard import AuthorizationGuard, Decision
 from .integrations.email import get_email_client
+from .integrations.oidc import GoogleOidcVerifier
 from .integrations.recaptcha import RecaptchaClient
 from .models import (
     DomainException,
+    OidcProvider,
+    Principal,
     SessionExpiredException,
     SessionStoreUnavailableException,
+    SocialLinkConfirmationRequired,
     UnauthorizedException,
+    UserRole,
 )
 from .repository.credential import CredentialRepository
 from .repository.session import SessionRepository
@@ -31,6 +38,7 @@ from .services.auth import AuthenticationService
 from .services.password_reset import PasswordResetService
 from .services.session_manager import SessionManager
 from .services.signup import SignupService
+from .services.social_login import SocialLoginService
 from .services.totp import TotpService
 
 router = APIRouter(prefix="/auth", tags=["Accounts/Auth"])
@@ -182,6 +190,39 @@ def get_account_deletion_service(
 ) -> AccountDeletionService:
     # AccountDeleted 발행자는 기본 LoggingAccountDeletedPublisher(실 EventBridge는 인프라 이월).
     return AccountDeletionService(repo, manager)
+
+
+def get_social_verifier() -> GoogleOidcVerifier:
+    # client_id/secret은 ECS 환경변수로 주입(미설정 시 토큰 교환이 실패 → Fail-Closed).
+    return GoogleOidcVerifier(
+        client_id=os.getenv("GOOGLE_OIDC_CLIENT_ID", ""),
+        client_secret=os.getenv("GOOGLE_OIDC_CLIENT_SECRET", ""),
+    )
+
+
+def get_social_login_service(repo: CredentialRepository = Depends(get_credential_repo)) -> SocialLoginService:
+    return SocialLoginService(repo)
+
+
+def _app_base() -> str:
+    """공개 앱(프런트) 베이스 URL — 소셜 로그인 후 리다이렉트 대상."""
+    return os.getenv("PUBLIC_APP_URL", "").strip().rstrip("/")
+
+
+def _social_redirect_uri(request: Request) -> str:
+    """Google에 등록된 콜백 URI. 명시 env 우선, 없으면 공개 앱/요청 베이스에서 파생."""
+    explicit = os.getenv("GOOGLE_OIDC_REDIRECT_URI", "").strip()
+    if explicit:
+        return explicit
+    base = _app_base()
+    if base:
+        return f"{base}/auth/social/google/callback"
+    return str(request.base_url) + "auth/social/google/callback"
+
+
+def _clear_oidc_cookies(resp: RedirectResponse) -> None:
+    resp.delete_cookie("oidc_state")
+    resp.delete_cookie("oidc_nonce")
 
 
 @router.post("/password-reset/request")
@@ -352,6 +393,80 @@ async def delete_account(
     except Exception:
         db.rollback()
         raise HTTPException(status_code=500, detail="계정 삭제 처리 중 서버 장애가 발생했습니다. (Fail-Closed)") from None
+
+
+@router.get("/social/google/start")
+async def social_google_start(
+    request: Request,
+    verifier: GoogleOidcVerifier = Depends(get_social_verifier),
+):
+    """소셜 로그인 시작 (FR-27) — state·nonce 발급(httpOnly 쿠키) 후 Google 인가 페이지로 리다이렉트."""
+    state = secrets.token_urlsafe(24)
+    nonce = secrets.token_urlsafe(24)
+    auth_url = verifier.build_authorization_url(_social_redirect_uri(request), state, nonce)
+    resp = RedirectResponse(auth_url, status_code=302)
+    # samesite=lax라야 Google 콜백 복귀 GET에 쿠키가 실린다. 10분 단명.
+    cookie = {"httponly": True, "secure": True, "samesite": "lax", "max_age": 600}
+    resp.set_cookie("oidc_state", state, **cookie)
+    resp.set_cookie("oidc_nonce", nonce, **cookie)
+    return resp
+
+
+@router.get("/social/google/callback")
+async def social_google_callback(
+    request: Request,
+    code: str = Query(...),
+    state: str = Query(...),
+    verifier: GoogleOidcVerifier = Depends(get_social_verifier),
+    social_svc: SocialLoginService = Depends(get_social_login_service),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    repo: CredentialRepository = Depends(get_credential_repo),
+    db: Session = Depends(get_db_session),
+):
+    """소셜 로그인 콜백 (FR-27/BR-A9) — CSRF(state)·nonce 검증 → 신원 조정 → 세션 발급 →
+    앱으로 리다이렉트. 기존 *비밀번호* 계정과 충돌(H1)하면 자동 병합 없이 연결 안내 페이지로 보낸다."""
+    cookie_state = request.cookies.get("oidc_state")
+    cookie_nonce = request.cookies.get("oidc_nonce")
+    # CSRF: 쿼리 state와 쿠키 state가 일치해야 한다(상수시간 비교).
+    if not cookie_state or not secrets.compare_digest(cookie_state, state):
+        raise HTTPException(status_code=400, detail="소셜 로그인 상태 검증에 실패했습니다. 다시 시도해 주세요.")
+    try:
+        claims = await verifier.exchange_and_verify(code, _social_redirect_uri(request), cookie_nonce or "")
+        account_id = social_svc.reconcile(OidcProvider.GOOGLE, claims)
+        db.commit()
+    except SocialLinkConfirmationRequired:
+        db.commit()  # PENDING_CONFIRMATION 신원 기록됨(추후 비밀번호 로그인 후 연결 — 이월).
+        resp = RedirectResponse((_app_base() or "") + "/social-link-required", status_code=302)
+        _clear_oidc_cookies(resp)
+        return resp
+    except DomainException as e:
+        db.rollback()
+        raise HTTPException(status_code=401, detail=str(e)) from e
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="소셜 로그인 처리 중 서버 장애가 발생했습니다. (Fail-Closed)") from None
+
+    account = repo.get_by_id(account_id)
+    if account is None:
+        raise HTTPException(status_code=500, detail="소셜 로그인 계정 조회에 실패했습니다.")
+    try:
+        role = UserRole(account.role)
+    except (ValueError, TypeError):
+        role = UserRole.USER
+    # 소셜 로그인은 로그인 시점 MFA 미통과(관리자 제어 평면은 별도 TOTP 승격 필요, BR-A7).
+    principal = Principal(user_id=account_id, role=role, mfa_verified=False)
+    try:
+        session = await session_mgr.issue(principal)
+    except SessionStoreUnavailableException as e:
+        raise HTTPException(status_code=503, detail="일시적으로 로그인할 수 없습니다. 잠시 후 다시 시도해 주세요.") from e
+
+    resp = RedirectResponse(_app_base() or "/", status_code=302)
+    resp.set_cookie(
+        key="session_id", value=session.handle, httponly=True, secure=True,
+        samesite="lax", max_age=30 * 24 * 60 * 60,
+    )
+    _clear_oidc_cookies(resp)
+    return resp
 
 
 @router.post("/signup", response_model=SignupResult, status_code=201)
