@@ -551,6 +551,6 @@ can use them**, not just Claude Code:
 
 | Skill | Path | Use when |
 |-------|------|----------|
-| `aidlc-requirements-generator` | `.claude/skills/aidlc-requirements-generator/SKILL.md` | INCEPTION / Requirements Analysis — turning informal docs (Figma, PDFs, notes) into `FR/NFR/TC·BC·LC` entries in `aidlc-docs/inception/requirements/` |
+| `aidlc-requirements-generator` | `.claude/skills/aidlc-requirements-generator/SKILL.md` | INCEPTION / Requirements Analysis — turning informal docs (Figma, PDFs, notes) into `FR/NFR/C` entries in `aidlc-docs/inception/requirements/` |
 | `aidlc-git-merge` | `.claude/skills/aidlc-git-merge/SKILL.md` | A git merge/rebase across unit branches conflicts — union-merge state files, classify code conflicts, escalate contract changes |
 | `aidlc-unit-review` | `.claude/skills/aidlc-unit-review/SKILL.md` | Before merging a unit branch — review the diff against that unit's own design/requirements/constraints |

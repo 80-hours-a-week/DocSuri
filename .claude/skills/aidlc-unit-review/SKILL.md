@@ -16,7 +16,9 @@ Before reading any code, load that unit's spec so the review is grounded:
 - `aidlc-docs/inception/requirements/requirements.md` — the FR/NFR/constraint IDs this unit must satisfy
 - `.aidlc-rule-details/extensions/{security,resiliency,testing}/` — opt-in extension rules that apply
 
-The review's job is: **does the diff satisfy this unit's requirements and violate none of its constraints?** Cite requirement IDs (FR-N / NFR-… / TC/BC/LC) in findings.
+> u7 spans two directories — `u7-summarization/` and `u7-summarization-frontend/`. For a u7 review, load both.
+
+The review's job is: **does the diff satisfy this unit's requirements and violate none of its constraints?** Cite requirement IDs (FR-N / NFR-… / C-N) in findings.
 
 ## Always check these (canonical AI-DLC bug classes)
 
