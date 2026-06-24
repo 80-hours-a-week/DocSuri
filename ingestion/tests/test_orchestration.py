@@ -154,6 +154,40 @@ def test_worker_dispatches_schedule_tick_and_acks() -> None:
     assert queue.dlq == []
 
 
+def test_worker_dispatches_legacy_schedule_tick_action_and_acks() -> None:
+    _, _, _, queue, observability = build_test_pipeline()
+    refresh = SimpleNamespace(on_schedule_tick=lambda: 2)
+    message = SimpleNamespace(
+        message_id="tick-legacy",
+        receipt_handle="tick-legacy",
+        body={"action": "schedule_tick"},
+    )
+    runtime = SimpleNamespace(refresh=refresh, queue=queue, observability=observability)
+
+    process_message(runtime, message)
+
+    assert queue.acked == ["tick-legacy"]
+    assert queue.dlq == []
+
+
+def test_worker_dispatches_legacy_type_less_ingest_job() -> None:
+    _, _, _, queue, observability = build_test_pipeline()
+    seen: list[IngestionJob] = []
+    message = SimpleNamespace(
+        message_id="legacy-job",
+        receipt_handle="legacy-job",
+        body={"jobId": "job-1", "kind": "EVENT", "arxivRef": "2401.00001v1"},
+    )
+    pipeline = SimpleNamespace(ingest_one=seen.append)
+    runtime = SimpleNamespace(pipeline=pipeline, queue=queue, observability=observability)
+
+    process_message(runtime, message)
+
+    assert queue.acked == ["legacy-job"]
+    assert queue.dlq == []
+    assert seen[0].job_id == "job-1"
+
+
 def test_worker_sends_unknown_message_type_to_dlq() -> None:
     _, _, _, queue, observability = build_test_pipeline()
     message = SimpleNamespace(

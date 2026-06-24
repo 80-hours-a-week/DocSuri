@@ -1564,3 +1564,11 @@
 **Context**: Documentation — PR draft creation for U1 issue119 remediation.
 
 ---
+
+## U1 Issue 119 Cross Review Remediation
+**Timestamp**: 2026-06-24T03:17:33Z
+**User Input**: "u1-issue119의 수정에 대해, cross-review.md 라는 리뷰를 받았습니다. 이 리뷰를 기반으로 코드를 개선하고, 202606241240_PR.md를 작성해 주세요."
+**AI Response**: "`cross-review.md`의 U1 worker 하위 호환성 지적을 반영함. `type`이 없는 legacy ingestion job은 `ingest_paper`로 처리하고, legacy `action=schedule_tick` 메시지는 schedule tick으로 처리하도록 `worker.py`를 보완함. legacy schedule tick/type-less ingest job 테스트를 추가하고 `202606241240_PR.md`를 생성함. 검증: `uv run pytest tests/test_orchestration.py -q` 15 passed, `uv run pytest -q` 99 passed/1 skipped, `uv run ruff check src/docsuri_ingestion/worker.py tests/test_orchestration.py` pass, `python -m compileall ingestion/src/docsuri_ingestion/worker.py` pass."
+**Context**: CONSTRUCTION — U1 issue119 cross-review remediation and PR draft.
+
+---

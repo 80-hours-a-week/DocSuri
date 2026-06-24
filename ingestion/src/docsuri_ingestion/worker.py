@@ -46,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
 def process_message(runtime, message) -> None:
     queue = runtime.queue
 
-    message_type = message.body.get("type")
+    message_type = message_type_from_payload(message.body)
 
     if message_type == "schedule_tick":
         queued = runtime.refresh.on_schedule_tick()
@@ -93,6 +93,15 @@ def process_message(runtime, message) -> None:
             queue.ack(message)
     else:
         queue.ack(message)
+
+
+def message_type_from_payload(payload) -> str | None:
+    if payload.get("action") == "schedule_tick":
+        return "schedule_tick"
+    message_type = payload.get("type")
+    if message_type is None:
+        return "ingest_paper"
+    return message_type
 
 
 def job_from_payload(payload) -> IngestionJob:
