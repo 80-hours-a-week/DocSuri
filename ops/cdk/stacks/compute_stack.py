@@ -222,6 +222,20 @@ class ComputeStack(Stack):
             ),
             "PERSONALIZATION_ENABLED": "false",
             "PERSONALIZATION_RAW_EVENT_RETENTION_DAYS": "90",
+            # --- U3 social login (FR-27, Google OIDC) ---
+            # client_id is public (embedded in the auth URL) → plain env. The matching
+            # GOOGLE_OIDC_CLIENT_SECRET arrives via Secrets Manager (see secrets= below).
+            "GOOGLE_OIDC_CLIENT_ID": (
+                "505093491210-15equvtfs7ikb9f1f10ptfam277c3qp5.apps.googleusercontent.com"
+            ),
+            # The browser must land first-party on docsuri.org for the session cookie to stick,
+            # so this callback path is routed to the backend by a CloudFront behavior on the
+            # frontend distribution (frontend_stack: /auth/social/* → backend origin — TODO).
+            "GOOGLE_OIDC_REDIRECT_URI": "https://docsuri.org/auth/social/google/callback",
+            # --- U3 account deletion cascade (FR-28/BR-A11) ---
+            # AccountDeletedPublisher puts events here; subscribers (U4/U2/U11) attach bus rules.
+            # Unset → app falls back to the Logging publisher (no real fan-out).
+            "ACCOUNT_EVENTS_BUS": "docsuri-account-events",
         }
 
         # DB password injected from the RDS-generated secret (JSON key "password"); CDK grants
@@ -238,6 +252,16 @@ class ComputeStack(Stack):
             self, "ResendApiKey", "docsuri/resend-api-key",
         )
         container_secrets["RESEND_API_KEY"] = ecs.Secret.from_secrets_manager(resend_secret)
+        # Google OIDC client secret (FR-27). The secret "docsuri/google-oidc-client-secret"
+        # (raw secret as the value) is already stored in Secrets Manager; referenced by name so
+        # CDK grants the task execution role read on it. Missing → API task fails to start, so it
+        # must exist before deploy (it does).
+        google_oidc_secret = secretsmanager.Secret.from_secret_name_v2(
+            self, "GoogleOidcClientSecret", "docsuri/google-oidc-client-secret",
+        )
+        container_secrets["GOOGLE_OIDC_CLIENT_SECRET"] = ecs.Secret.from_secrets_manager(
+            google_oidc_secret
+        )
 
         # --- TLS for the origin: Route53 zone + ACM cert for origin.docsuri.org ---
         zone = route53.HostedZone.from_hosted_zone_attributes(
@@ -494,6 +518,42 @@ class ComputeStack(Stack):
                                     "-m",
                                     "backend.modules.personalization.maintenance",
                                 ],
+                            )
+                        ],
+                    )
+                ],
+            )
+
+        # --- U3 account deletion cascade (FR-28/BR-A11) ---
+        # Custom EventBridge bus for AccountDeleted fan-out. The API task publishes here
+        # (build_account_deleted_publisher reads ACCOUNT_EVENTS_BUS=docsuri-account-events);
+        # U4/U2/U11 attach rules to purge owner-scoped data (idempotent · DLQ on their side).
+        account_events_bus = events.EventBus(
+            self, "AccountEventsBus", event_bus_name="docsuri-account-events"
+        )
+        account_events_bus.grant_put_events_to(self.service.task_definition.task_role)
+
+        # Grace-purge worker (FR-28): daily scan of DEACTIVATED accounts past purge_after →
+        # AccountDeleted + permanent delete. Same image/env/secrets as the API task; reuses the
+        # personalization-cleanup pattern. Idempotent — a missed/extra run is harmless.
+        if api_container is not None:
+            events.Rule(
+                self,
+                "AccountPurgeWorker",
+                description="Daily grace purge of soft-deleted (DEACTIVATED) accounts (FR-28)",
+                schedule=events.Schedule.cron(hour="3", minute="30"),
+                targets=[
+                    targets.EcsTask(
+                        cluster=cluster,
+                        task_definition=self.service.task_definition,
+                        task_count=1,
+                        subnet_selection=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
+                        assign_public_ip=True,
+                        security_groups=self.service.service.connections.security_groups,
+                        container_overrides=[
+                            targets.ContainerOverride(
+                                container_name=api_container.container_name,
+                                command=["python", "-m", "backend.modules.accounts.purge_worker"],
                             )
                         ],
                     )
