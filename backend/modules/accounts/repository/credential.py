@@ -36,6 +36,14 @@ class AccountTable(Base):
     # 탈퇴(soft-delete) 여부는 status 값으로 추론하지 않고 별도 bool 컬럼으로 명시 판단한다.
     is_withdrawn = Column(Boolean, default=False, nullable=False)
     withdrawn_at = Column(DateTime, nullable=True)
+    # U10: 동의 항목 — 개인정보처리방침/이용약관은 필수(가입 시 거부하면 가입 자체가 안 되므로
+    # 항상 True), 야간 푸시(이메일, 최신/관심 논문 등재 알림)만 선택이라 실제로 토글된다.
+    privacy_policy_agreed = Column(Boolean, default=True, nullable=False)
+    privacy_policy_agreed_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    terms_of_service_agreed = Column(Boolean, default=True, nullable=False)
+    terms_of_service_agreed_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    nightly_push_agreed = Column(Boolean, default=False, nullable=False)
+    nightly_push_agreed_at = Column(DateTime, nullable=True)
 
 
 class VerificationTokenTable(Base):
