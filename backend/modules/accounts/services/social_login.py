@@ -77,3 +77,8 @@ class SocialLoginService:
         self._repo.create_social_identity(provider_v, claims.subject, account.id, email, status="LINKED")
         logger.info(f"Social auto-link: account {account.id} linked to {provider_v}.")
         return account.id
+
+    def confirm_pending_links(self, account_id: str) -> int:
+        """비밀번호 로그인으로 소유권을 증명한 사용자가 자신의 보류 소셜 연결을 확정한다 (H1, BR-A9).
+        승격(PENDING_CONFIRMATION→LINKED)한 신원 수를 반환한다."""
+        return self._repo.confirm_social_links_for_account(account_id)

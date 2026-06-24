@@ -207,6 +207,23 @@ class CredentialRepository:
         self._session.flush()
         return rec
 
+    def confirm_social_links_for_account(self, account_id: str) -> int:
+        """유예(PENDING_CONFIRMATION) 소셜 신원을 LINKED로 승격한다 (H1 명시 연결, BR-A9).
+        소유권은 호출 측(비밀번호 로그인 세션)이 이미 증명했다. 승격한 행 수를 반환한다."""
+        rows = (
+            self._session.query(SocialIdentityTable)
+            .filter(
+                SocialIdentityTable.account_id == account_id,
+                SocialIdentityTable.status == "PENDING_CONFIRMATION",
+            )
+            .all()
+        )
+        for r in rows:
+            r.status = "LINKED"
+            self._session.add(r)
+        self._session.flush()
+        return len(rows)
+
     def create_social_account(self, email: str) -> AccountTable:
         """소셜 가입 — 비밀번호 없는 ACTIVE 계정 생성 (BR-A9: 프로바이더 검증 이메일이므로
         PENDING 우회). password_hash는 매칭 불가 센티넬이라 비밀번호 로그인은 불가."""

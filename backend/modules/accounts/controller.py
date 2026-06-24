@@ -469,6 +469,34 @@ async def social_google_callback(
     return resp
 
 
+@router.post("/social/link")
+async def social_link_confirm(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    social_svc: SocialLoginService = Depends(get_social_login_service),
+    db: Session = Depends(get_db_session),
+):
+    """보류 중인 소셜 연결 확정 (FR-27/BR-A9 H1). 비밀번호 로그인으로 소유권을 증명한 사용자가
+    자신의 PENDING_CONFIRMATION 소셜 신원을 LINKED로 승격한다."""
+    session_id = request.cookies.get("session_id")
+    if not session_id:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
+    try:
+        principal = await session_mgr.verify(session_id)
+        linked = social_svc.confirm_pending_links(principal.user_id)
+        db.commit()
+        message = "소셜 계정 연결이 완료되었습니다." if linked else "연결할 보류 중인 소셜 계정이 없습니다."
+        return {"status": "success", "linked": linked, "message": message}
+    except (UnauthorizedException, SessionExpiredException) as e:
+        db.rollback()
+        raise HTTPException(status_code=401, detail=str(e)) from e
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="소셜 연결 확정 중 서버 장애가 발생했습니다. (Fail-Closed)") from None
+
+
 @router.post("/signup", response_model=SignupResult, status_code=201)
 async def signup(
     req: SignupRequest,

@@ -14,7 +14,10 @@
 동일 패턴), 코어 파기 로직은 발행자 포트로 분리해 단위 테스트 가능하게 둔다.
 """
 
+import asyncio
+import json
 import logging
+import os
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
@@ -49,6 +52,54 @@ class LoggingAccountDeletedPublisher:
         )
 
 
+class EventBridgeAccountDeletedPublisher:
+    """실 발행자 — AWS EventBridge에 AccountDeleted를 put_events한다 (TD-U3-9).
+    구독자(U4/U2/U11)는 버스 규칙으로 라우팅된다. boto3는 동기 호출이라 to_thread로 위임하고,
+    발행 실패(FailedEntryCount>0 또는 예외)는 상위로 올려 purge_job이 다음 회차에 재시도하게
+    한다(DEACTIVATED 유지·at-least-once)."""
+
+    def __init__(self, event_bus_name: str, source: str = "docsuri.accounts", region: str | None = None):
+        self._bus = event_bus_name
+        self._source = source
+        self._region = region
+        self._client = None
+
+    def _get_client(self):
+        if self._client is None:
+            import boto3
+            self._client = boto3.client("events", region_name=self._region)
+        return self._client
+
+    async def publish(self, account_id: str, occurred_at: datetime, event_id: str) -> None:
+        detail = json.dumps(
+            {"accountId": account_id, "occurredAt": occurred_at.isoformat(), "eventId": event_id}
+        )
+
+        def _put():
+            return self._get_client().put_events(
+                Entries=[
+                    {
+                        "Source": self._source,
+                        "DetailType": "AccountDeleted",
+                        "Detail": detail,
+                        "EventBusName": self._bus,
+                    }
+                ]
+            )
+
+        resp = await asyncio.to_thread(_put)
+        if resp.get("FailedEntryCount", 0):
+            raise RuntimeError(f"EventBridge put_events 실패: {resp.get('Entries')}")
+
+
+def build_account_deleted_publisher() -> AccountDeletedPublisher:
+    """환경 기반 발행자 선택: ACCOUNT_EVENTS_BUS 설정 시 EventBridge, 아니면 Logging(기본)."""
+    bus = os.getenv("ACCOUNT_EVENTS_BUS", "").strip()
+    if bus:
+        return EventBridgeAccountDeletedPublisher(event_bus_name=bus, region=os.getenv("AWS_REGION") or None)
+    return LoggingAccountDeletedPublisher()
+
+
 def _now() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
@@ -57,7 +108,7 @@ class AccountDeletionService:
     def __init__(
         self,
         credential_repo: CredentialRepository,
-        session_manager: SessionManager,
+        session_manager: SessionManager | None,  # purge_job 경로는 미사용 → 워커는 None 주입.
         publisher: AccountDeletedPublisher | None = None,
         grace_days: int = DEFAULT_GRACE_DAYS,
     ):
