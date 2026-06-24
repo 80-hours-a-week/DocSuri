@@ -41,6 +41,30 @@ class PasswordResetTokenTable(Base):
     expires_at = Column(DateTime, nullable=False)
 
 
+# 소셜 전용(비밀번호 없는) 계정의 password_hash 센티넬. 유효한 argon2 인코딩이 아니므로
+# 비밀번호 로그인 검증(verify)은 항상 실패한다 → 소셜-only 계정은 비밀번호로 로그인 불가.
+# has_usable_password()가 이 값을 "사용 가능한 비밀번호 없음"으로 판정한다 (H1/BR-A9).
+SOCIAL_NO_PASSWORD_HASH = "!"
+
+
+def has_usable_password(account: "AccountTable") -> bool:
+    """계정이 *사용 가능한 비밀번호 자격증명*을 가졌는지 (H1 자동연결 가드용)."""
+    return bool(account.password_hash) and account.password_hash != SOCIAL_NO_PASSWORD_HASH
+
+
+class SocialIdentityTable(Base):
+    """소셜 신원 연결 (FR-27 / BR-A9). (provider, provider_subject)는 전역 유일.
+    status: LINKED | PENDING_CONFIRMATION(H1 — 기존 비밀번호 계정 명시적 연결 대기)."""
+    __tablename__ = "social_identities"
+
+    provider = Column(String(20), primary_key=True)
+    provider_subject = Column(String(255), primary_key=True)
+    account_id = Column(String(36), nullable=False, index=True)
+    email_at_link = Column(String(254), nullable=False)
+    linked_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    status = Column(String(24), default="LINKED", nullable=False)
+
+
 class CredentialRepository:
     """SQLAlchemy 기반의 Credential 및 계정 영속성 저장소 (PostgreSQL 매핑)"""
     
@@ -132,3 +156,46 @@ class CredentialRepository:
             PasswordResetTokenTable.token_hash == token_hash
         ).delete()
         self._session.flush()
+
+    def get_social_identity(self, provider: str, subject: str) -> SocialIdentityTable | None:
+        """(provider, provider_subject)로 소셜 신원 연결을 조회합니다 (FR-27)."""
+        return (
+            self._session.query(SocialIdentityTable)
+            .filter(
+                SocialIdentityTable.provider == provider,
+                SocialIdentityTable.provider_subject == subject,
+            )
+            .first()
+        )
+
+    def create_social_identity(
+        self, provider: str, subject: str, account_id: str, email_at_link: str, status: str = "LINKED"
+    ) -> SocialIdentityTable:
+        """소셜 신원을 계정에 연결합니다 (FR-27/BR-A9)."""
+        rec = SocialIdentityTable(
+            provider=provider,
+            provider_subject=subject,
+            account_id=account_id,
+            email_at_link=email_at_link,
+            status=status,
+        )
+        self._session.add(rec)
+        self._session.flush()
+        return rec
+
+    def create_social_account(self, email: str) -> AccountTable:
+        """소셜 가입 — 비밀번호 없는 ACTIVE 계정 생성 (BR-A9: 프로바이더 검증 이메일이므로
+        PENDING 우회). password_hash는 매칭 불가 센티넬이라 비밀번호 로그인은 불가."""
+        if self.get_by_email(email):
+            raise DomainException("이미 등록된 이메일 주소입니다.")
+        account = AccountTable(
+            id=str(uuid4()),
+            email=email,
+            password_hash=SOCIAL_NO_PASSWORD_HASH,
+            status=AccountStatus.ACTIVE.value,
+            created_at=datetime.now(UTC),
+            failure_count=0,
+        )
+        self._session.add(account)
+        self._session.flush()
+        return account

@@ -1644,3 +1644,11 @@
 **Context**: CONSTRUCTION — U3 Accounts FR-26 백엔드 슬라이스 완료·검증. 리뷰 게이트 대기. 다음=FR-26 FE/마이그레이션 또는 FR-27 OIDC 슬라이스.
 
 ---
+
+## U3 Accounts 프로덕션화 — Construction: Code (FR-27 소셜 로그인 조정 코어)
+**Timestamp**: 2026-06-24T11:05:00Z
+**User Input**: "commit then move on to FR-27"
+**AI Response**: "FR-26 커밋(efc0c95) 후 FR-27 착수. 비용(~$628)·복잡도 고려해 OIDC의 보안 핵심(H1) 신원 조정 코어로 범위 한정 — OIDC HTTP/JWKS 트랜스포트는 이월. models OidcProvider+SocialLinkConfirmationRequired, credential social_identities 테이블+SOCIAL_NO_PASSWORD_HASH 센티넬+has_usable_password+repo(social identity/account), SocialLoginService.reconcile(미검증 거부·기존연결 멱등·소셜-only 자동연결·H1 비번계정 자동병합 금지→PENDING_CONFIRMATION+예외·신규 ACTIVE). 테스트 5 케이스(H1 포함). 검증: ruff clean·pytest tests/accounts 44 passed(회귀 0). 이월: Google verifier·state/nonce·컨트롤러·FE·마이그레이션. 미커밋."
+**Context**: CONSTRUCTION — U3 Accounts FR-27 OIDC 조정 코어 완료·검증. 리뷰 게이트 대기. 다음=FR-27 OIDC 트랜스포트+컨트롤러 또는 일시정지(비용).
+
+---
