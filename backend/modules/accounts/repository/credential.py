@@ -40,10 +40,33 @@ class AccountTable(Base):
 
 class VerificationTokenTable(Base):
     __tablename__ = "verification_tokens"
-    
+
     token = Column(String(64), primary_key=True)
     email = Column(String(254), nullable=False, index=True)
     expires_at = Column(DateTime, nullable=False)
+
+
+class AccountWithdrawalBackupTable(Base):
+    """U10 회원탈퇴 시점의 accounts 스냅샷 (5년 보관, purge_after 이후 하드 삭제 대상).
+
+    U3가 소유한 데이터만 담는다 — 라이브러리(U4)/행동 이벤트·관심 프로필(U9)은 1:N 데이터라
+    여기 담을 수 없고 각 모듈이 별도로 백업해야 한다(후속 작업). password_hash/totp_secret은
+    재로그인 복구 목적이 아니므로 의도적으로 제외한다."""
+
+    __tablename__ = "account_withdrawal_backups"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    original_account_id = Column(String(36), nullable=False, index=True)
+    email = Column(String(254), nullable=False)
+    status = Column(String(20), nullable=False)
+    google_sub = Column(String(255), nullable=True)
+    orcid_id = Column(String(19), nullable=True)
+    orcid_name = Column(String(255), nullable=True)
+    orcid_affiliation = Column(String(255), nullable=True)
+    signed_up_at = Column(DateTime, nullable=False)
+    withdrawn_at = Column(DateTime, nullable=False)
+    purge_after = Column(DateTime, nullable=False, index=True)
+    backed_up_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
 
 class CredentialRepository:
