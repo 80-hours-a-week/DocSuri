@@ -112,6 +112,18 @@ class SourceText:
 
 
 @dataclass(frozen=True, slots=True)
+class DocModelLookup:
+    """Result of a doc-model read (BR-30/D6): the cached artifact on a hit, or ``building`` when
+    a lazy build was (re)triggered on a miss so the client polls again. ``building`` stays False
+    when no build queue is wired — the router then surfaces ``source_unavailable`` (prior
+    behavior preserved)."""
+
+    doc: DocModel | None = None
+    building: bool = False
+    retry_after_ms: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Section:
     label: str  # "" when only a span could be derived (Q6 span-only degrade)
     start: int
@@ -258,6 +270,20 @@ class AbstainDTO:
 
 
 @dataclass(frozen=True, slots=True)
+class PendingDTO:
+    """A long-input summary (MAP_REDUCE band) is being produced by a background job (BR-S6/BR-S8);
+    the client re-requests after ``retry_after_ms`` and gets the result on a cache hit."""
+
+    retry_after_ms: int | None = None
+
+    def to_dict(self) -> dict:
+        body: dict = {"status": "pending"}
+        if self.retry_after_ms is not None:
+            body["retryAfterMs"] = self.retry_after_ms
+        return body
+
+
+@dataclass(frozen=True, slots=True)
 class CostDegradedDTO:
     message: str = "AI 요약 일시 중단"
 
@@ -273,7 +299,9 @@ class SourceUnavailableDTO:
         return {"status": "source_unavailable", "reason": self.reason}
 
 
-SummaryResponse = SummaryResultDTO | AbstainDTO | CostDegradedDTO | SourceUnavailableDTO
+SummaryResponse = (
+    SummaryResultDTO | PendingDTO | AbstainDTO | CostDegradedDTO | SourceUnavailableDTO
+)
 
 
 # --- FR-17 multimodal asset read DTOs (display-only; produced by U1, read by U7) ----

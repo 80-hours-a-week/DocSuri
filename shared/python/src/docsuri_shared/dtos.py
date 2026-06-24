@@ -27,6 +27,7 @@ from ._generated.dtos.docmodel_schema import (
 )
 from ._generated.dtos.docmodel_schema import (
     Block,
+    BuildingDTO,
     CodeBlock,
     DocModel,
     DocModelMeta,
@@ -142,6 +143,7 @@ __all__ = [
     "DocModelRequest",
     "DocModelResponse",
     "DocModelResultDTO",
+    "BuildingDTO",
     "SourceUnavailableDTO",
     "DocModelLicenseUnavailableDTO",
     "Provenance",

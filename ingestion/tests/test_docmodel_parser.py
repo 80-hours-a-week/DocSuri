@@ -178,6 +178,51 @@ def test_parse_is_deterministic() -> None:
     assert a == b
 
 
+# An appendix (ltx_appendix) with a footnote (ltx_note) inlined in a body paragraph —
+# mirrors real ar5iv output (e.g. BERT's "Appendix A" + footnote URLs).
+APPENDIX_HTML = """
+<!DOCTYPE html><html><body><article class="ltx_document">
+ <section class="ltx_section" id="S1">
+  <h2 class="ltx_title ltx_title_section"><span class="ltx_tag">1 </span>Main</h2>
+  <div class="ltx_para"><p class="ltx_p">We release the code<span
+    class="ltx_note ltx_role_footnote"><span class="ltx_tag">1</span>https://example.org/code
+    </span> for review.</p></div>
+ </section>
+ <section class="ltx_appendix" id="A1">
+  <h2 class="ltx_title ltx_title_appendix">
+    <span class="ltx_tag">Appendix A </span>Extra Details</h2>
+  <div class="ltx_para"><p class="ltx_p">Appendix intro.</p></div>
+  <section class="ltx_subsection" id="A1.SS1">
+   <h3 class="ltx_title ltx_title_subsection"><span class="ltx_tag">A.1 </span>Setup</h3>
+   <div class="ltx_para"><p class="ltx_p">Appendix subsection text.</p></div>
+  </section>
+ </section>
+</article></body></html>
+"""
+
+
+def test_appendix_is_top_level_section_with_nested_subsections() -> None:
+    """ltx_appendix is a section: it stays a top-level node and keeps its subsections nested,
+    rather than flattening them up into the body (FD Q2=B — appendices preserved)."""
+    doc = _parse(APPENDIX_HTML)
+    assert [s.id for s in doc.sections] == ["s1", "s2"]
+    appendix = doc.sections[1]
+    assert appendix.title == "Extra Details"
+    assert appendix.sections is not None
+    assert [s.title for s in appendix.sections] == ["Setup"]
+    assert _blocks(appendix.sections[0])[0].text == "Appendix subsection text."
+
+
+def test_footnote_excluded_from_paragraph_body() -> None:
+    """An inline ltx_note (footnote) must not leak into the sentence text (it would corrupt
+    the LLM input and the rich view)."""
+    doc = _parse(APPENDIX_HTML)
+    para = _blocks(doc.sections[0])[0]
+    assert isinstance(para, ParagraphBlock)
+    assert para.text == "We release the code for review."
+    assert "example.org" not in para.text
+
+
 def test_span_only_fallback_when_no_sections() -> None:
     html = '<html><body><div class="ltx_para"><p class="ltx_p">Just a note.</p></div></body></html>'
     doc = _parse(html)

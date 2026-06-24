@@ -9,7 +9,7 @@ Output is built as plain dicts and validated through the generated pydantic ``Do
 binding, so a parser that drifts from ``shared/dtos/docmodel.schema.json`` fails loudly.
 
 Mapping (LaTeXML -> doc-model):
-  - ``section.ltx_section`` / ``ltx_subsection`` / ...   -> nested Section tree
+  - ``section.ltx_section`` / ``ltx_subsection`` / ``ltx_appendix`` / ...  -> nested Section tree
   - ``div.ltx_para`` > ``p.ltx_p``                       -> ParagraphBlock (inline math -> \\( \\))
   - ``table.ltx_equation`` / ``div.ltx_equationgroup``   -> FormulaBlock (MathML -> LaTeX)
   - ``figure.ltx_table`` > ``table.ltx_tabular``         -> TableBlock (rows/cols data, D8)
@@ -36,8 +36,17 @@ from docsuri_ingestion.domain.enums import AssetType
 
 _WS_RE = re.compile(r"\s+")
 
-# LaTeXML section-level wrappers (deepest = \paragraph), all rendered as <section>.
-_SECTION_CLASSES = {"ltx_section", "ltx_subsection", "ltx_subsubsection", "ltx_paragraph"}
+# LaTeXML section-level wrappers, all rendered as <section>. ``ltx_appendix`` is included
+# (FD Q2=B: appendices are preserved) — without it LaTeXML appendix subsections lose their
+# nearest section ancestor and flatten up into the top level, dropping the "Appendix A"
+# container title and the section hierarchy.
+_SECTION_CLASSES = {
+    "ltx_section",
+    "ltx_subsection",
+    "ltx_subsubsection",
+    "ltx_paragraph",
+    "ltx_appendix",
+}
 _HEADING_TAGS = {"h1", "h2", "h3", "h4", "h5", "h6"}
 # Block-id type abbreviations (1-based ordinals per section): s3.p2, s3.tbl1, s3.eq2, ...
 _ABBREV = {
@@ -365,8 +374,11 @@ def _code_block(el: Tag, sec_ctx: _SectionCtx) -> dict | None:
 def _inline_text(el: Tag) -> str:
     """Visible text of an element with inline math rendered as ``\\( latex \\)``.
 
-    Skips LaTeXML marker tags (``ltx_tag`` — section numbers, list bullets, eq numbers)
-    so they do not leak into body text.
+    Skips LaTeXML marker tags (``ltx_tag`` — section numbers, list bullets, eq numbers) and
+    footnotes/notes (``ltx_note`` — out-of-flow annotations) so neither leaks into body text.
+    A footnote rendered inline (``...heads as A.33In all cases...``) would otherwise corrupt
+    the sentence sent to the LLM and the rich view (footnote data is not preserved — a follow-up
+    may promote it to a dedicated block).
     """
     parts: list[str] = []
     for node in el.children:
@@ -377,7 +389,7 @@ def _inline_text(el: Tag) -> str:
                 latex = mathml_to_latex(node)
                 if latex:
                     parts.append(f"\\({latex}\\)")
-            elif "ltx_tag" in _classes(node):
+            elif "ltx_tag" in _classes(node) or "ltx_note" in _classes(node):
                 continue
             else:
                 parts.append(_inline_text(node))

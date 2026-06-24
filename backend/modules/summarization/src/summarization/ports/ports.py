@@ -97,6 +97,32 @@ class DocModelReadPort(Protocol):
 
 
 @runtime_checkable
+class DocModelBuildQueuePort(Protocol):
+    """Trigger U1's lazy doc-model build (BR-30/D6) on a read miss. The read side only enqueues
+    a ``BUILD_DOC_MODEL`` job onto U1's queue — it never imports/runs the builder (boundary B:
+    consumer enqueues, ingestion worker produces). Idempotent at the producer (a cache hit
+    short-circuits the build), so a duplicate enqueue is cheap."""
+
+    def enqueue_build(self, paper_id: str, version: int) -> None:
+        """Best-effort enqueue of a doc-model build for ``(paper_id, version)``. MUST NOT raise
+        on the read path — a failed enqueue degrades to ``source_unavailable``, not a 500."""
+        ...
+
+
+@runtime_checkable
+class SummaryJobQueuePort(Protocol):
+    """Enqueue a long-input summary as a background job (BR-S6/BR-S8). On the MAP_REDUCE band the
+    API path enqueues and returns ``pending`` instead of running 3-5 LLM calls inline (a request
+    that would blow the gateway timeout). A summarization worker consumes the job, runs the
+    map-reduce summary inline, and write-throughs the result to the store — so the client's poll
+    hits the cache. MUST NOT raise on the request path (a failed enqueue degrades, not 500s)."""
+
+    def enqueue(self, request: SummaryRequest, user_id: str) -> None:
+        """Best-effort enqueue of a summary job for ``request`` on behalf of ``user_id``."""
+        ...
+
+
+@runtime_checkable
 class AssetReadPort(Protocol):
     """FR-17 read side: list a paper's figure/table manifest (paper_asset, RDS, read-only —
     U1 is the single writer) and presign its S3 object refs (BR-S15). Read capability only."""

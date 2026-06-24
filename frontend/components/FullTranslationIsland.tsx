@@ -38,6 +38,9 @@ export function FullTranslationIsland({ paperId, version }: { paperId: string; v
       );
     case 'summary':
       return <StateView kind="error" message="예상치 못한 결과예요." onRetry={retry} />;
+    case 'pending':
+      // Translate does not map-reduce in this scope (PR-2); the hook polls if it ever occurs.
+      return <StateView kind="loading" title="번역 준비 중…" message="잠시만 기다려 주세요." />;
     case 'abstain':
       return <StateView kind="abstain" message="근거가 부족해 번역을 보류했어요." />;
     case 'degraded':

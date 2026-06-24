@@ -231,7 +231,7 @@ buildDocModel(paperId, version):              # U1 도메인 능력; 소비자(U
   ObjectStorage.put(doc-model/{paperId}/v{version}.json)  # SEC-9 비공개, doc-model/ prefix(Infra)
   return doc
 ```
-- **트리거(Q5 권장)**: 첫 **요약/열람(리치뷰)/에이전트 사용** 시 생성·캐시. **version 변경 시 무효화**(키 = paperId+version). 전 코퍼스 eager 아님(D6 — 비용=사용량 비례). 인기 논문 일부 eager는 후속 고려.
+- **트리거(Q5 권장) — 비동기·경계 B(구현됨)**: 첫 **열람(리치뷰)** 시 캐시 미스면 소비자(U7)가 **빌더를 직접 호출하지 않고** U1 큐에 `BUILD_DOC_MODEL` 잡을 enqueue(읽기 측은 enqueue만, 빌더 생성은 U1 워커 — 요약↔빌더 의존 분리). 워커가 `buildDocModel`을 실행(메타 fetch→파싱→`doc-model/{id}/v{ver}.json` 캐시). 읽기 API는 미스를 **`building`**(폴링 힌트 `retryAfterMs`)으로 반환 → 클라이언트 폴링 → 캐시 히트로 렌더. 멱등(캐시 히트 단락)·인프로세스 dedup·enqueue best-effort. **요약 입력 경로는 빌드를 트리거하지 않음**(미스→`.txt` 폴백·다음 요청 자동 업그레이드). **version 변경 시 무효화**(키 = paperId+version). 전 코퍼스 eager 아님(D6 — 비용=사용량 비례).
 - **결정성(D1, P7)**: LLM 추출 금지(표 숫자 환각 방지) — 결정적 파서만. 동일 HTML → 동일 doc-model.
 - **`ingestOne`은 doc-model을 eager 생성하지 않음** — 인덱스 hot path 비차단(§6 자산과 동일하게 인덱스 원자성 밖). 빌더는 U1 소유, 호출 시점은 on-demand. 파서 라이브러리·MathML→LaTeX 변환·캐시 스토어는 **NFR/Infra**(TD-12·Infra).
 - **철회(tombstone) 연동**: §6.3 자산 정리에 doc-model 캐시 무효화 동반(`remove docModel(paperId)`, best-effort·비차단).

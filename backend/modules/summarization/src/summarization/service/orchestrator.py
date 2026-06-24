@@ -15,7 +15,6 @@ API/presentation concern; the domain returns a complete, validated result.
 
 from __future__ import annotations
 
-from docsuri_shared.dtos import DocModel
 from docsuri_shared.ports import CostGuardCircuitBreaker, ObservabilityHub
 
 from ..domain.assembler import ResultAssembler
@@ -23,11 +22,14 @@ from ..domain.cache_key import build_cache_key
 from ..domain.glossary import GlossaryResolver
 from ..domain.grounding import GroundingValidator
 from ..domain.length_router import LengthRoute, LengthRouter
+from ..domain.map_reduce import MapReduceSummarizer
 from ..domain.models import (
     AbstainDTO,
     AssetRef,
     CostDegradedDTO,
+    DocModelLookup,
     GroundingInput,
+    PendingDTO,
     RequestContext,
     SourceUnavailableDTO,
     SummaryRequest,
@@ -38,11 +40,18 @@ from ..domain.refiner import InputRefiner
 from ..domain.source_selector import SourceSelector
 from ..ports.ports import (
     AssetReadPort,
+    DocModelBuildQueuePort,
     DocModelReadPort,
     LlmGatewayPort,
     LlmUnavailable,
+    SummaryJobQueuePort,
     SummaryStorePort,
 )
+
+# Client poll backoff hint after a lazy build was (re)triggered on a miss (BR-30/D6).
+_BUILD_POLL_BACKOFF_MS = 2000
+# Client poll backoff hint after a long summary was enqueued as a background job (BR-S6/BR-S8).
+_SUMMARY_POLL_BACKOFF_MS = 3000
 
 
 def _is_cost_degraded(budget) -> bool:
@@ -69,6 +78,9 @@ class SummarizationOrchestrationService:
         model_ver: str,
         asset_reader: AssetReadPort | None = None,
         doc_model_reader: DocModelReadPort | None = None,
+        doc_model_build_queue: DocModelBuildQueuePort | None = None,
+        map_reduce_summarizer: MapReduceSummarizer | None = None,
+        summary_job_queue: SummaryJobQueuePort | None = None,
     ) -> None:
         self._store = store
         self._source = source_selector
@@ -83,8 +95,19 @@ class SummarizationOrchestrationService:
         self._model_ver = model_ver
         self._asset_reader = asset_reader
         self._docmodel_reader = doc_model_reader
+        self._docmodel_build_queue = doc_model_build_queue
+        # Long-input map-reduce summarizer (BR-S6). None → MAP_REDUCE band abstains (current
+        # behavior); wired → summary map-reduce runs (translate map-reduce stays PR-2 scope).
+        self._map_reduce = map_reduce_summarizer
+        # Async long-summary job queue (BR-S8). When wired, the API path enqueues + returns
+        # pending; the worker re-runs with allow_enqueue=False so map-reduce executes inline.
+        self._summary_job_queue = summary_job_queue
 
-    def run(self, request: SummaryRequest, ctx: RequestContext) -> SummaryResponse:
+    def run(
+        self, request: SummaryRequest, ctx: RequestContext, *, allow_enqueue: bool = True
+    ) -> SummaryResponse:
+        # ``allow_enqueue`` is True on the API request path (long summaries are dispatched to a
+        # background job → pending) and False on the worker path (map-reduce runs inline there).
         user_id = ctx.auth_session.user_id
 
         # 0. cache lookup (read-through) — HIT ends here (LLM 0 calls, §11).
@@ -109,28 +132,47 @@ class SummarizationOrchestrationService:
         #    route (shape; over-cap or map-reduce → abstain).
         refined = self._refiner.refine_source(source)
         route = self._length.route(refined.token_count)
-        # OVER_CAP always abstains. MAP_REDUCE (CONTEXT_BUDGET~INPUT_CAP, ~40K-120K tok) also
-        # abstains: async map-reduce is deferred (TD-S9, tracked in #135), so honestly returning
-        # "too long" beats a wrong single over-budget call. Large papers see input_too_long until
-        # the deferred map-reduce job lands.
-        if route == LengthRoute.OVER_CAP or route == LengthRoute.MAP_REDUCE:
+        # OVER_CAP always abstains (extreme inputs are rejected, not partial-summarized — mobile
+        # decision). MAP_REDUCE (CONTEXT_BUDGET~INPUT_CAP, ~40K-120K tok) runs section-aware
+        # map-reduce when a summarizer is wired (BR-S6); otherwise it abstains (current behavior).
+        # Translate map-reduce stays out of scope (PR-2 structured translation).
+        if route == LengthRoute.OVER_CAP:
             return AbstainDTO(reason="input_too_long")
+        if route == LengthRoute.MAP_REDUCE and (
+            request.task == Task.TRANSLATE or self._map_reduce is None
+        ):
+            return AbstainDTO(reason="input_too_long")
+        if (
+            route == LengthRoute.MAP_REDUCE
+            and allow_enqueue
+            and self._summary_job_queue is not None
+        ):
+            # Async long-summary (BR-S8): enqueue a background job, return pending → client polls.
+            # The worker re-runs with allow_enqueue=False so map-reduce executes inline (below).
+            self._summary_job_queue.enqueue(request, user_id)
+            self._emit("u7.summary.pending", 1.0, request)
+            return PendingDTO(retry_after_ms=_SUMMARY_POLL_BACKOFF_MS)
 
         # 4. glossary
         glossary = self._glossary.resolve(user_id)
 
-        # 6-7. generate (buffer) → grounding validate, with ONE retry (BR-S7).
+        # 6-7. generate (buffer) → grounding validate, with ONE retry (BR-S7). On the MAP_REDUCE
+        # band the summary is produced by the map-reduce summarizer (chunk→map→reduce); grounding
+        # still validates the unified draft against the FULL refined body.
         if request.task == Task.TRANSLATE:
             response = self._run_translate(request, source, refined, glossary, key)
         else:
-            response = self._run_summary(request, source, refined, glossary, key)
+            summarizer = self._map_reduce if route == LengthRoute.MAP_REDUCE else self._llm
+            response = self._run_summary(request, source, refined, glossary, key, summarizer)
         return response
 
     # --- summary path --------------------------------------------------------
-    def _run_summary(self, request, source, refined, glossary, key) -> SummaryResponse:
+    def _run_summary(self, request, source, refined, glossary, key, summarizer) -> SummaryResponse:
+        # ``summarizer`` is the single-call LLM gateway or the map-reduce summarizer (same
+        # ``summarize(refined, request, glossary)`` contract) chosen by the length route.
         for attempt in (1, 2):
             try:
-                draft = self._llm.summarize(refined, request, glossary)
+                draft = summarizer.summarize(refined, request, glossary)
             except LlmUnavailable:
                 if attempt == 2:
                     self._emit("u7.llm.unavailable", 1.0, request)
@@ -186,13 +228,24 @@ class SummarizationOrchestrationService:
         return self._glossary.upsert_term(user_id, term_from, term_to)
 
     # --- structured doc-model (BR-30, rich-view + summary input) -------------
-    def doc_model(self, paper_id: str, version: int) -> DocModel | None:
-        """Read the lazily-built, cached structured doc-model (None → not yet built /
-        unavailable). Read-only — building is U1's role (D6). OA license gating is applied
-        at the router (parallel to full_text/list_assets)."""
+    def doc_model(self, paper_id: str, version: int) -> DocModelLookup:
+        """Read the cached structured doc-model; on a miss, (re)trigger U1's lazy build and tell
+        the client to poll (BR-30/D6). Read-only — building is U1's role (boundary B: this only
+        enqueues a job, never runs the builder). OA license gating is applied at the router
+        (parallel to full_text/list_assets).
+
+        Returns a :class:`DocModelLookup`: ``doc`` set on a cache hit; ``building`` True when a
+        build was enqueued on a miss (a build queue is wired); otherwise empty → the router maps
+        it to ``source_unavailable`` (prior behavior when no queue is configured)."""
         if self._docmodel_reader is None:
-            return None
-        return self._docmodel_reader.get_doc_model(paper_id, version)
+            return DocModelLookup()
+        doc = self._docmodel_reader.get_doc_model(paper_id, version)
+        if doc is not None:
+            return DocModelLookup(doc=doc)
+        if self._docmodel_build_queue is not None:
+            self._docmodel_build_queue.enqueue_build(paper_id, version)
+            return DocModelLookup(building=True, retry_after_ms=_BUILD_POLL_BACKOFF_MS)
+        return DocModelLookup()
 
     # --- figure/table assets (FR-17, BR-S15) ---------------------------------
     def list_assets(self, paper_id: str, version: int) -> list[AssetRef] | None:

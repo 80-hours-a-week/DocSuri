@@ -4,8 +4,11 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import uuid4
 
+from docsuri_shared.dtos import DocModelResultDTO, SourceUnavailableDTO
+
 from .asset_extraction import AssetExtractor
 from .config import CORPUS_SLICE_CATEGORIES
+from .docmodel import DocModelBuilder
 from .domain.enums import DedupDecision, FailureClass, FailureReason, JobKind
 from .domain.errors import IngestionError, PermanentIngestionError
 from .domain.models import EmbeddingBatch, IngestionJob, Tombstone
@@ -56,6 +59,7 @@ class IngestionPipelineService:
         asset_extractor: AssetExtractor | None = None,
         asset_store: AssetStorePort | None = None,
         asset_source: AssetSourcePort | None = None,
+        doc_model_builder: DocModelBuilder | None = None,
         embedding_v2: EmbeddingPort | None = None,
         vector_index_v2: VectorIndexPort | None = None,
     ) -> None:
@@ -76,8 +80,46 @@ class IngestionPipelineService:
         self._asset_extractor = asset_extractor
         self._asset_store = asset_store
         self._asset_source = asset_source
+        # Lazy on-demand doc-model builder (BR-30/D6) — drives BUILD_DOC_MODEL jobs only;
+        # the index hot path (ingest_one) never touches it.
+        self._doc_model_builder = doc_model_builder
         self._embedding_v2 = embedding_v2
         self._vector_index_v2 = vector_index_v2
+
+    def build_doc_model(
+        self, job: IngestionJob
+    ) -> DocModelResultDTO | SourceUnavailableDTO:
+        """Produce (and cache) the structured doc-model for a paper version (BR-30/D6).
+
+        Dispatched as a BUILD_DOC_MODEL queue job by a consumer (U7 viewer/summary) on a cache
+        miss — the read side enqueues, this worker produces. Idempotent: the builder serves the
+        cached artifact on a hit, so duplicate enqueues are cheap (no rebuild). A genuine source
+        miss returns ``SourceUnavailableDTO`` (terminal — ack, no redelivery); transient arXiv
+        metadata failures raise through resilience (retriable redelivery)."""
+        if self._doc_model_builder is None:
+            raise PermanentIngestionError(
+                "doc-model builder not configured",
+                reason=FailureReason.VALIDATION_VIOLATION,
+                stage="docmodel",
+            )
+        if not job.arxiv_ref:
+            raise PermanentIngestionError(
+                "build_doc_model requires arxiv_ref",
+                reason=FailureReason.VALIDATION_VIOLATION,
+                stage="docmodel",
+            )
+        metadata = self._resilience.dependency_call(
+            "arxiv",
+            "fetch_metadata",
+            lambda: self._arxiv.fetch_metadata(job.arxiv_ref or ""),
+        )
+        result = self._doc_model_builder.build(metadata)
+        self._observability.emit_metric(
+            "ingestion.docmodel.build",
+            1.0,
+            {"status": result.status, "cached": str(getattr(result, "cached", "")).lower()},
+        )
+        return result
 
     def ingest_one(self, job: IngestionJob) -> DedupDecision:
         if not job.arxiv_ref:

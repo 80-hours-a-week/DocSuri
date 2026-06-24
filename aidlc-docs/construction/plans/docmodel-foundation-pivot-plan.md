@@ -104,19 +104,27 @@
 - [x] FD `business-logic-model.md` — BR-29 확장: 보관=평문 1종 → **+doc-model**; `ingestOne`에 doc-model 생성/캐시 단계(lazy) → **§7 신설 + §6.3 무효화 연동**
 - [x] FD `business-rules.md` — 표=데이터·수식=LaTeX 규칙; 그림 webp 참조 연결 → **BR-29 carve-out 뒤집기 + BR-30 신설(doc-model 구조·생성)**
 - [x] NFR `tech-stack-decisions.md` — **TD-12 재검토**(표=PDF크롭 → HTML 표=데이터); HTML 파서 의존성(lxml/BeautifulSoup·MathML→LaTeX) → **TD-12 재작성 + TD-16 신설 + TD-11 최후폴백 강등**
-- [ ] Infra `infrastructure-design.md` — S3 `doc-model/` prefix(SSE) + 캐시 라이프사이클
+- [x] Infra `infrastructure-design.md` — S3 `doc-model/` prefix(단일 버킷) + **요약 잡 큐·요약 워커 배포 단위 ④ + IAM 3역할**(빌드 큐=ingestion 재사용). PR-1 slice 6 CDK(`compute_stack`·신규 `summarization_stack`·app.py, `cdk synth` 검증·배포 X)와 함께 완료.
 
 **U7 Summarization (소비자 — 입력 교체)**
 - [x] FD `domain-entities.md`·`business-logic-model.md` — SourceSelector/full-text 어댑터 입력 = doc-model; 프롬프트가 표·수식 인지 → **SourceText/RefinedSource(+tables[]) · SourceSelector·InputRefiner·프롬프트(표=데이터·수식 LaTeX)**
 - [x] FD `business-rules.md` — 입력 계약 갱신(로직 불변 명시) → **BR-S2/BR-S3 doc-model 입력 + 로직 불변 명시**
-- [ ] NFR/Infra — 입력 어댑터 경량 정합 (U1 Infra 배치와 함께 마무리)
+- [x] NFR/Infra — 입력 어댑터 경량 정합 → **NFR `tech-stack-decisions` TD-S9 비동기 잡(SQS 요약 큐+요약 워커) 구현 반영**(PR-1 slice 5b). Infra 배치(큐·워커 배포)는 slice 6.
 
 **U5 Frontend (리치뷰)**
 - [x] 자체 리치뷰 컴포넌트(doc-model 렌더: KaTeX·표·그림·목차/앵커 점프) → **실제 위치는 상세 표면 소유한 `u7-summarization-frontend` `FullTextViewer`→`DocModelViewer`(§2.10)에 본문화**(U5 frontend-components는 히어로/검색 슬라이스 전용). `getFullText`→`getDocModel`·union 매핑·계층도 갱신
 - [x] 기존 `AssetGallery`/앵커 매처 재사용 연결 → **U5 `frontend-components.md` §6 신설**: 그림=AssetGallery webp 재사용, **표=크롭 폐기→DocModelViewer 표 컴포넌트(D8)**, AssetGallery 스코프=그림 전용 축소
 
 **원장**
-- [ ] `aidlc-state.md` — 사후 결정/핫픽스 절에 본 피벗 entry + `:159-162` 비전 항목이 본 doc-model 기반으로 흡수됨 명시
+- [x] `aidlc-state.md` — 사후 결정 절에 **PR-1(doc-model 실데이터·비동기) entry** 등재(2026-06-24). 비전(`:159-162`) doc-model 흡수 명시는 후속.
+
+**PR-1 추가(실데이터·비동기, 2026-06-24 back-sync)**
+- [x] 공유계약 — `docmodel.schema.json` **building**·`summarization.schema.json` **pending** 신설(재생성) + `shared/docmodel.md` §5 union 갱신
+- [x] U1 FD `business-logic-model.md` §7.2 — lazy 빌드 **트리거(경계 B·`BUILD_DOC_MODEL` 큐 잡·building)** 구체화
+- [x] U7 FD `business-rules.md`·`business-logic-model.md` — BR-S6(3단계 맵리듀스)·BR-S9(pending)·BR-S12(비동기 잡 구현)·BLM §3.6
+- [x] U7 NFR `tech-stack-decisions.md` — TD-S9 비동기 잡 구현 반영
+- [x] Infra `infrastructure-design.md` + CDK(slice 6) — 단일 버킷 prefix·요약 큐·워커 배포 단위 ④·IAM, `cdk synth` 검증(배포 X)
+- [x] OA 게이트(slice 7) — OA 신호 = U1 인제스션 검증(BR-1); 게이트=운영 토글(논문별 조회 불요), 주석·문서 정합
 
 ---
 

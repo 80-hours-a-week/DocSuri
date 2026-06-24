@@ -200,6 +200,21 @@ class SummaryResultDTO(BaseModel):
     translation: TranslationDraft | None = None
 
 
+class PendingDTO(BaseModel):
+    """
+    A long-input summary (LengthRouter MAP_REDUCE band) is being produced asynchronously as a background job (BR-S6/BR-S8): a cache miss enqueued a summary job. The client re-requests the same action after retryAfterMs and gets the result on a cache hit once the worker finishes. Trace: BR-S6, BR-S8, #135.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    status: Literal['pending']
+    retryAfterMs: int | None = Field(
+        None,
+        description='Suggested client poll backoff in milliseconds before re-requesting.',
+    )
+
+
 class AbstainDTO(BaseModel):
     """
     Returned when summary is abstained due to failure to pass grounding validation rules. Trace: FR-12.
@@ -335,12 +350,22 @@ class PaperAssetsResponse(
 
 
 class SummaryResponse(
-    RootModel[SummaryResultDTO | AbstainDTO | CostDegradedDTO | SourceUnavailableDTO]
+    RootModel[
+        SummaryResultDTO
+        | PendingDTO
+        | AbstainDTO
+        | CostDegradedDTO
+        | SourceUnavailableDTO
+    ]
 ):
-    root: SummaryResultDTO | AbstainDTO | CostDegradedDTO | SourceUnavailableDTO = (
-        Field(
-            ...,
-            description='U7 Summarization DTO contract. The ROOT schema describes SummaryResponse — the union (oneOf) returned by on-demand actions (FR-12/13/14) and branched by U5 ApiClient to surface status. All named DTOs (SummaryRequest, SummaryResultDTO, SummaryDraft, Anchor, TranslationDraft, AbstainDTO, CostDegradedDTO, SourceUnavailableDTO) are defined in $defs for type generation.',
-            title='SummaryResponse',
-        )
+    root: (
+        SummaryResultDTO
+        | PendingDTO
+        | AbstainDTO
+        | CostDegradedDTO
+        | SourceUnavailableDTO
+    ) = Field(
+        ...,
+        description='U7 Summarization DTO contract. The ROOT schema describes SummaryResponse — the union (oneOf) returned by on-demand actions (FR-12/13/14) and branched by U5 ApiClient to surface status. All named DTOs (SummaryRequest, SummaryResultDTO, SummaryDraft, Anchor, TranslationDraft, PendingDTO, AbstainDTO, CostDegradedDTO, SourceUnavailableDTO) are defined in $defs for type generation.',
+        title='SummaryResponse',
     )

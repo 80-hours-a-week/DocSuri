@@ -68,7 +68,11 @@ def process_message(runtime, message) -> None:
         return
 
     try:
-        runtime.pipeline.ingest_one(job)
+        if job.kind is JobKind.BUILD_DOC_MODEL:
+            # Lazy doc-model build (BR-30/D6) — separate from the index pipeline.
+            runtime.pipeline.build_doc_model(job)
+        else:
+            runtime.pipeline.ingest_one(job)
     except IngestionError as exc:
         if exc.failure_class is FailureClass.PERMANENT:
             queue.ack(message)
