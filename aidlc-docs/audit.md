@@ -1636,3 +1636,11 @@
 **Context**: CONSTRUCTION — U3 Accounts Code 첫 슬라이스(FR-29) 완료·검증. 리뷰 게이트 대기. 다음=FR-26/27/28 슬라이스 또는 Infra Design.
 
 ---
+
+## U3 Accounts 프로덕션화 — Construction: Code (FR-26 비밀번호 재설정 백엔드)
+**Timestamp**: 2026-06-24T10:45:00Z
+**User Input**: "continue to the next slice"
+**AI Response**: "FR-26 비밀번호 재설정 백엔드 슬라이스 풀 구현. SSOT 2 DTO+재생성, 리포지토리 password_reset_tokens(해시저장·단일사용), PasswordResetService(request 열거방지·confirm 만료/단일사용/BR-A1/전세션무효화), email 3프로바이더 send_password_reset_email, 세션 invalidate_all_for_user(user_sessions Redis 셋), 컨트롤러 2 엔드포인트(request 일반응답·confirm 400/503/500). 기존 email-verification 토큰 패턴 미러. 검증: ruff clean·`uv run --project backend pytest tests/accounts` 39 passed(reset 6 신규·회귀 0)·generate.py --check ok. 이월: FE 재설정 페이지·DB 마이그레이션·앱셸 와이어링. 미커밋(사용자 미요청)."
+**Context**: CONSTRUCTION — U3 Accounts FR-26 백엔드 슬라이스 완료·검증. 리뷰 게이트 대기. 다음=FR-26 FE/마이그레이션 또는 FR-27 OIDC 슬라이스.
+
+---

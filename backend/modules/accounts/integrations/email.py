@@ -30,6 +30,30 @@ def _render_verification_email(link: str) -> tuple[str, str, str]:
     return subject, body_text, body_html
 
 
+def _render_password_reset_email(link: str) -> tuple[str, str, str]:
+    """(subject, text, html) for the forgot-password reset email (FR-26/BR-A8).
+    Shared by every provider so wording/link format can't drift."""
+    subject = "[DocSuri] 비밀번호 재설정 링크"
+    body_text = (
+        "비밀번호 재설정을 요청하셨습니다. 다음 링크를 30분 이내에 클릭해 새 비밀번호를 설정해 주세요.\n"
+        "요청하지 않으셨다면 이 메일을 무시하셔도 됩니다.\n\n"
+        f"{link}"
+    )
+    body_html = f"""
+        <html>
+            <body>
+                <h3>DocSuri 비밀번호 재설정</h3>
+                <p>아래 링크를 클릭해 새 비밀번호를 설정해 주세요 (30분 동안 유효합니다).</p>
+                <p><a href="{link}">비밀번호 재설정하기</a></p>
+                <p>요청하지 않으셨다면 이 메일을 무시하셔도 됩니다.</p>
+                <p>링크가 동작하지 않으면 다음 주소를 브라우저에 복사해 넣어주세요:</p>
+                <p>{link}</p>
+            </body>
+        </html>
+    """
+    return subject, body_text, body_html
+
+
 def _emit_email_failure(observability_hub, e: Exception, provider: str) -> None:
     """소프트 폴백 실패 신호(EmailDeliveryFailureSignal) 발행 — 공통 헬퍼."""
     if not observability_hub:
@@ -52,6 +76,11 @@ class EmailClientInterface(ABC):
         """이메일 인증 링크를 사용자에게 발송합니다."""
         pass
 
+    @abstractmethod
+    async def send_password_reset_email(self, email: str, token: str, reset_link: str) -> bool:
+        """비밀번호 재설정 링크를 사용자에게 발송합니다 (FR-26/BR-A8)."""
+        pass
+
 
 class MockEmailClient(EmailClientInterface):
     """로컬 테스트를 위해 실제 이메일을 발송하지 않고 터미널 콘솔에 출력하는 Mock 이메일 클라이언트"""
@@ -63,6 +92,14 @@ class MockEmailClient(EmailClientInterface):
         logger.info(f"Verification Token: {token}")
         logger.info(f"Verification Link: {signup_link}?token={token}")
         logger.info("=========================================================")
+        return True
+
+    async def send_password_reset_email(self, email: str, token: str, reset_link: str) -> bool:
+        logger.info("================ [MOCK PASSWORD RESET EMAIL] ================")
+        logger.info(f"To: {email}")
+        logger.info(f"Reset Token: {token}")
+        logger.info(f"Reset Link: {reset_link}?token={token}")
+        logger.info("=============================================================")
         return True
 
 
@@ -112,6 +149,32 @@ class SESEmailClient(EmailClientInterface):
             _emit_email_failure(self._observability_hub, e, provider="ses")
             return False
 
+    async def send_password_reset_email(self, email: str, token: str, reset_link: str) -> bool:
+        """Amazon SES로 비밀번호 재설정 메일 전송. 실패 시 소프트 폴백."""
+        link = f"{reset_link}?token={token}"
+        subject, body_text, body_html = _render_password_reset_email(link)
+        try:
+            ses = self._get_client()
+            response = await asyncio.to_thread(
+                lambda: ses.send_email(
+                    Source=self._sender_email,
+                    Destination={"ToAddresses": [email]},
+                    Message={
+                        "Subject": {"Data": subject, "Charset": "UTF-8"},
+                        "Body": {
+                            "Text": {"Data": body_text, "Charset": "UTF-8"},
+                            "Html": {"Data": body_html, "Charset": "UTF-8"},
+                        },
+                    },
+                )
+            )
+            logger.info(f"Password reset email sent via SES to {email}. MessageId: {response.get('MessageId')}")
+            return True
+        except Exception as e:
+            logger.error(f"Amazon SES 재설정 메일 발송 실패 (Soft-Fallback): {str(e)}")
+            _emit_email_failure(self._observability_hub, e, provider="ses")
+            return False
+
 
 class ResendEmailClient(EmailClientInterface):
     """Resend (https://resend.com) 트랜잭셔널 이메일 클라이언트.
@@ -152,6 +215,33 @@ class ResendEmailClient(EmailClientInterface):
             return False
         except Exception as e:
             logger.error(f"Resend 이메일 발송 예외 (Soft-Fallback 활성): {str(e)}")
+            _emit_email_failure(self._observability_hub, e, provider="resend")
+            return False
+
+    async def send_password_reset_email(self, email: str, token: str, reset_link: str) -> bool:
+        link = f"{reset_link}?token={token}"
+        subject, body_text, body_html = _render_password_reset_email(link)
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    self._ENDPOINT,
+                    headers={"Authorization": f"Bearer {self._api_key}"},
+                    json={
+                        "from": self._sender_email,
+                        "to": [email],
+                        "subject": subject,
+                        "html": body_html,
+                        "text": body_text,
+                    },
+                )
+            if resp.status_code in (200, 201):
+                logger.info(f"Password reset email sent via Resend to {email}.")
+                return True
+            logger.error(f"Resend 재설정 메일 발송 실패 status={resp.status_code} body={resp.text[:200]}")
+            _emit_email_failure(self._observability_hub, RuntimeError(f"resend_status_{resp.status_code}"), provider="resend")
+            return False
+        except Exception as e:
+            logger.error(f"Resend 재설정 메일 발송 예외 (Soft-Fallback): {str(e)}")
             _emit_email_failure(self._observability_hub, e, provider="resend")
             return False
 

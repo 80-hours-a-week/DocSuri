@@ -25,8 +25,18 @@ class AccountTable(Base):
 
 class VerificationTokenTable(Base):
     __tablename__ = "verification_tokens"
-    
+
     token = Column(String(64), primary_key=True)
+    email = Column(String(254), nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+
+
+class PasswordResetTokenTable(Base):
+    """비밀번호 재설정 토큰 (FR-26 / BR-A8). 토큰은 평문이 아닌 SHA-256 해시로 저장한다
+    (DB 유출 시 토큰 무력화). 단일 사용은 확정(confirm) 시 즉시 삭제로 강제한다."""
+    __tablename__ = "password_reset_tokens"
+
+    token_hash = Column(String(64), primary_key=True)
     email = Column(String(254), nullable=False, index=True)
     expires_at = Column(DateTime, nullable=False)
 
@@ -97,4 +107,28 @@ class CredentialRepository:
     def delete_verification_token(self, token: str) -> None:
         """인증 완료 후 사용한 이메일 인증 토큰을 파기합니다."""
         self._session.query(VerificationTokenTable).filter(VerificationTokenTable.token == token).delete()
+        self._session.flush()
+
+    def create_reset_token(self, email: str, token_hash: str, expires_at: datetime) -> PasswordResetTokenTable:
+        """비밀번호 재설정 토큰을 생성합니다 (FR-26/BR-A8). 토큰 해시만 저장하며,
+        같은 이메일의 기존 미사용 토큰은 선삭제하여 활성 토큰을 1개로 제한합니다."""
+        self._session.query(PasswordResetTokenTable).filter(PasswordResetTokenTable.email == email).delete()
+        rec = PasswordResetTokenTable(token_hash=token_hash, email=email, expires_at=expires_at)
+        self._session.add(rec)
+        self._session.flush()
+        return rec
+
+    def get_reset_token(self, token_hash: str) -> PasswordResetTokenTable | None:
+        """토큰 해시로 재설정 토큰 레코드를 조회합니다."""
+        return (
+            self._session.query(PasswordResetTokenTable)
+            .filter(PasswordResetTokenTable.token_hash == token_hash)
+            .first()
+        )
+
+    def delete_reset_token(self, token_hash: str) -> None:
+        """사용/만료된 재설정 토큰을 파기합니다 (단일 사용 강제)."""
+        self._session.query(PasswordResetTokenTable).filter(
+            PasswordResetTokenTable.token_hash == token_hash
+        ).delete()
         self._session.flush()

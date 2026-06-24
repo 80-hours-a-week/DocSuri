@@ -17,8 +17,16 @@ from .models import (
 )
 from .repository.credential import CredentialRepository
 from .repository.session import SessionRepository
-from .schemas import LoginRequest, SessionInfo, SignupRequest, SignupResult
+from .schemas import (
+    LoginRequest,
+    PasswordResetConfirm,
+    PasswordResetRequest,
+    SessionInfo,
+    SignupRequest,
+    SignupResult,
+)
 from .services.auth import AuthenticationService
+from .services.password_reset import PasswordResetService
 from .services.session_manager import SessionManager
 from .services.signup import SignupService
 from .services.totp import TotpService
@@ -107,6 +115,79 @@ def get_totp_service(
     repo: CredentialRepository = Depends(get_credential_repo),
 ) -> TotpService:
     return TotpService(repo)
+
+
+def _reset_link_base(request: Request) -> str:
+    """비밀번호 재설정 링크의 공개 베이스 URL. 프로덕션은 프런트 재설정 페이지(`/reset-password`),
+    로컬은 백엔드 confirm 경로로 폴백(메일은 Mock가 콘솔에 출력)."""
+    public = os.getenv("PUBLIC_APP_URL", "").strip().rstrip("/")
+    if public:
+        return f"{public}/reset-password"
+    return str(request.base_url) + "auth/password-reset/confirm"
+
+
+def get_password_reset_service(
+    request: Request,
+    repo: CredentialRepository = Depends(get_credential_repo),
+    manager: SessionManager = Depends(get_session_manager),
+) -> PasswordResetService:
+    observability = getattr(request.app.state, "observability", None)
+    email_client = get_email_client(
+        env=os.getenv("ENV", "local"),
+        sender_email=os.getenv("SES_SENDER_EMAIL", "no-reply@docsuri.org"),
+        region=os.getenv("SES_REGION", "ap-northeast-2"),
+        observability_hub=observability,
+    )
+    return PasswordResetService(repo, manager, email_client)
+
+
+@router.post("/password-reset/request")
+async def password_reset_request(
+    req: PasswordResetRequest,
+    request: Request,
+    reset_svc: PasswordResetService = Depends(get_password_reset_service),
+    db: Session = Depends(get_db_session),
+):
+    """비밀번호 재설정 요청 (FR-26/BR-A8). 계정 열거 방지 — 가입/상태와 무관하게 항상 동일 응답."""
+    base_url = _reset_link_base(request)
+    try:
+        await reset_svc.request_reset(req.email, base_url)
+        db.commit()
+    except Exception:
+        # 어떤 경우에도 계정 존재/상태를 추론할 단서를 주지 않는다 (Fail-Closed, 일반 응답 유지).
+        db.rollback()
+    return {
+        "status": "success",
+        "message": "해당 이메일로 가입된 활성 계정이 있다면 비밀번호 재설정 링크를 보냈습니다. 메일함을 확인해 주세요.",
+    }
+
+
+@router.post("/password-reset/confirm")
+async def password_reset_confirm(
+    req: PasswordResetConfirm,
+    reset_svc: PasswordResetService = Depends(get_password_reset_service),
+    db: Session = Depends(get_db_session),
+):
+    """재설정 토큰으로 새 비밀번호 확정 (FR-26/BR-A8). 성공 시 해당 계정 전 세션 무효화."""
+    try:
+        await reset_svc.confirm_reset(req.token, req.newPassword)
+        db.commit()
+        return {"status": "success", "message": "비밀번호가 재설정되었습니다. 새 비밀번호로 로그인해 주세요."}
+    except SessionStoreUnavailableException as e:
+        # 세션 일괄 무효화 중 Redis 장애 — 401 위장 금지, 503으로 매핑 (DomainException 핸들러보다 먼저).
+        db.rollback()
+        raise HTTPException(
+            status_code=503,
+            detail="일시적으로 처리할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+        ) from e
+    except DomainException as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=500, detail="비밀번호 재설정 처리 중 서버 장애가 발생했습니다. (Fail-Closed)"
+        ) from None
 
 
 @router.post("/signup", response_model=SignupResult, status_code=201)
