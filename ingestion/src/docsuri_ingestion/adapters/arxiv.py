@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable, Sequence
 from datetime import datetime
@@ -15,7 +16,7 @@ from docsuri_ingestion.full_text_extraction import (
     html_to_text,
     pdf_to_text,
 )
-from docsuri_ingestion.resilience import TokenBucket
+from docsuri_ingestion.resilience import RetryPolicy, TokenBucket
 
 _log = logging.getLogger("docsuri.ingestion.arxiv")
 
@@ -48,6 +49,7 @@ class ArxivHttpSource:
         ),
         timeout_seconds: float = 30.0,
         rate_limiter: TokenBucket | None = None,
+        oai_retry_policy: RetryPolicy | None = None,
     ) -> None:
         self._atom_base_url = atom_base_url
         self._oai_base_url = oai_base_url
@@ -60,6 +62,11 @@ class ArxivHttpSource:
         )
         self._timeout_seconds = timeout_seconds
         self._rate_limiter = rate_limiter or TokenBucket(rate_per_second=0.33)
+        # Harvest pagination is long-running (hours); tolerate transient arXiv blips with
+        # generous backoff before giving up. ~2,4,8,16,32s ≈ 62s total across 6 attempts.
+        self._oai_retry_policy = oai_retry_policy or RetryPolicy(
+            max_attempts=6, base_delay_seconds=2.0
+        )
 
     def harvest_seed(self, category_filter: CategoryFilter) -> Iterable[MetadataRecord]:
         for category in category_filter.categories:
@@ -184,12 +191,31 @@ class ArxivHttpSource:
             "until": category_filter.updated_before.date().isoformat(),
         }
         while True:
-            body = self._get_text(self._oai_base_url, params=params, stage="harvest_seed")
+            body = self._fetch_oai_page(params)
             yield from parse_oai_records(body)
             token = parse_oai_resumption_token(body)
             if not token:
                 return
             params = {"verb": "ListRecords", "resumptionToken": token}
+
+    def _fetch_oai_page(self, params: dict[str, str]) -> str:
+        """Fetch one OAI ListRecords page, retrying transient failures with backoff.
+
+        This runs inside the harvest_seed generator, so a RetriableIngestionError raised here
+        propagates past backfill's per-paper try/except and aborts the whole multi-hour run
+        (the timeout-mid-pagination crash). Retry transient blips in-place; if they persist past
+        the policy, abort loudly — a re-run resumes via idempotent upserts rather than silently
+        dropping a page of papers."""
+        policy = self._oai_retry_policy
+        for attempt in range(1, policy.max_attempts + 1):
+            try:
+                return self._get_text(self._oai_base_url, params=params, stage="harvest_seed")
+            except RetriableIngestionError:
+                if attempt >= policy.max_attempts:
+                    raise
+                _log.warning("harvest page fetch failed (attempt %d), retrying", attempt)
+                time.sleep(policy.delay_for_attempt(attempt))
+        raise AssertionError("unreachable")  # pragma: no cover
 
     def _get_text(self, url: str, *, params: dict[str, str] | None, stage: str) -> str:
         return self._get_bytes(url, params=params, stage=stage).decode("utf-8", errors="replace")
