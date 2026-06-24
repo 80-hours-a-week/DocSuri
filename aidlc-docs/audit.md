@@ -1370,3 +1370,11 @@
 **Context**: CONSTRUCTION — U9 CDK build and test follow-up.
 
 ---
+
+## Cross Review Remediation
+**Timestamp**: 2026-06-24T01:21:26Z
+**User Input**: "U9에 대한 리뷰인 cross-review.md 를 검토하여, 코드를 개선해 주세요. 이후, 수정 사항에 대한 202606241030_PR.md를 작성해 주세요."
+**AI Response**: "`cross-review.md`의 U9 지적 사항을 반영함. CDK retention cleanup ECS task에 `assign_public_ip=True`를 추가하고, in-memory delete_events가 SQL 구현처럼 `profileResetAt`을 설정하도록 수정했으며, SQL insert_event를 PostgreSQL `ON CONFLICT DO NOTHING` 기반 멱등 insert로 교체함. `controller.get_repo()`의 process-global in-memory 기본값을 제거하고 wiring 누락 시 RuntimeError가 발생하도록 변경함. U9 테스트 13 passed, U9+app-shell 27 passed, backend tests 59 passed/1 skipped, ruff pass, compileall pass, cdk synth pass를 확인하고 `202606241030_PR.md`를 생성함."
+**Context**: CONSTRUCTION — U9 cross-review code remediation and PR draft.
+
+---

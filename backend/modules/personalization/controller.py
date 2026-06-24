@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from functools import lru_cache
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import ValidationError
@@ -16,7 +15,7 @@ from .models import (
     SettingsUpdate,
     ValidatedBehaviorEventCreate,
 )
-from .repository import InMemoryPersonalizationRepository, PersonalizationRepository
+from .repository import PersonalizationRepository
 from .service import (
     BehaviorEventRecorder,
     PersonalizationReadPort,
@@ -36,9 +35,8 @@ router = APIRouter(
 )
 
 
-@lru_cache(maxsize=1)
 def get_repo() -> PersonalizationRepository:
-    return InMemoryPersonalizationRepository()
+    raise RuntimeError("personalization repository is not wired")
 
 
 def get_principal(request: Request) -> Principal:

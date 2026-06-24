@@ -127,6 +127,20 @@ def test_delete_events_removes_future_personalization() -> None:
 
     assert deleted == 1
     assert PersonalizationReadPort(repo).search_decision(user_id).reason == "no_profile"
+    assert repo.get_settings(user_id).profileResetAt is not None
+
+
+def test_delete_events_ignores_backdated_events_after_delete() -> None:
+    repo = InMemoryPersonalizationRepository()
+    user_id = str(uuid4())
+    repo.insert_event(_event(user_id, "d1"))
+
+    repo.delete_events(user_id)
+    reset_at = repo.get_settings(user_id).profileResetAt
+    assert reset_at is not None
+    repo.insert_event(_event(user_id, "late-old", occurred_at=reset_at - timedelta(seconds=1)))
+
+    assert PersonalizationReadPort(repo).search_decision(user_id).reason == "no_profile"
 
 
 def test_profile_reset_ignores_old_events_until_new_signal() -> None:
@@ -209,3 +223,11 @@ def test_feature_flag_blocks_endpoint_by_default() -> None:
 
     assert client.get("/api/personalization/decision/search").status_code == 404
 
+
+def test_personalization_repo_must_be_wired() -> None:
+    try:
+        controller.get_repo()
+    except RuntimeError as exc:
+        assert "not wired" in str(exc)
+    else:  # pragma: no cover - failure path clarity
+        raise AssertionError("default personalization repo should not be process-global")

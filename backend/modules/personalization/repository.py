@@ -5,6 +5,7 @@ from threading import RLock
 from typing import Protocol
 
 from sqlalchemy import JSON, Boolean, DateTime, String
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from .models import (
@@ -67,11 +68,11 @@ class InMemoryPersonalizationRepository:
             keys = [k for k, e in self._events.items() if e.userId == user_id]
             for key in keys:
                 del self._events[key]
+            self.reset_profile(user_id)
             settings = self.get_settings(user_id).model_copy(
                 update={"rawEventsDeletedAt": utc_now(), "updatedAt": utc_now()}
             )
             self._settings[user_id] = settings
-            self._profiles.pop(user_id, None)
             return len(keys)
 
     def get_profile(self, user_id: str) -> UserInterestProfile | None:
@@ -208,18 +209,9 @@ class SqlPersonalizationRepository:
         return _settings_from_row(row)
 
     def insert_event(self, event: BehaviorEvent) -> bool:
-        existing = (
-            self._s.query(BehaviorEventTable)
-            .filter(
-                BehaviorEventTable.owner_id == event.userId,
-                BehaviorEventTable.dedupe_key == event.dedupeKey,
-            )
-            .first()
-        )
-        if existing is not None:
-            return False
-        self._s.add(
-            BehaviorEventTable(
+        result = self._s.execute(
+            pg_insert(BehaviorEventTable)
+            .values(
                 id=event.eventId,
                 owner_id=event.userId,
                 event_type=event.eventType.value,
@@ -230,9 +222,10 @@ class SqlPersonalizationRepository:
                 occurred_at=event.occurredAt,
                 created_at=utc_now(),
             )
+            .on_conflict_do_nothing(index_elements=["owner_id", "dedupe_key"])
         )
         self._s.flush()
-        return True
+        return bool(result.rowcount)
 
     def list_events(self, user_id: str) -> list[BehaviorEvent]:
         rows = (

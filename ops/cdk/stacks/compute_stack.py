@@ -405,6 +405,7 @@ class ComputeStack(Stack):
                         subnet_selection=ec2.SubnetSelection(
                             subnet_type=ec2.SubnetType.PUBLIC
                         ),
+                        assign_public_ip=True,
                         security_groups=self.service.service.connections.security_groups,
                         container_overrides=[
                             targets.ContainerOverride(
