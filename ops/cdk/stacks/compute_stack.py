@@ -82,6 +82,8 @@ from aws_cdk import (
 )
 from constructs import Construct
 
+from ._origin_auth import SOCIAL_ORIGIN_VERIFY_SECRET
+
 # Public DNS for the API origin (zone docsuri.org lives in this account's Route53). CloudFront
 # connects to this name over HTTPS so the ACM cert (issued for it) validates — ACM can't issue
 # for the ALB's *.elb.amazonaws.com name, so a controlled domain is mandatory for origin TLS.
@@ -370,7 +372,12 @@ class ComputeStack(Stack):
             "VerifiedOriginOnly",
             priority=1,
             conditions=[
-                elbv2.ListenerCondition.http_header("X-Origin-Verify", [_ORIGIN_VERIFY_SECRET])
+                # Accept the existing backend-CF secret AND the shared social-edge secret
+                # (Option A): the frontend CF's /auth/social/* behavior sends the latter. Additive —
+                # existing backend BFF-gateway auth is unchanged.
+                elbv2.ListenerCondition.http_header(
+                    "X-Origin-Verify", [_ORIGIN_VERIFY_SECRET, SOCIAL_ORIGIN_VERIFY_SECRET]
+                )
             ],
             action=elbv2.ListenerAction.forward([self.service.target_group]),
         )
