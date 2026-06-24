@@ -17,7 +17,6 @@ from __future__ import annotations
 import logging
 import os
 import time
-from dataclasses import replace
 from datetime import UTC, datetime
 
 from docsuri_shared.index_spec import papers_index_body
@@ -133,12 +132,13 @@ def backfill(settings: IngestionSettings | None = None) -> int:
     count = errors = 0
     for metadata in arxiv.harvest_seed(filter_):
         try:
-            full_metadata = arxiv.fetch_metadata(metadata.arxiv_ref)
-            # The Atom re-fetch omits the license; restore it from the OAI harvest record
-            # (else every paper fails the OA gate as "missing").
-            if not full_metadata.license_url and metadata.license_url:
-                full_metadata = replace(full_metadata, license_url=metadata.license_url)
-            paper = parser.parse(arxiv.fetch_full_text(full_metadata))
+            # Use the OAI harvest record directly. The old per-paper Atom id_list re-fetch
+            # (export.arxiv.org/api/query) was redundant — OAI already returns full metadata —
+            # and arXiv 429-rate-limited it, skipping ~all papers. OAI also keeps the license the
+            # Atom feed drops, so the OA gate sees it without a restore step.
+            # ponytail: OAI ids are version-less → fetch resolves to v1 (vs the Atom path's
+            # latest). Fine for a discovery corpus; thread the OAI <version> if "latest" matters.
+            paper = parser.parse(arxiv.fetch_full_text(metadata))
             if paper.withdrawal_detected:
                 continue
             chunks = chunker.chunk(paper)
