@@ -254,12 +254,14 @@ class ComputeStack(Stack):
             self, "ResendApiKey", "docsuri/resend-api-key",
         )
         container_secrets["RESEND_API_KEY"] = ecs.Secret.from_secrets_manager(resend_secret)
-        # Google OIDC client secret (FR-27). The secret "docsuri/google-oidc-client-secret"
-        # (raw secret as the value) is already stored in Secrets Manager; referenced by name so
-        # CDK grants the task execution role read on it. Missing → API task fails to start, so it
-        # must exist before deploy (it does).
-        google_oidc_secret = secretsmanager.Secret.from_secret_name_v2(
-            self, "GoogleOidcClientSecret", "docsuri/google-oidc-client-secret",
+        # Google OIDC client secret (FR-27). Referenced by COMPLETE ARN, not name:
+        # from_secret_name_v2 grants on "<name>-??????" but ECS fetches the partial name ARN — they
+        # mismatch, so the task gets AccessDenied and the deploy rolls back (observed). The full ARN
+        # makes the grant and the container valueFrom identical to the real secret ARN.
+        google_oidc_secret = secretsmanager.Secret.from_secret_complete_arn(
+            self,
+            "GoogleOidcClientSecret",
+            "arn:aws:secretsmanager:ap-northeast-2:028317349537:secret:docsuri/google-oidc-client-secret-lihORg",  # noqa: E501
         )
         container_secrets["GOOGLE_OIDC_CLIENT_SECRET"] = ecs.Secret.from_secrets_manager(
             google_oidc_secret
