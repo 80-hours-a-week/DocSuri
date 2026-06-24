@@ -298,6 +298,11 @@ class ComputeStack(Stack):
             cpu=256,
             memory_limit_mib=512,
             desired_count=1,
+            # ECS Exec (SSM-backed): team assumes DocsuriCrossAccountDev → `aws ecs
+            # execute-command` into this task → psql to the private RDS. No EC2 bastion.
+            # CDK auto-grants the task role ssmmessages:*. ponytail: shell-in only; a
+            # local port-forward to RDS still needs a standing SSM host (small EC2).
+            enable_execute_command=True,
             task_image_options=ecs_patterns.ApplicationLoadBalancedTaskImageOptions(
                 image=ecs.ContainerImage.from_ecr_repository(self.api_repo, tag="latest"),
                 container_port=8000,
