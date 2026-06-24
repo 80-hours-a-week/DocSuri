@@ -4,6 +4,7 @@ import logging
 import time
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable, Sequence
+from dataclasses import replace
 from datetime import datetime
 
 from docsuri_shared.dtos import SourceTier
@@ -98,7 +99,29 @@ class ArxivHttpSource:
                 reason=FailureReason.FETCH_FAILURE,
                 stage="fetch_metadata",
             )
-        return records[0]
+        record = records[0]
+        # The Atom API no longer reliably exposes <arxiv:license>; backfill from OAI-PMH
+        # GetRecord so strict-OA gating sees the real license instead of None.
+        if record.license_url is None:
+            record = self._enrich_license_from_oai(record)
+        return record
+
+    def _enrich_license_from_oai(self, record: MetadataRecord) -> MetadataRecord:
+        # ponytail: bare-id heuristic — strip the "vN" version suffix; arXiv versions are
+        # always a trailing "v<digits>", so split on the last "v" is safe for both new
+        # ("2401.12345v2") and legacy ("hep-ph/9901001") ids.
+        ref = record.arxiv_ref
+        bare_id = ref.rsplit("v", 1)[0] if "v" in ref else ref
+        params = {
+            "verb": "GetRecord",
+            "metadataPrefix": "arXiv",
+            "identifier": f"oai:arXiv.org:{bare_id}",
+        }
+        body = self._get_text(self._oai_base_url, params=params, stage="fetch_license")
+        license_el = ET.fromstring(body).find(".//arxiv:license", OAI_NS)
+        if license_el is not None and license_el.text:
+            return replace(record, license_url=license_el.text.strip())
+        return record
 
     def fetch_full_text(self, metadata: MetadataRecord) -> RawDocument:
         """Acquire full-text plain text (BR-29): arXiv HTML first, PDF text fallback.
