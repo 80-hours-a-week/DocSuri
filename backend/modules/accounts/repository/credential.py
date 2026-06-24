@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import Column, DateTime, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Integer, String
 from sqlalchemy.orm import Session, declarative_base
 
 from ..models import AccountStatus, DomainException
@@ -13,7 +13,8 @@ class AccountTable(Base):
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
     email = Column(String(254), unique=True, nullable=False, index=True)
-    password_hash = Column(String(255), nullable=False)
+    # U10: Google/ORCID 전용 가입(비밀번호 미설정)을 허용하므로 NOT NULL 제약을 제거했다.
+    password_hash = Column(String(255), nullable=True)
     status = Column(String(20), default=AccountStatus.PENDING.value, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
     failure_count = Column(Integer, default=0, nullable=False)
@@ -21,6 +22,20 @@ class AccountTable(Base):
     # BR-A7: 역할 단일 출처는 DB(공개 가입=USER; ADMIN은 시딩만). totp_secret은 MFA 등록 시 채워진다.
     role = Column(String(20), default="USER", nullable=False)
     totp_secret = Column(String(64), nullable=True)
+    # U10: Google/ORCID 소셜로그인 연동 — 기존 이메일+비밀번호 로그인과 공존한다(연동 해제해도
+    # 로그인 수단이 사라지지 않음). 두 식별자 모두 계정당 유일해야 하므로 unique=True.
+    google_sub = Column(String(255), unique=True, nullable=True)
+    google_linked_at = Column(DateTime, nullable=True)
+    orcid_id = Column(String(19), unique=True, nullable=True)
+    orcid_linked_at = Column(DateTime, nullable=True)
+    # ORCID record(이름/소속) 캐시 — works(논문 목록)는 1:N이라 컬럼에 두지 않고 조회 시마다
+    # ORCID API에서 다시 가져온다.
+    orcid_name = Column(String(255), nullable=True)
+    orcid_affiliation = Column(String(255), nullable=True)
+    orcid_synced_at = Column(DateTime, nullable=True)
+    # 탈퇴(soft-delete) 여부는 status 값으로 추론하지 않고 별도 bool 컬럼으로 명시 판단한다.
+    is_withdrawn = Column(Boolean, default=False, nullable=False)
+    withdrawn_at = Column(DateTime, nullable=True)
 
 
 class VerificationTokenTable(Base):
