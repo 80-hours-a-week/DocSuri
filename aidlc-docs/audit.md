@@ -1548,3 +1548,19 @@
 **Context**: CONSTRUCTION — U9 cross-review code remediation and PR draft.
 
 ---
+
+## U1 Issue 119 Remediation
+**Timestamp**: 2026-06-24T02:12:50Z
+**User Input**: "u1에 대한 이슈 issue119.md 를 참고하여, 문제를 수정해 주세요."
+**AI Response**: "`issue119.md`의 자동 증분 수집 경로 단절 문제를 수정함. EventBridge가 SQS에 `{\"type\":\"schedule_tick\"}` JSON 메시지를 발행하도록 바꾸고, ingestion queue job에는 `type=ingest_paper`를 추가했으며, worker가 `schedule_tick`은 `refresh.on_schedule_tick()`으로, `ingest_paper`는 기존 `ingest_one()`/doc-model 경로로 분기하도록 수정함. 깨진 JSON/알 수 없는 type은 DLQ로 보내고 ack하도록 처리함. infrastructure design 문서에 메시지 타입과 디스패치 규칙을 명문화함. 검증: U1 orchestration/docmodel worker tests pass, ingestion tests pass with 1 skipped, ruff pass, compileall pass, `cdk synth Docsuri-Ingestion` pass."
+**Context**: CONSTRUCTION — U1 issue119 worker dispatch and schedule tick fix.
+
+---
+
+## PR Documentation
+**Timestamp**: 2026-06-24T02:15:21Z
+**User Input**: "202606241130_PR.md 를 작성해 주세요."
+**AI Response**: "`.github/PULL_REQUEST_TEMPLATE.md` 구조를 기반으로 U1 issue119 수정 사항, 테스트 결과, 체크리스트, 참고사항을 정리한 `202606241130_PR.md`를 생성함."
+**Context**: Documentation — PR draft creation for U1 issue119 remediation.
+
+---
