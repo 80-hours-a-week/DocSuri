@@ -259,20 +259,20 @@ def _mount_summarization(app: FastAPI, settings: Settings, result: MountResult) 
         abstract_lookup=abstract_lookup,
     )
     app.state.summarization_bundle = bundle
-    # The full-text viewer is OA-license-gated; the gate is passed from settings (default OFF —
-    # ``license_unavailable`` → arXiv link-out) until a confirmed license signal is wired.
+    # The doc-model rich view + assets are OA-license-gated; the gates are passed from settings
+    # (default OFF — ``license_unavailable`` → arXiv link-out) until a license signal is wired.
     app.include_router(
         build_router(
             bundle.orchestrator,
-            fulltext_enabled=sm_settings.fulltext_viewer_enabled,
             assets_enabled=sm_settings.assets_enabled,
+            docmodel_enabled=sm_settings.docmodel_viewer_enabled,
         )
     )
     result.mounted.append("summarization")
     log.info(
-        "app-shell: summarization mounted (fulltext_viewer=%s, assets=%s)",
-        sm_settings.fulltext_viewer_enabled,
+        "app-shell: summarization mounted (assets=%s, docmodel=%s)",
         sm_settings.assets_enabled,
+        sm_settings.docmodel_viewer_enabled,
     )
 
 

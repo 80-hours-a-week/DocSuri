@@ -32,8 +32,11 @@
 ### BR-S5 — 모델 선택 정책 (§2 / Q14=A)
 - task가 모델 역량 등급을 **자동 결정**(요약=고역량·번역=경량), 사용자 모델 선택기 **비노출**. **구체 모델 식별자·비용 바인딩은 NFR/Infra.**
 
-### BR-S6 — 길이 분기 (§5 / Q3=A)
-- `tokenCount > 컨텍스트예산` → map-reduce, else 단일 콜. 임계·청크 크기·비동기 전환점 = NFR. map-reduce 통합 출력도 §3 동일 스키마.
+### BR-S6 — 길이 분기 (§5 / Q3=A) — **3단계(구현됨, #135)**
+- **3경로**: `≤컨텍스트예산`(~40K) → 단일 콜 / `컨텍스트예산~입력상한`(~40K–120K) → **map-reduce** / `>입력상한`(~120K, OVER_CAP) → **거절(`input_too_long`)**.
+- **map-reduce**(구현 = `MapReduceSummarizer`): doc-model **섹션 경계 청킹**(+문자 오버랩, 초과 섹션은 윈도우 분할) → 부분요약(map) → 통합(reduce). 통합 출력도 §3 동일 스키마. 근거화는 **전체 `RefinedSource`** 기준 검증(앵커 문서 전역 해소).
+- **OVER_CAP은 부분요약(degraded)하지 않고 거절** — 모바일 결정(극단 입력은 솔직히 거절). 번역 map-reduce는 범위 밖(PR-2 구조화 번역).
+- 게이트 `DOCSURI_MAP_REDUCE_ENABLED` OFF 시 MAP_REDUCE 밴드도 abstain(기존 동작 보존). 임계·청크 크기 = NFR. 동기/비동기는 BR-S12.
 
 ### BR-S7 — 근거화 게이트 (§7 / Q4=A · Q15=A)
 - **U7 고유 결정적 게이트**(검색용 U6 `enforce`와 형상 다름 — 단일 논문 충실도 검증). **결정적 체크만**(앵커 실재성·수치 일치·스키마 완전·잘림/빈출력), **LLM-judge 미사용**.
@@ -44,8 +47,8 @@
 - **버퍼-검증-스트리밍**: 근거화 통과 전까지 사용자 노출 보류 → 근거 없는 토큰 유출 금지(FR-5 최우선). 통과분부터 점진 렌더.
 
 ### BR-S9 — 종단 상태 union (FR-11 / Q5=A)
-- `SummaryResultDTO`(통과·완전) · `AbstainDTO`(근거화 실패/코퍼스밖) · `CostDegradedDTO`(비용 OPEN/저하) · `SourceUnavailableDTO`(소스 부재).
-- **빈 성공 금지**. 비용저하·소스부재와 무관하게 근거화 실패면 **기권 우선**.
+- `SummaryResultDTO`(통과·완전) · **`PendingDTO`(긴 요약 비동기 잡 진행 중·`retryAfterMs` — BR-S12)** · `AbstainDTO`(근거화 실패/코퍼스밖) · `CostDegradedDTO`(비용 OPEN/저하) · `SourceUnavailableDTO`(소스 부재).
+- **빈 성공 금지**. 비용저하·소스부재와 무관하게 근거화 실패면 **기권 우선**. `PendingDTO`는 비종단(클라이언트 폴링 → 캐시 히트로 종단 결과 수신).
 
 ### BR-S10 — persona 생성 vs 뷰 프리셋 (§9.2 / Q9=A)
 - **생성 변형 = persona(expert/beginner)**, 논문당 최대 2벌(캐시 키 포함). **뷰 프리셋(전체/3줄/관점별) = 같은 §3 JSON의 클라이언트 렌더**(재생성·캐시 0). U7은 풍부한 출력만 보장(뷰 렌더는 U5).
@@ -54,8 +57,9 @@
 ### BR-S11 — 재현성 추출 (§12 / Q16=A)
 - **정규식 힌트 + LLM 추출 병행** → `reproducibility{code, data}`. 정규식(github.com·"code available"·"dataset" 등)은 high-precision 링크, LLM은 문맥. 날조 링크는 BR-S7 근거화가 차단.
 
-### BR-S12 — 동기/비동기 (§12 / Q17=A)
-- 기본 **스트리밍 동기**(단일 콜). 초장문(map-reduce)만 **비동기 잡**(배포 ③). 비동기 잡도 동일 근거화/기권 규칙 — 잡 결과를 STORE write-through 후 통지.
+### BR-S12 — 동기/비동기 (§12 / Q17=A) — **구현됨(#135, slice 5b)**
+- 기본 **동기**(단일 콜, 대부분의 논문). 초장문(map-reduce)만 **비동기 잡**: API가 미스 시 요약 잡을 큐에 enqueue하고 **`PendingDTO`(BR-S9)** 반환 → 클라이언트가 `retryAfterMs` 백오프로 폴링. **요약 워커**가 잡을 소비해 map-reduce를 inline 실행(게이트웨이 타임아웃 회피)하고 결과를 **STORE write-through** → 폴링이 캐시 히트로 결과 수신.
+- 비동기 잡도 **동일 근거화/기권 규칙**. enqueue는 best-effort(요청 경로 비차단)·인프로세스 dedup, 멱등 backstop = 캐시 히트. 게이트 `DOCSURI_SUMMARY_JOB_QUEUE_URL` 미설정 시 map-reduce는 inline 실행(타임아웃 위험, NFR/Infra). **요약 워커는 별도 배포 단위**(Infra §… — slice 6).
 
 ### BR-S13 — 비용 게이트 배치 (NFR-C1 / Q13=A)
 - LLM 호출 **직전**(캐시 MISS 후) `get_budget_state()`. OPEN/저하 → `CostDegradedDTO` + RES-11a 신호. 캐시 HIT는 게이트 우회(비용 0).

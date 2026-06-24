@@ -76,6 +76,12 @@ export interface TranslationOkDTO {
   scope?: SummarizeScope;
 }
 
+/** Long summary running as a background job (BR-S6/BR-S8): client polls again after the hint. */
+export interface SummaryPendingDTO {
+  status: 'pending';
+  retryAfterMs?: number;
+}
+
 export interface SummaryAbstainDTO {
   status: 'abstain';
   reason: unknown;
@@ -107,38 +113,12 @@ export interface UnauthorizedDTO {
 export type SummarizeResponseDTO =
   | SummaryOkDTO
   | TranslationOkDTO
+  | SummaryPendingDTO
   | SummaryAbstainDTO
   | CostDegradedDTO
   | SourceUnavailableDTO
   | SummarizeValidationErrorDTO
   | UnauthorizedDTO;
-
-// ---- Full-text return (Q5=C, provisional) ----
-
-export interface FullTextRequest {
-  paperId: string;
-  version: number;
-}
-
-export interface FullTextOkDTO {
-  status: 'ok';
-  /** Normalized full text (references/author info stripped — BR-SF-12). */
-  text: string;
-}
-
-/** OA license not permitted → viewer not opened; arXiv link-out instead (BR-SF-11). */
-export interface FullTextLicenseDTO {
-  status: 'license_unavailable';
-}
-
-export interface FullTextSourceUnavailableDTO {
-  status: 'source_unavailable';
-}
-
-export type FullTextResponseDTO =
-  | FullTextOkDTO
-  | FullTextLicenseDTO
-  | FullTextSourceUnavailableDTO;
 
 // ---- Figure/table assets (FR-17, display-only) ----
 

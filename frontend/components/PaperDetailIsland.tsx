@@ -1,16 +1,15 @@
 'use client';
 
 // PaperDetailIsland (P3·P5) — the client island inside the SSR /paper/[id] shell.
-// Owns everything under the DocSuri header: a sticky 요약/초록번역/전문번역 action bar
-// (each opens SummaryModal at the matching tab), the paper metadata (title/authors/
-// abstract), and the normalized S3 full-text body. Choosing a summary anchor closes
-// the modal and highlights the span in the on-page body (Q5=C). real-first: real BFF
-// transport, mock in dev (NEXT_PUBLIC_… unset).
+// Owns the 요약/초록번역/각주트리 action bar and the paper metadata (title/authors/abstract).
+// 본문(doc-model rich view) and 본문 번역 open as full-screen IN-APP routes (Link / router.push,
+// same tab — each has its own ← back arrow), not a browser tab or inline. Choosing a summary
+// source anchor navigates to the 본문 route scrolled to the matching block. real-first.
 import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { AnchorVM } from '@/types/generated';
 import { usePaperMeta } from '@/lib/usePaperMeta';
-import { FullTextViewer } from './FullTextViewer';
-import { AssetGallery } from './AssetGallery';
 import { SummaryModal, type DetailView } from './SummaryModal';
 import { SaveToLibraryButton } from './SaveToLibraryButton';
 import { CitationTreePanel } from './CitationTreePanel';
@@ -22,18 +21,31 @@ interface PaperDetailIslandProps {
   arxivUrl?: string;
 }
 
+// Top action bar (modal openers). 본문 / 본문 번역 live below the metadata instead.
 const ACTIONS: { view: DetailView; label: string }[] = [
   { view: 'summary', label: '요약' },
   { view: 'abstractTrans', label: '초록 번역' },
-  { view: 'fullTrans', label: '전문 번역' },
 ];
 
 export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIslandProps) {
   const safeArxivUrl = (arxivUrl && (arxivUrl.startsWith('http://') || arxivUrl.startsWith('https://'))) ? arxivUrl : undefined;
-  const [anchor, setAnchor] = useState<AnchorVM | null>(null);
   const [modalView, setModalView] = useState<DetailView | null>(null);
   const [citationOpen, setCitationOpen] = useState(false);
   const meta = usePaperMeta(paperId);
+  const router = useRouter();
+
+  // 본문 / 본문 번역 are in-app routes (Link). A summary source anchor navigates to the 본문
+  // route scrolled to the matching block (label carried via the query).
+  const bodyHref = `/paper/${encodeURIComponent(paperId)}/doc-model?version=${version}`;
+  const translateHref = `/paper/${encodeURIComponent(paperId)}/translate?version=${version}`;
+  const openBody = (anchor?: AnchorVM | null) => {
+    const sp = new URLSearchParams({ version: String(version) });
+    if (anchor?.label) {
+      sp.set('anchorLabel', anchor.label);
+      if (anchor.span) sp.set('anchorSpan', anchor.span);
+    }
+    router.push(`/paper/${encodeURIComponent(paperId)}/doc-model?${sp.toString()}`);
+  };
 
   return (
     <div className={styles.root}>
@@ -104,15 +116,16 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
         </p>
       ) : null}
 
-      {/* Figure/table assets (FR-17). A figure/table summary anchor scrolls to its asset;
-          license-disallowed / empty renders nothing. */}
-      <AssetGallery paperId={paperId} version={version} anchor={anchor} />
-
-      {/* Body-first: the normalized S3 full text, with anchor highlight when set. */}
-      <section className={styles.bodySection} aria-label="원문 전문">
-        <h2 className={styles.bodyHeading}>원문 전문</h2>
-        <FullTextViewer paperId={paperId} version={version} anchor={anchor} arxivUrl={safeArxivUrl} />
-      </section>
+      {/* Body access — below the metadata. Both navigate in-app to a full-screen route (each
+          with its own ← back): 본문 = the doc-model rich view, 본문 번역 = the full-text translation. */}
+      <div className={styles.bodyActions} role="group" aria-label="본문">
+        <Link className={styles.action} href={bodyHref} data-testid="open-doc-model">
+          본문
+        </Link>
+        <Link className={styles.action} href={translateHref} data-testid="open-full-translation">
+          본문 번역
+        </Link>
+      </div>
 
       {modalView ? (
         <SummaryModal
@@ -120,7 +133,7 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
           version={version}
           view={modalView}
           onClose={() => setModalView(null)}
-          onAnchor={setAnchor}
+          onAnchor={openBody}
         />
       ) : null}
     </div>

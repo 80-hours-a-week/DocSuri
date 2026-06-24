@@ -80,10 +80,12 @@ DocModel
 | status | 페이로드 | 매핑 |
 |---|---|---|
 | `ok` | `docModel` + `cached?` | 리치뷰 렌더·요약 입력 |
-| `license_unavailable` | `reason` · `arxivUrl?` | OA 미허용 → arXiv 링크아웃(BR-SF-11) |
-| `source_unavailable` | `reason` | 전 소스 폴백 실패(Q6) |
+| `building` | `retryAfterMs?` | lazy 빌드 진행 중(미스→`BUILD_DOC_MODEL` 큐 잡 enqueue, 경계 B) → 클라이언트 폴링(BR-30 트리거) |
+| `license_unavailable` | `reason` · `arxivUrl?` | OA 게이트 OFF → arXiv 링크아웃(BR-SF-11). **OA 신호 = U1 인제스션 검증**(CC-BY/CC-BY-SA/CC0만 저장, 비-OA 거부 — BR-1) → 코퍼스 논문은 전부 OA·인앱 렌더 안전이라 게이트는 **운영 토글**(논문별 라이선스 조회 불요); 활성화는 팀 deploy |
+| `source_unavailable` | `reason` | 빌드했으나 전 소스 폴백 실패(Q6) — `building`(진행 중)과 구분 |
 
-(네트워크/5xx는 transport 계층 — 스키마 밖, 기존 union 관례와 동일.)
+- `building`은 비종단(폴링 → 캐시 히트로 `ok`). 빌드 트리거 미배선 시 미스는 `source_unavailable`(기존 동작). 프론트는 폴링 상한 후 종료(소스 없는 논문 무한 폴링 방지).
+- (네트워크/5xx는 transport 계층 — 스키마 밖, 기존 union 관례와 동일.)
 
 ---
 

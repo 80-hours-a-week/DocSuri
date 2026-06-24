@@ -118,12 +118,27 @@ arXiv 논문 수집·파싱·임베딩·벡터 인덱스 쓰기 파이프라인.
 
 | 큐 이름 | 용도 | 가시성 타임아웃 | 최대 수신 | DLQ |
 |---|---|---|---|---|
-| `docsuri-ingestion-queue` | 인제스천 작업 메시지(paperId/arXiv event) | 300s (5분 — 논문 1편 처리 상한) | 3회 | → `docsuri-ingestion-dlq` |
+| `docsuri-ingestion-queue` | 인제스천 작업 메시지(paperId/arXiv event) **+ doc-model lazy 빌드 잡(`BUILD_DOC_MODEL`, 피벗)** | 300s (5분 — 논문 1편 처리 상한) | 3회 | → `docsuri-ingestion-dlq` |
 | `docsuri-ingestion-dlq` | 실패 메시지 격리 (redrive 또는 수동 조사) | — | — | — |
+| `docsuri-summary-job-queue` | **긴 논문 요약 비동기 잡(BR-S6/BR-S12)** — API가 enqueue, 요약 워커가 소비 | 900s (15분 — map-reduce N+1 LLM 콜 상한) | 3회 | → `docsuri-summary-job-dlq` |
+| `docsuri-summary-job-dlq` | 실패 요약 잡 격리 | — | — | — |
 
-- **메시지 보존**: 큐 14일 / DLQ 14일.
-- **암호화**: SSE-SQS (AWS 관리형 키).
-- **Redrive Policy**: `maxReceiveCount=3` → DLQ로 이동. 재처리 런북은 Operations에서 정의.
+- **메시지 보존**: 큐 14일 / DLQ 14일. **암호화**: SSE-SQS (AWS 관리형 키). **Redrive**: `maxReceiveCount=3` → DLQ.
+- **doc-model 빌드 잡은 신규 큐 없이 인제스천 큐 재사용** — 워커 `process_message`가 `kind=BUILD_DOC_MODEL` 분기로 `build_doc_model`을 호출(인제스천 워커가 이미 arXiv fetch·S3 쓰기·파서 보유). API(`docsuri-api-task-role`)는 인제스천 큐에 `SendMessage`만(빌드 트리거, 경계 B).
+
+### 2.4. 요약 워커 — 배포 단위 ④ (ECS Fargate, 신규 — 피벗 BR-S12)
+
+긴 논문 요약(map-reduce, LLM 3~5콜·15~75s)은 게이트웨이 동기 한계(~29s)를 넘으므로 **비동기 잡**으로 처리한다. API가 `docsuri-summary-job-queue`에 잡을 enqueue→`PendingDTO` 반환, **요약 워커**가 소비해 map-reduce를 inline 실행(`orchestrator.run(allow_enqueue=False)`)하고 결과를 `summary/` 캐시에 write-through → 클라이언트 폴링이 캐시 히트.
+
+| 항목 | 값 | 비고 |
+|---|---|---|
+| **서비스 이름** | `docsuri-summary-worker` | |
+| **이미지** | `docsuri-api` ECR 재사용(엔트리 `python -m summarization.worker`) | U7 코드가 API 이미지에 포함 — 별도 이미지 불필요 |
+| **크기/스케일** | 0.5 vCPU / 1 GB · min 0 — max 2 | SQS depth 기반 step scaling, scale-to-zero |
+| **환경변수** | `DOCSURI_SUMMARY_BUCKET`(papers 버킷) · `DOCSURI_SUMMARY_JOB_QUEUE_URL` · **`DOCSURI_MAP_REDUCE_ENABLED=true`**(워커는 맵리듀스 보유 필수) · Bedrock 모델 id · Redis(요약 store) · RDS DSN(용어집) · `CLOUDWATCH_NAMESPACE` | SSM/Secrets 주입 |
+| **의존 서비스** | Bedrock(InvokeModel) · S3(doc-model read·summary write) · Redis(store) · RDS(용어집) | API와 동일 백킹(워커 = HTTP 서버 없는 동일 파이프라인) |
+
+- **게이트**: `DOCSURI_MAP_REDUCE_ENABLED`/`DOCSURI_SUMMARY_JOB_QUEUE_URL` 미설정 시 API는 MAP_REDUCE를 inline 또는 abstain(BR-S6) — 워커 없이도 안전 저하. **배포는 팀 담당**(본 설계는 코드·synth까지).
 
 ---
 
@@ -145,10 +160,13 @@ arXiv Atom 피드 기반 near-real-time 트리거는 EventBridge Pipes(SQS→ste
 
 | 버킷 이름 | 용도 | 암호화 | 수명주기 |
 |---|---|---|---|
-| `docsuri-papers-fulltext-{env}` | arXiv 논문 전문 PDF/source 원본 보관 (BR-1 OA 라이선스 검증 완료분만) | SSE-S3 (AES-256) | Intelligent-Tiering (90일 미접근 → IA, 180일 → Archive) |
+| `docsuri-papers-fulltext-{env}` | **단일 버킷·프리픽스 분리**(피벗 §1.1): `full-text/`(평문 .txt) · `assets/`(그림 webp) · **`doc-model/`(구조화 JSON)** · `summary/`(요약 캐시 영구본) | SSE-S3 (AES-256) | Intelligent-Tiering (90일→IA, 180일→Archive) |
 
-- **접근**: 인제스천 워커 태스크 역할(`docsuri-ingestion-task-role`)만 PutObject; API 태스크 역할은 읽기 불요(청크만 인덱스에 저장).
-- **버저닝**: 활성화 (철회(tombstone) 시 이전 버전 보존).
+- **접근(피벗 갱신)**:
+  - `docsuri-ingestion-task-role`: 버킷 **read/write**(full-text·assets·**doc-model** 쓰기 — 빌더 PutObject).
+  - `docsuri-api-task-role`(요약/리치뷰): **`doc-model/*` GetObject**(U7 리치뷰·요약 입력 reader) + `summary/*` read/write(요약 캐시 store). 그림은 RDS `paper_asset`의 object_ref를 **presign**(버킷 GetObject).
+  - `docsuri-summary-worker-task-role`: `doc-model/*` GetObject(요약 입력) + `summary/*` read/write(결과 write-through).
+- **버저닝**: 활성화. doc-model 캐시 키 = `(paperId, version)`, version 변경 시 무효화(BR-30).
 
 ---
 
@@ -196,8 +214,9 @@ arXiv Atom 피드 기반 near-real-time 트리거는 EventBridge Pipes(SQS→ste
 
 | 역할 이름 | 바인딩 | 허용 액션 |
 |---|---|---|
-| `docsuri-api-task-role` | 배포 단위 ① (ECS) | OpenSearch(읽기) · Bedrock `InvokeModel`(search_query) · SES(SendEmail) · CloudWatch(PutMetricData/PutLogEvents) |
-| `docsuri-ingestion-task-role` | 배포 단위 ② (ECS) | OpenSearch(쓰기/삭제) · Bedrock `InvokeModel`(search_document) · S3(PutObject/GetObject) · SQS(ReceiveMessage/DeleteMessage/SendMessage[DLQ]) · CloudWatch |
+| `docsuri-api-task-role` | 배포 단위 ① (ECS) | OpenSearch(읽기) · Bedrock `InvokeModel`(search_query **+ 요약/번역 모델 — U7**) · SES(SendEmail) · CloudWatch(PutMetricData/PutLogEvents) · **S3 `doc-model/*` GetObject + `summary/*` read/write** · **SQS `SendMessage`(`docsuri-ingestion-queue` doc-model 빌드 + `docsuri-summary-job-queue` 요약 잡)** |
+| `docsuri-ingestion-task-role` | 배포 단위 ② (ECS) | OpenSearch(쓰기/삭제) · Bedrock `InvokeModel`(search_document) · S3(PutObject/GetObject — **doc-model 빌더 PutObject 포함**) · SQS(ReceiveMessage/DeleteMessage/SendMessage[DLQ]) · CloudWatch |
+| `docsuri-summary-worker-task-role` | **배포 단위 ④ (ECS — 요약 워커, 신규)** | Bedrock `InvokeModel`(요약/번역 모델) · S3 `doc-model/*` GetObject + `summary/*` read/write · SQS(Receive/DeleteMessage `docsuri-summary-job-queue` · SendMessage[DLQ]) · RDS(용어집) · CloudWatch |
 | `docsuri-eventbridge-rule-role` | EventBridge 규칙 | SQS(SendMessage) 대상 `docsuri-ingestion-queue`만 |
 
 ---
