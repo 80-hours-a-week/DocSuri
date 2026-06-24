@@ -63,28 +63,28 @@
 
 ## 6. Code Generation Steps
 
-- [ ] **Step 1 — Module skeleton**
+- [x] **Step 1 — Module skeleton**
   - Create `backend/modules/personalization/`.
   - Add `__init__.py`.
   - Keep module import light so app-shell can graceful-skip only on real import failures.
 
-- [ ] **Step 2 — Domain models and policy**
+- [x] **Step 2 — Domain models and policy**
   - Create `models.py`.
   - Define `BehaviorEvent`, event type literals/enums, subject metadata, settings, profile, decision DTOs.
   - Implement metadata allowlist policy with no raw paper text, no anchor-nearby source text, no credentials/tokens, no free-form click payload.
 
-- [ ] **Step 3 — Repository seam**
+- [x] **Step 3 — Repository seam**
   - Create `repository.py`.
   - Provide in-memory repository for tests/local SQLite path.
   - Provide SQLAlchemy/PostgreSQL repository for production RDS.
   - Implement owner-scoped insert, dedupe lookup, active event list, direct user event delete, profile upsert/reset, settings read/write, and timestamp purge.
 
-- [ ] **Step 4 — Business services**
+- [x] **Step 4 — Business services**
   - Create `service.py`.
   - Implement `BehaviorEventRecorder`, `ProfileAggregator`, `PersonalizationReadPort`, and `PersonalizationSettingsService`.
   - Ensure U9 read/record failures fail open for caller feature paths.
 
-- [ ] **Step 5 — API controller**
+- [x] **Step 5 — API controller**
   - Create `controller.py`.
   - Add routes:
     - `POST /api/personalization/events`
@@ -96,12 +96,12 @@
   - Gate routes with `PERSONALIZATION_ENABLED`.
   - Use existing `Principal` dependency pattern.
 
-- [ ] **Step 6 — Maintenance command**
+- [x] **Step 6 — Maintenance command**
   - Create `maintenance.py`.
   - Add idempotent retention purge command for `PERSONALIZATION_RAW_EVENT_RETENTION_DAYS` default `90`.
   - Emit U6 success/failure telemetry with row count/status only.
 
-- [ ] **Step 7 — RDS migration**
+- [x] **Step 7 — RDS migration**
   - Create `backend/modules/personalization/migrations/001_create_personalization_tables.sql`.
   - Add only:
     - `user_behavior_events`
@@ -110,37 +110,37 @@
   - Do not add `user_behavior_event_backup`.
   - Add owner/time/dedupe indexes needed for owner isolation, dedupe, aggregation, and purge.
 
-- [ ] **Step 8 — Migration runner integration**
+- [x] **Step 8 — Migration runner integration**
   - Update `backend/migrations/__main__.py` to include `backend/modules/personalization/migrations`.
   - Keep existing migration behavior unchanged.
 
-- [ ] **Step 9 — App-shell wiring**
+- [x] **Step 9 — App-shell wiring**
   - Update `backend/wiring.py` with `_mount_personalization`.
   - Reuse existing DB engine/session factory when PostgreSQL is configured.
   - Inject U6 observability from `app.state.observability`.
   - Register module in `_INTEGRATIONS`.
 
-- [ ] **Step 10 — Backend tests**
+- [x] **Step 10 — Backend tests**
   - Create `backend/tests/test_personalization.py`.
   - Cover event DTO roundtrip, allowlist rejection, dedupe, owner isolation, deterministic aggregation, direct raw-log delete, profile reset, fail-open decision behavior, and idempotent purge.
   - Use existing pytest/Hypothesis stack where suitable.
 
-- [ ] **Step 11 — App-shell tests**
+- [x] **Step 11 — App-shell tests**
   - Update `backend/tests/test_app_shell.py`.
   - Add `personalization` to module registry expectations.
   - Assert feature flag default behavior does not expose active endpoints unexpectedly.
 
-- [ ] **Step 12 — Infrastructure wiring for cleanup**
+- [x] **Step 12 — Infrastructure wiring for cleanup**
   - Update `ops/cdk/stacks/compute_stack.py`.
   - Add EventBridge scheduled ECS RunTask for the backend maintenance command.
   - Add IAM/EventBridge permission required to run the task.
   - Add CloudWatch alarm path for purge failure metric.
 
-- [ ] **Step 13 — Code summary document**
+- [x] **Step 13 — Code summary document**
   - Create `aidlc-docs/construction/u9-personalization/code/summary.md`.
   - Summarize generated files, endpoints, tables, cleanup behavior, telemetry, and test commands.
 
-- [ ] **Step 14 — Verification commands**
+- [x] **Step 14 — Verification commands**
   - Run the smallest relevant checks:
     - `python -m pytest backend/tests/test_personalization.py backend/tests/test_app_shell.py -q`
     - `python -m ruff check backend/modules/personalization backend/wiring.py backend/tests/test_personalization.py backend/tests/test_app_shell.py`
@@ -173,5 +173,4 @@ B) 코드 생성 전에 계획을 수정한다.
 
 X) 기타.
 
-[Answer]: 
-
+[Answer]: A

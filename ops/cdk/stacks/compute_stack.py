@@ -48,6 +48,12 @@ from aws_cdk import (
     aws_elasticloadbalancingv2 as elbv2,
 )
 from aws_cdk import (
+    aws_events as events,
+)
+from aws_cdk import (
+    aws_events_targets as targets,
+)
+from aws_cdk import (
     aws_iam as iam,
 )
 from aws_cdk import (
@@ -214,6 +220,8 @@ class ComputeStack(Stack):
             "DOCSURI_SUMMARY_JOB_QUEUE_URL": (  # long-summary async job (BR-S12)
                 f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-summary-job-queue"
             ),
+            "PERSONALIZATION_ENABLED": "false",
+            "PERSONALIZATION_RAW_EVENT_RETENTION_DAYS": "90",
         }
 
         # DB password injected from the RDS-generated secret (JSON key "password"); CDK grants
@@ -453,6 +461,40 @@ class ComputeStack(Stack):
         scaling = self.service.service.auto_scale_task_count(min_capacity=1, max_capacity=2)
         scaling.scale_on_cpu_utilization("CpuScale", target_utilization_percent=70)
 
+        # U9 Personalization retention cleanup: one short scheduled task, no always-on worker.
+        # Idempotent command; failures emit `personalization.retention_purge_failure`, alarmed
+        # below. Uses the same backend image/env/secrets as the API task.
+        api_container = self.service.task_definition.default_container
+        if api_container is not None:
+            events.Rule(
+                self,
+                "PersonalizationRetentionCleanup",
+                description="Daily purge of expired U9 behavior events",
+                schedule=events.Schedule.cron(hour="18", minute="0"),
+                targets=[
+                    targets.EcsTask(
+                        cluster=cluster,
+                        task_definition=self.service.task_definition,
+                        task_count=1,
+                        subnet_selection=ec2.SubnetSelection(
+                            subnet_type=ec2.SubnetType.PUBLIC
+                        ),
+                        assign_public_ip=True,
+                        security_groups=self.service.service.connections.security_groups,
+                        container_overrides=[
+                            targets.ContainerOverride(
+                                container_name=api_container.container_name,
+                                command=[
+                                    "python",
+                                    "-m",
+                                    "backend.modules.personalization.maintenance",
+                                ],
+                            )
+                        ],
+                    )
+                ],
+            )
+
         # SG: allow ECS → OpenSearch (HTTPS). Direction: egress from ECS → avoids cycle.
         self.service.service.connections.allow_to(
             opensearch_domain.connections, ec2.Port.tcp(443)
@@ -543,6 +585,22 @@ class ComputeStack(Stack):
             alarm_description="DocSuri API p95 latency > 2s sustained 15min",
         )
         api_latency_alarm.add_alarm_action(cw_actions.SnsAction(ops_alerts))
+
+        personalization_purge_alarm = cloudwatch.Metric(
+            namespace="DocSuri/Production",
+            metric_name="personalization.retention_purge_failure",
+            period=Duration.minutes(5),
+            statistic="Sum",
+        ).create_alarm(
+            self,
+            "PersonalizationRetentionPurgeFailureAlarm",
+            threshold=0,
+            evaluation_periods=1,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+            alarm_description="U9 behavior-event retention purge failed",
+        )
+        personalization_purge_alarm.add_alarm_action(cw_actions.SnsAction(ops_alerts))
 
         # SLO 3 — cost burn: account budget mirroring the in-app cap ($1600), notifying at the same
         # 80% warning ratio ($1280 — cost_guard.warning_ratio). Budget emails the ops alias directly
