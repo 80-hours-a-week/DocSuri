@@ -46,6 +46,9 @@ class BedrockCohereQueryEmbedder:
             "texts": [text],
             "input_type": INPUT_TYPE_READER,  # search_query (vector-spec §1 asymmetry)
             "embedding_types": ["float"],
+            # Cohere Embed v4 defaults to 1536-dim; pin to the index width so query and index
+            # share one space (else the dimension guard below fails loud). Matches the writer.
+            "output_dimension": DIMENSIONS,
         }
         try:
             response = self._client.invoke_model(
