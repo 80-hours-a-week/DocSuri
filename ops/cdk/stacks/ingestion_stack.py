@@ -120,7 +120,7 @@ class IngestionStack(Stack):
                 targets.SqsQueue(
                     self.queue,
                     message=events.RuleTargetInput.from_object(
-                        {"action": "schedule_tick"}
+                        {"type": "schedule_tick"}
                     ),
                 )
             ],

@@ -1548,3 +1548,27 @@
 **Context**: CONSTRUCTION — U9 cross-review code remediation and PR draft.
 
 ---
+
+## U1 Issue 119 Remediation
+**Timestamp**: 2026-06-24T02:12:50Z
+**User Input**: "u1에 대한 이슈 issue119.md 를 참고하여, 문제를 수정해 주세요."
+**AI Response**: "`issue119.md`의 자동 증분 수집 경로 단절 문제를 수정함. EventBridge가 SQS에 `{\"type\":\"schedule_tick\"}` JSON 메시지를 발행하도록 바꾸고, ingestion queue job에는 `type=ingest_paper`를 추가했으며, worker가 `schedule_tick`은 `refresh.on_schedule_tick()`으로, `ingest_paper`는 기존 `ingest_one()`/doc-model 경로로 분기하도록 수정함. 깨진 JSON/알 수 없는 type은 DLQ로 보내고 ack하도록 처리함. infrastructure design 문서에 메시지 타입과 디스패치 규칙을 명문화함. 검증: U1 orchestration/docmodel worker tests pass, ingestion tests pass with 1 skipped, ruff pass, compileall pass, `cdk synth Docsuri-Ingestion` pass."
+**Context**: CONSTRUCTION — U1 issue119 worker dispatch and schedule tick fix.
+
+---
+
+## PR Documentation
+**Timestamp**: 2026-06-24T02:15:21Z
+**User Input**: "202606241130_PR.md 를 작성해 주세요."
+**AI Response**: "`.github/PULL_REQUEST_TEMPLATE.md` 구조를 기반으로 U1 issue119 수정 사항, 테스트 결과, 체크리스트, 참고사항을 정리한 `202606241130_PR.md`를 생성함."
+**Context**: Documentation — PR draft creation for U1 issue119 remediation.
+
+---
+
+## U1 Issue 119 Cross Review Remediation
+**Timestamp**: 2026-06-24T03:17:33Z
+**User Input**: "u1-issue119의 수정에 대해, cross-review.md 라는 리뷰를 받았습니다. 이 리뷰를 기반으로 코드를 개선하고, 202606241240_PR.md를 작성해 주세요."
+**AI Response**: "`cross-review.md`의 U1 worker 하위 호환성 지적을 반영함. `type`이 없는 legacy ingestion job은 `ingest_paper`로 처리하고, legacy `action=schedule_tick` 메시지는 schedule tick으로 처리하도록 `worker.py`를 보완함. legacy schedule tick/type-less ingest job 테스트를 추가하고 `202606241240_PR.md`를 생성함. 검증: `uv run pytest tests/test_orchestration.py -q` 15 passed, `uv run pytest -q` 99 passed/1 skipped, `uv run ruff check src/docsuri_ingestion/worker.py tests/test_orchestration.py` pass, `python -m compileall ingestion/src/docsuri_ingestion/worker.py` pass."
+**Context**: CONSTRUCTION — U1 issue119 cross-review remediation and PR draft.
+
+---
