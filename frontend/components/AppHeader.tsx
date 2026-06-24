@@ -45,6 +45,8 @@ export function AppHeader({ title, backHref }: AppHeaderProps) {
           </Link>
         ) : (
           <Link href={brandHref} className={styles.brand} data-testid="app-header-brand">
+            {/* Decorative mark: the brand text beside it carries the accessible name. */}
+            <img src="/logo.png" alt="" className={styles.brandLogo} width={32} height={32} />
             {title}
           </Link>
         )}
