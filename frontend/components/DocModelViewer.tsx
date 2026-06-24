@@ -95,16 +95,35 @@ export function DocModelViewer({ paperId, version, anchor, arxivUrl }: DocModelV
       );
     case 'page':
       return (
-        <div className={styles.root} data-testid="docmodel-viewer" ref={containerRef}>
-          <DocTOC sections={outcome.docModel.sections} />
-          <article className={styles.body}>
-            {outcome.docModel.sections.map((s) => (
-              <SectionView key={s.id} section={s} depth={1} assetsById={assetsById} anchor={anchor} />
-            ))}
-          </article>
+        <div ref={containerRef}>
+          <DocModelBody docModel={outcome.docModel} assetsById={assetsById} anchor={anchor} />
         </div>
       );
   }
+}
+
+// Presentational doc-model render (TOC + nested section/block tree). Reused by the full-text
+// viewer and the structured translation view (BR-S18): both render the SAME structure — only
+// the text differs (original vs Korean). External text is escaped by React (BR-SF-9).
+export function DocModelBody({
+  docModel,
+  assetsById,
+  anchor,
+}: {
+  docModel: DocModel;
+  assetsById: Map<string, AssetRef>;
+  anchor?: AnchorVM | null;
+}) {
+  return (
+    <div className={styles.root} data-testid="docmodel-viewer">
+      <DocTOC sections={docModel.sections} />
+      <article className={styles.body}>
+        {docModel.sections.map((s) => (
+          <SectionView key={s.id} section={s} depth={1} assetsById={assetsById} anchor={anchor} />
+        ))}
+      </article>
+    </div>
+  );
 }
 
 // ---- table of contents (anchor jump) ------------------------------------

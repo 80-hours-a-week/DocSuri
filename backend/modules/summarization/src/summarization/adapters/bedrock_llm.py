@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+from collections.abc import Sequence
 from typing import Any
 
 from ..domain.models import (
@@ -21,10 +22,11 @@ from ..domain.models import (
     RefinedSource,
     SummaryDraft,
     SummaryRequest,
-    TranslationDraft,
+    TranslationSegment,
+    TranslationSegmentsResult,
 )
 from ..ports.ports import LlmUnavailable
-from ..prompts import build_summary_prompt, build_translate_prompt
+from ..prompts import build_summary_prompt, build_translate_segments_prompt
 
 
 class LocalCircuitBreaker:
@@ -101,24 +103,33 @@ class BedrockLlmGateway:
         payload = self._invoke_json(self._summary_model, system, user)
         return _to_summary_draft(payload)
 
-    def translate(
-        self, text: str, request: SummaryRequest, glossary: Glossary
-    ) -> TranslationDraft:
-        system, user = build_translate_prompt(text, request, glossary)
-        payload = self._invoke_json(self._translate_model, system, user)
-        return TranslationDraft(
-            korean_text=str(payload.get("koreanText", "")),
-            kept_terms=tuple(payload.get("keptTerms", [])),
+    def translate_segments(
+        self,
+        segments: Sequence[TranslationSegment],
+        request: SummaryRequest,
+        glossary: Glossary,
+    ) -> TranslationSegmentsResult:
+        system, user = build_translate_segments_prompt(segments, request, glossary)
+        # A translation's output volume tracks its input, so it needs a much higher token cap
+        # than the (small, structured) summary output; chunking upstream keeps each call within it.
+        payload = self._invoke_json(self._translate_model, system, user, max_tokens=8192)
+        raw = payload.get("translations", {})
+        translations = {str(k): str(v) for k, v in raw.items()} if isinstance(raw, dict) else {}
+        return TranslationSegmentsResult(
+            translations=translations,
+            kept_terms=tuple(str(t) for t in payload.get("keptTerms", [])),
         )
 
     # --- bedrock plumbing ----------------------------------------------------
-    def _invoke_json(self, model_id: str, system: str, user: str) -> dict:
+    def _invoke_json(
+        self, model_id: str, system: str, user: str, *, max_tokens: int = 2000
+    ) -> dict:
         if not self._cb.allow_request():
             raise LlmUnavailable("Bedrock LLM circuit breaker is OPEN")
 
         body = {
             "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 2000,
+            "max_tokens": max_tokens,
             "system": system,
             "messages": [{"role": "user", "content": [{"type": "text", "text": user}]}],
         }

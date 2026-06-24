@@ -15,6 +15,7 @@ API/presentation concern; the domain returns a complete, validated result.
 
 from __future__ import annotations
 
+from docsuri_shared.dtos import DocModel
 from docsuri_shared.ports import CostGuardCircuitBreaker, ObservabilityHub
 
 from ..domain.assembler import ResultAssembler
@@ -38,6 +39,7 @@ from ..domain.models import (
 )
 from ..domain.refiner import InputRefiner
 from ..domain.source_selector import SourceSelector
+from ..domain.structured_translator import StructuredTranslator, iter_text_fields
 from ..ports.ports import (
     AssetReadPort,
     DocModelBuildQueuePort,
@@ -81,6 +83,7 @@ class SummarizationOrchestrationService:
         doc_model_build_queue: DocModelBuildQueuePort | None = None,
         map_reduce_summarizer: MapReduceSummarizer | None = None,
         summary_job_queue: SummaryJobQueuePort | None = None,
+        structured_translator: StructuredTranslator | None = None,
     ) -> None:
         self._store = store
         self._source = source_selector
@@ -96,12 +99,18 @@ class SummarizationOrchestrationService:
         self._asset_reader = asset_reader
         self._docmodel_reader = doc_model_reader
         self._docmodel_build_queue = doc_model_build_queue
-        # Long-input map-reduce summarizer (BR-S6). None → MAP_REDUCE band abstains (current
-        # behavior); wired → summary map-reduce runs (translate map-reduce stays PR-2 scope).
+        # Long-input map-reduce summarizer (BR-S6). None → summary MAP_REDUCE band abstains
+        # (gate OFF); wired → summary map-reduce runs. Its presence also gates the *translate*
+        # long-input band (shared DOCSURI_MAP_REDUCE_ENABLED flag — one switch for both).
         self._map_reduce = map_reduce_summarizer
-        # Async long-summary job queue (BR-S8). When wired, the API path enqueues + returns
-        # pending; the worker re-runs with allow_enqueue=False so map-reduce executes inline.
+        # Async long-input job queue (BR-S8/BR-S12). When wired, the API path enqueues + returns
+        # pending; the worker re-runs with allow_enqueue=False so the long job executes inline.
+        # task-agnostic — carries summary and translate jobs alike.
         self._summary_job_queue = summary_job_queue
+        # Structured (doc-model-mirroring) translator (BR-S18). Drives the translate path; chunks
+        # internally for map-only long translation. None only in legacy wiring (translate then
+        # abstains as generation_unavailable).
+        self._translator = structured_translator
 
     def run(
         self, request: SummaryRequest, ctx: RequestContext, *, allow_enqueue: bool = True
@@ -133,25 +142,22 @@ class SummarizationOrchestrationService:
         refined = self._refiner.refine_source(source)
         route = self._length.route(refined.token_count)
         # OVER_CAP always abstains (extreme inputs are rejected, not partial-summarized — mobile
-        # decision). MAP_REDUCE (CONTEXT_BUDGET~INPUT_CAP, ~40K-120K tok) runs section-aware
-        # map-reduce when a summarizer is wired (BR-S6); otherwise it abstains (current behavior).
-        # Translate map-reduce stays out of scope (PR-2 structured translation).
+        # decision; both tasks). MAP_REDUCE (CONTEXT_BUDGET~INPUT_CAP, ~40K-120K tok) runs the
+        # long-input path: summary = section-aware map-reduce, translate = section map-only
+        # (BR-S6/BR-S18). The shared DOCSURI_MAP_REDUCE_ENABLED flag gates both (proxied by
+        # ``self._map_reduce``); OFF → the band abstains, preserving prior behavior.
         if route == LengthRoute.OVER_CAP:
             return AbstainDTO(reason="input_too_long")
-        if route == LengthRoute.MAP_REDUCE and (
-            request.task == Task.TRANSLATE or self._map_reduce is None
-        ):
-            return AbstainDTO(reason="input_too_long")
-        if (
-            route == LengthRoute.MAP_REDUCE
-            and allow_enqueue
-            and self._summary_job_queue is not None
-        ):
-            # Async long-summary (BR-S8): enqueue a background job, return pending → client polls.
-            # The worker re-runs with allow_enqueue=False so map-reduce executes inline (below).
-            self._summary_job_queue.enqueue(request, user_id)
-            self._emit("u7.summary.pending", 1.0, request)
-            return PendingDTO(retry_after_ms=_SUMMARY_POLL_BACKOFF_MS)
+        if route == LengthRoute.MAP_REDUCE:
+            if self._map_reduce is None:
+                return AbstainDTO(reason="input_too_long")
+            if allow_enqueue and self._summary_job_queue is not None:
+                # Async long input (BR-S8/BR-S12): enqueue a background job, return pending →
+                # client polls. The worker re-runs with allow_enqueue=False so the long job
+                # (summary map-reduce / translate map-only) executes inline below.
+                self._summary_job_queue.enqueue(request, user_id)
+                self._emit("u7.job.pending", 1.0, request)
+                return PendingDTO(retry_after_ms=_SUMMARY_POLL_BACKOFF_MS)
 
         # 4. glossary
         glossary = self._glossary.resolve(user_id)
@@ -191,22 +197,28 @@ class SummarizationOrchestrationService:
 
     # --- translate path ------------------------------------------------------
     def _run_translate(self, request, source, refined, glossary, key) -> SummaryResponse:
-        # BR-S3/Q18(P2): translate consumes the refined body (same as summary) — references/
-        # boilerplate stripped, control chars sanitized, and the length route (computed on
-        # refined.token_count) now matches the text actually sent. Prompt is scope-aware.
+        # Structured translation (BR-S18): translate the doc-model into a 'translated doc-model'
+        # (same structure, Korean text). The translator chunks internally (map-only) for long
+        # inputs. When the source is not a structured doc-model (scope=abstract, or full-text
+        # fell back to abstract/legacy .txt), wrap the refined body in a one-paragraph doc-model
+        # so the output contract is uniform.
+        if self._translator is None:
+            return AbstainDTO(reason="generation_unavailable")
+        doc = source.doc_model or _wrap_plain_doc(refined.body, request)
         for attempt in (1, 2):
             try:
-                draft = self._llm.translate(refined.body, request, glossary)
+                draft = self._translator.translate(doc, request, glossary)
             except LlmUnavailable:
                 if attempt == 2:
+                    self._emit("u7.llm.unavailable", 1.0, request)
                     return AbstainDTO(reason="generation_unavailable")
                 continue
-            if not draft.korean_text.strip():
+            if not _has_translated_text(draft):
                 if attempt == 2:
                     return AbstainDTO(reason="empty_translation")
                 continue
             result = self._assembler.assemble_translation(draft, glossary, source)
-            self._store.put(key, result.to_dict())
+            self._store.put(key, result.to_dict())  # write-through
             self._emit("u7.translate.ok", 1.0, request)
             return result
         return AbstainDTO(reason="empty_translation")
@@ -294,6 +306,41 @@ class SummarizationOrchestrationService:
             self._obs.emit_metric(name, value, tags)
         except Exception:  # noqa: BLE001, S110 — telemetry is advisory, off the response path
             pass
+
+
+def _wrap_plain_doc(body: str, request: SummaryRequest) -> DocModel:
+    """Wrap a plain refined body (abstract / legacy .txt fallback) in a minimal one-section,
+    one-paragraph doc-model so the structured translation output contract is uniform (BR-S18).
+    This synthetic doc-model is never cached as a real doc-model — ``parserVersion`` marks it."""
+    return DocModel.model_validate(
+        {
+            "meta": {
+                "paperId": request.paper_id,
+                "version": request.version,
+                "title": "",
+                "provenance": {
+                    "sourceTier": "native_html",
+                    "parserVersion": "synthetic-plain-wrap",
+                    "schemaVersion": "1",
+                    "generatedAt": "1970-01-01T00:00:00Z",
+                },
+            },
+            "sections": [
+                {
+                    "id": "s1",
+                    "title": "",
+                    "blocks": [{"id": "s1.p1", "type": "paragraph", "text": body}],
+                }
+            ],
+        }
+    )
+
+
+def _has_translated_text(draft) -> bool:
+    """True when the translated doc-model has at least one non-empty translatable text field —
+    an all-empty translation is treated as a failed generation (fail-closed, BR-S18)."""
+    doc_dict = draft.doc_model.model_dump(mode="json")
+    return any(text.strip() for _id, text, _set in iter_text_fields(doc_dict))
 
 
 class _CachedResult:
