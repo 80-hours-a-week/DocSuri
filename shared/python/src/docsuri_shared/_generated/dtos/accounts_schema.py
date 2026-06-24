@@ -20,9 +20,6 @@ class SignupRequest(BaseModel):
     Self-signup input. Source: AccountController.signup(req: SignupRequest, ctx) (component-methods U3). `password` is INPUT-ONLY and NOT logged (SEC-3); policy/breach checks are server-side (PasswordPolicy). Trace: dtos.md §2, FR-7, US-A1, SEC-12.
     """
 
-    model_config = ConfigDict(
-        extra='forbid',
-    )
     email: str = Field(
         ..., description='Account email (signup identity). Trace: FR-7, US-A1.'
     )
@@ -51,9 +48,6 @@ class LoginRequest(BaseModel):
     Login input. Source: AccountController.login(req: LoginRequest, ctx) (component-methods U3). `password` is INPUT-ONLY and NOT logged. Failures surface as a generalized auth error (401/429 — credential existence not disclosed). Trace: dtos.md §2, FR-7, US-A2, SEC-12.
     """
 
-    model_config = ConfigDict(
-        extra='forbid',
-    )
     email: str = Field(
         ..., description='Account email (login identity). Trace: FR-7, US-A2.'
     )

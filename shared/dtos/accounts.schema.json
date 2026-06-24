@@ -18,8 +18,7 @@
           "description": "INPUT-ONLY plaintext password. NEVER returned in any response and NEVER logged (SEC-12/SEC-3). Policy/breach validation is server-side (PasswordPolicy). Trace: FR-7, SEC-3, SEC-12."
         }
       },
-      "required": ["email", "password"],
-      "additionalProperties": false
+      "required": ["email", "password"]
     },
     "SignupResult": {
       "type": "object",
@@ -47,8 +46,7 @@
           "description": "INPUT-ONLY plaintext password. NEVER returned in any response and NEVER logged (SEC-12/SEC-3). Trace: FR-7, SEC-3, SEC-12."
         }
       },
-      "required": ["email", "password"],
-      "additionalProperties": false
+      "required": ["email", "password"]
     },
     "SessionInfo": {
       "type": "object",
