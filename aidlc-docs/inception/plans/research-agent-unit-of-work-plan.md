@@ -80,13 +80,13 @@ X) 기타 (아래 [Answer]: A 태그 뒤에 기술)
 ---
 
 ## Part 2 실행 체크리스트 *(계획 승인 후 실행)*
-- [ ] `application-design/unit-of-work.md`에 Research Agent 유닛 정의 추가(번호=UQ2 결정 반영) + 주석(v1=모드 A·모드 B 차기·추출 경계·HOW 이월).
-- [ ] API 배포 단위와 코드 조직 전략에 `backend/modules/research_agent/` 추가 + 긴 분석 비동기 잡 옵션 표기.
-- [ ] `application-design/unit-of-work-dependency.md`에 Research Agent 행/열 추가 — Agent→U6(`enforce`/CostGuard, shared/ports)·Agent→U2(검색)·Agent→U7(doc-model/근거화)·Agent→U8(외부 API 캐시·차기)·Agent→U9(개인화 신호, 비차단) 정리, 코드 DAG 비순환 검증, 근거형성 ASCII 흐름.
-- [ ] `application-design/unit-of-work-story-map.md`에 US-RA1~8 매핑(Owner=UQ5 결정) 추가.
-- [ ] 전체 스토리 수를 48개로 갱신하고 미할당 0 검증.
-- [ ] 유닛 수·배포 단위 갱신(신규 유닛 1개 추가, 배포 단위 ① API).
-- [ ] **공유 계약(원본 UQ5 참고)**: 신규 DTO(연구 세션·근거 정리·novelty 비교)는 `shared/` 단일 소유로 두되, 스키마 상세는 Construction Functional Design 이월임을 명시(지금은 소유 위치만 고정).
+- [x] `application-design/unit-of-work.md`에 Research Agent 유닛 정의 추가(번호=UQ2 결정 반영) + 주석(v1=모드 A·모드 B 차기·추출 경계·HOW 이월).
+- [x] API 배포 단위와 코드 조직 전략에 `backend/modules/research_agent/` 추가 + 긴 분석 비동기 잡 옵션 표기.
+- [x] `application-design/unit-of-work-dependency.md`에 Research Agent 행/열 추가 — Agent→U6(`enforce`/CostGuard, shared/ports)·Agent→U2(검색)·Agent→U7(doc-model/근거화)·Agent→U8(외부 API 캐시·차기)·Agent→U9(개인화 신호, 비차단) 정리, 코드 DAG 비순환 검증, 근거형성 ASCII 흐름.
+- [x] `application-design/unit-of-work-story-map.md`에 US-RA1~8 매핑(Owner=UQ5 결정) 추가.
+- [x] 전체 스토리 수를 48개로 갱신하고 미할당 0 검증.
+- [x] 유닛 수·배포 단위 갱신(신규 유닛 1개 추가, 배포 단위 ① API).
+- [x] **공유 계약(원본 UQ5 참고)**: 신규 DTO(연구 세션·근거 정리·novelty 비교)는 `shared/` 단일 소유로 두되, 스키마 상세는 Construction Functional Design 이월임을 명시(지금은 소유 위치만 고정).
 
 ## 확장 규칙 준수 요약
 - **Security Baseline**: 적용. Agent는 owner-scoped 세션·결과·첨부, 외부 데이터 출력 콘텐츠 삽입 방어, 외부 API SSRF·남용 방어를 유지한다.
