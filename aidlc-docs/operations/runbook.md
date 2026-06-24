@@ -99,7 +99,10 @@ Option B: 팀원의 **자체 AWS 계정**이 prod 계정(`028317349537`)으로 a
 
 > 이 역할 = **콘솔/CLI/디버그용**. 배포 권한 아님 — 실배포는 여전히 CI OIDC(`CD_ROLE_ARN`).
 
-**관리자 (부여/회수):**
+**접근 관리자 (Access admins) — 부여/회수 권한 보유:**
+- corpseonthemission@icloud.com (계정 `028317349537` 소유자, SSO 프로필 `AdministratorAccess-028317349537`)
+
+**부여/회수 절차:**
 1. `app.py` `TEAM_ACCOUNT_IDS`에 팀원 12자리 계정 ID 추가(회수 = 제거) → PR → 머지.
 2. `cd ops/cdk && cdk deploy Docsuri-Access` (SSO 자격증명, 함정 §2.3). 출력 `CrossAccountDevRoleArn` 확인 후 팀원에게 전달.
 3. 회수: 목록에서 빼고 재배포 → 다음 assume부터 거부.
