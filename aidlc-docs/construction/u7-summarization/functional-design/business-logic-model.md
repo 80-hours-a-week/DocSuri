@@ -69,8 +69,9 @@
 - `seedTerms`∪`keepAsIs`(공유) ∪ `userOverrides`(개인, `glossaryVer`). 
 - **2경로**: 핵심 용어 보존·매핑 → 프롬프트 강제 주입; 사용자 선호 단순 명사 → 생성 후 결정적 후치환(조사 안전 단순 명사 한정).
 
-### 3.6 `LengthRouter` (Q3)
-- `tokenCount > 컨텍스트예산` → map-reduce(섹션 인지 청킹+오버랩 → 부분요약 → 통합), else 단일 콜. **임계·청크 크기·비동기 전환점은 NFR.** map-reduce 통합 출력도 §3 동일 스키마(결과 동등).
+### 3.6 `LengthRouter` (Q3) — **3단계 구현됨(#135)**
+- `≤컨텍스트예산` → 단일 콜 / `컨텍스트예산~입력상한` → **map-reduce**(`MapReduceSummarizer`: 섹션 인지 청킹+오버랩 → 부분요약(map) → 통합(reduce), §3 동일 스키마) / `>입력상한`(OVER_CAP) → **거절**(`input_too_long`, 부분요약 안 함 — BR-S6).
+- **동기/비동기(BR-S12)**: 단일 콜=동기. map-reduce=비동기 잡(API enqueue→`PendingDTO`→폴링→요약 워커 inline 생성→write-through). 게이트 OFF면 MAP_REDUCE도 abstain(기존 보존). **임계·청크 크기는 NFR.**
 
 ### 3.7 `LlmSummarizer` / `LlmTranslator` (생성, §6 stage 6)
 - 모델 자동 선택(task→역량 등급; 요약=고역량/번역=경량, 선택기 비노출 — Q14). **구체 모델(Sonnet/Haiku)·Bedrock 바인딩은 NFR/Infra.**

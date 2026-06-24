@@ -68,7 +68,11 @@ def process_message(runtime, message) -> None:
         return
 
     try:
-        runtime.pipeline.ingest_one(job)
+        if job.kind is JobKind.BUILD_DOC_MODEL:
+            # Lazy doc-model build (BR-30/D6) — separate from the index pipeline.
+            runtime.pipeline.build_doc_model(job)
+        else:
+            runtime.pipeline.ingest_one(job)
     except IngestionError as exc:
         if exc.failure_class is FailureClass.PERMANENT:
             queue.ack(message)
@@ -97,4 +101,12 @@ def job_from_payload(payload) -> IngestionJob:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1:]))
+    # A step arg (provision|backfill|cutover) runs the v4 migration runner once and exits;
+    # no arg runs the normal SQS-polling worker. Lets one-off ECS run-task reuse this image
+    # (entrypoint is fixed to this module) without a separate task definition.
+    _args = sys.argv[1:]
+    if _args:
+        from .migrate import run_step
+
+        raise SystemExit(run_step(_args[0]))
+    raise SystemExit(main())

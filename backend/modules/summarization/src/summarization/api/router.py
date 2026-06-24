@@ -29,8 +29,8 @@ from ..service.orchestrator import SummarizationOrchestrationService
 def build_router(
     orchestrator: SummarizationOrchestrationService,
     *,
-    fulltext_enabled: bool = False,
     assets_enabled: bool = False,
+    docmodel_enabled: bool = False,
 ) -> Any:
     router = APIRouter()
 
@@ -88,23 +88,42 @@ def build_router(
             return JSONResponse({"status": "unavailable"}, status_code=503)
         return JSONResponse({"status": "ok", "glossaryVer": glossary_ver}, status_code=201)
 
-    @router.get("/api/papers/{paper_id}/full-text")
-    def full_text(request: Request, paper_id: str) -> Any:
-        """In-app full-text viewer source (Q5=C). OA-license-gated: disabled by default
-        (``license_unavailable`` → arXiv link-out) until a license signal is wired."""
+    @router.get("/api/papers/{paper_id}/doc-model")
+    def doc_model(request: Request, paper_id: str) -> Any:
+        """Structured doc-model for the rich view / summary input (BR-30, D4). OA-license-gated
+        (BR-SF-11): the OA signal is the U1 ingestion gate — only OA papers (CC-BY/CC-BY-SA/CC0,
+        BR-1) are stored, so any corpus paper is license-safe to render and this flag is an
+        operational toggle (OFF by default → ``license_unavailable`` arXiv link-out until the team
+        enables it at deploy). Returns the cached artifact when present; a
+        miss (re)triggers U1's lazy build and surfaces ``building`` (client polls) when a build
+        queue is wired, else ``source_unavailable`` (D6, boundary B). The doc-model is
+        url-free (SEC-9): figure signed URLs come from the parallel ``/assets`` manifest,
+        joined by ``assetId`` on the client."""
         user_id = _principal_user_id(request)
         if not user_id:
             return JSONResponse({"status": "unauthorized"}, status_code=401)
-        if not fulltext_enabled:
+        if not docmodel_enabled:
             return JSONResponse({"status": "license_unavailable"})
         try:
             version = int(request.query_params.get("version", "1"))
         except (TypeError, ValueError):
             version = 1
-        text = orchestrator.full_text(paper_id, version)
-        if text is None:
-            return JSONResponse({"status": "source_unavailable"})
-        return JSONResponse({"status": "ok", "text": text})
+        result = orchestrator.doc_model(paper_id, version)
+        if result.doc is not None:
+            return JSONResponse(
+                {
+                    "status": "ok",
+                    "cached": True,
+                    "docModel": result.doc.model_dump(mode="json", exclude_none=True),
+                }
+            )
+        if result.building:
+            # Lazy build (re)triggered on a miss — client polls again after the hint (BR-30/D6).
+            body: dict[str, Any] = {"status": "building"}
+            if result.retry_after_ms is not None:
+                body["retryAfterMs"] = result.retry_after_ms
+            return JSONResponse(body)
+        return JSONResponse({"status": "source_unavailable"})
 
     @router.get("/api/papers/{paper_id}/assets")
     def paper_assets(request: Request, paper_id: str) -> Any:

@@ -17,9 +17,12 @@ import styles from './TranslationView.module.css';
 interface TranslationViewProps {
   translation: TranslationVM;
   cached?: boolean;
+  /** Show the personal-glossary editor (kept-term badges). Only the full-text translation
+   * (본문 번역) exposes it; the abstract translation does not. */
+  showGlossary?: boolean;
 }
 
-export function TranslationView({ translation, cached }: TranslationViewProps) {
+export function TranslationView({ translation, cached, showGlossary = false }: TranslationViewProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const termsRef = useRef<HTMLDivElement | null>(null);
   const { terms, setTerm } = useGlossaryTerms();
@@ -45,20 +48,26 @@ export function TranslationView({ translation, cached }: TranslationViewProps) {
         </span>
       ) : null}
 
-      {translation.keptTerms.length > 0 ? (
-        <div className={styles.terms} ref={termsRef}>
-          {translation.keptTerms.map((t, i) => (
-            <GlossaryTermBadge
-              key={`${t}-${i}`}
-              term={t}
-              open={openIndex === i}
-              onOpen={() => setOpenIndex(i)}
-              onClose={() => setOpenIndex(null)}
-              initialValue={terms[t] ?? ''}
-              onSaved={(termTo) => setTerm(t, termTo)}
-            />
-          ))}
-        </div>
+      {showGlossary && translation.keptTerms.length > 0 ? (
+        <section className={styles.glossary} ref={termsRef} aria-label="핵심 용어">
+          <h3 className={styles.glossaryTitle}>핵심 용어</h3>
+          <p className={styles.glossaryHint}>
+            번역에서 원어 그대로 둔 핵심 용어예요. 탭해서 내 번역어를 지정할 수 있어요.
+          </p>
+          <div className={styles.terms}>
+            {translation.keptTerms.map((t, i) => (
+              <GlossaryTermBadge
+                key={`${t}-${i}`}
+                term={t}
+                open={openIndex === i}
+                onOpen={() => setOpenIndex(i)}
+                onClose={() => setOpenIndex(null)}
+                initialValue={terms[t] ?? ''}
+                onSaved={(termTo) => setTerm(t, termTo)}
+              />
+            ))}
+          </div>
+        </section>
       ) : null}
 
       <p className={styles.text}>{translation.koreanText}</p>

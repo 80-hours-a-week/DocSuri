@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from docsuri_shared.dtos import DocModel
+
 
 class Task(StrEnum):
     SUMMARY = "summary"
@@ -102,8 +104,23 @@ class SummaryCacheKey:
 @dataclass(frozen=True, slots=True)
 class SourceText:
     kind: SourceKind
-    raw: str
+    raw: str = ""  # plain text (abstract, or legacy .txt full text); empty when doc_model is set
+    # (D2) structured doc-model full-text input — preferred over plain `.txt` when available.
+    # The refiner takes sections/tables/formulas/captions from it directly (no regex guessing).
+    doc_model: DocModel | None = None
     fallback_reason: str | None = None  # set when summary fell back to abstract (Q1/NFR-R2)
+
+
+@dataclass(frozen=True, slots=True)
+class DocModelLookup:
+    """Result of a doc-model read (BR-30/D6): the cached artifact on a hit, or ``building`` when
+    a lazy build was (re)triggered on a miss so the client polls again. ``building`` stays False
+    when no build queue is wired — the router then surfaces ``source_unavailable`` (prior
+    behavior preserved)."""
+
+    doc: DocModel | None = None
+    building: bool = False
+    retry_after_ms: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,9 +131,24 @@ class Section:
 
 
 @dataclass(frozen=True, slots=True)
+class Table:
+    """A doc-model table projected for the LLM input + grounding (D8 — numbers visible).
+
+    ``rows`` are the structured cell texts (row-major); ``label`` is the paper's anchor label
+    ("Table 3"); ``anchor`` is the doc-model block id. Carried on ``RefinedSource`` so the
+    grounding gate can resolve table anchors and numeric matches against real data."""
+
+    label: str
+    rows: tuple[tuple[str, ...], ...]
+    caption: str = ""
+    anchor: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class RefinedSource:
     body: str
     sections: tuple[Section, ...] = ()
+    tables: tuple[Table, ...] = ()  # doc-model structured tables — data visible to LLM (D8)
     captions: tuple[str, ...] = ()  # Table/Figure captions — preserved (Q2)
     formulas: tuple[str, ...] = ()  # LaTeX — preserved, never translated
     preserved: tuple[str, ...] = ()  # Appendix, Supplementary Results, etc. (Step 36)
@@ -238,6 +270,20 @@ class AbstainDTO:
 
 
 @dataclass(frozen=True, slots=True)
+class PendingDTO:
+    """A long-input summary (MAP_REDUCE band) is being produced by a background job (BR-S6/BR-S8);
+    the client re-requests after ``retry_after_ms`` and gets the result on a cache hit."""
+
+    retry_after_ms: int | None = None
+
+    def to_dict(self) -> dict:
+        body: dict = {"status": "pending"}
+        if self.retry_after_ms is not None:
+            body["retryAfterMs"] = self.retry_after_ms
+        return body
+
+
+@dataclass(frozen=True, slots=True)
 class CostDegradedDTO:
     message: str = "AI 요약 일시 중단"
 
@@ -253,7 +299,9 @@ class SourceUnavailableDTO:
         return {"status": "source_unavailable", "reason": self.reason}
 
 
-SummaryResponse = SummaryResultDTO | AbstainDTO | CostDegradedDTO | SourceUnavailableDTO
+SummaryResponse = (
+    SummaryResultDTO | PendingDTO | AbstainDTO | CostDegradedDTO | SourceUnavailableDTO
+)
 
 
 # --- FR-17 multimodal asset read DTOs (display-only; produced by U1, read by U7) ----

@@ -14,6 +14,7 @@ from stacks.frontend_stack import FrontendStack
 from stacks.ingestion_stack import IngestionStack
 from stacks.network_stack import NetworkStack
 from stacks.search_stack import SearchStack
+from stacks.summarization_stack import SummarizationStack
 
 app = cdk.App()
 
@@ -31,6 +32,13 @@ ingestion = IngestionStack(
     app, "Docsuri-Ingestion",
     vpc=network.vpc,
     opensearch_domain=search.domain,
+    env=env,
+)
+# Deploy unit ④ — U7 summarization worker (long-summary async jobs, BR-S6/BR-S12). Code/synth
+# only; the team owns deploy. Reuses the docsuri-api image + papers bucket (by name).
+summarization = SummarizationStack(
+    app, "Docsuri-Summarization",
+    vpc=network.vpc,
     env=env,
 )
 # Deploy unit ④ — U5 frontend. The BFF (server-side) calls the backend gateway over its

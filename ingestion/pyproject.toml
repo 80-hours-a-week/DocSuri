@@ -18,6 +18,11 @@ dependencies = [
     # BR-29 full-text PDF fallback (MIT, permissive) — core because the full-text path now
     # depends on PDF text extraction when arXiv HTML is unavailable.
     "pdfplumber>=0.11,<1",
+    # BR-30/TD-16 doc-model HTML parser stack (permissive: lxml=BSD, beautifulsoup4=MIT).
+    # Deterministic arXiv/ar5iv (LaTeXML) HTML -> doc-model parsing; no LLM extraction (D1).
+    # lxml >=6.1: PYSEC-2026-87 fixed in 6.1.0 (pip-audit / Security Scan gate).
+    "lxml>=6.1,<7",
+    "beautifulsoup4>=4.12,<5",
 ]
 
 [project.optional-dependencies]

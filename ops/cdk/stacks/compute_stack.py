@@ -198,6 +198,28 @@ class ComputeStack(Stack):
             "OPENSEARCH_ENDPOINT": Fn.join("", [
                 "https://", opensearch_domain.domain_endpoint,
             ]),
+            # U2 discovery reader real-path wiring. DiscoverySettings.from_env reads the
+            # DOCSURI_-prefixed names, and search_enabled requires BOTH the endpoint AND the
+            # model — without these the reader silently falls back to the mock orchestrator.
+            # The model MUST match the writer's (Cohere v4) so query and corpus share one
+            # embedding space (vector-spec §4). Index defaults to the docsuri-corpus alias.
+            "DOCSURI_OPENSEARCH_ENDPOINT": Fn.join("", [
+                "https://", opensearch_domain.domain_endpoint,
+            ]),
+            "DOCSURI_BEDROCK_MODEL_ID": "global.cohere.embed-v4:0",
+            "DOCSURI_AWS_REGION": self.region,
+            # --- U7 summarization + doc-model (피벗) — queue URLs (deploy-ready config) ---
+            # The IAM below is provisioned ahead of activation. ACTIVATION is a deploy-time step the
+            # team owns: set DOCSURI_SUMMARY_BUCKET (papers bucket) + DATABASE_URL(+PGPASSWORD) [+
+            # DOCSURI_REDIS_URL] to mount the real path (summarization_enabled = bool(bucket)); the
+            # OA-license + map-reduce gates stay OFF by default. Referenced by name to avoid a
+            # cross-stack export coupling deploys (repo pattern).
+            "DOCSURI_DOCMODEL_BUILD_QUEUE_URL": (  # doc-model lazy build (BR-30, boundary B)
+                f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-ingestion-queue"
+            ),
+            "DOCSURI_SUMMARY_JOB_QUEUE_URL": (  # long-summary async job (BR-S12)
+                f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-summary-job-queue"
+            ),
             "PERSONALIZATION_ENABLED": "false",
             "PERSONALIZATION_RAW_EVENT_RETENTION_DAYS": "90",
         }
@@ -380,6 +402,58 @@ class ComputeStack(Stack):
                 # pre-created group above is harmless.
                 actions=["logs:CreateLogGroup"],
                 resources=[ops_log_group.log_group_arn],
+            )
+        )
+
+        # --- U7 summarization + doc-model IAM (피벗, infra-design §4·§7) ---
+        # Single papers bucket (Docsuri-Ingestion owns it) — referenced by ARN-by-name to avoid a
+        # cross-stack export. API reads the built doc-model and read/writes the summary cache.
+        _papers_bucket = f"arn:aws:s3:::docsuri-papers-fulltext-{self.account}"
+        self.service.task_definition.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["s3:GetObject"],
+                resources=[f"{_papers_bucket}/doc-model/*"],
+            )
+        )
+        self.service.task_definition.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["s3:GetObject", "s3:PutObject"],
+                resources=[f"{_papers_bucket}/summary/*"],
+            )
+        )
+        # SendMessage: doc-model build (ingestion queue, boundary B) + long-summary job queue.
+        self.service.task_definition.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["sqs:SendMessage"],
+                resources=[
+                    f"arn:aws:sqs:{self.region}:{self.account}:docsuri-ingestion-queue",
+                    f"arn:aws:sqs:{self.region}:{self.account}:docsuri-summary-job-queue",
+                ],
+            )
+        )
+        # Bedrock InvokeModel for the U7 summary/translate models (Anthropic on Bedrock). Scoped to
+        # Anthropic foundation models + inference profiles in-region (concrete ids are app config).
+        self.service.task_definition.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+                resources=[
+                    f"arn:aws:bedrock:{self.region}::foundation-model/anthropic.*",
+                    f"arn:aws:bedrock:{self.region}:{self.account}:inference-profile/*",
+                ],
+            )
+        )
+        # U2 reader query-embedding: Bedrock invoke on the SAME model the writer uses (Cohere
+        # v4). Must match DOCSURI_BEDROCK_MODEL_ID above and ingestion_stack._BEDROCK_MODEL_ID.
+        # Without this the real read path 500s on the first search (AccessDenied at embed time).
+        self.service.task_definition.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["bedrock:InvokeModel"],
+                resources=[
+                    # Invoked via the global inference profile (bare model id isn't on-demand
+                    # invokable); the profile can route the FM to any region — grant both.
+                    f"arn:aws:bedrock:{self.region}:{self.account}:inference-profile/global.cohere.embed-v4:0",
+                    "arn:aws:bedrock:*::foundation-model/cohere.embed-v4:0",
+                ],
             )
         )
 
