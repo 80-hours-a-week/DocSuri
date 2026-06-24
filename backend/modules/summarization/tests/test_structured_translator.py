@@ -122,6 +122,39 @@ def test_map_only_chunks_long_input_without_reduce() -> None:
     assert all(text.startswith("번역:") for _id, text, _set in iter_text_fields(doc_dict))
 
 
+def test_duplicate_block_ids_translate_independently() -> None:
+    # Reading-order keying: even if the parser emitted duplicate block ids, each segment is keyed
+    # by position, so two same-id blocks get their own translations (no merge/collision).
+    doc = DocModel.model_validate(
+        {
+            "meta": {
+                "paperId": "2401.1",
+                "version": 1,
+                "title": "S",
+                "provenance": {
+                    "sourceTier": "native_html",
+                    "parserVersion": "test",
+                    "schemaVersion": "1",
+                    "generatedAt": "1970-01-01T00:00:00Z",
+                },
+            },
+            "sections": [
+                {
+                    "id": "s1",
+                    "title": "",
+                    "blocks": [
+                        {"id": "dup", "type": "paragraph", "text": "first"},
+                        {"id": "dup", "type": "paragraph", "text": "second"},
+                    ],
+                }
+            ],
+        }
+    )
+    draft = StructuredTranslator(_EchoLlm()).translate(doc, _req(), Glossary())
+    texts = [b.root.text for b in draft.doc_model.sections[0].blocks]
+    assert texts == ["번역:first", "번역:second"]
+
+
 def test_missing_translation_falls_back_to_original_text() -> None:
     class _Partial:
         def translate_segments(self, segments, request, glossary) -> TranslationSegmentsResult:

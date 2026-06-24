@@ -213,7 +213,7 @@ class SummarizationOrchestrationService:
                     self._emit("u7.llm.unavailable", 1.0, request)
                     return AbstainDTO(reason="generation_unavailable")
                 continue
-            if not _has_translated_text(draft):
+            if not _has_translated_text(draft, doc):
                 if attempt == 2:
                     return AbstainDTO(reason="empty_translation")
                 continue
@@ -336,11 +336,15 @@ def _wrap_plain_doc(body: str, request: SummaryRequest) -> DocModel:
     )
 
 
-def _has_translated_text(draft) -> bool:
-    """True when the translated doc-model has at least one non-empty translatable text field —
-    an all-empty translation is treated as a failed generation (fail-closed, BR-S18)."""
-    doc_dict = draft.doc_model.model_dump(mode="json")
-    return any(text.strip() for _id, text, _set in iter_text_fields(doc_dict))
+def _has_translated_text(draft, source: DocModel) -> bool:
+    """True when at least one translatable field was actually translated — i.e. differs from the
+    source text. A blank LLM response leaves every field falling back to the source (English), so
+    checking 'non-empty' is not enough (BR-S18): we compare against the source by reading-order
+    position (same structure → same field order) and require at least one real change. An
+    all-unchanged draft is treated as a failed generation (fail-closed → retry, then abstain)."""
+    src = [t for _id, t, _set in iter_text_fields(source.model_dump(mode="json"))]
+    out = [t for _id, t, _set in iter_text_fields(draft.doc_model.model_dump(mode="json"))]
+    return any(o.strip() and o != s for o, s in zip(out, src, strict=False))
 
 
 class _CachedResult:

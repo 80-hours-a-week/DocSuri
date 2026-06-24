@@ -97,6 +97,16 @@ def test_translate_path() -> None:
     assert "translation" in out
 
 
+def test_translate_abstains_on_empty_translation() -> None:
+    # A blank LLM response (empty translations map) leaves every field falling back to the source
+    # English text — that must NOT be served as a successful translation. The empty-translation
+    # gate compares against the source and abstains after a retry (BR-S18).
+    orch = make_orchestrator(llm=StubLlm(empty=True))
+    result = orch.run(_req(Task.TRANSLATE, abstract="An abstract about BERT."), _ctx())
+    assert isinstance(result, AbstainDTO)
+    assert result.reason == "empty_translation"
+
+
 def test_orchestrator_abstains_on_map_reduce_length() -> None:
     # No map-reduce summarizer wired → MAP_REDUCE band still abstains (current behavior).
     from summarization.domain.length_router import LengthRouter

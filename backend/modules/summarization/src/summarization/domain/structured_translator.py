@@ -35,8 +35,9 @@ from .models import Glossary, SummaryRequest, TranslationDraft, TranslationSegme
 _DEFAULT_CHUNK_BUDGET_TOKENS = 6_000
 _CHARS_PER_TOKEN = 4  # matches the refiner's cheap estimate
 
-# Segment-id suffixes derived from the source block/section id (BR-S18) — addressable,
-# deterministic, and collision-free across a doc-model's unique ids.
+# Human-readable seg-id suffixes (BR-S18). NOTE: these descriptive ids are NOT used as the LLM
+# segment key — translate() keys segments by reading-order index, so correctness does not depend
+# on doc-model id uniqueness. The suffixes only make the walk's output legible (debug/tests).
 _TITLE_SUFFIX = "#title"
 _CAPTION_SUFFIX = "#caption"
 
@@ -65,36 +66,45 @@ class StructuredTranslator:
         # the result is a well-formed DocModel (schema parity, fail-closed on a malformed merge).
         doc_dict = doc.model_dump(mode="json")
         fields = list(iter_text_fields(doc_dict))  # (seg_id, text, setter), reading order
+        # Key each segment by its READING-ORDER INDEX, not the doc-model block/section id: the
+        # index is unique by construction, so re-injection is correct even if the parser ever
+        # emits duplicate ids (the LLM only needs a stable handle to map text back).
+        segments = [
+            TranslationSegment(id=str(i), text=t) for i, (_sid, t, _set) in enumerate(fields)
+        ]
 
         translations: dict[str, str] = {}
         kept: list[str] = []
-        for chunk in self._chunk(fields):
+        for chunk in self._chunk(segments):
             result = self._llm.translate_segments(chunk, request, glossary)  # map
             translations.update(result.translations)
             for term in result.kept_terms:
                 if term not in kept:
                     kept.append(term)
 
-        for seg_id, original, setter in fields:  # re-inject (map-only concat — no reduce)
-            setter(translations.get(seg_id, original))
+        # Re-inject by index (map-only concat — no reduce). A missing/blank entry keeps the
+        # source text; the orchestrator's empty-translation gate catches an all-untranslated draft.
+        for i, (_sid, original, setter) in enumerate(fields):
+            ko = translations.get(str(i))
+            setter(ko if ko and ko.strip() else original)
 
         return TranslationDraft(
             doc_model=DocModel.model_validate(doc_dict), kept_terms=tuple(kept)
         )
 
     def _chunk(
-        self, fields: list[tuple[str, str, Callable[[str], None]]]
+        self, segments: list[TranslationSegment]
     ) -> Iterator[tuple[TranslationSegment, ...]]:
         """Group segments into output-bounded chunks. A single oversized segment becomes its
         own chunk (the gateway still translates it; the model's cap is the hard limit)."""
         cur: list[TranslationSegment] = []
         cur_tokens = 0
-        for seg_id, text, _ in fields:
-            t = _estimate_tokens(text)
+        for seg in segments:
+            t = _estimate_tokens(seg.text)
             if cur and cur_tokens + t > self._budget:
                 yield tuple(cur)
                 cur, cur_tokens = [], 0
-            cur.append(TranslationSegment(id=seg_id, text=text))
+            cur.append(seg)
             cur_tokens += t
         if cur:
             yield tuple(cur)
