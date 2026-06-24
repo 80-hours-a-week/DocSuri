@@ -25,6 +25,8 @@ from .schemas import (
     SignupRequest,
     SignupResult,
 )
+from .services.account_deletion import AccountDeletionService
+from .services.account_management import AccountManagementService
 from .services.auth import AuthenticationService
 from .services.password_reset import PasswordResetService
 from .services.session_manager import SessionManager
@@ -41,6 +43,15 @@ class MfaVerifyRequest(BaseModel):
 # 인증 메일 재발송 요청 DTO (U3-내부 — 가입 후 메일 미수신 복구 경로용).
 class ResendVerificationRequest(BaseModel):
     email: str
+
+# 비밀번호 변경 DTO (U3-내부 — 로그인 사용자 자가 관리, FR-28/BR-A10).
+class ChangePasswordRequest(BaseModel):
+    currentPassword: str
+    newPassword: str
+
+# 이메일 변경 요청 DTO (U3-내부 — 로그인 사용자 자가 관리, FR-28/BR-A10).
+class EmailChangeRequestBody(BaseModel):
+    newEmail: str
 
 
 def _verification_link_base(request: Request) -> str:
@@ -141,6 +152,38 @@ def get_password_reset_service(
     return PasswordResetService(repo, manager, email_client)
 
 
+def _email_change_confirm_link_base(request: Request) -> str:
+    """이메일 변경 확인 링크의 공개 베이스 URL. 프로덕션은 프런트 페이지(`/email-change/confirm`),
+    로컬은 백엔드 confirm 경로로 폴백(메일은 Mock가 콘솔에 출력)."""
+    public = os.getenv("PUBLIC_APP_URL", "").strip().rstrip("/")
+    if public:
+        return f"{public}/email-change/confirm"
+    return str(request.base_url) + "auth/email-change/confirm"
+
+
+def get_account_management_service(
+    request: Request,
+    repo: CredentialRepository = Depends(get_credential_repo),
+    manager: SessionManager = Depends(get_session_manager),
+) -> AccountManagementService:
+    observability = getattr(request.app.state, "observability", None)
+    email_client = get_email_client(
+        env=os.getenv("ENV", "local"),
+        sender_email=os.getenv("SES_SENDER_EMAIL", "no-reply@docsuri.org"),
+        region=os.getenv("SES_REGION", "ap-northeast-2"),
+        observability_hub=observability,
+    )
+    return AccountManagementService(repo, manager, email_client)
+
+
+def get_account_deletion_service(
+    repo: CredentialRepository = Depends(get_credential_repo),
+    manager: SessionManager = Depends(get_session_manager),
+) -> AccountDeletionService:
+    # AccountDeleted 발행자는 기본 LoggingAccountDeletedPublisher(실 EventBridge는 인프라 이월).
+    return AccountDeletionService(repo, manager)
+
+
 @router.post("/password-reset/request")
 async def password_reset_request(
     req: PasswordResetRequest,
@@ -188,6 +231,127 @@ async def password_reset_confirm(
         raise HTTPException(
             status_code=500, detail="비밀번호 재설정 처리 중 서버 장애가 발생했습니다. (Fail-Closed)"
         ) from None
+
+
+@router.post("/change-password")
+async def change_password(
+    req: ChangePasswordRequest,
+    request: Request,
+    response: Response,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    mgmt_svc: AccountManagementService = Depends(get_account_management_service),
+    db: Session = Depends(get_db_session),
+):
+    """로그인 사용자 비밀번호 변경 (FR-28/BR-A10). 성공 시 전 세션 무효화 + 쿠키 삭제(재로그인 필요)."""
+    session_id = request.cookies.get("session_id")
+    if not session_id:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
+    try:
+        principal = await session_mgr.verify(session_id)
+        await mgmt_svc.change_password(principal.user_id, req.currentPassword, req.newPassword)
+        db.commit()
+        response.delete_cookie(key="session_id")
+        return {"status": "success", "message": "비밀번호가 변경되었습니다. 새 비밀번호로 다시 로그인해 주세요."}
+    except (UnauthorizedException, SessionExpiredException) as e:
+        db.rollback()
+        raise HTTPException(status_code=401, detail=str(e)) from e
+    except SessionStoreUnavailableException as e:
+        db.rollback()
+        raise HTTPException(status_code=503, detail="일시적으로 처리할 수 없습니다. 잠시 후 다시 시도해 주세요.") from e
+    except DomainException as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="비밀번호 변경 중 서버 장애가 발생했습니다. (Fail-Closed)") from None
+
+
+@router.post("/email-change/request")
+async def email_change_request(
+    req: EmailChangeRequestBody,
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    mgmt_svc: AccountManagementService = Depends(get_account_management_service),
+    db: Session = Depends(get_db_session),
+):
+    """로그인 사용자 이메일 변경 요청 (FR-28/BR-A10). 새 주소로 확인 링크 + 현 주소로 알림(M2).
+    이미 사용 중인 주소는 존재를 노출하지 않기 위해 동일 일반 응답을 반환한다(열거 방지)."""
+    session_id = request.cookies.get("session_id")
+    if not session_id:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
+    confirm_base = _email_change_confirm_link_base(request)
+    try:
+        principal = await session_mgr.verify(session_id)
+        await mgmt_svc.request_email_change(principal.user_id, req.newEmail, confirm_base)
+        db.commit()
+        return {"status": "success", "message": "새 이메일 주소로 확인 링크를 보냈습니다. 메일함을 확인해 주세요."}
+    except (UnauthorizedException, SessionExpiredException) as e:
+        db.rollback()
+        raise HTTPException(status_code=401, detail=str(e)) from e
+    except DomainException as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="이메일 변경 요청 중 서버 장애가 발생했습니다. (Fail-Closed)") from None
+
+
+@router.get("/email-change/confirm")
+async def email_change_confirm(
+    token: str = Query(..., description="이메일 변경 확인 토큰"),
+    mgmt_svc: AccountManagementService = Depends(get_account_management_service),
+    db: Session = Depends(get_db_session),
+):
+    """이메일 변경 확인 링크 엔드포인트 (FR-28/BR-A10). 토큰 검증 후 로그인 식별자에 새 주소 반영."""
+    try:
+        await mgmt_svc.confirm_email_change(token)
+        db.commit()
+        return {"status": "success", "message": "이메일 주소가 변경되었습니다."}
+    except DomainException as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="이메일 변경 확인 중 서버 장애가 발생했습니다.") from None
+
+
+@router.post("/account/delete")
+async def delete_account(
+    request: Request,
+    response: Response,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    deletion_svc: AccountDeletionService = Depends(get_account_deletion_service),
+    db: Session = Depends(get_db_session),
+):
+    """로그인 사용자 계정 삭제(탈퇴) 요청 (FR-28/BR-A11). 소프트 삭제 + 전 세션 즉시 무효화.
+    유예 기간 내 복구 가능; 영구 파기는 유예 경과 후 비동기 잡이 수행한다."""
+    session_id = request.cookies.get("session_id")
+    if not session_id:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
+    try:
+        principal = await session_mgr.verify(session_id)
+        await deletion_svc.request_deletion(principal.user_id)
+        db.commit()
+        response.delete_cookie(key="session_id")
+        return {"status": "success", "message": "계정이 탈퇴 처리되었습니다. 유예 기간 내에는 복구할 수 있습니다."}
+    except (UnauthorizedException, SessionExpiredException) as e:
+        db.rollback()
+        raise HTTPException(status_code=401, detail=str(e)) from e
+    except SessionStoreUnavailableException as e:
+        db.rollback()
+        raise HTTPException(status_code=503, detail="일시적으로 처리할 수 없습니다. 잠시 후 다시 시도해 주세요.") from e
+    except DomainException as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="계정 삭제 처리 중 서버 장애가 발생했습니다. (Fail-Closed)") from None
 
 
 @router.post("/signup", response_model=SignupResult, status_code=201)

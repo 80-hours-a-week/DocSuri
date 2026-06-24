@@ -54,6 +54,50 @@ def _render_password_reset_email(link: str) -> tuple[str, str, str]:
     return subject, body_text, body_html
 
 
+def _render_email_change_verification(link: str) -> tuple[str, str, str]:
+    """(subject, text, html) — 새 이메일로 보내는 변경 확인 링크 (FR-28/BR-A10)."""
+    subject = "[DocSuri] 새 이메일 주소 확인 링크"
+    body_text = (
+        "DocSuri 계정의 이메일 주소를 이 주소로 변경하려면 다음 링크를 30분 이내에 클릭해 주세요.\n"
+        "본인이 요청하지 않았다면 이 메일을 무시하셔도 됩니다.\n\n"
+        f"{link}"
+    )
+    body_html = f"""
+        <html>
+            <body>
+                <h3>DocSuri 이메일 변경 확인</h3>
+                <p>이 주소로 계정 이메일을 변경하려면 아래 링크를 클릭해 주세요 (30분 동안 유효합니다).</p>
+                <p><a href="{link}">이메일 변경 확인하기</a></p>
+                <p>본인이 요청하지 않았다면 이 메일을 무시하셔도 됩니다.</p>
+                <p>{link}</p>
+            </body>
+        </html>
+    """
+    return subject, body_text, body_html
+
+
+def _render_email_change_notice(new_email: str) -> tuple[str, str, str]:
+    """(subject, text, html) — 현재(기존) 이메일로 보내는 변경 시도 알림 (M2 — 계정 탈취 탐지).
+    링크를 포함하지 않는다(현 주소 소유자가 변경을 인지/이의제기하게 하는 알림 전용)."""
+    subject = "[DocSuri] 계정 이메일 변경이 요청되었습니다"
+    body_text = (
+        f"회원님 계정의 이메일 주소를 '{new_email}'(으)로 변경하려는 요청이 접수되었습니다.\n"
+        "본인이 요청한 것이 맞다면 새 주소로 보낸 확인 메일의 링크를 클릭해 주세요.\n"
+        "본인이 요청하지 않았다면 즉시 비밀번호를 변경하고 고객센터에 알려주세요.\n"
+    )
+    body_html = f"""
+        <html>
+            <body>
+                <h3>계정 이메일 변경 요청 알림</h3>
+                <p>회원님 계정의 이메일을 <b>{new_email}</b>(으)로 변경하려는 요청이 접수되었습니다.</p>
+                <p>본인이 요청했다면 새 주소로 보낸 확인 메일의 링크를 클릭해 주세요.</p>
+                <p>본인이 요청하지 않았다면 즉시 비밀번호를 변경하고 고객센터에 알려주세요.</p>
+            </body>
+        </html>
+    """
+    return subject, body_text, body_html
+
+
 def _emit_email_failure(observability_hub, e: Exception, provider: str) -> None:
     """소프트 폴백 실패 신호(EmailDeliveryFailureSignal) 발행 — 공통 헬퍼."""
     if not observability_hub:
@@ -81,6 +125,23 @@ class EmailClientInterface(ABC):
         """비밀번호 재설정 링크를 사용자에게 발송합니다 (FR-26/BR-A8)."""
         pass
 
+    @abstractmethod
+    async def _send(self, to: str, subject: str, text: str, html: str) -> bool:
+        """일반 발송 프리미티브(프로바이더별 1회 구현). 신규 메일 종류는 렌더 → _send로 위임한다.
+        ponytail: 기존 send_verification/reset는 자체 구현 유지(작동 중 코드 미변경)."""
+        pass
+
+    async def send_email_change_verification_email(self, email: str, token: str, confirm_link: str) -> bool:
+        """새 이메일로 변경 확인 링크를 발송한다 (FR-28/BR-A10)."""
+        link = f"{confirm_link}?token={token}"
+        subject, text, html = _render_email_change_verification(link)
+        return await self._send(email, subject, text, html)
+
+    async def send_email_change_notice_email(self, email: str, new_email: str) -> bool:
+        """현재(기존) 이메일로 변경 시도 알림을 발송한다 (M2 — 계정 탈취 탐지)."""
+        subject, text, html = _render_email_change_notice(new_email)
+        return await self._send(email, subject, text, html)
+
 
 class MockEmailClient(EmailClientInterface):
     """로컬 테스트를 위해 실제 이메일을 발송하지 않고 터미널 콘솔에 출력하는 Mock 이메일 클라이언트"""
@@ -100,6 +161,14 @@ class MockEmailClient(EmailClientInterface):
         logger.info(f"Reset Token: {token}")
         logger.info(f"Reset Link: {reset_link}?token={token}")
         logger.info("=============================================================")
+        return True
+
+    async def _send(self, to: str, subject: str, text: str, html: str) -> bool:
+        logger.info("================ [MOCK EMAIL DELIVERY] ================")
+        logger.info(f"To: {to}")
+        logger.info(f"Subject: {subject}")
+        logger.info(f"Body: {text}")
+        logger.info("=========================================================")
         return True
 
 
@@ -175,6 +244,29 @@ class SESEmailClient(EmailClientInterface):
             _emit_email_failure(self._observability_hub, e, provider="ses")
             return False
 
+    async def _send(self, to: str, subject: str, text: str, html: str) -> bool:
+        try:
+            ses = self._get_client()
+            response = await asyncio.to_thread(
+                lambda: ses.send_email(
+                    Source=self._sender_email,
+                    Destination={"ToAddresses": [to]},
+                    Message={
+                        "Subject": {"Data": subject, "Charset": "UTF-8"},
+                        "Body": {
+                            "Text": {"Data": text, "Charset": "UTF-8"},
+                            "Html": {"Data": html, "Charset": "UTF-8"},
+                        },
+                    },
+                )
+            )
+            logger.info(f"Email sent via SES to {to}. MessageId: {response.get('MessageId')}")
+            return True
+        except Exception as e:
+            logger.error(f"Amazon SES 발송 실패 (Soft-Fallback): {str(e)}")
+            _emit_email_failure(self._observability_hub, e, provider="ses")
+            return False
+
 
 class ResendEmailClient(EmailClientInterface):
     """Resend (https://resend.com) 트랜잭셔널 이메일 클라이언트.
@@ -242,6 +334,31 @@ class ResendEmailClient(EmailClientInterface):
             return False
         except Exception as e:
             logger.error(f"Resend 재설정 메일 발송 예외 (Soft-Fallback): {str(e)}")
+            _emit_email_failure(self._observability_hub, e, provider="resend")
+            return False
+
+    async def _send(self, to: str, subject: str, text: str, html: str) -> bool:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    self._ENDPOINT,
+                    headers={"Authorization": f"Bearer {self._api_key}"},
+                    json={
+                        "from": self._sender_email,
+                        "to": [to],
+                        "subject": subject,
+                        "html": html,
+                        "text": text,
+                    },
+                )
+            if resp.status_code in (200, 201):
+                logger.info(f"Email sent via Resend to {to}.")
+                return True
+            logger.error(f"Resend 발송 실패 status={resp.status_code} body={resp.text[:200]}")
+            _emit_email_failure(self._observability_hub, RuntimeError(f"resend_status_{resp.status_code}"), provider="resend")
+            return False
+        except Exception as e:
+            logger.error(f"Resend 발송 예외 (Soft-Fallback): {str(e)}")
             _emit_email_failure(self._observability_hub, e, provider="resend")
             return False
 

@@ -65,6 +65,30 @@ class SocialIdentityTable(Base):
     status = Column(String(24), default="LINKED", nullable=False)
 
 
+class EmailChangeRequestTable(Base):
+    """이메일 변경 요청 (FR-28 / BR-A10). 검증 완료(confirm) 전까지 Account.email(로그인
+    식별자)은 그대로 두고, 토큰 검증 시에만 newEmail로 반영한다(지연 반영). 토큰은 SHA-256
+    해시로만 저장하며, 계정당 활성 요청은 1개로 제한(생성 시 선삭제)."""
+    __tablename__ = "email_change_requests"
+
+    token_hash = Column(String(64), primary_key=True)
+    account_id = Column(String(36), nullable=False, index=True)
+    new_email = Column(String(254), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+
+
+class AccountDeletionTable(Base):
+    """계정 삭제 레코드 (FR-28 / BR-A11). 소프트 삭제 시점에 DEACTIVATED로 생성하고,
+    purge_after 경과 후 비동기 잡이 PURGED로 전이하며 자격증명을 영구 삭제한다. state로
+    멱등성을 보장(이미 PURGED면 재처리 안 함)."""
+    __tablename__ = "account_deletions"
+
+    account_id = Column(String(36), primary_key=True)
+    requested_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    purge_after = Column(DateTime, nullable=False, index=True)
+    state = Column(String(20), default=AccountStatus.DEACTIVATED.value, nullable=False)
+
+
 class CredentialRepository:
     """SQLAlchemy 기반의 Credential 및 계정 영속성 저장소 (PostgreSQL 매핑)"""
     
@@ -199,3 +223,104 @@ class CredentialRepository:
         self._session.add(account)
         self._session.flush()
         return account
+
+    # ── 이메일 변경 (FR-28 / BR-A10) ────────────────────────────────────────────
+    def create_email_change_request(
+        self, account_id: str, new_email: str, token_hash: str, expires_at: datetime
+    ) -> EmailChangeRequestTable:
+        """이메일 변경 요청을 생성한다. 계정당 활성 요청 1개로 제한(기존 선삭제)."""
+        self._session.query(EmailChangeRequestTable).filter(
+            EmailChangeRequestTable.account_id == account_id
+        ).delete()
+        rec = EmailChangeRequestTable(
+            token_hash=token_hash, account_id=account_id, new_email=new_email, expires_at=expires_at
+        )
+        self._session.add(rec)
+        self._session.flush()
+        return rec
+
+    def get_email_change_request(self, token_hash: str) -> EmailChangeRequestTable | None:
+        return (
+            self._session.query(EmailChangeRequestTable)
+            .filter(EmailChangeRequestTable.token_hash == token_hash)
+            .first()
+        )
+
+    def delete_email_change_request(self, token_hash: str) -> None:
+        self._session.query(EmailChangeRequestTable).filter(
+            EmailChangeRequestTable.token_hash == token_hash
+        ).delete()
+        self._session.flush()
+
+    # ── 계정 삭제·유예 파기 (FR-28 / BR-A11) ────────────────────────────────────
+    def create_account_deletion(self, account_id: str, purge_after: datetime) -> AccountDeletionTable:
+        """소프트 삭제 레코드를 생성한다(DEACTIVATED). 멱등: 기존 미파기 레코드가 있으면 재사용."""
+        existing = self.get_account_deletion(account_id)
+        if existing is not None:
+            return existing
+        rec = AccountDeletionTable(
+            account_id=account_id,
+            requested_at=datetime.now(UTC),
+            purge_after=purge_after,
+            state=AccountStatus.DEACTIVATED.value,
+        )
+        self._session.add(rec)
+        self._session.flush()
+        return rec
+
+    def get_account_deletion(self, account_id: str) -> AccountDeletionTable | None:
+        return (
+            self._session.query(AccountDeletionTable)
+            .filter(AccountDeletionTable.account_id == account_id)
+            .first()
+        )
+
+    def get_due_deletions(self, now: datetime) -> list[AccountDeletionTable]:
+        """유예(purge_after)가 경과한 미파기(DEACTIVATED) 삭제 레코드를 반환한다(파기 잡 입력)."""
+        return (
+            self._session.query(AccountDeletionTable)
+            .filter(
+                AccountDeletionTable.state == AccountStatus.DEACTIVATED.value,
+                AccountDeletionTable.purge_after <= now,
+            )
+            .all()
+        )
+
+    def delete_account_permanently(self, account_id: str) -> None:
+        """계정과 그에 딸린 모든 자격증명 잔여물을 영구 삭제한다(파기). 멱등.
+
+        accounts + 이메일 키 토큰(verification/reset) + 소셜 신원 + 이메일 변경 요청을 제거한다.
+        owner-scoped 콘텐츠(라이브러리·이력·연구세션) 파기는 U3가 직접 하지 않고
+        AccountDeleted 이벤트로 U4/U2/U11이 각자 수행한다(코드 DAG 비순환)."""
+        account = self.get_by_id(account_id)
+        if account is not None:
+            email = account.email
+            self._session.query(VerificationTokenTable).filter(
+                VerificationTokenTable.email == email
+            ).delete()
+            self._session.query(PasswordResetTokenTable).filter(
+                PasswordResetTokenTable.email == email
+            ).delete()
+        self._session.query(SocialIdentityTable).filter(
+            SocialIdentityTable.account_id == account_id
+        ).delete()
+        self._session.query(EmailChangeRequestTable).filter(
+            EmailChangeRequestTable.account_id == account_id
+        ).delete()
+        self._session.query(AccountTable).filter(AccountTable.id == account_id).delete()
+        self._session.flush()
+
+    def mark_deletion_purged(self, account_id: str) -> None:
+        """삭제 레코드를 PURGED로 전이해 재처리를 막는다(멱등 보증)."""
+        rec = self.get_account_deletion(account_id)
+        if rec is not None:
+            rec.state = "PURGED"
+            self._session.add(rec)
+            self._session.flush()
+
+    def delete_account_deletion(self, account_id: str) -> None:
+        """유예 중 재활성화(복구) 시 삭제 레코드를 제거한다(M1)."""
+        self._session.query(AccountDeletionTable).filter(
+            AccountDeletionTable.account_id == account_id
+        ).delete()
+        self._session.flush()

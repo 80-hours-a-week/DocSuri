@@ -46,6 +46,8 @@ class AccountStatus(str, Enum):
     PENDING = "PENDING"
     ACTIVE = "ACTIVE"
     LOCKED = "LOCKED"
+    # BR-A11: 소프트 삭제(탈퇴) — 즉시 로그인 차단·유예 동안 보존(복구 가능)·유예 경과 후 영구 파기(PURGED).
+    DEACTIVATED = "DEACTIVATED"
 
 class UserRole(str, Enum):
     USER = "USER"
