@@ -6,9 +6,10 @@ import styles from './BottomNav.module.css';
 import { useSession } from './session/SessionContext';
 
 // BottomNav — mobile-first fixed bottom tab bar, shown only when authenticated.
-// Two destinations today: 검색 / 마이페이지(라이브러리). "에이전트" 탭은 해당 기능이
-// 생긴 뒤 추가한다 — 빈 목적지로 가는 탭은 두지 않는다. A spacer reserves layout space
-// so page content can scroll clear of the fixed bar (scoped to pages that mount this).
+// Two destinations today: 검색 / 마이페이지(U10, /mypage — 관심 논문 섹션이 라이브러리로
+// 링크한다). "에이전트" 탭은 해당 기능이 생긴 뒤 추가한다 — 빈 목적지로 가는 탭은 두지
+// 않는다. A spacer reserves layout space so page content can scroll clear of the fixed bar
+// (scoped to pages that mount this).
 
 function SearchIcon() {
   return (
@@ -32,7 +33,7 @@ function UserIcon() {
 
 const TABS = [
   { href: '/search', label: '검색', Icon: SearchIcon, isActive: (p: string) => p.startsWith('/search') || p.startsWith('/paper') },
-  { href: '/library', label: '마이페이지', Icon: UserIcon, isActive: (p: string) => p.startsWith('/library') },
+  { href: '/mypage', label: '마이페이지', Icon: UserIcon, isActive: (p: string) => p.startsWith('/mypage') },
 ];
 
 export function BottomNav() {
