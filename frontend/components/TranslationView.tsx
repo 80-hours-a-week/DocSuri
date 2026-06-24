@@ -40,17 +40,18 @@ export function TranslationView({
   const termsRef = useRef<HTMLDivElement | null>(null);
   const { terms, setTerm } = useGlossaryTerms();
 
-  // Close the open editor on any pointer-down outside the badge row (mousedown fires
-  // before click, so a tap elsewhere dismisses before it activates anything).
+  // Close the open editor on any pointer-down outside the glossary section. `pointerdown`
+  // covers both mouse and touch (a plain `mousedown` may not fire on a real phone), and fires
+  // before click so a tap elsewhere dismisses before it activates anything.
   useEffect(() => {
     if (openIndex === null) return;
-    const onPointerDown = (e: MouseEvent) => {
+    const onPointerDown = (e: PointerEvent) => {
       if (termsRef.current && !termsRef.current.contains(e.target as Node)) {
         setOpenIndex(null);
       }
     };
-    document.addEventListener('mousedown', onPointerDown);
-    return () => document.removeEventListener('mousedown', onPointerDown);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [openIndex]);
 
   return (
