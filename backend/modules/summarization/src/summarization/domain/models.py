@@ -193,7 +193,33 @@ class SummaryDraft:
 
 @dataclass(frozen=True, slots=True)
 class TranslationDraft:
-    korean_text: str
+    """Structured translation output (BR-S18 / FR-13, PR-2): a 'translated doc-model' —
+    the source doc-model with text fields (section titles, paragraphs, list items,
+    table/figure captions) in Korean and structural/verbatim fields (block & section ids,
+    formula LaTeX, table numeric cells, figure assetRefs) copied unchanged. The client
+    renders it with the SAME rich viewer as the original body."""
+
+    doc_model: DocModel
+    kept_terms: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class TranslationSegment:
+    """One translatable text unit of a doc-model, keyed by a deterministic ``id`` derived
+    from the source block/section id (BR-S18). The LLM returns ``id → 번역텍스트`` so the
+    translator re-injects text into the source structure without the model dropping or
+    reordering blocks."""
+
+    id: str
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
+class TranslationSegmentsResult:
+    """Gateway translation result: ``translations`` maps segment id → Korean text;
+    ``kept_terms`` are terms left untranslated (BR-S4)."""
+
+    translations: dict[str, str]
     kept_terms: tuple[str, ...] = ()
 
 
@@ -254,8 +280,12 @@ class SummaryResultDTO:
                 ],
             }
         if self.translation is not None:
+            # Mirror the doc-model read path (router): emit the translated doc-model with
+            # ``exclude_none`` so absent optional fields stay absent (schema parity).
             out["translation"] = {
-                "koreanText": self.translation.korean_text,
+                "docModel": self.translation.doc_model.model_dump(
+                    mode="json", exclude_none=True
+                ),
                 "keptTerms": list(self.translation.kept_terms),
             }
         return out

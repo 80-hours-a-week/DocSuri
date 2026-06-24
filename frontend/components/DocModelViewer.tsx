@@ -10,7 +10,7 @@
 // block's anchorLabel (the AnchorVM still carries a label, not a doc-model id — the
 // id-based anchor contract is a follow-up). Span-precise inline highlight is a follow-up.
 import 'katex/dist/katex.min.css';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { AnchorVM, AssetRef, DocBlock, DocModel, DocSection } from '@/types/generated';
 import { useDocModel } from '@/lib/useDocModel';
 import { useAssets } from '@/lib/useAssets';
@@ -95,23 +95,58 @@ export function DocModelViewer({ paperId, version, anchor, arxivUrl }: DocModelV
       );
     case 'page':
       return (
-        <div className={styles.root} data-testid="docmodel-viewer" ref={containerRef}>
-          <DocTOC sections={outcome.docModel.sections} />
-          <article className={styles.body}>
-            {outcome.docModel.sections.map((s) => (
-              <SectionView key={s.id} section={s} depth={1} assetsById={assetsById} anchor={anchor} />
-            ))}
-          </article>
+        <div ref={containerRef}>
+          <DocModelBody docModel={outcome.docModel} assetsById={assetsById} anchor={anchor} />
         </div>
       );
   }
 }
 
+// Presentational doc-model render (TOC + nested section/block tree). Reused by the full-text
+// viewer and the structured translation view (BR-S18): both render the SAME structure — only
+// the text differs (original vs Korean). External text is escaped by React (BR-SF-9).
+export function DocModelBody({
+  docModel,
+  assetsById,
+  anchor,
+}: {
+  docModel: DocModel;
+  assetsById: Map<string, AssetRef>;
+  anchor?: AnchorVM | null;
+}) {
+  // Tap-to-enlarge: figures/tables/formulas are shown fit-to-width inline and open a
+  // full-screen, scaled-to-fit overlay on tap (no scrollbars).
+  const [zoom, setZoom] = useState<React.ReactNode | null>(null);
+  return (
+    <div className={styles.root} data-testid="docmodel-viewer">
+      <DocTOC sections={docModel.sections} />
+      <article className={styles.body}>
+        {docModel.sections.map((s) => (
+          <SectionView
+            key={s.id}
+            section={s}
+            depth={1}
+            assetsById={assetsById}
+            anchor={anchor}
+            onZoom={setZoom}
+          />
+        ))}
+      </article>
+      {zoom ? <BlockZoomOverlay onClose={() => setZoom(null)}>{zoom}</BlockZoomOverlay> : null}
+    </div>
+  );
+}
+
 // ---- table of contents (anchor jump) ------------------------------------
 
 function DocTOC({ sections }: { sections: DocSection[] }) {
-  const entries = useMemo(() => flattenToc(sections), [sections]);
-  if (entries.length === 0) return null;
+  // Only titled sections are navigable; a TOC is useful with at least two of them. So an
+  // abstract translation (one untitled section) or a single-section doc shows no TOC.
+  const entries = useMemo(
+    () => flattenToc(sections).filter((e) => e.title.trim().length > 0),
+    [sections],
+  );
+  if (entries.length < 2) return null;
   return (
     <nav className={styles.toc} aria-label="목차" data-testid="docmodel-toc">
       <p className={styles.tocTitle}>목차</p>
@@ -127,12 +162,105 @@ function DocTOC({ sections }: { sections: DocSection[] }) {
                   ?.scrollIntoView({ block: 'start', behavior: 'smooth' });
               }}
             >
-              {e.title || '(무제 섹션)'}
+              {e.title}
             </a>
           </li>
         ))}
       </ul>
     </nav>
+  );
+}
+
+// ---- tap-to-enlarge (figures / tables / formulas) -----------------------
+
+// Wraps a block so a tap/click/Enter opens the zoom overlay. `role=button` (not <button>)
+// so block content like <table> stays valid inside it.
+function ZoomTrigger({
+  children,
+  onZoom,
+  className,
+}: {
+  children: React.ReactNode;
+  onZoom: () => void;
+  className?: string;
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      className={className ? `${styles.zoomTrigger} ${className}` : styles.zoomTrigger}
+      onClick={onZoom}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onZoom();
+        }
+      }}
+      title="탭하면 크게 볼 수 있어요"
+      aria-label="크게 보기"
+    >
+      {children}
+    </div>
+  );
+}
+
+// Full-screen overlay that scales the content to FIT the viewport (enlarging small content,
+// shrinking large) so the whole thing is visible with no scrollbars. Transform is visual only,
+// so the measured natural size is stable. Tap the backdrop / ✕ / Esc to close.
+function BlockZoomOverlay({
+  children,
+  onClose,
+}: {
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const [scale, setScale] = useState(1);
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = contentRef.current;
+      if (!el) return;
+      const availW = window.innerWidth * 0.94;
+      const availH = window.innerHeight * 0.84;
+      const w = el.scrollWidth || 1;
+      const h = el.scrollHeight || 1;
+      setScale(Math.min(availW / w, availH / h));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [children]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className={styles.zoomOverlay}
+      role="dialog"
+      aria-modal="true"
+      aria-label="크게 보기"
+      onClick={onClose}
+      data-testid="block-zoom"
+    >
+      <button type="button" className={styles.zoomClose} onClick={onClose} aria-label="닫기">
+        ✕
+      </button>
+      <div
+        ref={contentRef}
+        className={styles.zoomContent}
+        style={{ transform: `scale(${scale})` }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -143,21 +271,36 @@ function SectionView({
   depth,
   assetsById,
   anchor,
+  onZoom,
 }: {
   section: DocSection;
   depth: number;
   assetsById: Map<string, AssetRef>;
   anchor?: AnchorVM | null;
+  onZoom: (node: React.ReactNode) => void;
 }) {
   const Heading = `h${Math.min(depth + 1, 6)}` as keyof React.JSX.IntrinsicElements;
   return (
     <section id={`dm-${section.id}`} className={styles.section}>
       {section.title ? <Heading className={styles.heading}>{section.title}</Heading> : null}
       {section.blocks.map((b) => (
-        <BlockView key={b.id} block={b} assetsById={assetsById} active={isActive(b, anchor)} />
+        <BlockView
+          key={b.id}
+          block={b}
+          assetsById={assetsById}
+          active={isActive(b, anchor)}
+          onZoom={onZoom}
+        />
       ))}
       {(section.sections ?? []).map((s) => (
-        <SectionView key={s.id} section={s} depth={depth + 1} assetsById={assetsById} anchor={anchor} />
+        <SectionView
+          key={s.id}
+          section={s}
+          depth={depth + 1}
+          assetsById={assetsById}
+          anchor={anchor}
+          onZoom={onZoom}
+        />
       ))}
     </section>
   );
@@ -167,10 +310,12 @@ function BlockView({
   block,
   assetsById,
   active,
+  onZoom,
 }: {
   block: DocBlock;
   assetsById: Map<string, AssetRef>;
   active: boolean;
+  onZoom: (node: React.ReactNode) => void;
 }) {
   const cls = active ? `${styles.block} ${styles.active}` : styles.block;
   switch (block.type) {
@@ -180,45 +325,63 @@ function BlockView({
           {renderInlineMath(block.text)}
         </p>
       );
-    case 'formula':
+    case 'formula': {
+      const math = <MathDisplay latex={block.latex} />;
       return (
         <div className={`${cls} ${styles.formula}`} data-block={block.id}>
-          <MathDisplay latex={block.latex} />
+          <ZoomTrigger className={styles.formulaInner} onZoom={() => onZoom(math)}>
+            {math}
+          </ZoomTrigger>
           {block.anchorLabel ? <span className={styles.eqno}>{block.anchorLabel}</span> : null}
         </div>
       );
-    case 'table':
+    }
+    case 'table': {
+      const table = (
+        <table className={styles.table}>
+          <tbody>
+            {block.rows.map((row, ri) => (
+              <tr key={ri}>
+                {row.cells.map((cell, ci) =>
+                  cell.isHeader ? (
+                    <th key={ci} colSpan={cell.colspan} rowSpan={cell.rowspan}>
+                      {renderInlineMath(cell.text)}
+                    </th>
+                  ) : (
+                    <td key={ci} colSpan={cell.colspan} rowSpan={cell.rowspan}>
+                      {renderInlineMath(cell.text)}
+                    </td>
+                  ),
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
       return (
         <figure className={cls} data-block={block.id}>
-          <table className={styles.table}>
-            <tbody>
-              {block.rows.map((row, ri) => (
-                <tr key={ri}>
-                  {row.cells.map((cell, ci) =>
-                    cell.isHeader ? (
-                      <th key={ci} colSpan={cell.colspan} rowSpan={cell.rowspan}>
-                        {renderInlineMath(cell.text)}
-                      </th>
-                    ) : (
-                      <td key={ci} colSpan={cell.colspan} rowSpan={cell.rowspan}>
-                        {renderInlineMath(cell.text)}
-                      </td>
-                    ),
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <ZoomTrigger className={styles.tableWrap} onZoom={() => onZoom(table)}>
+            {table}
+          </ZoomTrigger>
           {caption(block.anchorLabel, block.caption)}
         </figure>
       );
+    }
     case 'figure': {
       const asset = assetsById.get(block.assetRef.assetId);
+      const alt = block.caption ?? block.anchorLabel ?? '그림';
       return (
         <figure className={`${cls} ${styles.figure}`} data-block={block.id}>
           {asset?.url ? (
-            // eslint-disable-next-line @next/next/no-img-element -- signed S3 url, not a static asset
-            <img src={asset.url} alt={block.caption ?? block.anchorLabel ?? '그림'} loading="lazy" />
+            <ZoomTrigger
+              onZoom={() =>
+                // eslint-disable-next-line @next/next/no-img-element -- signed S3 url
+                onZoom(<img src={asset.url} alt={alt} className={styles.zoomImg} />)
+              }
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- signed S3 url, not a static asset */}
+              <img src={asset.url} alt={alt} loading="lazy" />
+            </ZoomTrigger>
           ) : null}
           {caption(block.anchorLabel, block.caption)}
         </figure>

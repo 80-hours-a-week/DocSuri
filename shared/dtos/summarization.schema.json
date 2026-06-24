@@ -152,19 +152,19 @@
     "TranslationDraft": {
       "type": "object",
       "title": "TranslationDraft",
-      "description": "Translated paper content keeping core technical terminology.",
+      "description": "Structured Korean translation as a 'translated doc-model' mirroring the source structure (FR-13): section titles, paragraphs, list items, and table/figure captions are translated to Korean, while structural/verbatim fields — block & section ids, formula LaTeX, table numeric cells, figure assetRefs — are copied from the source doc-model unchanged (numbers/equations are never translated; D8). Block & section ids mirror the source doc-model so the client renders it with the SAME rich viewer as the original body. Trace: FR-13, BR-S3.",
       "properties": {
-        "koreanText": {
-          "type": "string",
-          "description": "Korean translated body text. Trace: FR-13."
+        "docModel": {
+          "$ref": "https://docsuri.dev/shared/dtos/docmodel.schema.json#/$defs/DocModel",
+          "description": "The translated doc-model: Korean text over the source structure (ids mirror the source). Rendered by the same rich viewer as the original body. Trace: FR-13."
         },
         "keptTerms": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Untranslated terminology or glossary terms. Trace: FR-13."
+          "description": "Untranslated terminology or glossary terms kept as-is. Trace: FR-13."
         }
       },
-      "required": ["koreanText", "keptTerms"],
+      "required": ["docModel", "keptTerms"],
       "additionalProperties": false
     },
     "SummaryMeta": {

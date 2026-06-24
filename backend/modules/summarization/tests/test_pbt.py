@@ -84,9 +84,13 @@ def test_pbt_response_to_dict_sec9_all_states(status: str, tldr: str, korean: st
         )
         dto = SummaryResultDTO(task=Task.SUMMARY, summary=draft, meta={"source": "full_text"})
     elif status == "ok_translate":
+        from tests.stubs import tiny_doc
+
         dto = SummaryResultDTO(
             task=Task.TRANSLATE,
-            translation=TranslationDraft(korean_text=korean, kept_terms=("BERT",)),
+            translation=TranslationDraft(
+                doc_model=tiny_doc(paragraph=korean or "x"), kept_terms=("BERT",)
+            ),
             meta={"source": "abstract"},
         )
     elif status == "abstain":

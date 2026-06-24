@@ -97,6 +97,16 @@ def test_translate_path() -> None:
     assert "translation" in out
 
 
+def test_translate_abstains_on_empty_translation() -> None:
+    # A blank LLM response (empty translations map) leaves every field falling back to the source
+    # English text — that must NOT be served as a successful translation. The empty-translation
+    # gate compares against the source and abstains after a retry (BR-S18).
+    orch = make_orchestrator(llm=StubLlm(empty=True))
+    result = orch.run(_req(Task.TRANSLATE, abstract="An abstract about BERT."), _ctx())
+    assert isinstance(result, AbstainDTO)
+    assert result.reason == "empty_translation"
+
+
 def test_orchestrator_abstains_on_map_reduce_length() -> None:
     # No map-reduce summarizer wired → MAP_REDUCE band still abstains (current behavior).
     from summarization.domain.length_router import LengthRouter
@@ -175,16 +185,49 @@ def test_orchestrator_over_cap_rejects_even_with_map_reduce() -> None:
     assert result.reason == "input_too_long"
 
 
-def test_orchestrator_translate_map_reduce_abstains() -> None:
-    # Long translate (scope=full) → MAP_REDUCE band, but translate map-reduce is PR-2 → abstain.
+def test_orchestrator_translate_abstains_when_gate_off() -> None:
+    # Gate OFF (no map-reduce wired) → long translate (MAP_REDUCE band) abstains (BR-S6/S18).
+    from summarization.domain.length_router import LengthRouter
+    from summarization.domain.models import Scope
+
+    orch = make_orchestrator()
+    orch._length = LengthRouter(context_budget=5, input_cap=10_000)
+
+    req = SummaryRequest(paper_id="2401.1", version=1, task=Task.TRANSLATE, scope=Scope.FULL)
+    result = orch.run(req, _ctx())
+    assert isinstance(result, AbstainDTO)
+    assert result.reason == "input_too_long"
+
+
+def test_orchestrator_translate_map_only_inline_when_gate_on() -> None:
+    # Gate ON (map-reduce wired), no queue → long translate runs map-only INLINE → ok translation
+    # (a 'translated doc-model'), no reduce step (BR-S18).
+    from summarization.domain.length_router import LengthRouter
+    from summarization.domain.models import Scope
+
+    orch = make_orchestrator()
+    orch._length = LengthRouter(context_budget=5, input_cap=10_000)
+    orch._map_reduce = StubLlm()  # shared gate proxy (DOCSURI_MAP_REDUCE_ENABLED)
+
+    req = SummaryRequest(paper_id="2401.1", version=1, task=Task.TRANSLATE, scope=Scope.FULL)
+    out = orch.run(req, _ctx()).to_dict()
+    assert out["status"] == "ok"
+    assert out["task"] == "translate"
+    assert "docModel" in out["translation"]
+
+
+def test_orchestrator_translate_enqueues_pending_on_long_input() -> None:
+    # API path: MAP_REDUCE band + queue wired → enqueue a translate job, return pending (BR-S12).
     from summarization.domain.length_router import LengthRouter
     from summarization.domain.models import Scope
 
     orch = make_orchestrator()
     orch._length = LengthRouter(context_budget=5, input_cap=10_000)
     orch._map_reduce = StubLlm()
+    queue = _SpyQueue()
+    orch._summary_job_queue = queue
 
     req = SummaryRequest(paper_id="2401.1", version=1, task=Task.TRANSLATE, scope=Scope.FULL)
-    result = orch.run(req, _ctx())
-    assert isinstance(result, AbstainDTO)
-    assert result.reason == "input_too_long"
+    out = orch.run(req, _ctx()).to_dict()
+    assert out["status"] == "pending"
+    assert queue.calls == [("2401.1", "u1")]

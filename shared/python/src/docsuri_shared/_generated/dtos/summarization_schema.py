@@ -6,6 +6,7 @@ from __future__ import annotations
 from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, Field, RootModel
 from typing import Literal
+from . import docmodel_schema
 
 
 class SummarizeTask(StrEnum):
@@ -146,22 +147,6 @@ class SummaryDraft(BaseModel):
     )
 
 
-class TranslationDraft(BaseModel):
-    """
-    Translated paper content keeping core technical terminology.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid',
-    )
-    koreanText: str = Field(
-        ..., description='Korean translated body text. Trace: FR-13.'
-    )
-    keptTerms: list[str] = Field(
-        ..., description='Untranslated terminology or glossary terms. Trace: FR-13.'
-    )
-
-
 class SummaryMeta(BaseModel):
     """
     Summary metadata including fallback information.
@@ -177,27 +162,6 @@ class SummaryMeta(BaseModel):
         None,
         description="Fallback reason if processing was degraded (e.g., 'abstract'). Trace: FR-13.",
     )
-
-
-class SummaryResultDTO(BaseModel):
-    """
-    Successful summary or translation response. Only SEC-9 white-listed fields are exposed.
-    """
-
-    model_config = ConfigDict(
-        extra='forbid',
-    )
-    status: Literal['ok'] = Field(
-        ..., description='Successful status indicator. Trace: FR-11.'
-    )
-    task: SummarizeTask
-    meta: SummaryMeta
-    cached: bool = Field(
-        ...,
-        description='Indicates if the response was served from cache. Trace: FR-11.',
-    )
-    summary: SummaryDraft | None = None
-    translation: TranslationDraft | None = None
 
 
 class PendingDTO(BaseModel):
@@ -347,6 +311,45 @@ class PaperAssetsResponse(
         description='GET /api/papers/{id}/assets terminal union (FR-17). OA-license-gated like full-text (BR-SF-11).',
         title='PaperAssetsResponse',
     )
+
+
+class TranslationDraft(BaseModel):
+    """
+    Structured Korean translation as a 'translated doc-model' mirroring the source structure (FR-13): section titles, paragraphs, list items, and table/figure captions are translated to Korean, while structural/verbatim fields — block & section ids, formula LaTeX, table numeric cells, figure assetRefs — are copied from the source doc-model unchanged (numbers/equations are never translated; D8). Block & section ids mirror the source doc-model so the client renders it with the SAME rich viewer as the original body. Trace: FR-13, BR-S3.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    docModel: docmodel_schema.DocModel = Field(
+        ...,
+        description='The translated doc-model: Korean text over the source structure (ids mirror the source). Rendered by the same rich viewer as the original body. Trace: FR-13.',
+    )
+    keptTerms: list[str] = Field(
+        ...,
+        description='Untranslated terminology or glossary terms kept as-is. Trace: FR-13.',
+    )
+
+
+class SummaryResultDTO(BaseModel):
+    """
+    Successful summary or translation response. Only SEC-9 white-listed fields are exposed.
+    """
+
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    status: Literal['ok'] = Field(
+        ..., description='Successful status indicator. Trace: FR-11.'
+    )
+    task: SummarizeTask
+    meta: SummaryMeta
+    cached: bool = Field(
+        ...,
+        description='Indicates if the response was served from cache. Trace: FR-11.',
+    )
+    summary: SummaryDraft | None = None
+    translation: TranslationDraft | None = None
 
 
 class SummaryResponse(

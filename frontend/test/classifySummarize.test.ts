@@ -22,7 +22,13 @@ const translationOk = {
   task: 'translate',
   meta: { source: 'abstract' },
   cached: true,
-  translation: { koreanText: '한국어', keptTerms: ['Transformer'] },
+  translation: {
+    docModel: {
+      meta: { paperId: '1', version: 1, title: '', provenance: {} },
+      sections: [{ id: 's1', title: '', blocks: [{ id: 's1.p1', type: 'paragraph', text: '한국어' }] }],
+    },
+    keptTerms: ['Transformer'],
+  },
 };
 
 describe('classifySummarizeResponse — exhaustive status mapping (BR-SF-14)', () => {
