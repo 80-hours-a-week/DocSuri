@@ -1652,3 +1652,52 @@
 **Context**: CONSTRUCTION — U3 Accounts FR-27 OIDC 조정 코어 완료·검증. 리뷰 게이트 대기. 다음=FR-27 OIDC 트랜스포트+컨트롤러 또는 일시정지(비용).
 
 ---
+## Code Generation
+**Timestamp**: 2026-06-25T09:14:42Z
+**User Input**: "좋아요. 이제 버튼을 프론트에 만들어 연결하려고 합니다. mypage/setting에, 전에 만들었던 삭제와 초기화 기능을 여기다 자연스럽게 추가하고, 백엔드와 연결해 주세요."
+**AI Response**: "Added U9 personalization raw event deletion and profile reset controls to the mypage settings screen, connected them to ApiClient methods for POST /api/personalization/delete-events and POST /api/personalization/reset-profile, added mock transport handling, and covered the API/UI paths with focused tests."
+**Context**: U9 frontend settings controls implementation
+
+---
+## Code Update
+**Timestamp**: 2026-06-25T09:16:42Z
+**User Input**: "`개인맞춤 데이터` 라는 이름을 `맞춤 서비스`로 바꾸어 주세요. 또, 켜기/끄기는 왜 안만들었어요? 백엔드에 기능이 없는건가요?"
+**AI Response**: "Renamed the mypage settings section from `개인맞춤 데이터` to `맞춤 서비스` and checked the backend personalization settings contract. The backend currently exposes PATCH /api/personalization/settings but does not expose GET /api/personalization/settings, so the frontend cannot reliably render the current toggle state yet."
+**Context**: U9 mypage settings label update and backend settings contract clarification
+
+---
+## Code Generation
+**Timestamp**: 2026-06-25T09:17:58Z
+**User Input**: "좋아요. 그러면 백엔드에 상태 조회 기능도 추가해 주세요."
+**AI Response**: "Added GET /api/personalization/settings to return the current user's personalization settings, extended the existing backend personalization settings test to verify default and updated states, and updated the U9 code summary route table."
+**Context**: U9 backend personalization settings read endpoint
+
+---
+## Code Generation
+**Timestamp**: 2026-06-25T09:20:21Z
+**User Input**: "좋아요. 이제 프론트에 토글 버튼을 추가해 주세요."
+**AI Response**: "Added a personalization enabled toggle to the mypage settings screen, connected it to GET/PATCH /api/personalization/settings through ApiClient, added mock transport responses, and covered the API and UI toggle paths with focused tests."
+**Context**: U9 frontend personalization settings toggle implementation
+
+---
+## Bug Fix
+**Timestamp**: 2026-06-25T09:25:54Z
+**User Input**: "마이페이지 -> 설정에 만든거 맞아요? 설정 페이지가 접속이 안돼요."
+**AI Response**: "Confirmed the controls were added to /mypage/settings and fixed the settings page load path so U9 personalization settings lookup failure no longer blocks the whole settings screen. The page now loads consents as the required data and disables the personalization controls with a status message when the U9 settings endpoint is unavailable."
+**Context**: U9 frontend settings page availability fix
+
+---
+## Rollback
+**Timestamp**: 2026-06-25T09:28:31Z
+**User Input**: "좋아요. 테스트 환경에서 확인 했으니, 배포 환경 사용을 기준으로 롤백해 주세요."
+**AI Response**: "Rolled back the test-environment fail-open behavior in the mypage settings screen. The deployment-oriented behavior now treats GET /api/personalization/settings as required for the settings page, while keeping the U9 toggle/delete/reset controls."
+**Context**: U9 frontend settings deployment behavior rollback
+
+---
+## PR Documentation
+**Timestamp**: 2026-06-25T09:30:31Z
+**User Input**: "202606251830_PR.md와 커밋 메시지를 작성해 주세요."
+**AI Response**: "Created 202606251830_PR.md from the repository pull request template for the U9 mypage settings controls and prepared a commit message."
+**Context**: U9 settings PR documentation and commit message generation
+
+---

@@ -34,6 +34,36 @@ describe('MyPageSettingsScreen (U10)', () => {
     await waitFor(() => expect(checkbox).toBeChecked());
   });
 
+  it('deletes personalization logs and resets the profile from settings', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderScreen();
+
+    await screen.findByTestId('mypage-personalization-data');
+    await userEvent.click(screen.getByTestId('mypage-personalization-delete-events'));
+    await waitFor(() =>
+      expect(screen.getByTestId('mypage-action-notice')).toHaveTextContent(
+        '개인맞춤 행동 로그 0건을 삭제했습니다.',
+      ),
+    );
+
+    await userEvent.click(screen.getByTestId('mypage-personalization-reset-profile'));
+    await waitFor(() =>
+      expect(screen.getByTestId('mypage-action-notice')).toHaveTextContent(
+        '개인맞춤 프로필을 초기화했습니다.',
+      ),
+    );
+  });
+
+  it('toggles the personalization setting', async () => {
+    renderScreen();
+    const checkbox = await screen.findByTestId('mypage-personalization-enabled');
+    expect(checkbox).toBeChecked();
+
+    await userEvent.click(checkbox);
+
+    await waitFor(() => expect(checkbox).not.toBeChecked());
+  });
+
   it('logs out via the shared session and redirects home', async () => {
     renderScreen();
     await screen.findByTestId('mypage-account-actions');
