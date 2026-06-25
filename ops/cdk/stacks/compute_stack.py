@@ -222,6 +222,17 @@ class ComputeStack(Stack):
             "DOCSURI_SUMMARY_JOB_QUEUE_URL": (  # long-summary async job (BR-S12)
                 f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-summary-job-queue"
             ),
+            # Activation: mounting the U7 read path (summarization_enabled = bool(bucket)). The
+            # papers bucket is Ingestion-owned (same name the summary worker carries); the IAM for
+            # S3 read/write + Bedrock invoke is already granted to this task role below.
+            "DOCSURI_SUMMARY_BUCKET": f"docsuri-papers-fulltext-{self.account}",
+            # doc-model rich view (본문): on a read miss the API enqueues a BUILD_DOC_MODEL job to
+            # the ingestion queue (DOCSURI_DOCMODEL_BUILD_QUEUE_URL above) and returns `building`;
+            # the ingestion worker builds + caches it. OFF → license_unavailable.
+            "DOCSURI_DOCMODEL_VIEWER_ENABLED": "true",
+            # Long-input summaries: map-reduce band enqueues to the summary-job queue (async worker)
+            # and returns `pending`; without this the MAP_REDUCE band abstains (input_too_long).
+            "DOCSURI_MAP_REDUCE_ENABLED": "true",
             "CITATION_GRAPH_ENABLED": "true",
             "PERSONALIZATION_ENABLED": "true",
             "PERSONALIZATION_RAW_EVENT_RETENTION_DAYS": "90",
@@ -454,6 +465,15 @@ class ComputeStack(Stack):
             iam.PolicyStatement(
                 actions=["s3:GetObject"],
                 resources=[f"{_papers_bucket}/doc-model/*"],
+            )
+        )
+        # Full-text source (S3FullTextSource reads full-text/{paperId}/v{n}.txt) — the source-
+        # selector fallback for summary/full-translation when the doc-model is absent. Without
+        # this the fallback hits AccessDenied instead of degrading to abstract.
+        self.service.task_definition.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["s3:GetObject"],
+                resources=[f"{_papers_bucket}/full-text/*"],
             )
         )
         self.service.task_definition.task_role.add_to_principal_policy(
