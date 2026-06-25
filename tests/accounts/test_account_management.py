@@ -83,7 +83,10 @@ async def test_request_email_change_sends_verification_and_notice(session):
     email_client.send_email_change_notice_email.return_value = True
     svc = AccountManagementService(repo, AsyncMock(), email_client)
 
-    await svc.request_email_change(acct.id, "New@docsuri.org", "https://docsuri.org/email-change/confirm")
+    await svc.request_email_change(
+        acct.id, "New@docsuri.org", "https://docsuri.org/email-change/confirm",
+        current_password="OldPw123!@x", revoke_link_base="https://docsuri.org/email-change/revoke",
+    )
     session.commit()
 
     email_client.send_email_change_verification_email.assert_awaited_once()
@@ -100,7 +103,9 @@ async def test_request_email_change_in_use_is_noop(session):
     email_client = AsyncMock()
     svc = AccountManagementService(repo, AsyncMock(), email_client)
 
-    await svc.request_email_change(acct.id, "taken@docsuri.org", "https://x/confirm")
+    await svc.request_email_change(
+        acct.id, "taken@docsuri.org", "https://x/confirm", current_password="OldPw123!@x"
+    )
     email_client.send_email_change_verification_email.assert_not_awaited()  # enumeration-safe (SEC-BR-2)
 
 
@@ -110,7 +115,9 @@ async def test_request_email_change_same_email_rejected(session):
     acct = _active_account(repo, session)
     svc = AccountManagementService(repo, AsyncMock(), AsyncMock())
     with pytest.raises(DomainException):
-        await svc.request_email_change(acct.id, "user@docsuri.org", "https://x/confirm")
+        await svc.request_email_change(
+            acct.id, "user@docsuri.org", "https://x/confirm", current_password="OldPw123!@x"
+        )
 
 
 # ── confirm_email_change ─────────────────────────────────────────────────────
@@ -123,7 +130,10 @@ async def test_confirm_email_change_applies_and_consumes(session):
     email_client.send_email_change_notice_email.return_value = True
     svc = AccountManagementService(repo, AsyncMock(), email_client)
 
-    await svc.request_email_change(acct.id, "new@docsuri.org", "https://x/confirm")
+    await svc.request_email_change(
+        acct.id, "new@docsuri.org", "https://x/confirm",
+        current_password="OldPw123!@x", revoke_link_base="https://x/revoke",
+    )
     session.commit()
     token = _change_token(email_client)
 
@@ -142,3 +152,66 @@ async def test_confirm_email_change_invalid_token_rejected(session):
     svc = AccountManagementService(repo, AsyncMock(), AsyncMock())
     with pytest.raises(DomainException):
         await svc.confirm_email_change("nonexistent-token")
+
+
+# ── re-auth (H7) + session invalidation (H5) + revoke (H5) ─────────────────────
+def _revoke_token(email_client) -> str:
+    # send_email_change_notice_email(email, new_email, revoke_link) — revoke_link is positional[2].
+    link = email_client.send_email_change_notice_email.call_args.args[2]
+    return link.split("token=")[1]
+
+
+@pytest.mark.asyncio
+async def test_request_email_change_requires_correct_password(session):
+    repo = CredentialRepository(session)
+    acct = _active_account(repo, session)
+    svc = AccountManagementService(repo, AsyncMock(), AsyncMock())
+    with pytest.raises(DomainException):
+        await svc.request_email_change(
+            acct.id, "new@docsuri.org", "https://x/confirm", current_password="WrongPw1!@x"
+        )
+    with pytest.raises(DomainException):
+        await svc.request_email_change(acct.id, "new@docsuri.org", "https://x/confirm")  # 비번 미제공
+
+
+@pytest.mark.asyncio
+async def test_confirm_email_change_invalidates_all_sessions(session):
+    repo = CredentialRepository(session)
+    acct = _active_account(repo, session)
+    sm = AsyncMock()
+    email_client = AsyncMock()
+    svc = AccountManagementService(repo, sm, email_client)
+    await svc.request_email_change(
+        acct.id, "new2@docsuri.org", "https://x/confirm",
+        current_password="OldPw123!@x", revoke_link_base="https://x/revoke",
+    )
+    session.commit()
+    token = _change_token(email_client)
+
+    await svc.confirm_email_change(token)
+    session.commit()
+
+    sm.invalidate_all_for_user.assert_awaited_once_with(acct.id)  # H5: 식별자 변경 시 전 세션 무효화
+
+
+@pytest.mark.asyncio
+async def test_revoke_email_change_cancels_pending(session):
+    repo = CredentialRepository(session)
+    acct = _active_account(repo, session)
+    email_client = AsyncMock()
+    svc = AccountManagementService(repo, AsyncMock(), email_client)
+    await svc.request_email_change(
+        acct.id, "new@docsuri.org", "https://x/confirm",
+        current_password="OldPw123!@x", revoke_link_base="https://x/revoke",
+    )
+    session.commit()
+    confirm_token = _change_token(email_client)
+    revoke_token = _revoke_token(email_client)
+
+    await svc.revoke_email_change(revoke_token)  # 현 주소 소유자가 취소(세션 불필요)
+    session.commit()
+
+    assert repo.get_email_change_request(_hash_token(confirm_token)) is None  # 요청 폐기
+    with pytest.raises(DomainException):
+        await svc.confirm_email_change(confirm_token)  # 확인 토큰도 무효
+    assert repo.get_by_id(acct.id).email == "user@docsuri.org"  # 이메일 미변경

@@ -3,6 +3,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 
+from backend.middleware.rate_limit import InProcessWindowLimiter, RedisRateLimiter
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
@@ -21,6 +22,7 @@ from .models import (
     SocialLinkConfirmationRequired,
     UnauthorizedException,
     UserRole,
+    normalize_email,
 )
 from .repository.credential import CredentialRepository
 from .repository.session import SessionRepository
@@ -58,8 +60,14 @@ class ChangePasswordRequest(BaseModel):
     newPassword: str
 
 # 이메일 변경 요청 DTO (U3-내부 — 로그인 사용자 자가 관리, FR-28/BR-A10).
+# currentPassword: 비밀번호 계정은 재인증 필수(감사 H7); 소셜-only는 생략 가능.
 class EmailChangeRequestBody(BaseModel):
     newEmail: str
+    currentPassword: str | None = None
+
+# 계정 삭제(탈퇴) 요청 DTO (U3-내부, FR-28/BR-A11). 비밀번호 계정은 재인증 필수(감사 H7).
+class DeleteAccountRequest(BaseModel):
+    currentPassword: str | None = None
 
 
 def _verification_link_base(request: Request) -> str:
@@ -169,6 +177,15 @@ def _email_change_confirm_link_base(request: Request) -> str:
     return str(request.base_url) + "auth/email-change/confirm"
 
 
+def _email_change_revoke_link_base(request: Request) -> str:
+    """이메일 변경 취소(revoke) 링크의 공개 베이스 URL. 현(기존) 주소로 보내는 알림 메일에 실린다.
+    프로덕션은 프런트 페이지(`/email-change/revoke`), 로컬은 백엔드 revoke 경로로 폴백."""
+    public = os.getenv("PUBLIC_APP_URL", "").strip().rstrip("/")
+    if public:
+        return f"{public}/email-change/revoke"
+    return str(request.base_url) + "auth/email-change/revoke"
+
+
 def get_account_management_service(
     request: Request,
     repo: CredentialRepository = Depends(get_credential_repo),
@@ -241,6 +258,42 @@ def _client_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
 
 
+# 이메일 발송/가입 엔드포인트 레이트리밋 (SEC-11, 감사 M1/M6) — 이메일 폭탄·대량 PENDING 생성 방어.
+# 한도는 env로 조정 가능. per-email은 짧은 창의 엄격 한도, per-IP는 더 긴 창의 완화 한도.
+_RL_EMAIL_LIMIT = int(os.getenv("EMAIL_RATELIMIT_PER_EMAIL") or "5")
+_RL_EMAIL_WINDOW = int(os.getenv("EMAIL_RATELIMIT_EMAIL_WINDOW_SECONDS") or "900")  # 15분
+_RL_IP_LIMIT = int(os.getenv("EMAIL_RATELIMIT_PER_IP") or "20")
+_RL_IP_WINDOW = int(os.getenv("EMAIL_RATELIMIT_IP_WINDOW_SECONDS") or "3600")  # 1시간
+
+
+@lru_cache(maxsize=1)
+def _get_email_rate_limiter():
+    """REDIS_HOST 설정 시 워커 간 공유 RedisRateLimiter, 아니면 프로세스 내 폴백(로컬/테스트)."""
+    host = os.getenv("REDIS_HOST", "").strip()
+    if host:
+        return RedisRateLimiter(
+            redis_host=host,
+            redis_port=int(os.getenv("REDIS_PORT") or "6379"),
+            use_tls=os.getenv("REDIS_TLS", "").strip().lower() in {"1", "true", "yes", "on"},
+        )
+    return InProcessWindowLimiter()
+
+
+async def _enforce_email_rate_limit(request: Request, scope: str, email: str | None) -> None:
+    """이메일 키(있으면)와 IP 키 양쪽에 레이트리밋을 적용한다. 초과 시 429.
+    Redis 장애 시 limiter는 fail-open(가용성 우선) — 게이트웨이 per-IP 한도가 백스톱."""
+    limiter = _get_email_rate_limiter()
+    too_many = "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요."
+    norm = normalize_email(email) if email else ""
+    if norm and not await limiter.allow(
+        f"{scope}:email:{norm}", limit=_RL_EMAIL_LIMIT, window_seconds=_RL_EMAIL_WINDOW
+    ):
+        raise HTTPException(status_code=429, detail=too_many)
+    ip = _client_ip(request) or "unknown"
+    if not await limiter.allow(f"{scope}:ip:{ip}", limit=_RL_IP_LIMIT, window_seconds=_RL_IP_WINDOW):
+        raise HTTPException(status_code=429, detail=too_many)
+
+
 @router.post("/password-reset/request")
 async def password_reset_request(
     req: PasswordResetRequest,
@@ -249,6 +302,8 @@ async def password_reset_request(
     db: Session = Depends(get_db_session),
 ):
     """비밀번호 재설정 요청 (FR-26/BR-A8). 계정 열거 방지 — 가입/상태와 무관하게 항상 동일 응답."""
+    # 레이트리밋(SEC-11)은 try 밖에서 — 429는 열거방지 일반응답에 삼켜지지 않고 그대로 전파돼야 한다.
+    await _enforce_email_rate_limit(request, "password-reset", req.email)
     base_url = _reset_link_base(request)
     try:
         await reset_svc.request_reset(req.email, base_url)
@@ -338,10 +393,15 @@ async def email_change_request(
     session_id = request.cookies.get("session_id")
     if not session_id:
         raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
+    await _enforce_email_rate_limit(request, "email-change", req.newEmail)
     confirm_base = _email_change_confirm_link_base(request)
+    revoke_base = _email_change_revoke_link_base(request)
     try:
         principal = await session_mgr.verify(session_id)
-        await mgmt_svc.request_email_change(principal.user_id, req.newEmail, confirm_base)
+        await mgmt_svc.request_email_change(
+            principal.user_id, req.newEmail, confirm_base,
+            current_password=req.currentPassword, revoke_link_base=revoke_base,
+        )
         db.commit()
         return {"status": "success", "message": "새 이메일 주소로 확인 링크를 보냈습니다. 메일함을 확인해 주세요."}
     except (UnauthorizedException, SessionExpiredException) as e:
@@ -368,6 +428,9 @@ async def email_change_confirm(
         await mgmt_svc.confirm_email_change(token)
         db.commit()
         return {"status": "success", "message": "이메일 주소가 변경되었습니다."}
+    except SessionStoreUnavailableException as e:
+        db.rollback()
+        raise HTTPException(status_code=503, detail="일시적으로 처리할 수 없습니다. 잠시 후 다시 시도해 주세요.") from e
     except DomainException as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -376,22 +439,46 @@ async def email_change_confirm(
         raise HTTPException(status_code=500, detail="이메일 변경 확인 중 서버 장애가 발생했습니다.") from None
 
 
+@router.get("/email-change/revoke")
+async def email_change_revoke(
+    token: str = Query(..., description="이메일 변경 취소 토큰"),
+    mgmt_svc: AccountManagementService = Depends(get_account_management_service),
+    db: Session = Depends(get_db_session),
+):
+    """이메일 변경 취소 링크 엔드포인트 (FR-28/BR-A10, 감사 H5). 현(기존) 주소 소유자가 세션 없이도
+    보류 중인 변경을 차단할 수 있다. 토큰은 알림 메일에만 실리며 단일 사용."""
+    try:
+        await mgmt_svc.revoke_email_change(token)
+        db.commit()
+        return {"status": "success", "message": "이메일 변경 요청이 취소되었습니다."}
+    except DomainException as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="이메일 변경 취소 중 서버 장애가 발생했습니다.") from None
+
+
 @router.post("/account/delete")
 async def delete_account(
     request: Request,
     response: Response,
+    req: DeleteAccountRequest | None = None,
     session_mgr: SessionManager = Depends(get_session_manager),
     deletion_svc: AccountDeletionService = Depends(get_account_deletion_service),
     db: Session = Depends(get_db_session),
 ):
     """로그인 사용자 계정 삭제(탈퇴) 요청 (FR-28/BR-A11). 소프트 삭제 + 전 세션 즉시 무효화.
-    유예 기간 내 복구 가능; 영구 파기는 유예 경과 후 비동기 잡이 수행한다."""
+    유예 기간 내 복구 가능; 영구 파기는 유예 경과 후 비동기 잡이 수행한다. 비밀번호 계정은
+    현재 비밀번호 재인증을 요구한다(감사 H7)."""
     session_id = request.cookies.get("session_id")
     if not session_id:
         raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
     try:
         principal = await session_mgr.verify(session_id)
-        await deletion_svc.request_deletion(principal.user_id)
+        await deletion_svc.request_deletion(
+            principal.user_id, current_password=req.currentPassword if req else None
+        )
         db.commit()
         _clear_session_cookie(response)
         return {"status": "success", "message": "계정이 탈퇴 처리되었습니다. 유예 기간 내에는 복구할 수 있습니다."}
@@ -525,6 +612,7 @@ async def signup(
     가입 성공 시 PENDING 계정이 생성되며 이메일 인증 발송 처리됩니다.
     """
     # 메일 인증용 공개(클릭 가능) 베이스 링크 생성 (프로덕션은 PUBLIC_APP_URL→BFF 경유)
+    await _enforce_email_rate_limit(request, "signup", req.email)
     base_url = _verification_link_base(request)
 
     try:
@@ -630,6 +718,7 @@ async def resend_verification(
 
     계정 열거 방지(SEC): 입력 이메일의 가입/상태와 무관하게 항상 동일한 일반 응답을 반환한다.
     재발송 가능 여부(부존재/이미 활성 등)는 노출하지 않는다."""
+    await _enforce_email_rate_limit(request, "resend-verification", req.email)
     base_url = _verification_link_base(request)
     try:
         await signup_svc.resend_verification(req.email, base_url)

@@ -47,7 +47,7 @@ async def test_request_deletion_soft_deletes_invalidates_no_event(session):
     publisher = AsyncMock()
     svc = AccountDeletionService(repo, sm, publisher)
 
-    await svc.request_deletion(acct.id)
+    await svc.request_deletion(acct.id, "OldPw123!@x")
     session.commit()
 
     assert repo.get_by_id(acct.id).status == AccountStatus.DEACTIVATED.value
@@ -62,7 +62,7 @@ async def test_purge_job_publishes_event_and_permanently_deletes(session):
     acct = _active_account(repo, session)
     publisher = AsyncMock()
     svc = AccountDeletionService(repo, AsyncMock(), publisher, grace_days=30)
-    await svc.request_deletion(acct.id)
+    await svc.request_deletion(acct.id, "OldPw123!@x")
     session.commit()
 
     purged = await svc.purge_job(now=_naive(days=31))
@@ -88,7 +88,7 @@ async def test_purge_job_cascades_credential_artifacts(session):
     repo.create_reset_token(acct.email, "resethash1", _naive(days=0) + timedelta(minutes=30))
     session.commit()
     svc = AccountDeletionService(repo, AsyncMock(), AsyncMock(), grace_days=0)
-    await svc.request_deletion(acct.id)
+    await svc.request_deletion(acct.id, "OldPw123!@x")
     session.commit()
 
     await svc.purge_job(now=_naive(days=1))
@@ -99,11 +99,56 @@ async def test_purge_job_cascades_credential_artifacts(session):
 
 
 @pytest.mark.asyncio
+async def test_purge_job_isolates_failing_publish(session):
+    # 한 계정의 발행 실패가 나머지 due 계정의 파기를 막지 않는다(HOL 제거·행별 트랜잭션·at-least-once).
+    repo = CredentialRepository(session)
+    good = _active_account(repo, session, email="good@docsuri.org")
+    bad = _active_account(repo, session, email="bad@docsuri.org")
+    publisher = AsyncMock()
+
+    async def _publish(account_id, occurred_at, event_id):
+        if account_id == bad.id:
+            raise RuntimeError("eventbridge down")
+
+    publisher.publish.side_effect = _publish
+    svc = AccountDeletionService(repo, AsyncMock(), publisher, grace_days=0)
+    await svc.request_deletion(good.id, "OldPw123!@x")
+    await svc.request_deletion(bad.id, "OldPw123!@x")
+    session.commit()
+
+    purged = await svc.purge_job(now=_naive(days=1))
+
+    assert purged == 1
+    assert repo.get_by_id(good.id) is None  # 정상 계정은 파기됨
+    assert repo.get_by_id(bad.id) is not None  # 실패 계정은 살아남아 다음 회차 재시도 대상
+    assert repo.get_account_deletion(bad.id).state == AccountStatus.DEACTIVATED.value
+
+
+@pytest.mark.asyncio
+async def test_purge_job_event_id_is_deterministic(session):
+    # event_id는 account_id에서 결정적으로 파생 → 재시도에도 동일(구독자 중복 제거 가능).
+    repo = CredentialRepository(session)
+    acct = _active_account(repo, session)
+    publisher = AsyncMock()
+    svc = AccountDeletionService(repo, AsyncMock(), publisher, grace_days=0)
+    await svc.request_deletion(acct.id, "OldPw123!@x")
+    session.commit()
+
+    import uuid as _uuid
+
+    from backend.modules.accounts.services.account_deletion import _ACCOUNT_DELETED_NS
+
+    await svc.purge_job(now=_naive(days=1))
+    emitted_event_id = publisher.publish.call_args.args[2]
+    assert emitted_event_id == str(_uuid.uuid5(_ACCOUNT_DELETED_NS, acct.id))
+
+
+@pytest.mark.asyncio
 async def test_purge_job_skips_not_yet_due(session):
     repo = CredentialRepository(session)
     acct = _active_account(repo, session)
     svc = AccountDeletionService(repo, AsyncMock(), AsyncMock(), grace_days=30)
-    await svc.request_deletion(acct.id)
+    await svc.request_deletion(acct.id, "OldPw123!@x")
     session.commit()
 
     purged = await svc.purge_job()  # now ~= request time; purge_after = +30d → not due
@@ -116,7 +161,7 @@ async def test_reactivate_restores_within_grace(session):
     repo = CredentialRepository(session)
     acct = _active_account(repo, session)
     svc = AccountDeletionService(repo, AsyncMock(), AsyncMock())
-    await svc.request_deletion(acct.id)
+    await svc.request_deletion(acct.id, "OldPw123!@x")
     session.commit()
 
     await svc.reactivate(acct.id)
@@ -133,3 +178,16 @@ async def test_reactivate_non_deleted_rejected(session):
     svc = AccountDeletionService(repo, AsyncMock(), AsyncMock())
     with pytest.raises(DomainException):
         await svc.reactivate(acct.id)
+
+
+@pytest.mark.asyncio
+async def test_request_deletion_requires_correct_password(session):
+    # 감사 H7: 비밀번호 계정 탈퇴는 현재 비밀번호 재인증 필수(CSRF·세션탈취 방어).
+    repo = CredentialRepository(session)
+    acct = _active_account(repo, session)
+    svc = AccountDeletionService(repo, AsyncMock(), AsyncMock())
+    with pytest.raises(DomainException):
+        await svc.request_deletion(acct.id, "WrongPw1!@x")  # 틀린 비번
+    with pytest.raises(DomainException):
+        await svc.request_deletion(acct.id)  # 비번 미제공
+    assert repo.get_by_id(acct.id).status == AccountStatus.ACTIVE.value  # 삭제되지 않음

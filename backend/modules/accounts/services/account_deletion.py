@@ -22,13 +22,20 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
+from argon2.exceptions import InvalidHash, VerificationError
+
 from ..models import AccountStatus, DomainException
-from ..repository.credential import CredentialRepository
+from ..password import get_password_hasher
+from ..repository.credential import CredentialRepository, has_usable_password
 from .session_manager import SessionManager
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_GRACE_DAYS = 30  # 유예 기간 N (events.md 기본 제안 30일; 운영/법적 요건으로 조정).
+
+# AccountDeleted event_id를 account_id로부터 결정적으로 파생하기 위한 네임스페이스(고정).
+# 재시도 시에도 동일 account_id → 동일 event_id가 되어 구독자가 event_id로 중복 제거할 수 있다.
+_ACCOUNT_DELETED_NS = uuid.uuid5(uuid.NAMESPACE_URL, "https://docsuri.org/events/AccountDeleted")
 
 
 class AccountDeletedPublisher(Protocol):
@@ -39,7 +46,8 @@ class AccountDeletedPublisher(Protocol):
 
 class LoggingAccountDeletedPublisher:
     """기본 발행자 — 구조화 로그로만 기록한다. 실 EventBridge 트랜스포트는 인프라 슬라이스로 이월.
-    멱등 키는 ``account_id``, 중복 식별 키는 ``event_id``(at-least-once)다."""
+    멱등 키는 ``account_id``; ``event_id``는 account_id로부터 결정적으로 파생되므로(uuid5) 재시도
+    시에도 동일해 중복 식별 키로도 쓸 수 있다 (at-least-once)."""
 
     async def publish(self, account_id: str, occurred_at: datetime, event_id: str) -> None:
         logger.info(
@@ -116,12 +124,24 @@ class AccountDeletionService:
         self._session_manager = session_manager
         self._publisher = publisher or LoggingAccountDeletedPublisher()
         self._grace_days = grace_days
+        self._hasher = get_password_hasher()
 
-    async def request_deletion(self, account_id: str) -> None:
-        """소프트 삭제: DEACTIVATED 전이 + 전 세션 무효화 + 유예 레코드 생성 (멱등)."""
+    async def request_deletion(self, account_id: str, current_password: str | None = None) -> None:
+        """소프트 삭제: DEACTIVATED 전이 + 전 세션 무효화 + 유예 레코드 생성 (멱등).
+        비밀번호 계정은 현재 비밀번호 재인증을 요구한다(파괴적 작업 CSRF·세션탈취 방어, 감사 H7);
+        소셜-only 계정은 제공할 비밀번호가 없어 건너뛴다(세션 소유로 충분)."""
         account = self._repo.get_by_id(account_id)
         if account is None:
             raise DomainException("계정을 찾을 수 없습니다.")
+        if has_usable_password(account):
+            if not current_password:
+                raise DomainException("현재 비밀번호를 입력해 주세요.")
+            try:
+                ok = await asyncio.to_thread(self._hasher.verify, account.password_hash, current_password)
+            except (VerificationError, InvalidHash):
+                ok = False
+            if not ok:
+                raise DomainException("현재 비밀번호가 올바르지 않습니다.")
         account.status = AccountStatus.DEACTIVATED.value
         self._repo.update_account(account)
         purge_after = _now() + timedelta(days=self._grace_days)
@@ -147,18 +167,31 @@ class AccountDeletionService:
     async def purge_job(self, now: datetime | None = None) -> int:
         """유예 경과 계정을 영구 파기한다(비동기 잡). 멱등 — 이미 PURGED는 제외.
 
-        각 계정: AccountDeleted 발행(구독자 owner-scoped 파기) → 자격증명 영구 삭제 → PURGED.
-        발행 실패 시 해당 계정은 다음 회차에 재시도된다(DEACTIVATED 유지·at-least-once).
+        각 계정을 **독립 트랜잭션**으로 처리한다: AccountDeleted 발행(구독자 owner-scoped 파기) →
+        자격증명 영구 삭제 → PURGED → **행별 커밋**. 한 계정의 실패(발행/삭제)는 롤백 후 로그를
+        남기고 다음 계정으로 넘어간다 — 한 독성 레코드가 나머지 due 계정을 막던 머리물림(HOL)을
+        제거한다. 실패한 계정은 DEACTIVATED로 남아 다음 회차에 재시도된다(at-least-once).
+        event_id는 account_id에서 결정적으로 파생되어(uuid5) 재시도에도 동일하다.
         반환: 파기한 계정 수."""
         now = now or _now()
         purged = 0
         for rec in self._repo.get_due_deletions(now):
             account_id = rec.account_id
-            event_id = str(uuid.uuid4())
-            # 먼저 캐스케이드 이벤트 발행(U4/U2/U11 owner-scoped 파기 — 멱등·재시도·DLQ).
-            await self._publisher.publish(account_id, _now(), event_id)
-            self._repo.delete_account_permanently(account_id)
-            self._repo.mark_deletion_purged(account_id)
+            event_id = str(uuid.uuid5(_ACCOUNT_DELETED_NS, account_id))
+            try:
+                # 발행을 먼저 — 발행 성공 후에만 파기를 커밋한다. 커밋이 실패하면 이벤트는 이미
+                # 나갔어도 계정은 DEACTIVATED로 남아 다음 회차에 동일 event_id로 재시도된다(멱등).
+                # 발행 자체가 실패하면 except로 빠져 파기를 건너뛴다(이벤트 유실→캐스케이드 누락 방지).
+                await self._publisher.publish(account_id, _now(), event_id)
+                self._repo.delete_account_permanently(account_id)
+                self._repo.mark_deletion_purged(account_id)
+                self._repo.commit()
+            except Exception:
+                self._repo.rollback()
+                logger.exception(
+                    "Purge failed for one account; left DEACTIVATED for next run (at-least-once)."
+                )
+                continue
             purged += 1
             logger.info({"event": "AccountPurged", "accountId": account_id, "eventId": event_id})
         return purged
