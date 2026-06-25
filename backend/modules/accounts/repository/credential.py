@@ -13,8 +13,7 @@ class AccountTable(Base):
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
     email = Column(String(254), unique=True, nullable=False, index=True)
-    # U10: Google/ORCID 전용 가입(비밀번호 미설정)을 허용하므로 NOT NULL 제약을 제거했다.
-    password_hash = Column(String(255), nullable=True)
+    password_hash = Column(String(255), nullable=False)
     status = Column(String(20), default=AccountStatus.PENDING.value, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
     failure_count = Column(Integer, default=0, nullable=False)
@@ -22,17 +21,6 @@ class AccountTable(Base):
     # BR-A7: 역할 단일 출처는 DB(공개 가입=USER; ADMIN은 시딩만). totp_secret은 MFA 등록 시 채워진다.
     role = Column(String(20), default="USER", nullable=False)
     totp_secret = Column(String(64), nullable=True)
-    # U10: Google/ORCID 소셜로그인 연동 — 기존 이메일+비밀번호 로그인과 공존한다(연동 해제해도
-    # 로그인 수단이 사라지지 않음). 두 식별자 모두 계정당 유일해야 하므로 unique=True.
-    google_sub = Column(String(255), unique=True, nullable=True)
-    google_linked_at = Column(DateTime, nullable=True)
-    orcid_id = Column(String(19), unique=True, nullable=True)
-    orcid_linked_at = Column(DateTime, nullable=True)
-    # ORCID record(이름/소속) 캐시 — works(논문 목록)는 1:N이라 컬럼에 두지 않고 조회 시마다
-    # ORCID API에서 다시 가져온다.
-    orcid_name = Column(String(255), nullable=True)
-    orcid_affiliation = Column(String(255), nullable=True)
-    orcid_synced_at = Column(DateTime, nullable=True)
     # 탈퇴(soft-delete) 여부는 status 값으로 추론하지 않고 별도 bool 컬럼으로 명시 판단한다.
     is_withdrawn = Column(Boolean, default=False, nullable=False)
     withdrawn_at = Column(DateTime, nullable=True)
@@ -57,9 +45,10 @@ class VerificationTokenTable(Base):
 class AccountWithdrawalBackupTable(Base):
     """U10 회원탈퇴 시점의 accounts 스냅샷 (5년 보관, purge_after 이후 하드 삭제 대상).
 
-    U3가 소유한 데이터만 담는다 — 라이브러리(U4)/행동 이벤트·관심 프로필(U9)은 1:N 데이터라
-    여기 담을 수 없고 각 모듈이 별도로 백업해야 한다(후속 작업). password_hash/totp_secret은
-    재로그인 복구 목적이 아니므로 의도적으로 제외한다."""
+    accounts가 소유한 데이터만 담는다 — 라이브러리(U4)/행동 이벤트·관심 프로필(U9)/
+    social_identities(소셜 로그인 연동)는 전부 1:N 데이터라 여기 담을 수 없고 각 모듈/테이블이
+    별도로 백업해야 한다(후속 작업). password_hash/totp_secret은 재로그인 복구 목적이 아니므로
+    의도적으로 제외한다."""
 
     __tablename__ = "account_withdrawal_backups"
 
@@ -67,10 +56,6 @@ class AccountWithdrawalBackupTable(Base):
     original_account_id = Column(String(36), nullable=False, index=True)
     email = Column(String(254), nullable=False)
     status = Column(String(20), nullable=False)
-    google_sub = Column(String(255), nullable=True)
-    orcid_id = Column(String(19), nullable=True)
-    orcid_name = Column(String(255), nullable=True)
-    orcid_affiliation = Column(String(255), nullable=True)
     signed_up_at = Column(DateTime, nullable=False)
     withdrawn_at = Column(DateTime, nullable=False)
     purge_after = Column(DateTime, nullable=False, index=True)
