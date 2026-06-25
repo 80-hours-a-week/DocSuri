@@ -66,6 +66,11 @@ def test_parse_oai_records_nested_authors_and_skips_malformed():
     assert r.arxiv_ref == "2202.09848"
     assert r.authors == ("Sotirios Nikoloutsopoulos", "Michalis K. Titsias")
     assert r.categories == ("cs.LG", "cs.AI")
+    # backfill now feeds the OAI record straight into fetch_full_text, which builds the URL
+    # from the identifier — so the OAI record alone must resolve a usable id. The OAI id is
+    # bare (no version) → normalizes to v1; fetch_full_text still gets a real arXiv version.
+    assert r.identifier.paper_id == "2202.09848"
+    assert r.identifier.arxiv_id  # non-empty, URL-usable
 
 
 def _filter() -> CategoryFilter:

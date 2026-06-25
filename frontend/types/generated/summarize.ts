@@ -4,6 +4,8 @@
  * only — never object_ref). Run `pnpm gen:types` to refresh the raw schema dump under
  * types/.schema-raw/ for drift review. */
 
+import type { DocModel } from './docModel';
+
 export type SummarizeTask = 'summary' | 'translate';
 /** translate only; summary is fixed `full`. */
 export type SummarizeScope = 'abstract' | 'full';
@@ -45,9 +47,14 @@ export interface SummaryVM {
   anchors: AnchorVM[];
 }
 
-/** Korean translation (abstract or full per scope). keptTerms = untranslated terms. */
+/** Structured Korean translation as a "translated doc-model" mirroring the source structure
+ * (FR-13): section titles, paragraphs, list items, and table/figure captions are translated,
+ * while structural/verbatim fields (block & section ids, formula LaTeX, table numeric cells,
+ * figure assetRefs) are copied from the source unchanged. Block/section ids mirror the source
+ * doc-model so it renders with the SAME rich viewer as the original body. keptTerms = terms
+ * kept untranslated. */
 export interface TranslationVM {
-  koreanText: string;
+  docModel: DocModel;
   keptTerms: string[];
 }
 

@@ -345,6 +345,7 @@ class SqsQueue:
             QueueUrl=self._queue_url,
             MessageBody=json.dumps(
                 {
+                    "type": "ingest_paper",
                     "jobId": job.job_id,
                     "kind": job.kind.value,
                     "arxivRef": job.arxiv_ref,
@@ -362,11 +363,18 @@ class SqsQueue:
         )
         messages = []
         for message in response.get("Messages", []):
+            raw_body = message["Body"]
+            try:
+                body = json.loads(raw_body)
+            except json.JSONDecodeError:
+                body = {"type": "invalid", "rawBody": raw_body}
+            if not isinstance(body, dict):
+                body = {"type": "invalid", "rawBody": raw_body}
             messages.append(
                 SqsMessage(
                     message_id=message["MessageId"],
                     receipt_handle=message["ReceiptHandle"],
-                    body=json.loads(message["Body"]),
+                    body=body,
                 )
             )
         return messages

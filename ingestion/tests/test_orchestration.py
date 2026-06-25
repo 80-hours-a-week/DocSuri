@@ -138,6 +138,71 @@ def test_worker_does_not_duplicate_pipeline_permanent_failure_dlq() -> None:
     assert queue.acked == [message.message_id]
 
 
+def test_worker_dispatches_schedule_tick_and_acks() -> None:
+    _, _, _, queue, observability = build_test_pipeline()
+    refresh = SimpleNamespace(on_schedule_tick=lambda: 2)
+    message = SimpleNamespace(
+        message_id="tick-1",
+        receipt_handle="tick-1",
+        body={"type": "schedule_tick"},
+    )
+    runtime = SimpleNamespace(refresh=refresh, queue=queue, observability=observability)
+
+    process_message(runtime, message)
+
+    assert queue.acked == ["tick-1"]
+    assert queue.dlq == []
+
+
+def test_worker_dispatches_legacy_schedule_tick_action_and_acks() -> None:
+    _, _, _, queue, observability = build_test_pipeline()
+    refresh = SimpleNamespace(on_schedule_tick=lambda: 2)
+    message = SimpleNamespace(
+        message_id="tick-legacy",
+        receipt_handle="tick-legacy",
+        body={"action": "schedule_tick"},
+    )
+    runtime = SimpleNamespace(refresh=refresh, queue=queue, observability=observability)
+
+    process_message(runtime, message)
+
+    assert queue.acked == ["tick-legacy"]
+    assert queue.dlq == []
+
+
+def test_worker_dispatches_legacy_type_less_ingest_job() -> None:
+    _, _, _, queue, observability = build_test_pipeline()
+    seen: list[IngestionJob] = []
+    message = SimpleNamespace(
+        message_id="legacy-job",
+        receipt_handle="legacy-job",
+        body={"jobId": "job-1", "kind": "EVENT", "arxivRef": "2401.00001v1"},
+    )
+    pipeline = SimpleNamespace(ingest_one=seen.append)
+    runtime = SimpleNamespace(pipeline=pipeline, queue=queue, observability=observability)
+
+    process_message(runtime, message)
+
+    assert queue.acked == ["legacy-job"]
+    assert queue.dlq == []
+    assert seen[0].job_id == "job-1"
+
+
+def test_worker_sends_unknown_message_type_to_dlq() -> None:
+    _, _, _, queue, observability = build_test_pipeline()
+    message = SimpleNamespace(
+        message_id="bad-1",
+        receipt_handle="bad-1",
+        body={"type": "unknown"},
+    )
+    runtime = SimpleNamespace(queue=queue, observability=observability)
+
+    process_message(runtime, message)
+
+    assert queue.acked == ["bad-1"]
+    assert queue.dlq[-1]["reason"] == FailureReason.POISON_EVENT.value
+
+
 class FakeOpenSearchClient:
     def __init__(self) -> None:
         self.bulk_calls = 0

@@ -148,7 +148,7 @@ arXiv 논문 수집·파싱·임베딩·벡터 인덱스 쓰기 파이프라인.
 
 | 규칙 이름 | 스케줄 | 대상 | 근거 |
 |---|---|---|---|
-| `docsuri-arxiv-daily` | `cron(0 6 * * ? *)` (매일 06:00 UTC = 15:00 KST) | SQS `docsuri-ingestion-queue` (on_schedule_tick 메시지) | arXiv 일일 업데이트 후 수집 (Q12=B) |
+| `docsuri-arxiv-daily` | `cron(0 6 * * ? *)` (매일 06:00 UTC = 15:00 KST) | SQS `docsuri-ingestion-queue` JSON `{"type":"schedule_tick"}` | Worker dispatches `schedule_tick` to `on_schedule_tick()`; `ingest_paper` messages continue to `ingest_one()`/doc-model handling. Invalid message types are not acked as success and go to DLQ. |
 
 ### 3.2. 이벤트 규칙 — new-arXiv 이벤트 (향후)
 

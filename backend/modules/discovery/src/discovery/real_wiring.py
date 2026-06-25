@@ -66,6 +66,7 @@ def build_real_orchestrator(
 
     client = OpenSearchClientFactory.build(
         endpoint=settings.opensearch_endpoint,
+        region_name=settings.aws_region,
         username=settings.opensearch_username,
         password=settings.opensearch_password,
         use_ssl=settings.opensearch_use_ssl,

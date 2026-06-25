@@ -52,26 +52,114 @@ export const beginnerSummaryResponse: SummaryOkDTO = {
   },
 };
 
+// Structured translation (BR-S18): the translation output is a "translated doc-model" — same
+// structure/ids as the body, Korean text; formula LaTeX / table cells stay verbatim.
+const _provenance = {
+  sourceTier: 'ar5iv' as const,
+  parserVersion: 'docmodel-parser@1',
+  schemaVersion: '1.0.0',
+  generatedAt: '2026-06-23T00:00:00Z',
+};
+
 export const abstractTranslationResponse: TranslationOkDTO = {
   status: 'ok',
   task: 'translate',
   meta: { source: 'abstract' },
   cached: false,
   translation: {
-    koreanText:
-      '지배적인 시퀀스 변환 모델들은 복잡한 순환 신경망이나 합성곱 신경망에 기반한다. 우리는 순환과 합성곱을 완전히 배제하고 오직 어텐션 메커니즘에만 기반한 새로운 단순 네트워크 구조인 Transformer를 제안한다.',
+    docModel: {
+      meta: { paperId: '2401.00001', version: 1, title: '', provenance: _provenance },
+      sections: [
+        {
+          id: 's1',
+          title: '',
+          blocks: [
+            {
+              id: 's1.p1',
+              type: 'paragraph',
+              text: '지배적인 시퀀스 변환 모델들은 복잡한 순환 신경망이나 합성곱 신경망에 기반한다. 우리는 순환과 합성곱을 완전히 배제하고 오직 어텐션 메커니즘에만 기반한 새로운 단순 네트워크 구조인 Transformer를 제안한다.',
+            },
+          ],
+        },
+      ],
+    },
     keptTerms: ['Transformer', 'attention', 'BLEU'],
   },
 };
 
+// Mirrors `docModelResponse` (same ids → figures join `assetsResponse` by assetId), Korean text;
+// formula LaTeX and table cells are preserved verbatim (D8/BR-S18).
 export const fullTranslationResponse: TranslationOkDTO = {
   status: 'ok',
   task: 'translate',
   meta: { source: 'full_text' },
   cached: false,
   translation: {
-    koreanText:
-      '1. 서론\n순환 신경망, 특히 LSTM과 게이트 순환 신경망은 시퀀스 모델링과 변환 문제에서 최첨단 접근으로 확고히 자리잡았다…\n\n3. 모델 구조\n대부분의 경쟁력 있는 시퀀스 변환 모델은 인코더-디코더 구조를 갖는다. 여기서 인코더는 입력 시퀀스를 연속 표현의 시퀀스로 매핑한다…\n\n(데모용 발췌 — 실제 전문 번역은 논문 전체를 포함합니다.)',
+    docModel: {
+      meta: {
+        paperId: '2401.00001',
+        version: 1,
+        title: '어텐션만 있으면 된다',
+        provenance: _provenance,
+      },
+      sections: [
+        {
+          id: 's3',
+          title: '모델 구조',
+          blocks: [
+            {
+              id: 's3.p1',
+              type: 'paragraph',
+              text: 'Transformer는 순환 대신 스케일드 닷-프로덕트 어텐션 \\(\\mathrm{Attention}(Q,K,V)\\)을 사용한다.',
+            },
+            {
+              id: 's3.eq1',
+              type: 'formula',
+              latex: '\\mathrm{Attention}(Q,K,V)=\\mathrm{softmax}\\left(\\frac{QK^{T}}{\\sqrt{d_{k}}}\\right)V',
+              display: true,
+              anchorLabel: '(1)',
+            },
+            {
+              id: 's3.fig1',
+              type: 'figure',
+              assetRef: { assetId: '2401.00001:v1:figure:0', type: 'figure', ordinal: 0 },
+              caption: 'Transformer — 모델 구조.',
+              anchorLabel: 'Figure 1',
+            },
+          ],
+          sections: [
+            {
+              id: 's3.2',
+              title: '셀프 어텐션을 쓰는 이유',
+              blocks: [
+                {
+                  id: 's3.2.tbl1',
+                  type: 'table',
+                  caption: '최대 경로 길이와 층별 복잡도.',
+                  anchorLabel: 'Table 1',
+                  rows: [
+                    {
+                      cells: [
+                        { text: '층 종류', isHeader: true },
+                        { text: '복잡도', isHeader: true },
+                        { text: '경로 길이', isHeader: true },
+                      ],
+                    },
+                    {
+                      cells: [
+                        { text: 'Self-Attention' },
+                        { text: '\\(O(n^{2}\\cdot d)\\)' },
+                        { text: '\\(O(1)\\)' },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
     keptTerms: ['Transformer', 'encoder', 'decoder', 'self-attention'],
   },
 };

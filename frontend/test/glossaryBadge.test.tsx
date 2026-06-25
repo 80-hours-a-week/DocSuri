@@ -10,7 +10,26 @@ import type { TranslationVM } from '@/types/generated';
 // rendering, save; only one editor opens at a time; an outside click dismisses it.
 
 const translation: TranslationVM = {
-  koreanText: '어텐션만으로 시퀀스를 변환한다.',
+  docModel: {
+    meta: {
+      paperId: '2401.1',
+      version: 1,
+      title: '',
+      provenance: {
+        sourceTier: 'ar5iv',
+        parserVersion: 'test',
+        schemaVersion: '1.0.0',
+        generatedAt: '2026-06-23T00:00:00Z',
+      },
+    },
+    sections: [
+      {
+        id: 's1',
+        title: '',
+        blocks: [{ id: 's1.p1', type: 'paragraph', text: '어텐션만으로 시퀀스를 변환한다.' }],
+      },
+    ],
+  },
   keptTerms: ['attention', 'BLEU'],
 };
 

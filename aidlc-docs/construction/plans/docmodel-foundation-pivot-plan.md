@@ -126,6 +126,16 @@
 - [x] Infra `infrastructure-design.md` + CDK(slice 6) — 단일 버킷 prefix·요약 큐·워커 배포 단위 ④·IAM, `cdk synth` 검증(배포 X)
 - [x] OA 게이트(slice 7) — OA 신호 = U1 인제스션 검증(BR-1); 게이트=운영 토글(논문별 조회 불요), 주석·문서 정합
 
+**PR-2 (구조화 번역, 2026-06-24, doc-first)** — 번역 영역 전부(PR-1에서 의도적 미룸). 설계 게이트 확정: ① 출력 = **번역본 doc-model**(자기완결; `summarization.schema.json`이 `docmodel.schema.json#/$defs/DocModel`을 **크로스파일 `$ref`** — 복제 회피, 생성기 지원 확인) ② 긴 번역 = **비동기**(요약 잡 큐·워커 재사용, `task=translate`).
+- [x] 공유계약 — `summarization.schema.json` `TranslationDraft`: `{koreanText}` → `{docModel: $ref DocModel, keptTerms}` 개정 + 재생성 + 프론트 `types/generated/summarize.ts` 수기 갱신(`import DocModel`) + drift `--check`(green)
+- [x] U7 FD `business-rules.md` — **BR-S18 신설**(구조화 번역 출력·번역 단위/보존·재조립 안정성·긴 번역 map-only) + BR-S2/S6/S9/S12 정합
+- [x] U7 FD `domain-entities.md`·`business-logic-model.md` — `TranslationDraft`=번역본 doc-model; `_run_translate` 구조화/map-only 경로; 잡 큐·워커 task-agnostic 명시
+- [x] U7 백엔드 — `StructuredTranslator` 도메인(소스 doc-model 워크→번역 유닛 추출→번역본 doc-model 재조립; 표 셀·수식·코드=verbatim) + 게이트웨이 `translate_segments`(id→ko) + orchestrator MAP_REDUCE 밴드 map-only·enqueue(task-agnostic 워커 재사용). **자기완결 출력이라 parserVersion 캐시키 desync 무관**(번역본이 자체 doc-model 보유·별도 fetch 없음 — 불요로 정정)
+- [x] U5/U7-frontend — `DocModelViewer` 렌더부 `DocModelBody`로 분리 → `TranslationView`가 `translation.docModel` 구조 렌더(keptTerms 유지·그림 자산 로드)
+- [x] requirements `FR-13` 개정 + 추적성 + 개정 배너 / `aidlc-state.md` PR-2 entry
+- [x] 테스트 동반(StructuredTranslator·map-only·orchestrator·assembler·DTO 라운드트립·프론트 렌더) · 배포 X. **검증: summarization pytest green·ruff 베이스라인·shared drift 0·프론트 tsc/lint/vitest 93 green.**
+- **후속(PR-2 아님)**: 표 셀 번역(현 verbatim) · 각주 footnote 블록 보존 · 앵커 id 계약 정합 · doc-model 빌드 실패 네거티브캐시
+
 ---
 
 ## 4. 시퀀싱 (권장 순서)

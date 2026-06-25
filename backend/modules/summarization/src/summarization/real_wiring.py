@@ -23,6 +23,7 @@ from .domain.grounding import GroundingValidator
 from .domain.length_router import LengthRouter
 from .domain.refiner import InputRefiner
 from .domain.source_selector import SourceSelector
+from .domain.structured_translator import StructuredTranslator
 from .service.orchestrator import SummarizationOrchestrationService
 
 
@@ -124,5 +125,7 @@ def build_real_orchestrator(
         doc_model_build_queue=doc_model_build_queue,
         map_reduce_summarizer=map_reduce_summarizer,
         summary_job_queue=summary_job_queue,
+        # Structured translation (BR-S18) drives the translate path; reuses the same LLM gateway.
+        structured_translator=StructuredTranslator(llm),
     )
     return SummarizationBundle(orchestrator=orchestrator, settings=settings)

@@ -12,6 +12,10 @@ node_modules/
 .env.*
 !.env.example
 
+# Local secrets
+backend/.env
+frontend/.env
+
 # Python (shared/python/ binding — backend·ingestion·ops = Python, §5-A)
 .venv/
 __pycache__/

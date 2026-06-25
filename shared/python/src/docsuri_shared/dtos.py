@@ -14,6 +14,8 @@ from __future__ import annotations
 # U3 — Accounts/Auth (accounts.schema.json)
 from ._generated.dtos.accounts_schema import (
     LoginRequest,
+    PasswordResetConfirm,
+    PasswordResetRequest,
     SessionInfo,
     SignupRequest,
     SignupResult,
@@ -118,6 +120,8 @@ __all__ = [
     "SignupResult",
     "LoginRequest",
     "SessionInfo",
+    "PasswordResetRequest",
+    "PasswordResetConfirm",
     # library
     "PageParams",
     "SavedSearchCreateDTO",

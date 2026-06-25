@@ -20,7 +20,8 @@ from ..domain.models import (
     SummaryDraft,
     SummaryRequest,
     TermMapping,
-    TranslationDraft,
+    TranslationSegment,
+    TranslationSegmentsResult,
 )
 
 __all__ = [
@@ -52,11 +53,15 @@ class LlmGatewayPort(Protocol):
         """Generate a structured summary (§3). Raises ``LlmUnavailable`` on failure."""
         ...
 
-    def translate(
-        self, text: str, request: SummaryRequest, glossary: Glossary
-    ) -> TranslationDraft:
-        """Translate the refined source text to Korean (scope: abstract|full — BR-S3/Q18).
-        Raises ``LlmUnavailable`` on failure."""
+    def translate_segments(
+        self,
+        segments: Sequence[TranslationSegment],
+        request: SummaryRequest,
+        glossary: Glossary,
+    ) -> TranslationSegmentsResult:
+        """Translate a batch of doc-model text segments to Korean, returning ``id → 번역텍스트``
+        (BR-S18 — structured translation). Verbatim content (table numeric cells, formula LaTeX,
+        code) is never sent here. Raises ``LlmUnavailable`` on failure."""
         ...
 
 

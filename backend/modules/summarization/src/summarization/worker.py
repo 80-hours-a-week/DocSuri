@@ -1,9 +1,10 @@
-"""Summarization worker — long-summary background jobs (BR-S6/BR-S8, #135).
+"""Summarization worker — long-input background jobs (BR-S6/BR-S8/BR-S18, #135).
 
-Consumes the summary jobs the API enqueues on the LengthRouter MAP_REDUCE band and runs the
-map-reduce summary **inline** (``allow_enqueue=False``) — here there is no request/gateway
-timeout, so the 3-5 LLM calls can complete. The orchestrator write-throughs the result to the
-shared summary store, so the client's next poll of ``/api/summarize`` hits the cache.
+Consumes the jobs the API enqueues on the LengthRouter MAP_REDUCE band and runs them **inline**
+(``allow_enqueue=False``) — here there is no request/gateway timeout, so the long-input work can
+complete: summary map-reduce (3-5 LLM calls) or translate map-only (section-by-section). The
+worker is task-agnostic (the payload carries ``task``); the orchestrator write-throughs the
+result to the shared store, so the client's next poll of ``/api/summarize`` hits the cache.
 
 Deployment note: this is its own deploy unit (separate from the API). It MUST run with
 ``DOCSURI_MAP_REDUCE_ENABLED`` on (so the orchestrator has the map-reduce summarizer) and

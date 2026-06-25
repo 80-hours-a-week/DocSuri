@@ -16,6 +16,7 @@
 /* Personal-glossary section (본문 번역 only) — titled like the body lists, with a gap
    before the translated text below. */
 .glossary {
+  position: relative; /* containing block for a badge's editor popover (full-width, no overflow) */
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
