@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import Column, DateTime, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Integer, String
 from sqlalchemy.orm import Session, declarative_base
 
 from ..models import AccountStatus, DomainException
@@ -21,6 +21,14 @@ class AccountTable(Base):
     # BR-A7: 역할 단일 출처는 DB(공개 가입=USER; ADMIN은 시딩만). totp_secret은 MFA 등록 시 채워진다.
     role = Column(String(20), default="USER", nullable=False)
     totp_secret = Column(String(64), nullable=True)
+    # U10: 동의 항목 — 개인정보처리방침/이용약관은 필수(가입 시 거부하면 가입 자체가 안 되므로
+    # 항상 True), 야간 푸시(이메일, 최신/관심 논문 등재 알림)만 선택이라 실제로 토글된다.
+    privacy_policy_agreed = Column(Boolean, default=True, nullable=False)
+    privacy_policy_agreed_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    terms_of_service_agreed = Column(Boolean, default=True, nullable=False)
+    terms_of_service_agreed_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    nightly_push_agreed = Column(Boolean, default=False, nullable=False)
+    nightly_push_agreed_at = Column(DateTime, nullable=True)
 
 
 class VerificationTokenTable(Base):
@@ -190,6 +198,14 @@ class CredentialRepository:
                 SocialIdentityTable.provider_subject == subject,
             )
             .first()
+        )
+
+    def list_social_identities(self, account_id: str) -> list[SocialIdentityTable]:
+        """계정에 연결된 소셜 신원 전부를 조회합니다 (U10 로그인 경로 표기용)."""
+        return (
+            self._session.query(SocialIdentityTable)
+            .filter(SocialIdentityTable.account_id == account_id)
+            .all()
         )
 
     def create_social_identity(

@@ -67,6 +67,13 @@ from ._generated.dtos.library_schema import (
     SearchResultSetDTO,
 )
 
+# U10 — My Page subscription (mypage.schema.json, mock — no real PG/billing)
+from ._generated.dtos.mypage_schema import (
+    SubscriptionDTO,
+    SubscriptionPlan,
+    SubscriptionStatusValue,
+)
+
 # U2 — Discovery/Search (search.schema.json)
 from ._generated.dtos.search_schema import (
     AbstainDTO,
@@ -164,4 +171,8 @@ __all__ = [
     "ListItem",
     "CodeBlock",
     "DocModelAssetRef",
+    # mypage (mypage.schema.json, mock subscription)
+    "SubscriptionDTO",
+    "SubscriptionPlan",
+    "SubscriptionStatusValue",
 ]
