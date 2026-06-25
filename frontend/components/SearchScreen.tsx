@@ -9,6 +9,7 @@ import { SaveToLibraryButton } from './SaveToLibraryButton';
 import { SaveSearchButton } from './SaveSearchButton';
 import { getApiClient, UserFacingError, type SearchOutcome } from '@/lib/api';
 import { validateQuery, MAX_QUERY_LENGTH } from '@/lib/api/validate';
+import { recordSearchExecuted } from '@/lib/personalization';
 import type { ResultCardVM } from '@/types/generated';
 
 // Per-card save control (US-L2/S1, Q2=A): a bookmark icon on the card's top-right.
@@ -76,6 +77,7 @@ export function SearchScreen() {
         setInlineError(null);
       }
       setState({ tag: 'outcome', outcome });
+      recordSearchExecuted(result.value, resultCount(outcome));
     } catch (err) {
       if (err instanceof UserFacingError && err.isAuth) {
         router.push('/login?redirect=/search');
@@ -160,6 +162,13 @@ export function SearchScreen() {
       </div>
     </div>
   );
+}
+
+function resultCount(outcome: SearchOutcome): number {
+  if (outcome.kind === 'page' || outcome.kind === 'degraded') {
+    return outcome.meta.resultCount ?? outcome.cards.length;
+  }
+  return 0;
 }
 
 function SortControl({ sort, onChange }: { sort: SortKey; onChange: (s: SortKey) => void }) {

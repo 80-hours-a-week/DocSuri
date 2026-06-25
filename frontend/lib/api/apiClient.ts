@@ -46,6 +46,7 @@ import type {
   GlossaryListDTO,
 } from '@/types/glossary';
 import type { CitationNode, CitationTreeQuery, CitationTreeResponse } from '@/types/citationGraph';
+import type { BehaviorEventCreate, EventRecordResult } from '@/types/personalization';
 
 export interface ApiClientOptions {
   timeoutMs?: number;
@@ -201,6 +202,17 @@ export class ApiClient {
       idempotent: false,
     });
     if (res.status === 200 || res.status === 201) return res.body as GlossaryUpsertResultDTO;
+    throw normalizeHttpError(res.status, serverMessage(res.body));
+  }
+
+  async recordBehaviorEvent(req: BehaviorEventCreate): Promise<EventRecordResult> {
+    const res = await this.request({
+      method: 'POST',
+      path: '/api/personalization/events',
+      body: req,
+      idempotent: false,
+    });
+    if (res.status === 200) return res.body as EventRecordResult;
     throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
