@@ -13,7 +13,7 @@
 
 - **DF-1 전문 통합 인덱스**: OpenSearch 검색 인덱스를 **"제목+초록만" → "전문 전체(제목+초록+본문)"** 로 전환한다(초록을 본문으로 *교체*가 아니라 **포함 + 본문 추가** — 초록 기반 topic 검색 recall 손실 없음). **U2 검색·U11 에이전트가 단일 인덱스 공유**(에이전트 전용 별도 인덱스 안 만듦 — 서브시스템 분기 회피).
 - **DF-2 eager doc-model**: doc-model을 **전 논문 인제스트 시 eager 생성**한다(D6 lazy 되돌림). **doc-model은 이미 제목·초록(meta) + 본문(sections, 표=데이터·수식=latex·그림 캡션)을 담는다**(코드 검증: `builder.py`·`parser.py` — 빌더에 제목/초록 추가 불필요). 색인 소스 = **doc-model 전체 평탄화**(meta.title + meta.abstract + 문단 + 표 셀 텍스트 + 수식 latex + 그림 캡션). 표/수식/캡션이 **찾기·근거에 first-class**.
-- **DF-3 근거화 정합**: U11 근거 추출·앵커는 동일 doc-model block-id를 사용(U7 doc-fidelity 근거화 계약과 통일 — U11 FD Q7).
+- **DF-3 근거화 U6 통일 (확정)**: 근거 추출·앵커는 동일 doc-model block-id 사용. **근거화는 U6 단일 권위로 통일** — U6 공유 계약이 검색 enforce + 문서충실도(단일 논문 / 다논문)를 포괄하도록 업그레이드하고, **U7이 따로 둔 근거화(`AnchorVerdict`)도 이 계약으로 이관·수정한다**(선택 아님; blast-radius=`shared/ports.md`·U6 FD·**배포된 U7 FD/코드+회귀**). 상세는 U11 FD Q7. *(인덱스 전환과는 독립 트랙이나 같은 U11 사이클에서 함께 진행.)*
 - **DF-4 `982f64a` 승격**: 미승인 복원 커밋 `982f64a`(전문 본문 임베딩 복원)를 폐기/revert가 아니라 **본 게이트로 정식 승격**해 *제대로* 수행한다(소스=doc-model·infra resize·비용 갱신·테스트/문서 정합).
 - **DF-5 색인 단위(잠정·NFR 확정)**: 임베딩 비용 지렛대가 벡터 수이므로 **섹션 단위 임베딩 우선 검토**(블록 단위 대비 벡터 수↓), 또는 dense=초록+섹션 / **본문 표·수식·캡션은 BM25(어휘)** 혼합. 정확한 granularity·dense/lexical 배분은 NFR/Infra.
 - **DF-6 doc-model 완전성 (논문 전체 담기)**: doc-model이 "논문 내용 전체"를 담도록 **가산적(forward-compat)** 보강한다 —
@@ -40,7 +40,7 @@
 | **인프라/비용** | OpenSearch 노드 등급↑(전문 벡터 RAM). `infrastructure-design §1/§5` 사이징·**NFR-C1 비용 라인** 갱신 | infra |
 | **doc-model 계약/스키마** | D6(lazy)→eager 전제. **DF-6 가산 스키마**: 각주 블록(또는 notes 필드)·meta에 저자/발행일/카테고리. `construction/shared/docmodel.md`·`docmodel.schema.json`·`docmodel-foundation-pivot-plan.md` 정합 | shared |
 | **doc-model 파서/빌더** | DF-6(a) 각주 out-of-flow 추출(현 drop 반전)·DF-6(b) meta 저자/발행일/카테고리 채움. `ingestion/.../docmodel/parser.py`·`builder.py` | U1 트랙 |
-| **U7 요약** | doc-model eager화로 `getDocModel` `building` 상태가 인덱스 논문엔 사실상 해소(경미) | U7 트랙 |
+| **U7 요약** | ① doc-model eager화로 `getDocModel` `building` 상태가 인덱스 논문엔 사실상 해소(경미). ② **★근거화 이관★ — U7 자체 `AnchorVerdict`를 U6 공유 근거화 계약으로 이관·수정**(배포된 코드 변경 + 회귀; DF-3·U11 FD Q7) | U7 트랙 |
 | **v4 마이그레이션(진행 중)** | 전문 임베딩이 마이그레이션 재임베딩 비용·범위↑ | 조율 |
 | **U11** | 본 결정 위에 FD/코드 진행(소비자) | U11 |
 
@@ -70,6 +70,7 @@
 - [ ] `shared/docmodel.md`·`docmodel.schema.json`·`docmodel-foundation-pivot-plan.md` — D6 lazy→eager + **DF-6 가산 스키마(각주 블록·meta 저자/발행일/카테고리)** 정합.
 - [ ] `ingestion/.../docmodel/parser.py`·`builder.py` — DF-6 각주 추출·meta 보강(코드↔스키마 정합·테스트).
 - [ ] U2 FD/테스트/QT-2 — 전문 검색 의미.
+- [ ] **근거화 U6 통일(DF-3)** — `shared/ports.md`(근거화 계약: 검색+문서충실도) · U6 FD · **U7 `AnchorVerdict` 이관·수정 + 회귀**(배포 코드).
 - [ ] `982f64a` — 본 게이트 참조로 정식화(코드↔문서 정합 검증).
 - [ ] v4 마이그레이션 계획 — 전문 재임베딩 반영.
 
