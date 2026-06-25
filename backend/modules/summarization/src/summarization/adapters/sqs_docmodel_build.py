@@ -49,7 +49,11 @@ class SqsDocModelBuildQueue:
     def enqueue_build(self, paper_id: str, version: int) -> None:
         now = time.monotonic()
         self._prune(now)
-        key = (paper_id, version)
+        # Dedup on the SAME identity the job carries (the bare id), not the raw spelling — so two
+        # raw forms that normalize to one ref (``2304.10557v1`` vs ``2304.10557``, both v1) share a
+        # bucket and the second is collapsed, consistent with ``arxivRef`` below.
+        bare = bare_paper_id(paper_id)
+        key = (bare, version)
         expiry = self._inflight.get(key)
         if expiry is not None and expiry > now:
             return  # already enqueued recently on this instance — skip (dedup)
@@ -57,12 +61,10 @@ class SqsDocModelBuildQueue:
             {
                 "jobId": f"docmodel-{paper_id}-v{version}-{uuid4().hex[:8]}",
                 "kind": "BUILD_DOC_MODEL",
-                # U1 normalizes/validates this ref (rejects malformed → DLQ), so it is the
-                # only field that carries the external paper_id, and only into a JSON body.
-                # paper_id may already carry a version suffix (``2304.10557v1``); strip it
-                # before re-attaching ``v{version}`` so the ref is not double-versioned
-                # (``2304.10557v1v1``), which arXiv can't resolve → the build never runs.
-                "arxivRef": f"{bare_paper_id(paper_id)}v{version}",
+                # U1 normalizes/validates this ref (rejects malformed → DLQ). Built from the
+                # bare id so it is not double-versioned (``2304.10557v1v1``), which arXiv can't
+                # resolve → the build would never run.
+                "arxivRef": f"{bare}v{version}",
                 "eventId": None,
                 "correlationId": None,
             }

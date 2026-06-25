@@ -135,3 +135,13 @@ def test_adapter_strips_version_suffix_to_avoid_double_version_ref() -> None:
     q = SqsDocModelBuildQueue(queue_url="https://q/url", client=sqs)
     q.enqueue_build("2304.10557v1", 1)
     assert sqs.sent[0]["body"]["arxivRef"] == "2304.10557v1"
+
+
+def test_adapter_dedups_across_raw_id_spellings_with_same_bare() -> None:
+    # Two raw spellings that normalize to one ref (versioned vs bare, both v1) must share a
+    # dedup bucket — the second is collapsed (dedup keys on the bare id, like the ref).
+    sqs = _FakeSqs()
+    q = SqsDocModelBuildQueue(queue_url="https://q/url", client=sqs)
+    q.enqueue_build("2304.10557v1", 1)
+    q.enqueue_build("2304.10557", 1)  # same bare+version → deduped, not re-sent
+    assert [b["body"]["arxivRef"] for b in sqs.sent] == ["2304.10557v1"]
