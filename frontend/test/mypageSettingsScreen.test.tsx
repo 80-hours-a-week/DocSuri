@@ -41,16 +41,17 @@ describe('MyPageSettingsScreen (U10)', () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith('/'));
   });
 
-  it('withdraws after confirmation and redirects home', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+  it('withdraws after password re-auth prompt and redirects home', async () => {
+    // 탈퇴는 현재 비밀번호 재인증(prompt)을 요구한다(감사 H7).
+    vi.spyOn(window, 'prompt').mockReturnValue('OldPw123!@x');
     renderScreen();
     await screen.findByTestId('mypage-account-actions');
     await userEvent.click(screen.getByTestId('mypage-withdraw'));
     await waitFor(() => expect(push).toHaveBeenCalledWith('/'));
   });
 
-  it('does not withdraw when the confirmation is dismissed', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
+  it('does not withdraw when the re-auth prompt is dismissed', async () => {
+    vi.spyOn(window, 'prompt').mockReturnValue(null);
     renderScreen();
     await screen.findByTestId('mypage-account-actions');
     await userEvent.click(screen.getByTestId('mypage-withdraw'));

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, String
@@ -7,6 +7,10 @@ from sqlalchemy.orm import Session, declarative_base
 from ..models import AccountStatus, DomainException
 
 Base = declarative_base()
+
+# 회원탈퇴 스냅샷 보관 기간 (분쟁/법적 대응) — 5년. 하드 파기 시점에 accounts-owned 최소 스냅샷을
+# 이 기간만큼 보관하고, purge_after 경과 후 별도 배치가 하드 삭제한다(배치는 후속 작업).
+WITHDRAWAL_BACKUP_RETENTION_DAYS = 365 * 5
 
 class AccountTable(Base):
     __tablename__ = "accounts"
@@ -83,6 +87,9 @@ class EmailChangeRequestTable(Base):
     account_id = Column(String(36), nullable=False, index=True)
     new_email = Column(String(254), nullable=False)
     expires_at = Column(DateTime, nullable=False)
+    # 현(기존) 주소 소유자가 변경을 취소(revoke)할 수 있게 하는 별도 단일사용 토큰의 SHA-256 해시.
+    # 알림 메일에 이 토큰 링크를 실어, 세션 없이도 탈취 시도를 본인이 차단할 수 있게 한다(H5).
+    revoke_token_hash = Column(String(64), nullable=True, index=True)
 
 
 class AccountDeletionTable(Base):
@@ -97,6 +104,26 @@ class AccountDeletionTable(Base):
     state = Column(String(20), default=AccountStatus.DEACTIVATED.value, nullable=False)
 
 
+class AccountWithdrawalBackupTable(Base):
+    """회원탈퇴 시점 accounts 스냅샷 (5년 보관, purge_after 이후 하드 삭제 대상). 감사 #4 / PR #193 복원.
+
+    하드 파기(영구 삭제) 직전에 accounts가 *소유한* 데이터만 담는다. 분쟁/법적 대응용 최소 기록이며,
+    password_hash·totp_secret은 재로그인 복구 목적이 아니므로 의도적으로 제외한다(크리덴셜 비보관).
+    라이브러리(U4)·행동/관심(U9)·social_identities(1:N)는 여기 담을 수 없고 각 모듈이 AccountDeleted
+    이벤트를 구독해 자기 데이터를 따로 백업/정리한다(이 테이블 범위 밖, 후속 작업)."""
+
+    __tablename__ = "account_withdrawal_backups"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    original_account_id = Column(String(36), nullable=False, index=True)
+    email = Column(String(254), nullable=False)
+    status = Column(String(20), nullable=False)
+    signed_up_at = Column(DateTime, nullable=False)
+    withdrawn_at = Column(DateTime, nullable=False)
+    purge_after = Column(DateTime, nullable=False, index=True)
+    backed_up_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+
+
 class CredentialRepository:
     """SQLAlchemy 기반의 Credential 및 계정 영속성 저장소 (PostgreSQL 매핑)"""
     
@@ -105,6 +132,14 @@ class CredentialRepository:
         # 타이밍 공격 방어용 더미 해시 (argon2 KDF로 미리 만들어둔 일반적인 형태의 더미 값)
         # 실제 계정이 없을 때 이 더미 해시와 입력 패스워드를 대조 연산함으로써 시간 유추를 불가능하게 함
         self.dummy_hash = "$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHQ$abcdefghijklmnopqrstuvwxyz0123456789abcd"
+
+    def commit(self) -> None:
+        """현재 트랜잭션을 커밋한다 (파기 잡의 행별 커밋 등 유닛-오브-워크 경계용)."""
+        self._session.commit()
+
+    def rollback(self) -> None:
+        """현재 트랜잭션을 롤백한다 (행별 실패 격리용)."""
+        self._session.rollback()
 
     def get_by_email(self, email: str) -> AccountTable | None:
         """이메일로 계정을 조회합니다."""
@@ -259,14 +294,23 @@ class CredentialRepository:
 
     # ── 이메일 변경 (FR-28 / BR-A10) ────────────────────────────────────────────
     def create_email_change_request(
-        self, account_id: str, new_email: str, token_hash: str, expires_at: datetime
+        self,
+        account_id: str,
+        new_email: str,
+        token_hash: str,
+        expires_at: datetime,
+        revoke_token_hash: str | None = None,
     ) -> EmailChangeRequestTable:
         """이메일 변경 요청을 생성한다. 계정당 활성 요청 1개로 제한(기존 선삭제)."""
         self._session.query(EmailChangeRequestTable).filter(
             EmailChangeRequestTable.account_id == account_id
         ).delete()
         rec = EmailChangeRequestTable(
-            token_hash=token_hash, account_id=account_id, new_email=new_email, expires_at=expires_at
+            token_hash=token_hash,
+            account_id=account_id,
+            new_email=new_email,
+            expires_at=expires_at,
+            revoke_token_hash=revoke_token_hash,
         )
         self._session.add(rec)
         self._session.flush()
@@ -276,6 +320,16 @@ class CredentialRepository:
         return (
             self._session.query(EmailChangeRequestTable)
             .filter(EmailChangeRequestTable.token_hash == token_hash)
+            .first()
+        )
+
+    def get_email_change_request_by_revoke_hash(
+        self, revoke_token_hash: str
+    ) -> EmailChangeRequestTable | None:
+        """취소(revoke) 토큰 해시로 이메일 변경 요청을 조회한다 (현 주소 소유자 취소 경로)."""
+        return (
+            self._session.query(EmailChangeRequestTable)
+            .filter(EmailChangeRequestTable.revoke_token_hash == revoke_token_hash)
             .first()
         )
 
@@ -327,6 +381,7 @@ class CredentialRepository:
         AccountDeleted 이벤트로 U4/U2/U11이 각자 수행한다(코드 DAG 비순환)."""
         account = self.get_by_id(account_id)
         if account is not None:
+            self._create_withdrawal_backup(account)  # 시크릿 제외 5년 보관 스냅샷 (감사 #4)
             email = account.email
             self._session.query(VerificationTokenTable).filter(
                 VerificationTokenTable.email == email
@@ -341,6 +396,24 @@ class CredentialRepository:
             EmailChangeRequestTable.account_id == account_id
         ).delete()
         self._session.query(AccountTable).filter(AccountTable.id == account_id).delete()
+        self._session.flush()
+
+    def _create_withdrawal_backup(self, account: AccountTable) -> None:
+        """하드 파기 직전, accounts가 소유한 최소 스냅샷을 5년 보관 테이블에 적재한다(감사 #4 / PR #193
+        복원). password_hash·totp_secret은 의도적으로 제외(크리덴셜 비보관). withdrawn_at은 소프트삭제
+        시점(삭제 레코드 requested_at), purge_after는 +5년."""
+        deletion = self.get_account_deletion(account.id)
+        raw = deletion.requested_at if deletion is not None else datetime.now(UTC)
+        withdrawn_at = raw.replace(tzinfo=None) if raw.tzinfo else raw
+        backup = AccountWithdrawalBackupTable(
+            original_account_id=account.id,
+            email=account.email,
+            status=account.status,
+            signed_up_at=account.created_at,
+            withdrawn_at=withdrawn_at,
+            purge_after=withdrawn_at + timedelta(days=WITHDRAWAL_BACKUP_RETENTION_DAYS),
+        )
+        self._session.add(backup)
         self._session.flush()
 
     def mark_deletion_purged(self, account_id: str) -> None:

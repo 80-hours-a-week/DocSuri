@@ -12,22 +12,41 @@ import pytest
 
 from backend.modules.accounts.repository.credential import (
     AccountDeletionTable,
+    AccountWithdrawalBackupTable,
     EmailChangeRequestTable,
     PasswordResetTokenTable,
     SocialIdentityTable,
 )
 
-MIGRATION = Path("backend/modules/accounts/migrations/003_create_lifecycle_tables.sql")
+# 003은 라이프사이클 테이블을 만들고, 이후 additive 마이그레이션(007: email_change_requests에
+# revoke_token_hash 추가)이 컬럼을 덧붙인다. 파리티 검사는 둘 다 적용해야 모델과 일치한다.
+MIGRATIONS = [
+    Path("backend/modules/accounts/migrations/003_create_lifecycle_tables.sql"),
+    Path("backend/modules/accounts/migrations/007_add_email_change_revoke_token.sql"),
+    Path("backend/modules/accounts/migrations/008_create_account_withdrawal_backups.sql"),
+]
 
 
 @pytest.mark.parametrize(
     "model",
-    [PasswordResetTokenTable, SocialIdentityTable, EmailChangeRequestTable, AccountDeletionTable],
+    [
+        PasswordResetTokenTable,
+        SocialIdentityTable,
+        EmailChangeRequestTable,
+        AccountDeletionTable,
+        AccountWithdrawalBackupTable,
+    ],
 )
 def test_migration_columns_cover_model(model):
     conn = sqlite3.connect(":memory:")
     try:
-        conn.executescript(MIGRATION.read_text(encoding="utf-8"))
+        for migration in MIGRATIONS:
+            # SQLite는 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`(Postgres)를 모르므로 IF NOT EXISTS만
+            # 떼어 같은 컬럼을 추가한다(파리티 검사 목적상 동일). CREATE TABLE/INDEX IF NOT EXISTS는 OK.
+            sql = migration.read_text(encoding="utf-8").replace(
+                "ADD COLUMN IF NOT EXISTS", "ADD COLUMN"
+            )
+            conn.executescript(sql)
         created = {row[1] for row in conn.execute(f"PRAGMA table_info({model.__tablename__})")}
     finally:
         conn.close()

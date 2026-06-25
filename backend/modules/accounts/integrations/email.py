@@ -76,21 +76,40 @@ def _render_email_change_verification(link: str) -> tuple[str, str, str]:
     return subject, body_text, body_html
 
 
-def _render_email_change_notice(new_email: str) -> tuple[str, str, str]:
+def _esc(value: str) -> str:
+    """수신자 파생 값을 HTML 본문에 넣기 전 이스케이프(방어적, XSS — 감사 L3).
+    EmailAddress 정규식이 이미 <>"'를 막지만, 본문 보간값은 항상 이스케이프한다."""
+    import html as _html
+
+    return _html.escape(value, quote=True)
+
+
+def _render_email_change_notice(new_email: str, revoke_link: str = "") -> tuple[str, str, str]:
     """(subject, text, html) — 현재(기존) 이메일로 보내는 변경 시도 알림 (M2 — 계정 탈취 탐지).
-    링크를 포함하지 않는다(현 주소 소유자가 변경을 인지/이의제기하게 하는 알림 전용)."""
+    revoke_link가 있으면 '변경 취소' 링크를 포함해, 세션 없이도 현 주소 소유자가 변경을 차단할 수
+    있게 한다(감사 H5)."""
     subject = "[DocSuri] 계정 이메일 변경이 요청되었습니다"
+    revoke_text = f"\n본인이 요청하지 않았다면 다음 링크로 즉시 취소하세요:\n{revoke_link}\n" if revoke_link else ""
     body_text = (
         f"회원님 계정의 이메일 주소를 '{new_email}'(으)로 변경하려는 요청이 접수되었습니다.\n"
         "본인이 요청한 것이 맞다면 새 주소로 보낸 확인 메일의 링크를 클릭해 주세요.\n"
         "본인이 요청하지 않았다면 즉시 비밀번호를 변경하고 고객센터에 알려주세요.\n"
+        f"{revoke_text}"
+    )
+    safe_email = _esc(new_email)
+    revoke_html = (
+        f'<p><b>본인이 요청하지 않았다면</b> 아래 링크로 즉시 변경을 취소하세요:</p>'
+        f'<p><a href="{revoke_link}">이메일 변경 취소하기</a></p>'
+        if revoke_link
+        else ""
     )
     body_html = f"""
         <html>
             <body>
                 <h3>계정 이메일 변경 요청 알림</h3>
-                <p>회원님 계정의 이메일을 <b>{new_email}</b>(으)로 변경하려는 요청이 접수되었습니다.</p>
+                <p>회원님 계정의 이메일을 <b>{safe_email}</b>(으)로 변경하려는 요청이 접수되었습니다.</p>
                 <p>본인이 요청했다면 새 주소로 보낸 확인 메일의 링크를 클릭해 주세요.</p>
+                {revoke_html}
                 <p>본인이 요청하지 않았다면 즉시 비밀번호를 변경하고 고객센터에 알려주세요.</p>
             </body>
         </html>
@@ -137,9 +156,9 @@ class EmailClientInterface(ABC):
         subject, text, html = _render_email_change_verification(link)
         return await self._send(email, subject, text, html)
 
-    async def send_email_change_notice_email(self, email: str, new_email: str) -> bool:
-        """현재(기존) 이메일로 변경 시도 알림을 발송한다 (M2 — 계정 탈취 탐지)."""
-        subject, text, html = _render_email_change_notice(new_email)
+    async def send_email_change_notice_email(self, email: str, new_email: str, revoke_link: str = "") -> bool:
+        """현재(기존) 이메일로 변경 시도 알림 + 취소(revoke) 링크를 발송한다 (M2/H5 — 계정 탈취 방어)."""
+        subject, text, html = _render_email_change_notice(new_email, revoke_link)
         return await self._send(email, subject, text, html)
 
 

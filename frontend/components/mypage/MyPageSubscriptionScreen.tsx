@@ -15,10 +15,12 @@ const SUBSCRIPTION_LABEL: Record<string, string> = {
   CANCELED: '해지 예약',
 };
 
-const PREMIUM_BENEFITS = [
-  '논문 AI 요약 · 번역 무제한 이용',
-  '관심 논문 신규 등재 시 우선 알림',
-];
+const PREMIUM_BENEFITS = ['논문 AI 요약 · 번역 무제한 이용', '관심 논문 신규 등재 시 우선 알림'];
+
+// 결제(PG) 미연동 — subscribe/cancel은 mock 빌링이라 실제 결제가 일어나지 않는다. 프로덕션
+// (실 API)에서는 가짜 결제 플로우를 노출하지 않도록 버튼을 '결제 준비중'으로 비활성화한다
+// (감사 N1). mock 모드(로컬/테스트)에서는 기존 동작 유지 → 구독 플로우 테스트가 그대로 통과한다.
+const BILLING_COMING_SOON = Boolean(process.env.NEXT_PUBLIC_DOCSURI_REAL_API);
 
 type BusyKey = 'subscribe' | 'cancel' | null;
 
@@ -94,7 +96,17 @@ export function MyPageSubscriptionScreen() {
             {new Date(subscription.currentPeriodEnd).toLocaleDateString('ko-KR')}
           </p>
         ) : null}
-        {subscription.status === 'ACTIVE' ? (
+        {BILLING_COMING_SOON ? (
+          <button
+            type="button"
+            className={styles.action}
+            disabled
+            aria-disabled="true"
+            data-testid="mypage-subscription-coming-soon"
+          >
+            결제 준비중 (출시 예정)
+          </button>
+        ) : subscription.status === 'ACTIVE' ? (
           <button
             type="button"
             className={styles.action}
