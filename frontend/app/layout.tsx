@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { SessionProvider } from '@/components/session/SessionContext';
+import { SavedLibraryProvider } from '@/lib/library/savedLibrary';
 import { PhoneMockupFrame } from '@/components/PhoneMockupFrame';
 
 // AppShell (LC-1) — SSR root layout: phone-mockup frame + session context.
@@ -23,7 +24,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ko">
       <body>
         <SessionProvider>
-          <PhoneMockupFrame>{children}</PhoneMockupFrame>
+          <SavedLibraryProvider>
+            <PhoneMockupFrame>{children}</PhoneMockupFrame>
+          </SavedLibraryProvider>
         </SessionProvider>
       </body>
     </html>
