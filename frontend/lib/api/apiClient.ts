@@ -269,6 +269,61 @@ export class ApiClient {
     await this.request({ method: 'POST', path: '/auth/logout', idempotent: false });
   }
 
+  /**
+   * Request a password-reset email (FR-26/BR-A8). The backend returns a generic success
+   * regardless of whether the address exists / is active (no account enumeration), so this
+   * resolves on 200 and only throws on transport or non-2xx failures.
+   */
+  async requestPasswordReset(email: string): Promise<void> {
+    const res = await this.request({
+      method: 'POST',
+      path: '/auth/password-reset/request',
+      body: { email },
+      idempotent: false,
+    });
+    if (res.status === 200 || res.status === 204) return;
+    throw normalizeHttpError(res.status, serverMessage(res.body));
+  }
+
+  /** Set a new password from the emailed reset token (FR-26/BR-A8). 4xx → user-facing error
+   * (expired/invalid token or weak password) so the page can show a retry path. */
+  async confirmPasswordReset(token: string, newPassword: string): Promise<void> {
+    const res = await this.request({
+      method: 'POST',
+      path: '/auth/password-reset/confirm',
+      body: { token, newPassword },
+      idempotent: false,
+    });
+    if (res.status === 200 || res.status === 204) return;
+    throw normalizeHttpError(res.status, serverMessage(res.body));
+  }
+
+  /** Change the logged-in user's password (FR-28/BR-A10). Backend invalidates all sessions on
+   * success, so the caller must re-login afterward. */
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    const res = await this.request({
+      method: 'POST',
+      path: '/auth/change-password',
+      body: { currentPassword, newPassword },
+      idempotent: false,
+    });
+    if (res.status === 200 || res.status === 204) return;
+    throw normalizeHttpError(res.status, serverMessage(res.body));
+  }
+
+  /** Request an email-change confirmation link to a new address (FR-28/BR-A10). Password
+   * accounts must re-authenticate (currentPassword). Generic success (enumeration-safe). */
+  async requestEmailChange(newEmail: string, currentPassword: string): Promise<void> {
+    const res = await this.request({
+      method: 'POST',
+      path: '/auth/email-change/request',
+      body: { newEmail, currentPassword },
+      idempotent: false,
+    });
+    if (res.status === 200 || res.status === 204) return;
+    throw normalizeHttpError(res.status, serverMessage(res.body));
+  }
+
   /** Returns the current session, or null when anonymous (401 is not an error). */
   async currentSession(): Promise<SessionInfo | null> {
     const res = await this.request({ method: 'GET', path: '/auth/session', idempotent: true });
@@ -472,11 +527,13 @@ export class ApiClient {
   }
 
   /** 회원탈퇴 — REAL U3 소프트 삭제 (POST /auth/account/delete): status=DEACTIVATED 전이 +
-   * 전 세션 즉시 무효화 + 유예 기간 내 복구 가능. 성공 시 200/204. */
-  async withdrawAccount(): Promise<void> {
+   * 전 세션 즉시 무효화 + 유예 기간 내 복구 가능. 비밀번호 계정은 현재 비밀번호 재인증 필수
+   * (감사 H7); 소셜-only 계정은 생략 가능. 성공 시 200/204. */
+  async withdrawAccount(currentPassword?: string): Promise<void> {
     const res = await this.request({
       method: 'POST',
       path: '/auth/account/delete',
+      body: currentPassword ? { currentPassword } : undefined,
       idempotent: false,
     });
     if (res.status === 200 || res.status === 204) return;
