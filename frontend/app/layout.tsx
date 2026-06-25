@@ -9,6 +9,7 @@ import { PhoneMockupFrame } from '@/components/PhoneMockupFrame';
 export const metadata: Metadata = {
   title: 'DocSuri',
   description: '근거 있는 논문 검색 — 폰 우선 웹',
+  icons: { icon: '/logo.png', apple: '/logo.png' },
 };
 
 export const viewport: Viewport = {

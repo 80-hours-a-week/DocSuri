@@ -11,8 +11,8 @@ export default function MyPageRecentPage() {
       <div className={styles.screen}>
         <AppHeader title="관심 논문 · 최근 본" backHref="/mypage" />
         <MyPageLibraryScreen active="recent" />
-        <BottomNav />
       </div>
+      <BottomNav />
     </RouteGuard>
   );
 }
