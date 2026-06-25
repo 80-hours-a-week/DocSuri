@@ -678,19 +678,17 @@ class ComputeStack(Stack):
 
         # Email delivery failures (incident 2026-06-25): verification/reset emails silently failed
         # for every signup because the prod RESEND_API_KEY was invalid (Resend 400 "API key is
-        # invalid") — accounts stuck PENDING with NO alert. The app emits EmailDeliveryFailureSignal
-        # on every soft-fallback failure (dimension error_type: "RuntimeError" for a Resend non-2xx,
-        # the boto exception class for SES), but it was unmonitored. Alarm on the SUM across ALL
-        # error_type values (SEARCH expr → single series) so a bad key / unverified sender domain
-        # pages ops instead of failing silently. threshold=0 → any failure in a 5-min window pages.
-        email_failure_alarm = cloudwatch.MathExpression(
-            expression=(
-                "SUM(SEARCH('{DocSuri/Production,error_type} "
-                "MetricName=\"EmailDeliveryFailureSignal\"', 'Sum', 300))"
-            ),
-            label="EmailDeliveryFailures",
+        # invalid") — accounts stuck PENDING with NO alert. _emit_email_failure emits
+        # EmailDeliveryFailureSignal both per-error_type (diagnostics) AND dimensionless (this alarm
+        # target). We alarm on the DIMENSIONLESS stream because CloudWatch metric alarms do NOT
+        # support SEARCH (dimension wildcards) — the dimensionless total catches every error_type
+        # (Resend RuntimeError, network exceptions, SES boto errors) in one alarm. threshold=0 →
+        # any failure in a 5-min window pages ops instead of failing silently.
+        email_failure_alarm = cloudwatch.Metric(
+            namespace="DocSuri/Production",
+            metric_name="EmailDeliveryFailureSignal",
             period=Duration.minutes(5),
-            using_metrics={},
+            statistic="Sum",
         ).create_alarm(
             self,
             "EmailDeliveryFailureAlarm",
