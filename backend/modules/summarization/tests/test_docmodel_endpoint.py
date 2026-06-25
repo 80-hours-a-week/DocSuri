@@ -177,3 +177,15 @@ def test_reader_reads_cached_doc_model() -> None:
 def test_reader_returns_none_on_miss() -> None:
     reader = S3DocModelReader(bucket="papers", client=_FakeS3({}))
     assert reader.get_doc_model("2401.00001", 9) is None
+
+
+def test_reader_strips_version_suffix_from_paper_id() -> None:
+    # The app carries versioned paper ids (2304.10557v1) but U1 keys the doc-model store on
+    # the bare id (doc-model/{bareId}/v{version}.json). The read key must strip the trailing
+    # vN or a built artifact is never found (perpetual miss → "no rich source").
+    body = _doc_model(version=1).model_dump_json(exclude_none=True).encode("utf-8")
+    s3 = _FakeS3({"doc-model/2304.10557/v1.json": body})
+    reader = S3DocModelReader(bucket="papers", client=s3)
+    doc = reader.get_doc_model("2304.10557v1", 1)
+    assert doc is not None
+    assert s3.calls == ["doc-model/2304.10557/v1.json"]

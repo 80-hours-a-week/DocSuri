@@ -20,6 +20,8 @@ import time
 from typing import Any
 from uuid import uuid4
 
+from ._paper_ref import bare_paper_id
+
 logger = logging.getLogger(__name__)
 
 _DEFAULT_DEDUP_TTL_SECONDS = 120  # ~ expected build window; bounds rapid re-enqueues.
@@ -57,7 +59,10 @@ class SqsDocModelBuildQueue:
                 "kind": "BUILD_DOC_MODEL",
                 # U1 normalizes/validates this ref (rejects malformed → DLQ), so it is the
                 # only field that carries the external paper_id, and only into a JSON body.
-                "arxivRef": f"{paper_id}v{version}",
+                # paper_id may already carry a version suffix (``2304.10557v1``); strip it
+                # before re-attaching ``v{version}`` so the ref is not double-versioned
+                # (``2304.10557v1v1``), which arXiv can't resolve → the build never runs.
+                "arxivRef": f"{bare_paper_id(paper_id)}v{version}",
                 "eventId": None,
                 "correlationId": None,
             }
