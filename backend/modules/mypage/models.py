@@ -24,6 +24,32 @@ class DomainException(Exception):
 
 
 @dataclass
+class AccountProfile:
+    """A user's account-derived profile for the My Page header (read-only).
+
+    Backed by the REAL U3 accounts module: ``created_at`` is the account's signup time and
+    ``login_provider`` is derived from the user's LINKED social identities (ORCID > GOOGLE >
+    EMAIL). The mapping internal -> DTO lives in ``services/account.py``.
+    """
+
+    login_provider: str  # 'GOOGLE' | 'ORCID' | 'EMAIL'
+    created_at: datetime
+
+
+@dataclass
+class Consents:
+    """A user's consent flags (read-only for the two mandatory ones; nightly push is togglable).
+
+    Backed by the REAL U3 accounts module's consent columns. Privacy-policy / terms-of-service
+    are always True (rejecting them blocks signup), so only ``nightly_push_agreed`` ever toggles.
+    """
+
+    privacy_policy_agreed: bool
+    terms_of_service_agreed: bool
+    nightly_push_agreed: bool
+
+
+@dataclass
 class Subscription:
     """A user's mock subscription state (no real PG/billing behind plan/status changes).
 

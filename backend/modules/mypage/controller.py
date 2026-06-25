@@ -15,9 +15,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from backend.modules.accounts.models import Principal
 
-from .ports import SubscriptionRepository
-from .repository.memory import InMemorySubscriptionRepository
-from .schemas import SubscriptionDTO
+from .ports import AccountRepository, SubscriptionRepository
+from .repository.memory import InMemoryAccountRepository, InMemorySubscriptionRepository
+from .schemas import AccountProfileDTO, ConsentsDTO, ConsentsUpdate, SubscriptionDTO
+from .services.account import AccountService
 from .services.subscription import SubscriptionService
 
 
@@ -25,6 +26,11 @@ from .services.subscription import SubscriptionService
 @lru_cache(maxsize=1)
 def get_subscription_repo() -> SubscriptionRepository:
     return InMemorySubscriptionRepository()
+
+
+@lru_cache(maxsize=1)
+def get_account_repo() -> AccountRepository:
+    return InMemoryAccountRepository()
 
 
 def get_principal(request: Request) -> Principal:
@@ -40,6 +46,12 @@ def get_subscription_service(
     repo: SubscriptionRepository = Depends(get_subscription_repo),
 ) -> SubscriptionService:
     return SubscriptionService(repo)
+
+
+def get_account_service(
+    repo: AccountRepository = Depends(get_account_repo),
+) -> AccountService:
+    return AccountService(repo)
 
 
 router = APIRouter(prefix="/mypage/subscription", tags=["MyPage/Subscription"])
@@ -69,5 +81,43 @@ async def cancel_subscription(
     return svc.cancel(principal)
 
 
+# Account-backed profile + consents (REAL U3 accounts data via the AccountRepository port).
+account_router = APIRouter(prefix="/mypage", tags=["MyPage/Account"])
+
+
+@account_router.get("/account-profile", response_model=AccountProfileDTO)
+async def get_account_profile(
+    principal: Principal = Depends(get_principal),
+    svc: AccountService = Depends(get_account_service),
+) -> AccountProfileDTO:
+    profile = svc.get_profile(principal)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="account not found")
+    return profile
+
+
+@account_router.get("/consents", response_model=ConsentsDTO)
+async def get_consents(
+    principal: Principal = Depends(get_principal),
+    svc: AccountService = Depends(get_account_service),
+) -> ConsentsDTO:
+    consents = svc.get_consents(principal)
+    if consents is None:
+        raise HTTPException(status_code=404, detail="account not found")
+    return consents
+
+
+@account_router.post("/consents", response_model=ConsentsDTO)
+async def update_consents(
+    body: ConsentsUpdate,
+    principal: Principal = Depends(get_principal),
+    svc: AccountService = Depends(get_account_service),
+) -> ConsentsDTO:
+    consents = svc.set_nightly_push(principal, body.nightlyPushAgreed)
+    if consents is None:
+        raise HTTPException(status_code=404, detail="account not found")
+    return consents
+
+
 # Routers the app-shell mounts (mirrors library's `routers` tuple).
-routers = (router,)
+routers = (router, account_router)

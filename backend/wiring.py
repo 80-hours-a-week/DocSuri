@@ -227,10 +227,16 @@ def _mount_mypage(app: FastAPI, settings: Settings, result: MountResult) -> None
     # (관심 논문 / 로그아웃) are NOT mounted here — the frontend calls U4 GET /library and U3
     # POST /logout directly, so those two have no U10-owned backend code.
     from backend.modules.mypage import controller as mypage
-    from backend.modules.mypage.repository.memory import InMemorySubscriptionRepository
+    from backend.modules.mypage.repository.memory import (
+        InMemoryAccountRepository,
+        InMemorySubscriptionRepository,
+    )
 
     if _is_postgres(settings.database_url):
-        from backend.modules.mypage.repository.sql import SqlSubscriptionRepository
+        from backend.modules.mypage.repository.sql import (
+            SqlAccountRepository,
+            SqlSubscriptionRepository,
+        )
 
         from .db import make_engine, make_session_factory
 
@@ -250,16 +256,34 @@ def _mount_mypage(app: FastAPI, settings: Settings, result: MountResult) -> None
             finally:
                 session.close()
 
+        # Account-backed profile/consents read straight from U3's accounts tables on the SAME
+        # shared engine (SqlAccountRepository wraps CredentialRepository).
+        def get_account_repo():
+            session = session_factory()
+            try:
+                yield SqlAccountRepository(session)
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
+            finally:
+                session.close()
+
         log.info("app-shell: mypage read path = sql(postgres)")
     else:
         repo = InMemorySubscriptionRepository()
+        account_repo = InMemoryAccountRepository()
 
         def get_subscription_repo():
             return repo
 
+        def get_account_repo():
+            return account_repo
+
         log.info("app-shell: mypage read path = in-memory")
 
     app.dependency_overrides[mypage.get_subscription_repo] = get_subscription_repo
+    app.dependency_overrides[mypage.get_account_repo] = get_account_repo
     for router in mypage.routers:
         app.include_router(router)
     result.mounted.append("mypage")

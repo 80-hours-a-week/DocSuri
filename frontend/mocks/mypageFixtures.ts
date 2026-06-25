@@ -100,7 +100,3 @@ export function mockUpdateConsent(nightlyPushAgreed: boolean): ConsentSettingsVM
   consents = { ...consents, nightlyPushAgreed };
   return consents;
 }
-
-export function mockWithdrawAccount(): void {
-  subscription = { plan: 'FREE', status: 'NONE' };
-}

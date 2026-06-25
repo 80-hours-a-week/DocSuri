@@ -439,7 +439,8 @@ export class ApiClient {
     throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
-  /** 최근 본 논문 (MOCK — U9 paper_opened 이벤트 구현 전까지). */
+  /** 최근 본 논문 (MOCK — U9 paper_opened 이벤트 구현 전까지). 백엔드가 아직 이 경로를
+   * 제공하지 않으면 404 → 빈 목록으로 우아하게 처리(메뉴는 비어 보일 뿐 에러 아님). */
   async getRecentlyViewed(): Promise<RecentlyViewedItemVM[]> {
     const res = await this.request({
       method: 'GET',
@@ -447,6 +448,7 @@ export class ApiClient {
       idempotent: true,
     });
     if (res.status === 200) return (res.body as { items: RecentlyViewedItemVM[] }).items ?? [];
+    if (res.status === 404) return [];
     throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
@@ -469,9 +471,14 @@ export class ApiClient {
     throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
-  /** 회원탈퇴 (MOCK — soft-delete + 5년 백업 정책은 U3에서 별도 구현). */
+  /** 회원탈퇴 — REAL U3 소프트 삭제 (POST /auth/account/delete): status=DEACTIVATED 전이 +
+   * 전 세션 즉시 무효화 + 유예 기간 내 복구 가능. 성공 시 200/204. */
   async withdrawAccount(): Promise<void> {
-    const res = await this.request({ method: 'POST', path: '/mypage/withdraw', idempotent: false });
+    const res = await this.request({
+      method: 'POST',
+      path: '/auth/account/delete',
+      idempotent: false,
+    });
     if (res.status === 200 || res.status === 204) return;
     throw normalizeHttpError(res.status, serverMessage(res.body));
   }

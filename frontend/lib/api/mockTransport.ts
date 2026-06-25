@@ -52,7 +52,6 @@ import {
   mockGetRecentlyViewed,
   mockGetConsents,
   mockUpdateConsent,
-  mockWithdrawAccount,
 } from '@/mocks/mypageFixtures';
 import type {
   SavedSearchCreateDTO,
@@ -174,6 +173,11 @@ export class MockTransport implements Transport {
       mockLogout();
       return { status: 204, body: null };
     }
+    if (req.path === '/auth/account/delete' && req.method === 'POST') {
+      // REAL U3 soft-delete (withdrawAccount) — mock clears the session like a logout.
+      mockLogout();
+      return { status: 204, body: null };
+    }
     if (req.path === '/auth/session' && req.method === 'GET') {
       const session = mockCurrentSession();
       return session ? { status: 200, body: session } : { status: 401, body: null };
@@ -235,8 +239,9 @@ export class MockTransport implements Transport {
   }
 
   // U10 my-page routes. Subscription mirrors the REAL backend module (mock-only, no PG/
-  // billing). account-profile/orcid-profile/recently-viewed/consents/withdraw are MOCK-ONLY
-  // placeholders for menu items whose real U3/U9 contract does not exist yet.
+  // billing). account-profile/orcid-profile/recently-viewed/consents are MOCK-ONLY placeholders
+  // for menu items whose real U3/U9 contract does not exist yet. Withdrawal is NOT here — it
+  // calls the REAL U3 POST /auth/account/delete (handled in the auth branch above).
   private routeMypage(req: TransportRequest, path: string): TransportResponse | null {
     if (path === '/mypage/subscription') {
       if (req.method === 'GET') return { status: 200, body: mockGetSubscription() };
@@ -261,11 +266,6 @@ export class MockTransport implements Transport {
         const body = (req.body ?? {}) as { nightlyPushAgreed?: unknown };
         return { status: 200, body: mockUpdateConsent(Boolean(body.nightlyPushAgreed)) };
       }
-    }
-    if (path === '/mypage/withdraw' && req.method === 'POST') {
-      mockWithdrawAccount();
-      mockLogout();
-      return { status: 204, body: null };
     }
     return null;
   }

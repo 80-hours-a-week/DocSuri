@@ -21,9 +21,6 @@ class AccountTable(Base):
     # BR-A7: 역할 단일 출처는 DB(공개 가입=USER; ADMIN은 시딩만). totp_secret은 MFA 등록 시 채워진다.
     role = Column(String(20), default="USER", nullable=False)
     totp_secret = Column(String(64), nullable=True)
-    # 탈퇴(soft-delete) 여부는 status 값으로 추론하지 않고 별도 bool 컬럼으로 명시 판단한다.
-    is_withdrawn = Column(Boolean, default=False, nullable=False)
-    withdrawn_at = Column(DateTime, nullable=True)
     # U10: 동의 항목 — 개인정보처리방침/이용약관은 필수(가입 시 거부하면 가입 자체가 안 되므로
     # 항상 True), 야간 푸시(이메일, 최신/관심 논문 등재 알림)만 선택이라 실제로 토글된다.
     privacy_policy_agreed = Column(Boolean, default=True, nullable=False)
@@ -42,24 +39,6 @@ class VerificationTokenTable(Base):
     expires_at = Column(DateTime, nullable=False)
 
 
-class AccountWithdrawalBackupTable(Base):
-    """U10 회원탈퇴 시점의 accounts 스냅샷 (5년 보관, purge_after 이후 하드 삭제 대상).
-
-    accounts가 소유한 데이터만 담는다 — 라이브러리(U4)/행동 이벤트·관심 프로필(U9)/
-    social_identities(소셜 로그인 연동)는 전부 1:N 데이터라 여기 담을 수 없고 각 모듈/테이블이
-    별도로 백업해야 한다(후속 작업). password_hash/totp_secret은 재로그인 복구 목적이 아니므로
-    의도적으로 제외한다."""
-
-    __tablename__ = "account_withdrawal_backups"
-
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    original_account_id = Column(String(36), nullable=False, index=True)
-    email = Column(String(254), nullable=False)
-    status = Column(String(20), nullable=False)
-    signed_up_at = Column(DateTime, nullable=False)
-    withdrawn_at = Column(DateTime, nullable=False)
-    purge_after = Column(DateTime, nullable=False, index=True)
-    backed_up_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 class PasswordResetTokenTable(Base):
     """비밀번호 재설정 토큰 (FR-26 / BR-A8). 토큰은 평문이 아닌 SHA-256 해시로 저장한다
     (DB 유출 시 토큰 무력화). 단일 사용은 확정(confirm) 시 즉시 삭제로 강제한다."""
@@ -219,6 +198,14 @@ class CredentialRepository:
                 SocialIdentityTable.provider_subject == subject,
             )
             .first()
+        )
+
+    def list_social_identities(self, account_id: str) -> list[SocialIdentityTable]:
+        """계정에 연결된 소셜 신원 전부를 조회합니다 (U10 로그인 경로 표기용)."""
+        return (
+            self._session.query(SocialIdentityTable)
+            .filter(SocialIdentityTable.account_id == account_id)
+            .all()
         )
 
     def create_social_identity(

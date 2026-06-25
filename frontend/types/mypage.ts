@@ -4,7 +4,7 @@
  * mirrors the paperMeta.ts/glossary.ts/citationGraph.ts provisional-type pattern). Served by
  * MockTransport (frontend/mocks/mypageFixtures.ts) until U3 ships the real endpoints. */
 
-export type LoginProvider = 'GOOGLE' | 'ORCID';
+export type LoginProvider = 'GOOGLE' | 'ORCID' | 'EMAIL';
 
 /** 로그인 경로 + 가입날짜. */
 export interface AccountProfileVM {

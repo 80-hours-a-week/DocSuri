@@ -15,6 +15,7 @@ import type { AccountProfileVM, OrcidProfileVM } from '@/types/mypage';
 const LOGIN_PROVIDER_LABEL: Record<string, string> = {
   GOOGLE: 'Google',
   ORCID: 'ORCID',
+  EMAIL: '이메일',
 };
 
 const SUBSCRIPTION_LABEL: Record<string, string> = {

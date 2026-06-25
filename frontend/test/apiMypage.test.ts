@@ -79,6 +79,12 @@ describe('ApiClient mypage (U10) methods', () => {
     expect(out).toHaveLength(1);
   });
 
+  it('returns [] for recently-viewed on 404 (path not yet served — graceful)', async () => {
+    const r = recorder(() => ({ status: 404, body: null }));
+    const out = await new ApiClient(r.transport, fast).getRecentlyViewed();
+    expect(out).toEqual([]);
+  });
+
   it('updates the nightly-push consent (POST /mypage/consents)', async () => {
     const body = { privacyPolicyAgreed: true, termsOfServiceAgreed: true, nightlyPushAgreed: true };
     const r = recorder(() => ({ status: 200, body }));
@@ -91,10 +97,10 @@ describe('ApiClient mypage (U10) methods', () => {
     });
   });
 
-  it('withdraws the account (POST /mypage/withdraw, 204)', async () => {
+  it('withdraws the account via the REAL U3 soft-delete (POST /auth/account/delete, 204)', async () => {
     const r = recorder(() => ({ status: 204, body: null }));
     await expect(new ApiClient(r.transport, fast).withdrawAccount()).resolves.toBeUndefined();
-    expect(r.calls[0]).toMatchObject({ method: 'POST', path: '/mypage/withdraw' });
+    expect(r.calls[0]).toMatchObject({ method: 'POST', path: '/auth/account/delete' });
   });
 
   it('normalizes a 401 to a user-facing auth error (fail-closed)', async () => {
