@@ -134,6 +134,19 @@ def test_ok_returns_docmodel_union() -> None:
     assert orch.calls == [("2401.00001", 3)]
 
 
+def test_fail_closed_503_when_orchestrator_raises() -> None:
+    # A store/queue fault must surface as a generic 503 (fail-closed, INV-4/SEC-15), never a raw
+    # 500 leaking internals. A bare 500 here was also what the client retried in a tight loop.
+    class _Boom:
+        def doc_model(self, paper_id: str, version: int) -> DocModelLookup:
+            raise RuntimeError("s3 down")
+
+    endpoint = _endpoint(_Boom(), en=True)
+    resp = endpoint(_FakeRequest({"user_id": "u1"}, {"version": "1"}), "2401.00001")
+    assert resp.status_code == 503
+    assert json.loads(resp.body) == {"status": "unavailable"}
+
+
 # --- adapter: S3DocModelReader (S3 read, read-only) -----------------------
 
 
