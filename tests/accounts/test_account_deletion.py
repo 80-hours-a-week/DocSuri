@@ -181,6 +181,39 @@ async def test_reactivate_non_deleted_rejected(session):
 
 
 @pytest.mark.asyncio
+async def test_purge_writes_5y_withdrawal_backup_without_credentials(session):
+    # 감사 #4 / PR #193 복원: 하드 파기 직전 5년 보관 스냅샷 적재(시크릿 제외).
+    from backend.modules.accounts.repository.credential import (
+        WITHDRAWAL_BACKUP_RETENTION_DAYS,
+        AccountWithdrawalBackupTable,
+    )
+
+    repo = CredentialRepository(session)
+    acct = _active_account(repo, session)
+    acct_id, email = acct.id, acct.email
+    svc = AccountDeletionService(repo, AsyncMock(), AsyncMock(), grace_days=0)
+    await svc.request_deletion(acct_id, "OldPw123!@x")
+    session.commit()
+
+    await svc.purge_job(now=_naive(days=1))
+    session.commit()
+
+    backups = (
+        session.query(AccountWithdrawalBackupTable)
+        .filter(AccountWithdrawalBackupTable.original_account_id == acct_id)
+        .all()
+    )
+    assert len(backups) == 1
+    b = backups[0]
+    assert b.email == email
+    assert b.status == AccountStatus.DEACTIVATED.value
+    assert (b.purge_after - b.withdrawn_at).days == WITHDRAWAL_BACKUP_RETENTION_DAYS  # 5년 보관
+    # 백업 테이블에는 password_hash/totp_secret 컬럼이 없다(크리덴셜 비보관).
+    assert not hasattr(b, "password_hash")
+    assert repo.get_by_id(acct_id) is None  # 계정은 하드 파기됨
+
+
+@pytest.mark.asyncio
 async def test_request_deletion_requires_correct_password(session):
     # 감사 H7: 비밀번호 계정 탈퇴는 현재 비밀번호 재인증 필수(CSRF·세션탈취 방어).
     repo = CredentialRepository(session)

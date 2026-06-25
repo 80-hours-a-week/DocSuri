@@ -12,6 +12,7 @@ import pytest
 
 from backend.modules.accounts.repository.credential import (
     AccountDeletionTable,
+    AccountWithdrawalBackupTable,
     EmailChangeRequestTable,
     PasswordResetTokenTable,
     SocialIdentityTable,
@@ -22,12 +23,19 @@ from backend.modules.accounts.repository.credential import (
 MIGRATIONS = [
     Path("backend/modules/accounts/migrations/003_create_lifecycle_tables.sql"),
     Path("backend/modules/accounts/migrations/007_add_email_change_revoke_token.sql"),
+    Path("backend/modules/accounts/migrations/008_create_account_withdrawal_backups.sql"),
 ]
 
 
 @pytest.mark.parametrize(
     "model",
-    [PasswordResetTokenTable, SocialIdentityTable, EmailChangeRequestTable, AccountDeletionTable],
+    [
+        PasswordResetTokenTable,
+        SocialIdentityTable,
+        EmailChangeRequestTable,
+        AccountDeletionTable,
+        AccountWithdrawalBackupTable,
+    ],
 )
 def test_migration_columns_cover_model(model):
     conn = sqlite3.connect(":memory:")

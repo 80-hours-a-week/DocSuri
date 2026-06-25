@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, String
@@ -7,6 +7,10 @@ from sqlalchemy.orm import Session, declarative_base
 from ..models import AccountStatus, DomainException
 
 Base = declarative_base()
+
+# 회원탈퇴 스냅샷 보관 기간 (분쟁/법적 대응) — 5년. 하드 파기 시점에 accounts-owned 최소 스냅샷을
+# 이 기간만큼 보관하고, purge_after 경과 후 별도 배치가 하드 삭제한다(배치는 후속 작업).
+WITHDRAWAL_BACKUP_RETENTION_DAYS = 365 * 5
 
 class AccountTable(Base):
     __tablename__ = "accounts"
@@ -98,6 +102,26 @@ class AccountDeletionTable(Base):
     requested_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
     purge_after = Column(DateTime, nullable=False, index=True)
     state = Column(String(20), default=AccountStatus.DEACTIVATED.value, nullable=False)
+
+
+class AccountWithdrawalBackupTable(Base):
+    """회원탈퇴 시점 accounts 스냅샷 (5년 보관, purge_after 이후 하드 삭제 대상). 감사 #4 / PR #193 복원.
+
+    하드 파기(영구 삭제) 직전에 accounts가 *소유한* 데이터만 담는다. 분쟁/법적 대응용 최소 기록이며,
+    password_hash·totp_secret은 재로그인 복구 목적이 아니므로 의도적으로 제외한다(크리덴셜 비보관).
+    라이브러리(U4)·행동/관심(U9)·social_identities(1:N)는 여기 담을 수 없고 각 모듈이 AccountDeleted
+    이벤트를 구독해 자기 데이터를 따로 백업/정리한다(이 테이블 범위 밖, 후속 작업)."""
+
+    __tablename__ = "account_withdrawal_backups"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    original_account_id = Column(String(36), nullable=False, index=True)
+    email = Column(String(254), nullable=False)
+    status = Column(String(20), nullable=False)
+    signed_up_at = Column(DateTime, nullable=False)
+    withdrawn_at = Column(DateTime, nullable=False)
+    purge_after = Column(DateTime, nullable=False, index=True)
+    backed_up_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
 
 class CredentialRepository:
@@ -357,6 +381,7 @@ class CredentialRepository:
         AccountDeleted 이벤트로 U4/U2/U11이 각자 수행한다(코드 DAG 비순환)."""
         account = self.get_by_id(account_id)
         if account is not None:
+            self._create_withdrawal_backup(account)  # 시크릿 제외 5년 보관 스냅샷 (감사 #4)
             email = account.email
             self._session.query(VerificationTokenTable).filter(
                 VerificationTokenTable.email == email
@@ -371,6 +396,24 @@ class CredentialRepository:
             EmailChangeRequestTable.account_id == account_id
         ).delete()
         self._session.query(AccountTable).filter(AccountTable.id == account_id).delete()
+        self._session.flush()
+
+    def _create_withdrawal_backup(self, account: AccountTable) -> None:
+        """하드 파기 직전, accounts가 소유한 최소 스냅샷을 5년 보관 테이블에 적재한다(감사 #4 / PR #193
+        복원). password_hash·totp_secret은 의도적으로 제외(크리덴셜 비보관). withdrawn_at은 소프트삭제
+        시점(삭제 레코드 requested_at), purge_after는 +5년."""
+        deletion = self.get_account_deletion(account.id)
+        raw = deletion.requested_at if deletion is not None else datetime.now(UTC)
+        withdrawn_at = raw.replace(tzinfo=None) if raw.tzinfo else raw
+        backup = AccountWithdrawalBackupTable(
+            original_account_id=account.id,
+            email=account.email,
+            status=account.status,
+            signed_up_at=account.created_at,
+            withdrawn_at=withdrawn_at,
+            purge_after=withdrawn_at + timedelta(days=WITHDRAWAL_BACKUP_RETENTION_DAYS),
+        )
+        self._session.add(backup)
         self._session.flush()
 
     def mark_deletion_purged(self, account_id: str) -> None:
