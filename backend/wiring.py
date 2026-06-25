@@ -298,6 +298,18 @@ def _mount_summarization(app: FastAPI, settings: Settings, result: MountResult) 
     from summarization.adapters.settings import SummarizationSettings
 
     sm_settings = SummarizationSettings.from_env()
+    # DATABASE_URL env isn't set in prod — config._resolve_database_url assembles the DSN from
+    # DB_HOST/DB_PASSWORD for the app, but SummarizationSettings.from_env reads DATABASE_URL
+    # directly (→ None). The summarization glossary repo calls psycopg.connect, so feed it the
+    # app's assembled DSN as a libpq URL (drop the SQLAlchemy ``+psycopg`` dialect tag). Without
+    # this every summary/translate raises (DSN=None) and fail-closes to a generic "근거 없음".
+    if not sm_settings.database_url and settings.database_url.startswith("postgresql"):
+        from dataclasses import replace as _dc_replace
+
+        sm_settings = _dc_replace(
+            sm_settings,
+            database_url=settings.database_url.replace("postgresql+psycopg://", "postgresql://"),
+        )
     if not sm_settings.summarization_enabled:
         result.skipped.append(("summarization", "real path not configured (no S3 bucket)"))
         log.info("app-shell: summarization real path not configured — skipping mount")
