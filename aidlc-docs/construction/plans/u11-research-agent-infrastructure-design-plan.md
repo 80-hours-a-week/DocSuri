@@ -3,11 +3,11 @@
 **단계**: CONSTRUCTION → Infrastructure Design (유닛별 루프) · **유닛**: U11 Research Agent · **일자**: 2026-06-24
 **근거(SSOT)**: `u11-research-agent/nfr-design/`(논리 컴포넌트·토폴로지) · `nfr-requirements/`(TD-RA-1~15) · `functional-design/` · 시스템 전역 `construction/infrastructure-design/infrastructure-design.md` · 아키텍처 게이트 `docmodel-fulltext-index-pivot-plan.md`.
 **핵심 방향(선례 계승)**: U7처럼 **신규 관리형 서비스 최소화 — 기존 프로덕션 자산 재사용 + 자원 증분**. 리전 = **ap-northeast-2(서울)**. 단 U11은 **① SQS Agent 워커(비동기 잡)** 와 **② 전문 통합 인덱스 노드 증설(아키텍처 게이트)** 라는 신규/증설 요소가 있음.
-**선례 비교(질문 설계 입력 — 하나만 안 봄)**:
-- **U7**(논리→AWS 매핑·S3 프리픽스·Redis 키스페이스·RDS 테이블·Bedrock IAM ARN 스코프·증분 비용·SQS 워커 별도 배포)
-- **U8**(외부 API 쿼터·스냅샷 캐시·런타임/네트워크/스케일링 — 모드 B 참고)
-- **U3**(deployment-architecture·시크릿·서브넷·Multi-AZ)
-- **시스템 전역 infrastructure-design.md**(CDK 스택·CD·예산 알람)
+**선례 비교(실제 정독 반영)**:
+- **시스템 전역 `infrastructure-design.md`** ★ — OpenSearch 도메인 `docsuri-papers`(**VPC-내부·m6g.large.search×2 Multi-AZ·FGAC·~$220/월**), SQS 큐/DLQ 패턴(SSE-SQS·maxReceiveCount=3·14일 보존·요약잡 900s 가시성), S3 단일버킷 `docsuri-papers-fulltext-{env}` 프리픽스(`doc-model/`·`full-text/`·`summary/`), IAM 역할 4종, **비용 ~$370-400/$1,600(25% — 노드 업그레이드 여유 큼)**, Multi-AZ·NAT 배제 토폴로지.
+- **U7** — 논리→AWS 매핑·S3 프리픽스·Redis 키스페이스·RDS 테이블·**요약 워커=`docsuri-api` 이미지 재사용(entrypoint)·신규 task role**·증분 비용.
+- **U8** — 외부 API 시크릿(env)·Redis prefix·feature flag·쿼터(모드 B 참고, **신규 인프라 0**).
+- **U3**(deployment-architecture) — VPC·서브넷·Multi-AZ·시크릿(시스템 전역에 흡수).
 
 > 본 계획서는 **리뷰 게이트**다. `[Answer]:`가 모두 확정되기 전에 Infra 산출물(`infrastructure-design.md`·`deployment-architecture.md`)을 만들지 않는다. **본 게이트는 질문만 — 결정은 답변 후.**
 
@@ -53,9 +53,9 @@ B) 별도 서비스.  X) 기타.
 #### Q2 — Agent 워커(비동기 잡) 배포 (U7 SQS 워커 / U8 런타임 패턴)
 긴 다논문 분석 워커는?
 
-A) **별도 ECS 서비스/태스크(SQS 소비)로 분리(권장)** — 게이트웨이 타임아웃 무관·독립 스케일. U7 요약 워커 선례. 게이트(env)로 on/off, 미설정 시 대규모는 abstain(기존 패턴).
+A) **별도 ECS 서비스(SQS 소비)로 분리·`docsuri-api` 이미지 재사용(권장)** — 요약 워커(`docsuri-summary-worker`) 선례 그대로: 별도 이미지 없이 `docsuri-api` ECR 이미지에 entrypoint(`python -m research_agent.worker`), scale-to-zero(min 0), 신규 `docsuri-agent-worker-task-role`. 게이트웨이 타임아웃 무관·독립 스케일. env 게이트 미설정 시 대규모는 abstain(안전 저하).
 
-B) 동기 모듈 내 백그라운드 스레드.  C) Lambda.  X) 기타.
+B) 동기 모듈 내 백그라운드 스레드.  C) 별도 이미지/Lambda.  X) 기타.
 
 [Answer]: 
 
@@ -91,7 +91,7 @@ B) 신규 캐시.  X) 기타.
 #### Q6 — 전문 통합 인덱스 사이징 (아키텍처 게이트 · #120 · GQ1)
 전문 색인 OpenSearch는?
 
-A) **게이트·실험 종속 — 본 산출물엔 "노드 증설 가능성(월 +$100~220 추정)·granularity(GQ1) 미정"만 기록, 확정은 게이트 승인 + U1/U2/infra 조율(권장)**. 본 유닛 단독 사이징 확정 안 함.
+A) **게이트·실험 종속 — 사이징 확정 안 함(권장)**. 구체 사실만 기록: 현재 단일 공유 도메인 **`docsuri-papers` m6g.large.search×2 Multi-AZ(~$220)**, 전문 색인 도입 시 **벡터 ~12~18배 → 노드 업그레이드(r6g.large/m6g.xlarge) 또는 3노드**(시스템 전역 §6: 상한 내 가능, 현재 ~$370-400/$1,600). **eager doc-model은 인제스천 워커 변경**(현재 lazy `BUILD_DOC_MODEL` 잡 → eager). granularity(GQ1) 미정. 확정 = 게이트 승인 + U1/U2/infra 조율.
 
 B) 지금 노드 등급·granularity 확정.  X) 기타.
 
@@ -102,7 +102,7 @@ B) 지금 노드 등급·granularity 확정.  X) 기타.
 #### Q7 — Bedrock IAM (U7 §3 ARN 스코프 패턴)
 LLM 액세스 권한은?
 
-A) **task role에 `bedrock:InvokeModel(+Stream)` + 모델 ARN 스코프(권장)** — Sonnet 4.6·Haiku 4.5 ARN(inference profile 포함). 워커 role도 동일. ⚠️ task role 변경=조율 존.
+A) **기존 권한 재사용 + 워커 role 추가(권장)** — **`docsuri-api-task-role`엔 이미 Sonnet/Haiku `InvokeModel`이 부여됨(U7)** → U11 동기 모듈은 IAM 증분 0. 신규 `docsuri-agent-worker-task-role`에만 동일 모델 ARN 스코프 부여. ⚠️ task role 변경=조율 존.
 
 B) 광범위 권한.  X) 기타.
 
@@ -111,7 +111,7 @@ B) 광범위 권한.  X) 기타.
 #### Q8 — 검색/doc-model/OpenSearch 액세스 경로
 U11이 검색·doc-model에 어떻게 접근?
 
-A) **U2 검색 재사용(모듈 내 호출) + doc-model 읽기(S3/캐시)(권장)** — OpenSearch 직접 접근은 U2 경유(U2 API 재사용 vs 직접 질의는 NFR/Code 미정·FD Q2). 아웃바운드는 기존 서브넷 경로 재사용(NAT 0).
+A) **U2 검색 재사용 + doc-model 읽기(권장)** — **`docsuri-api-task-role`엔 이미 `doc-model/* GetObject`가 부여됨(U7 리치뷰/요약)** → U11 doc-model 읽기 IAM 증분 0. OpenSearch는 **VPC-내부 도메인**(공유)·U2 경유(직접 질의 시 OpenSearch read 권한·SG 인바운드 추가 — U2 API 재사용 vs 직접 질의는 FD Q2 미정). 아웃바운드 Bedrock/SQS/S3는 기존 IGW 경로(NAT 0).
 
 B) U11이 OpenSearch 직접 접근.  X) 기타.
 
@@ -122,9 +122,9 @@ B) U11이 OpenSearch 직접 접근.  X) 기타.
 #### Q9 — SQS 큐 (U7 요약 큐 / U8 패턴)
 비동기 잡 큐는?
 
-A) **신규 SQS 큐 `agent-analysis-jobs` + DLQ(권장)** — 가시성 타임아웃·재시도·멱등(캐시 히트). 워커가 소비. 게이트 env로 on/off. 수치는 Code-gen.
+A) **신규 SQS 큐 `docsuri-agent-job-queue` + DLQ(권장 — 요약잡 큐 패턴)** — SSE-SQS·maxReceiveCount=3·14일 보존·가시성 ~900s(다논문 fan-out·요약잡과 동급)·멱등(캐시 히트). 워커 소비, EventBridge 무관(API가 enqueue). 게이트 env(`DOCSURI_AGENT_JOB_QUEUE_URL`)로 on/off. 수치는 Code-gen.
 
-B) 기존 큐 공유.  C) 큐 없이 동기만.  X) 기타.
+B) 기존 인제스천/요약 큐 공유.  C) 큐 없이 동기만.  X) 기타.
 
 [Answer]: 
 
@@ -164,7 +164,7 @@ B) U11 전용 스택 신설.  X) 기타.
 #### Q13 — 증분 비용 요약 (U7 §7 패턴)
 비용 요약 방식은?
 
-A) **증분 표(권장)** — 컴퓨트(모듈 0·워커 소액)·RDS/Redis/S3(증분 무시~소액)·**Bedrock 토큰(가변·다논문 fan-out·K·캐시 bound)**·**(게이트 시)OpenSearch 노드 +$100~220/월 추정(실측 배포 후)**·SQS(소액). NFR-C1 상한 내.
+A) **증분 표(권장)** — 기준선 현재 **~$370-400/$1,600(25%·여유 큼)**. 증분: 컴퓨트(동기 모듈 0·워커 scale-to-zero 소액)·RDS/Redis/S3 프리픽스(무시~소액)·**Bedrock 토큰(가변·다논문 fan-out=단건의 K배·K 상한·캐시 bound)**·**(게이트 시)OpenSearch 노드 업그레이드(r6g/3노드, 시스템 §6 상한 내·실측 배포 후)**·SQS(소액). NFR-C1 상한 내.
 
 B) 단일 총액.  X) 기타.
 
