@@ -222,7 +222,7 @@ class ComputeStack(Stack):
             "DOCSURI_SUMMARY_JOB_QUEUE_URL": (  # long-summary async job (BR-S12)
                 f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-summary-job-queue"
             ),
-            "PERSONALIZATION_ENABLED": "false",
+            "PERSONALIZATION_ENABLED": "true",
             "PERSONALIZATION_RAW_EVENT_RETENTION_DAYS": "90",
             # --- U3 social login (FR-27, Google OIDC) ---
             # client_id is public (embedded in the auth URL) → plain env. The matching
