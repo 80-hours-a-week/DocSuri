@@ -12,10 +12,10 @@
 ## 1. 결정 (확정안 — 승인 시 D로 고정)
 
 - **DF-1 전문 통합 인덱스**: OpenSearch 검색 인덱스를 **"제목+초록만" → "전문 전체(제목+초록+본문)"** 로 전환한다(초록을 본문으로 *교체*가 아니라 **포함 + 본문 추가** — 초록 기반 topic 검색 recall 손실 없음). **U2 검색·U11 에이전트가 단일 인덱스 공유**(에이전트 전용 별도 인덱스 안 만듦 — 서브시스템 분기 회피).
-- **DF-2 eager doc-model**: doc-model을 **전 논문 인제스트 시 eager 생성**한다(D6 lazy 되돌림). **doc-model은 이미 제목·초록(meta) + 본문(sections, 표=데이터·수식=latex·그림 캡션)을 담는다**(코드 검증: `builder.py`·`parser.py` — 빌더에 제목/초록 추가 불필요). 색인 소스 = **doc-model 전체 평탄화**(meta.title + meta.abstract + 문단 + 표 셀 텍스트 + 수식 latex + 그림 캡션). 표/수식/캡션이 **찾기·근거에 first-class**.
+- **DF-2 eager doc-model**: doc-model을 **전 논문 인제스트 시 eager 생성**한다(D6 lazy 되돌림). **doc-model은 이미 제목·초록(meta) + 본문(sections, 표=데이터·수식=latex·그림 캡션)을 담는다**(코드 검증: `builder.py`·`parser.py` — 빌더에 제목/초록 추가 불필요). 색인은 **Index Projection**: `DocModel → 검색 가능 콘텐츠(제목·초록·문단·표·수식·그림 캡션)를 검색용 레코드로 투영 → OpenSearch`(JSON 문자열화가 아니라 필드 투영). 표/수식/캡션이 **찾기·근거에 first-class**.
 - **DF-3 근거화 U6 통일 (확정)**: 근거 추출·앵커는 동일 doc-model block-id 사용. **근거화는 U6 단일 권위로 통일** — U6 공유 계약이 검색 enforce + 문서충실도(단일 논문 / 다논문)를 포괄하도록 업그레이드하고, **U7이 따로 둔 근거화(`AnchorVerdict`)도 이 계약으로 이관·수정한다**(선택 아님; blast-radius=`shared/ports.md`·U6 FD·**배포된 U7 FD/코드+회귀**). 상세는 U11 FD Q7. *(인덱스 전환과는 독립 트랙이나 같은 U11 사이클에서 함께 진행.)*
 - **DF-4 `982f64a` 승격**: 미승인 복원 커밋 `982f64a`(전문 본문 임베딩 복원)를 폐기/revert가 아니라 **본 게이트로 정식 승격**해 *제대로* 수행한다(소스=doc-model·infra resize·비용 갱신·테스트/문서 정합).
-- **DF-5 색인 단위 + block_id locator(잠정·NFR 확정)**: 검색 hit는 **block_id locator(`paper_id·section·block_id·score`)** 를 반환해 추출이 해당 블록부터 시작(토큰↓·속도↑·비용↓·앵커 사전확보; locator=**시드**, 추출은 섹션까지 확장). 단 **비용 방향**: block 단위 **dense** = 벡터 수 최다 → k-NN RAM↑(#120 지렛대 재발). **block 단위 BM25(어휘)** 는 k-NN 그래프 RAM을 안 먹어 **locator를 싸게** 제공(데이터셋·기법·수식명 질의 강함). ⇒ **block BM25(locator) + 섹션 dense(의미)** 혼합이 토큰 절약은 얻고 RAM 폭증은 피함; 순수 block-dense는 최정밀·최고비용. 정확한 granularity·dense/lexical 배분은 NFR/Infra(GQ1).
+- **DF-5 검색 hit 반환 (최소 보장 + 권장 옵션)**: 검색 hit는 **최소 `paper_id`(+score)** 를 반환한다. **`block_id` locator(`section·block_id·score`)는 권장 최적화 옵션**(있으면 추출이 해당 블록부터 시작 → 토큰↓·속도↑·비용↓·앵커 사전확보; locator=**시드**, 추출은 섹션까지 확장). **확정 아님** — locator 가능 여부는 색인 granularity(아래 GQ1)에 종속하므로 지금 block_id를 못박지 않는다(향후 block/section/document dense 선택지 보존).
 - **DF-6 doc-model 완전성 (논문 전체 담기)**: doc-model이 "논문 내용 전체"를 담도록 **가산적(forward-compat)** 보강한다 —
   - **(a) 각주(footnote) 포함**: 현재 parser가 drop(인라인 오염 방지). → **out-of-flow 별도 블록/앵커로 추출**(인라인 미주입). 이유: 각주에 **코드/데이터 공개 사실·단서·추가 결과** 등 실제 근거가 숨음(FR-22 "코드/데이터 공개 사실 추출"과 정합); 버리면 사각지대. *(블록 타입/notes 필드 가산 — U1/shared 사인오프.)*
   - **(b) 서지 메타 보강**: doc-model `meta`에 **저자·발행일·arXiv 카테고리** 추가(현재 title/abstract만). doc-model이 **출처 표기까지 자급**(코퍼스 별도 조회 불요). *(가산.)*
@@ -78,8 +78,8 @@
 
 ## 6. 열린 질문 (코드 전 확정)
 
-- **GQ1**: 색인 granularity = 섹션 dense vs 블록 dense vs (초록·섹션 dense + 본문 BM25). → NFR/Infra(비용 직접 영향, DF-5).
-- **GQ2**: U2 일반 검색도 전문 인덱스 recall을 *원하는가*, 아니면 U2는 초록 랭킹 유지하고 전문은 필터/리랭크로만? (단일 인덱스 공유 시 검색 의미 변화 수용 범위.)
+- **GQ1 (열림 — 실험으로 결정)**: 색인 granularity = **document dense / section dense / block dense** (및 lexical[BM25] 혼합 여부). 어느 것도 미확정 — section dense만으로 충분할 수도, block dense가 필요할 수도 있어 **평가(QT-8/recall·비용) 결과로 결정**. block_id locator(DF-5) 가능 여부가 여기에 종속. 비용 방향만 참고: block dense=k-NN RAM 최다(#120 지렛대), block BM25=싸게 locator. **지금 특정 안으로 기울이지 않음.**
+- **GQ2 (열림 — 랭킹 전략)**: 단일 공유 인덱스는 **이미 결정(DF-1)**. 남은 문제는 **검색 랭킹 전략** — title/abstract/body(섹션) **필드별 boost 가중치**, U2 일반 검색 vs U11 에이전트의 **랭킹 프로파일 공유/분리**, 질의 유형(topic/passage)별 가중. → NFR/실험.
 - **GQ3**: eager doc-model 백필 전략(기존 코퍼스 ~70k 일괄 생성 vs 점진) — 인제스트 처리량·비용.
 - **GQ4**: 비-HTML(~9%) 폴백 논문의 표/수식 색인 한계(PDF 폴백 시 구조 약함) 처리.
 
