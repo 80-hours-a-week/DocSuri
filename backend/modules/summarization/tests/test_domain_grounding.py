@@ -83,6 +83,19 @@ def test_formula_anchor_exempt_from_existence(sample_paper: str, valid_draft: Su
     assert not any(v.kind == "anchor_missing" for v in verdict.violations)
 
 
+def test_prose_arrow_span_not_exempt(sample_paper: str, valid_draft: SummaryDraft) -> None:
+    # A ``→`` is common in prose, not just formulas. An absent arrow span must NOT be exempted as
+    # a formula — it stays subject to the existence check and is dropped (regression for the
+    # widened grounding hole when arrows were in _MATH_RE).
+    bad = replace(
+        valid_draft,
+        anchors=(Anchor("method", AnchorTarget.SECTION, span="pretrain → finetune on FakeSet-999"),),
+    )
+    verdict = GroundingValidator().validate(_gi(bad, sample_paper))
+    assert verdict.ok and verdict.kept_anchors == ()  # dropped, not exempted
+    assert any(v.kind == "anchor_missing" for v in verdict.violations)
+
+
 def test_numeric_minority_mismatch_tolerated() -> None:
     # A few stray figures (1 of 4 absent = 25% ≤ 50%) shouldn't abstain an otherwise-grounded draft.
     from summarization.domain.models import RefinedSource

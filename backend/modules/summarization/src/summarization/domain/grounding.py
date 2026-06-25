@@ -27,8 +27,12 @@ _NUM_RE = re.compile(r"\d+(?:\.\d+)?")
 # correctly-grounded math; numeric grounding (rule 2) still guards the reported result figures.
 # (Alternatives weighed: normalize math on both sides, or steer the prompt off formula anchors —
 # see PR discussion. Trade-off: a hallucinated formula anchor would now pass span-existence.)
+# NOTE: arrows (U+2190–U+21FF) are deliberately EXCLUDED — ``→`` is common in prose
+# ("pretrain → finetune"), so including it would exempt ordinary text spans from the existence
+# check and widen the grounding hole. Real formula signal comes from operators / math-alphanumeric
+# / LaTeX, which remain below.
 _MATH_RE = re.compile(
-    r"[←-⇿∀-⋿⨀-⫿\U0001D400-\U0001D7FF]"  # math unicode (ops/arrows/symbols)
+    r"[∀-⋿⨀-⫿\U0001D400-\U0001D7FF]"  # math unicode (operators/symbols/alphanumerics)
     r"|\\[A-Za-z]+"  # LaTeX command (\mathcal, \sum, …)
     r"|[_^]\{"  # LaTeX sub/superscript group
 )
