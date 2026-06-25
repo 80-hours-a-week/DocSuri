@@ -490,7 +490,11 @@ class ComputeStack(Stack):
         self.service.task_definition.task_role.add_to_principal_policy(
             iam.PolicyStatement(
                 actions=["s3:GetObject", "s3:PutObject"],
-                resources=[f"{_papers_bucket}/summary/*"],
+                # The summary store writes under ``summaries/`` (plural — SummaryCacheKey.object_path,
+                # infra-design §2.1); the grant must match or every cache write-through hits
+                # AccessDenied (uncaught → request fails; a successful summary/translation 500s and
+                # nothing is ever cached). Was ``summary/`` (typo).
+                resources=[f"{_papers_bucket}/summaries/*"],
             )
         )
         # SendMessage: doc-model build (ingestion queue, boundary B) + long-summary job queue.
