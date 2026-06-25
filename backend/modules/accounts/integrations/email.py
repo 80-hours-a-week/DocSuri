@@ -122,7 +122,11 @@ def _emit_email_failure(observability_hub, e: Exception, provider: str) -> None:
     if not observability_hub:
         return
     try:
+        # 진단용: error_type 차원 분해.
         observability_hub.emit_metric("EmailDeliveryFailureSignal", 1, {"error_type": type(e).__name__})
+        # 알람용: 무차원 합계. CloudWatch 메트릭 알람은 SEARCH(차원 와일드카드)를 지원하지 않으므로,
+        # 모든 error_type을 단일 알람으로 잡으려면 차원 없는 스트림이 필요하다(감사 인시던트 2026-06-25).
+        observability_hub.emit_metric("EmailDeliveryFailureSignal", 1, {})
         observability_hub.emit_log({
             "event": "EmailDeliveryFailureSignal",
             "error_type": type(e).__name__,
