@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './SearchScreen.module.css';
-import { clearSearchSnapshot, getSearchSnapshot, setSearchSnapshot } from '@/lib/search/searchCache';
+import {
+  clearSearchSnapshot,
+  getSearchSnapshot,
+  setSearchSnapshot,
+  type SearchSort,
+} from '@/lib/search/searchCache';
 import { StateView } from './StateView';
 import { ResultList } from './ResultList';
 import { SaveToLibraryButton } from './SaveToLibraryButton';
@@ -19,7 +24,7 @@ const renderBookmark = (card: ResultCardVM) => <SaveToLibraryButton card={card} 
 // Result sort (client-side, over the received top-N): relevance = the ranking order
 // U2 returned (PBT-03); recent = publication year desc. This only re-orders what was
 // returned — it does not re-query the corpus.
-type SortKey = 'relevance' | 'recent';
+type SortKey = SearchSort;
 
 function sortCards(cards: ResultCardVM[], sort: SortKey): ResultCardVM[] {
   if (sort !== 'recent') return cards;
@@ -64,9 +69,11 @@ export function SearchScreen() {
   // exactly what's on screen now (see searchCache).
   useEffect(() => {
     if (state.tag === 'outcome' && executedQuery) {
-      setSearchSnapshot({ query, executedQuery, outcome: state.outcome, sort });
+      // Restore the executed query (not the live input), so a back-navigation shows an input
+      // that matches the results even if the user edited the box without re-searching.
+      setSearchSnapshot({ query: executedQuery, executedQuery, outcome: state.outcome, sort });
     }
-  }, [state, executedQuery, query, sort]);
+  }, [state, executedQuery, sort]);
 
   const clearQuery = useCallback(() => {
     // ✕ dismisses the whole search — input, results, sort, and the saved snapshot — so a later

@@ -65,7 +65,9 @@ export function SavedLibraryProvider({ children }: { children: React.ReactNode }
       try {
         let cursor: string | undefined;
         for (let i = 0; i < MAX_PAGES; i += 1) {
-          const page = await getApiClient().listLibrary(cursor ? { cursor } : undefined);
+          // Page at the max size (100) so MAX_PAGES fully covers the 1000-item cap (BR-L4) —
+          // the default size (20) would only reach 500 and leave the upper half un-hydrated.
+          const page = await getApiClient().listLibrary({ limit: 100, ...(cursor ? { cursor } : {}) });
           for (const it of page.items as LibraryItemDTO[]) {
             next.set(it.arXivId, String(it.id));
           }
