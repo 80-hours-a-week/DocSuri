@@ -10,12 +10,14 @@
 
 ## 1. NFR 렌즈 (U11 관점)
 
-- **성능(NFR-P5)**: 온디맨드·비-SLA·비차단. 다논문 분석은 수 초~분 → 진행상태·부분결과. 검색 SLA(NFR-P1) 비대상.
-- **비용(NFR-C1)**: 다논문 LLM 호출 신규 라인 → 기존 $1,600 상한 내 흡수·별도 계상, U6 CostGuard 재사용, 캐시로 중복 차단.
-- **보안(SEC-5/8/11)**: 로그인·owner-scope, 첨부 무해화·injection 격리, 레이트리밋.
-- **신뢰(RES-9/11)**: 타임아웃·재시도·서킷·부분결과 저하, AI 인시던트(비용폭발·할루시네이션·반쪽결과) 탐지.
-- **운영(QT-8/NFR-O1)**: 모드별 호출·지연·기권/저하·비용 텔레메트리(U6 ObservabilityHub).
-- **테스트**: QT-8 PBT(기권 안정성·DTO roundtrip·owner isolation·캐시·부분결과·출처유효성).
+> **선례 참고(질문 설계 입력)**: U7(LLM 모델 바인딩·비용 라인·캐시 2단·Bedrock 스트리밍·비동기 잡·real-first 테스트), U2(의존성 격리·degradeMode·레이턴시 예산 분해·mock-first 병렬 개발), U3(RDS/Redis·보안 처분), U8(shared DTO 승격·쿼터). 아래 렌즈·질문은 이 선례들을 비교해 도출. **본 게이트는 질문만 — 결정은 답변 후 산출물에서.**
+
+- **성능(NFR-P5)**: 온디맨드·비-SLA·비차단. 다논문 분석은 수 초~분 → 진행상태·부분결과. 검색 SLA(NFR-P1) 비대상. (U7 스트리밍 TTFB·U2 예산 분해 관점)
+- **비용(NFR-C1)**: 다논문 LLM 호출 신규 라인 → 기존 $1,600 상한 내 흡수·별도 계상, U6 CostGuard 재사용, 캐시로 중복 차단. (U7 비용 라인 패턴)
+- **보안(SEC-5/8/11)**: 로그인·owner-scope, 첨부 무해화·injection 격리, 레이트리밋. (U7 본문 격리·U3 owner 격리)
+- **신뢰(RES-9/11)**: 의존성별 타임아웃·재시도·서킷·부분결과 저하, AI 인시던트(비용폭발·할루시네이션·반쪽결과) 탐지. (U2 의존성 격리/degrade 패턴)
+- **운영(QT-8/NFR-O1)**: 모드별 호출·지연·기권/저하·비용 텔레메트리(U6 ObservabilityHub). (U2/U7 단일 수집)
+- **테스트·병렬개발**: real-first(U7) vs mock-first(U2) 전략 + QT-8 PBT(기권 안정성·DTO roundtrip·owner isolation·캐시·부분결과·출처유효성).
 
 ---
 
@@ -164,11 +166,31 @@ B) 지금 외부 API 선정.  X) 기타.
 
 [Answer]: 
 
+### Q15 — 테스트·병렬개발 전략 (U7 real-first ↔ U2 mock-first)
+출하 코드에 mock 어댑터를 둘까요? 프런트(`u11-research-agent-frontend`)·타 유닛 병렬 개발은?
+
+A) **real-first(U7 방식, 권장)** — 출하 코드는 포트 + 실 어댑터 단일본(production mock 미구현). 단위 테스트만 테스트 전용 Fixture/Stub + Hypothesis PBT, 통합은 실 의존성.
+
+B) **mock-first(U2 방식)** — 포트 + mock/real 2구현·환경 토글. 프런트·의존 유닛이 mock으로 병렬 개발, 계약 불변 스왑.
+
+C) 혼합(핵심 경로 real-first + 프런트 계약용 mock 픽스처만).  X) 기타.
+
+[Answer]: 
+
+### Q16 — shared DTO 계약 승격 (U7/U8 선례)
+`research_agent` DTO(AgentResponse 5종 union·EvidenceTable·세션 등)를 어떻게 둘까요?
+
+A) **`shared/dtos/research_agent`로 승격(PROVISIONAL) + 별도 shared PR(권장)** — U4/U7 선례. 프런트·U6 근거화 계약 정합·드리프트 가드 대상.
+
+B) U11 모듈 내부에만 둔다(공유 안 함).  X) 기타.
+
+[Answer]: 
+
 ---
 
 ## 5. 다음 절차
-1. Q1~Q14 답변 확정(애매 시 후속 질문).
-2. `u11-research-agent/nfr-requirements/`에 `nfr-requirements.md`·`tech-stack-decisions.md` 생성.
+1. **Q1~Q16 답변 확정**(애매 시 후속 질문) — 본 게이트는 질문만, 결정은 답변 후.
+2. 답변 확정 후 `u11-research-agent/nfr-requirements/`에 `nfr-requirements.md`·`tech-stack-decisions.md` 생성.
 3. 승인 후 **NFR Design**(서킷·캐시·스케일·저하 패턴) → Infrastructure Design → Code Generation.
 4. granularity(GQ1)·랭킹(GQ2)은 권장/후보로 남기고 평가 단계에서 확정.
 5. 커밋·푸시·PR(#183)은 사용자 승인 후.
