@@ -3,13 +3,21 @@
 인가 코드 흐름의 트랜스포트 절반(인가 URL 생성·code↔token 교환·id_token 검증)을 담는다.
 신원 조정(계정 연결/생성)은 SocialLoginService.reconcile가 담당한다(코어 분리 유지 — 테스트 가능).
 
+인가 코드 흐름은 PKCE(S256, RFC 7636)를 사용한다(감사 #8) — verifier는 백엔드 쿠키로만 보관하고
+challenge만 Google에 보내, 인가 코드 가로채기/주입을 방어한다.
+
 id_token 서명 검증은 Google tokeninfo 엔드포인트에 위임한다 — 새 crypto 의존성 없이 httpx만
-사용한다(사용자 결정). tokeninfo는 서명·만료를 서버측에서 검증하고 클레임을 JSON으로 돌려준다.
-우리는 aud(우리 client_id)·iss(google)·nonce(재생 방어) 일치를 추가로 강제한다.
-# ponytail: tokeninfo = 로그인당 1 원격 RTT. 로그인 지연/구글 레이트가 병목이면 로컬 JWKS
-#           (python-jose, TD-U3-8) 검증으로 _fetch_tokeninfo만 교체하면 된다.
+사용한다. tokeninfo는 서명·만료를 서버측에서 검증하고 클레임을 JSON으로 돌려준다. 우리는
+aud(우리 client_id)·iss(google)·nonce(재생 방어) 일치를 추가로 강제한다. id_token은 *서버 대 서버*
+토큰 교환으로 직접 받으므로 이는 검증 우회가 아니다(감사 #9: tokeninfo는 우회가 아니라 운영상
+취약점).
+SECURITY-DEBT(감사 #9, deferred): 로컬 JWKS(RS256) 검증으로 _fetch_tokeninfo를 대체하면 로그인당
+구글 RTT/가용성 의존을 없앨 수 있으나 `cryptography` 의존성 추가 + 이미지 재빌드가 필요하다(현
+환경 미설치 → 테스트 불가). `GOOGLE_OIDC_VERIFY_MODE` env 게이트로 도입하는 것을 후속 작업으로 둔다.
 """
 
+import base64
+import hashlib
 import logging
 from urllib.parse import urlencode
 
@@ -26,14 +34,24 @@ GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo"
 GOOGLE_ISS = {"https://accounts.google.com", "accounts.google.com"}
 
 
+def pkce_challenge(code_verifier: str) -> str:
+    """PKCE S256 코드 챌린지 = base64url(sha256(code_verifier)) (패딩 제거, RFC 7636).
+    인가 코드 가로채기/주입(감사 #8) 방어 — 교환 시 원본 verifier 제시를 강제한다."""
+    digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+
+
 class GoogleOidcVerifier:
     def __init__(self, client_id: str, client_secret: str, *, timeout: float = 10.0):
         self._client_id = client_id
         self._client_secret = client_secret
         self._timeout = timeout
 
-    def build_authorization_url(self, redirect_uri: str, state: str, nonce: str) -> str:
-        """Google 인가 엔드포인트 URL을 만든다(start 단계 리다이렉트 대상)."""
+    def build_authorization_url(
+        self, redirect_uri: str, state: str, nonce: str, code_challenge: str | None = None
+    ) -> str:
+        """Google 인가 엔드포인트 URL을 만든다(start 단계 리다이렉트 대상).
+        code_challenge가 주어지면 PKCE(S256)를 함께 요청한다(감사 #8)."""
         params = {
             "client_id": self._client_id,
             "redirect_uri": redirect_uri,
@@ -43,21 +61,25 @@ class GoogleOidcVerifier:
             "nonce": nonce,
             "prompt": "select_account",
         }
+        if code_challenge:
+            params["code_challenge"] = code_challenge
+            params["code_challenge_method"] = "S256"
         return f"{GOOGLE_AUTH_URL}?{urlencode(params)}"
 
-    async def _exchange_code(self, code: str, redirect_uri: str) -> str:
-        """인가 코드를 토큰으로 교환하고 id_token(JWT)을 반환한다."""
+    async def _exchange_code(self, code: str, redirect_uri: str, code_verifier: str | None = None) -> str:
+        """인가 코드를 토큰으로 교환하고 id_token(JWT)을 반환한다.
+        code_verifier가 있으면 PKCE 증명으로 함께 전송한다."""
+        data = {
+            "code": code,
+            "client_id": self._client_id,
+            "client_secret": self._client_secret,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+        }
+        if code_verifier:
+            data["code_verifier"] = code_verifier
         async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.post(
-                GOOGLE_TOKEN_URL,
-                data={
-                    "code": code,
-                    "client_id": self._client_id,
-                    "client_secret": self._client_secret,
-                    "redirect_uri": redirect_uri,
-                    "grant_type": "authorization_code",
-                },
-            )
+            resp = await client.post(GOOGLE_TOKEN_URL, data=data)
         if resp.status_code != 200:
             logger.warning("OIDC token exchange failed: status=%s", resp.status_code)
             raise DomainException("소셜 로그인 토큰 교환에 실패했습니다.")
@@ -75,9 +97,12 @@ class GoogleOidcVerifier:
             raise DomainException("소셜 로그인 토큰 검증에 실패했습니다.")
         return resp.json()
 
-    async def exchange_and_verify(self, code: str, redirect_uri: str, expected_nonce: str) -> OidcClaims:
-        """code → id_token → 검증된 클레임. aud/iss/nonce 불일치 또는 필수 클레임 부재 시 거부."""
-        id_token = await self._exchange_code(code, redirect_uri)
+    async def exchange_and_verify(
+        self, code: str, redirect_uri: str, expected_nonce: str, code_verifier: str | None = None
+    ) -> OidcClaims:
+        """code → id_token → 검증된 클레임. aud/iss/nonce 불일치 또는 필수 클레임 부재 시 거부.
+        code_verifier가 있으면 PKCE 증명으로 교환에 사용한다(감사 #8)."""
+        id_token = await self._exchange_code(code, redirect_uri, code_verifier)
         info = await self._fetch_tokeninfo(id_token)
         if info.get("aud") != self._client_id:
             raise DomainException("소셜 로그인 토큰의 대상(aud)이 일치하지 않습니다.")

@@ -87,3 +87,30 @@ async def test_missing_required_claim_rejected():
     v = _with_tokeninfo(_info(sub=None))
     with pytest.raises(DomainException):
         await v.exchange_and_verify("code", "https://app/cb", "n1")
+
+
+# ── PKCE (감사 #8) ─────────────────────────────────────────────────────────────
+def test_build_authorization_url_includes_pkce_when_challenge_given():
+    url = _verifier().build_authorization_url("https://app/cb", "st", "no", "challenge123")
+    assert "code_challenge=challenge123" in url
+    assert "code_challenge_method=S256" in url
+
+
+def test_pkce_challenge_is_s256_base64url_unpadded():
+    import base64
+    import hashlib
+
+    from backend.modules.accounts.integrations.oidc import pkce_challenge
+
+    verifier = "some-random-verifier-string"
+    expected = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+    challenge = pkce_challenge(verifier)
+    assert challenge == expected
+    assert "=" not in challenge  # 패딩 제거
+
+
+@pytest.mark.asyncio
+async def test_exchange_and_verify_passes_code_verifier():
+    v = _with_tokeninfo(_info())
+    await v.exchange_and_verify("code", "https://app/cb", "n1", "the-verifier")
+    v._exchange_code.assert_awaited_once_with("code", "https://app/cb", "the-verifier")

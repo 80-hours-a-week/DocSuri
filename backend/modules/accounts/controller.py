@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from .guard import AuthorizationGuard, Decision
 from .integrations.email import get_email_client
-from .integrations.oidc import GoogleOidcVerifier
+from .integrations.oidc import GoogleOidcVerifier, pkce_challenge
 from .integrations.recaptcha import RecaptchaClient
 from .models import (
     DomainException,
@@ -240,6 +240,7 @@ def _social_redirect_uri(request: Request) -> str:
 def _clear_oidc_cookies(resp: RedirectResponse) -> None:
     resp.delete_cookie("oidc_state")
     resp.delete_cookie("oidc_nonce")
+    resp.delete_cookie("oidc_verifier")
 
 
 def _clear_session_cookie(resp: Response) -> None:
@@ -506,12 +507,17 @@ async def social_google_start(
     """소셜 로그인 시작 (FR-27) — state·nonce 발급(httpOnly 쿠키) 후 Google 인가 페이지로 리다이렉트."""
     state = secrets.token_urlsafe(24)
     nonce = secrets.token_urlsafe(24)
-    auth_url = verifier.build_authorization_url(_social_redirect_uri(request), state, nonce)
+    # PKCE(감사 #8): verifier는 쿠키로만 보관하고 challenge(S256)만 Google에 보낸다.
+    code_verifier = secrets.token_urlsafe(64)
+    auth_url = verifier.build_authorization_url(
+        _social_redirect_uri(request), state, nonce, pkce_challenge(code_verifier)
+    )
     resp = RedirectResponse(auth_url, status_code=302)
     # samesite=lax라야 Google 콜백 복귀 GET에 쿠키가 실린다. 10분 단명.
     cookie = {"httponly": True, "secure": True, "samesite": "lax", "max_age": 600}
     resp.set_cookie("oidc_state", state, **cookie)
     resp.set_cookie("oidc_nonce", nonce, **cookie)
+    resp.set_cookie("oidc_verifier", code_verifier, **cookie)
     return resp
 
 
@@ -530,11 +536,14 @@ async def social_google_callback(
     앱으로 리다이렉트. 기존 *비밀번호* 계정과 충돌(H1)하면 자동 병합 없이 연결 안내 페이지로 보낸다."""
     cookie_state = request.cookies.get("oidc_state")
     cookie_nonce = request.cookies.get("oidc_nonce")
+    cookie_verifier = request.cookies.get("oidc_verifier")
     # CSRF: 쿼리 state와 쿠키 state가 일치해야 한다(상수시간 비교).
     if not cookie_state or not secrets.compare_digest(cookie_state, state):
         raise HTTPException(status_code=400, detail="소셜 로그인 상태 검증에 실패했습니다. 다시 시도해 주세요.")
     try:
-        claims = await verifier.exchange_and_verify(code, _social_redirect_uri(request), cookie_nonce or "")
+        claims = await verifier.exchange_and_verify(
+            code, _social_redirect_uri(request), cookie_nonce or "", cookie_verifier
+        )
         account_id = social_svc.reconcile(OidcProvider.GOOGLE, claims)
         db.commit()
     except SocialLinkConfirmationRequired:
