@@ -121,7 +121,9 @@ class SummarizationOrchestrationService:
 
         # 0. cache lookup (read-through) — HIT ends here (LLM 0 calls, §11).
         glossary_ver = self._glossary_version(user_id)
-        key = build_cache_key(request, glossary_ver=glossary_ver, model_ver=self._model_ver)
+        key = build_cache_key(
+            request, glossary_ver=glossary_ver, model_ver=self._model_ver, user_id=user_id
+        )
         cached = self._store.get(key)
         if cached is not None:
             self._emit("u7.cache.hit", 1.0, request)
