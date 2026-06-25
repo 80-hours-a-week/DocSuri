@@ -58,6 +58,7 @@ import type {
   LibraryItemCreateDTO,
 } from '@/types/generated';
 import type { CitationNode } from '@/types/citationGraph';
+import type { BehaviorEventCreate } from '@/types/personalization';
 
 function matches(q: string, ...needles: string[]): boolean {
   const lower = q.toLowerCase();
@@ -81,6 +82,11 @@ export class MockTransport implements Transport {
 
     const mypageRes = this.routeMypage(req, path);
     if (mypageRes) return mypageRes;
+
+    if (path === '/api/personalization/events' && req.method === 'POST') {
+      void (req.body as BehaviorEventCreate);
+      return { status: 200, body: { recorded: true, duplicate: false, reason: 'recorded' } };
+    }
 
     if (req.path === '/api/search' && req.method === 'POST') {
       const query = String((req.body as { query?: unknown })?.query ?? '');

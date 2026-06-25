@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { getApiClient } from '@/lib/api';
+import { recordLibraryAdded, recordLibraryRemoved } from '@/lib/personalization';
 import styles from './SaveToLibraryButton.module.css';
 
 // SaveToLibraryButton (US-L2, FR-9) — toggles the paper in the user's library with a
@@ -38,6 +39,7 @@ export function SaveToLibraryButton({ card }: { card: SaveTarget }) {
       setState('removing');
       try {
         await getApiClient().removeFromLibrary(itemId);
+        recordLibraryRemoved(card.arxivId);
         setItemId(null);
         setState('idle');
       } catch {
@@ -60,6 +62,7 @@ export function SaveToLibraryButton({ card }: { card: SaveTarget }) {
           arxivUrl: card.arxivUrl ?? '',
         },
       });
+      recordLibraryAdded(card.arxivId);
       setItemId(item.id != null ? String(item.id) : null);
       setState('saved');
     } catch {

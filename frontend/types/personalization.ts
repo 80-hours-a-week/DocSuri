@@ -1,0 +1,30 @@
+export type BehaviorEventType =
+  | 'search_executed'
+  | 'paper_opened'
+  | 'library_added'
+  | 'library_removed'
+  | 'summary_translation_requested'
+  | 'source_anchor_clicked';
+
+export interface BehaviorSubject {
+  kind: 'paper' | 'search' | 'summary' | 'translation' | 'source_anchor';
+  paperId?: string;
+  queryHash?: string;
+  category?: string;
+  anchorId?: string;
+}
+
+export interface BehaviorEventCreate {
+  eventType: BehaviorEventType;
+  subject: BehaviorSubject;
+  occurredAt?: string;
+  source?: 'backend' | 'frontend_anchor';
+  metadata?: Record<string, unknown>;
+  dedupeKey: string;
+}
+
+export interface EventRecordResult {
+  recorded: boolean;
+  duplicate: boolean;
+  reason: 'recorded' | 'duplicate' | 'disabled' | 'degraded';
+}
