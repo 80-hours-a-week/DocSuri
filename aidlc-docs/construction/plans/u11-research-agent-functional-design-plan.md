@@ -41,7 +41,7 @@
 
 답변 확정 후 아래 산출물을 `aidlc-docs/construction/u11-research-agent/functional-design/`에 작성한다.
 
-- [ ] **domain-entities.md**
+- [x] **domain-entities.md** *(생성 완료)*
   - `ResearchSession` / `ConversationTurn` (세션·턴 시퀀스, owner-scoped)
   - `AgentMode` (modeA_evidence | modeB_novelty[차기])
   - `AgentQuery` / `Attachment` / `AttachmentRef` (대화 입력·첨부)
@@ -53,7 +53,7 @@
   - `ResearchResult` / `ResultRef` (영속 결과 신원)
   - `AgentCacheKey` (immutable 캐시 신원)
   - `AgentError`
-- [ ] **business-logic-model.md**
+- [x] **business-logic-model.md** *(생성 완료)*
   - `startSession(userId, mode)` / `appendTurn(sessionId, query, attachments)`
   - `runEvidenceFormation(turn)` — 파이프라인: retrieve→extract(논문별)→crossCheck→ground(enforce)→assemble
   - `retrieveCandidates(query, attachmentContext)` (U2 재사용 — 후보 paper_id; 선택적 block_id locator)
@@ -66,7 +66,7 @@
   - `lookupCache(key)` / `persistResult(result)`
   - (모드 B seam) `compareNovelty(...)` — placeholder, 차기
   - 실패 경로: 비차단 저하·부분결과·기권
-- [ ] **business-rules.md**
+- [x] **business-rules.md** *(생성 완료 — BR-RA-1~18·INV·QT-8·추적성)*
   - 로그인 필수·owner-scoped 접근 규칙(SEC-8)
   - 첨부 검증·무해화 규칙(SEC-5/11)·허용 형식/크기 거부
   - 추출·비교 경계 규칙(C-2 — 생성 산문 금지)
@@ -78,7 +78,7 @@
   - 세션·결과 영속/삭제/초기화 규칙(FR-25·Q14=B)
   - 모드 B 경계 규칙(v1 미빌드)
   - QT-8 속성 후보·추적성 매트릭스
-- [ ] **frontend-components.md** *(Q15=B — 생성)*: 네비 진입·모드 선택·대화 입력+첨부·스트리밍/진행상태·근거표 렌더(표/수식/캡션)·세션 리스트·삭제/초기화. 구현은 별도 `u11-research-agent-frontend` 트랙 예고.
+- [x] **frontend-components.md** *(Q15=B — 생성 완료)*: 네비 진입·모드 선택·대화 입력+첨부·스트리밍/진행상태·근거표 렌더(표/수식/캡션)·세션 리스트·삭제/초기화. 구현은 별도 `u11-research-agent-frontend` 트랙 예고.
 
 ---
 
