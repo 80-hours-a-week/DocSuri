@@ -18,6 +18,8 @@
 | BedrockLlmGatewayAdapter | **Bedrock** — Sonnet 4.6·Haiku 4.5(InvokeModel/Stream) | 재사용(IAM 권한 추가) |
 | CostGate/Telemetry | **Ports → U6**(CloudWatch 경유) | 재사용 |
 
+> **키 계약(읽기)**: `FullTextSourceAdapter`(full-text)·doc-model 리더·`paper_asset` 자산 리더는 **U1이 bare paperId로 기록한** 스토어를 읽는다. 앱이 들고 다니는 버전 포함 id(`2304.10557v1`)를 키/조회 전 **bare id로 정규화**(트레일링 `vN` 제거; `adapters/_paper_ref.bare_paper_id`)해야 U1 기록과 일치한다 — 누락 시 영구 미스. 근거: U1 infrastructure-design §1.1b 키 계약.
+
 ---
 
 ## 2. 스토리지 (Q2·Q3·Q4)

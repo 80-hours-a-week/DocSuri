@@ -9,7 +9,7 @@
 // NOTE: anchor highlight matches the summary anchor's label ("Table 1"/"Figure 2") to a
 // block's anchorLabel (the AnchorVM still carries a label, not a doc-model id — the
 // id-based anchor contract is a follow-up). Span-precise inline highlight is a follow-up.
-import 'katex/dist/katex.min.css';
+// (KaTeX stylesheet is pulled in by the renderMath import below.)
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { AnchorVM, AssetRef, DocBlock, DocModel, DocSection } from '@/types/generated';
 import { useDocModel } from '@/lib/useDocModel';
@@ -81,7 +81,12 @@ export function DocModelViewer({ paperId, version, anchor, arxivUrl }: DocModelV
         <div className={styles.gate} data-testid="docmodel-license">
           <StateView kind="licenseUnavailable" />
           {safeArxivUrl ? (
-            <a className={styles.link} href={safeArxivUrl} target="_blank" rel="noopener noreferrer">
+            <a
+              className={styles.link}
+              href={safeArxivUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               arXiv에서 원문 보기
             </a>
           ) : null}
@@ -91,7 +96,11 @@ export function DocModelViewer({ paperId, version, anchor, arxivUrl }: DocModelV
       return <StateView kind="sourceUnavailable" />;
     case 'error':
       return (
-        <StateView kind="error" message={outcome.message} onRetry={() => load({ paperId, version })} />
+        <StateView
+          kind="error"
+          message={outcome.message}
+          onRetry={() => load({ paperId, version })}
+        />
       );
     case 'page':
       return (
@@ -204,9 +213,9 @@ function ZoomTrigger({
   );
 }
 
-// Full-screen overlay that scales the content to FIT the viewport (enlarging small content,
-// shrinking large) so the whole thing is visible with no scrollbars. Transform is visual only,
-// so the measured natural size is stable. Tap the backdrop / ✕ / Esc to close.
+// Full-screen overlay that scales the content to FIT the available area (enlarging small
+// content, shrinking large) so the whole thing is visible with no scrollbars. Transform is
+// visual only, so the measured natural size is stable. Tap the backdrop / ✕ / Esc to close.
 function BlockZoomOverlay({
   children,
   onClose,
@@ -214,22 +223,38 @@ function BlockZoomOverlay({
   children: React.ReactNode;
   onClose: () => void;
 }) {
+  const overlayRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
 
   useLayoutEffect(() => {
+    const content = contentRef.current;
+    const overlay = overlayRef.current;
+    if (!content || !overlay) return;
     const measure = () => {
-      const el = contentRef.current;
-      if (!el) return;
-      const availW = window.innerWidth * 0.94;
-      const availH = window.innerHeight * 0.84;
-      const w = el.scrollWidth || 1;
-      const h = el.scrollHeight || 1;
+      // Available area = the overlay's OWN box, not the window. The overlay is
+      // `position: fixed; inset: 0`, but on desktop the phone mockup frame (`contain: layout`)
+      // is the containing block, so the overlay is confined to that frame — not the desktop
+      // window. Measuring against `window.innerWidth/Height` would over-scale the content and
+      // clip it inside the frame; the overlay's own size is correct in both cases (it spans
+      // the full viewport full-bleed on phones).
+      const availW = overlay.clientWidth * 0.94;
+      const availH = overlay.clientHeight * 0.84;
+      const w = content.scrollWidth || 1;
+      const h = content.scrollHeight || 1;
       setScale(Math.min(availW / w, availH / h));
     };
     measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    // The content's natural size settles after the first paint — a KaTeX formula reflows once
+    // its web fonts load (until then glyphs use narrow fallback metrics and measure too
+    // small), and a figure resizes when its <img> loads — and the overlay box itself can
+    // change (orientation / frame resize). A ResizeObserver on both re-measures on any such
+    // change. The scale is applied as a transform (visual only), so it never changes either
+    // measured box and can't drive an observer loop.
+    const ro = new ResizeObserver(measure);
+    ro.observe(content);
+    ro.observe(overlay);
+    return () => ro.disconnect();
   }, [children]);
 
   useEffect(() => {
@@ -242,6 +267,7 @@ function BlockZoomOverlay({
 
   return (
     <div
+      ref={overlayRef}
       className={styles.zoomOverlay}
       role="dialog"
       aria-modal="true"

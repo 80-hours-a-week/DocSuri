@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { SessionProvider } from '@/components/session/SessionContext';
 import { ThemeProvider } from '@/components/theme/ThemeContext';
+import { SavedLibraryProvider } from '@/lib/library/savedLibrary';
 import { PhoneMockupFrame } from '@/components/PhoneMockupFrame';
 import { THEME_INIT_SCRIPT } from '@/lib/theme';
 
@@ -31,7 +32,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <ThemeProvider>
           <SessionProvider>
-            <PhoneMockupFrame>{children}</PhoneMockupFrame>
+            <SavedLibraryProvider>
+              <PhoneMockupFrame>{children}</PhoneMockupFrame>
+            </SavedLibraryProvider>
           </SessionProvider>
         </ThemeProvider>
       </body>
