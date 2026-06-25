@@ -290,7 +290,7 @@ class SummarizationOrchestrationService:
         return refs
 
     # --- helpers -------------------------------------------------------------
-    def _glossary_version(self, user_id: str) -> int:
+    def _glossary_version(self, user_id: str | None) -> int:
         repo = getattr(self._glossary, "_repo", None)
         if repo is not None:
             try:

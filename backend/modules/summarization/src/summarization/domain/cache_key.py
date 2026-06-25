@@ -17,7 +17,7 @@ PROMPT_VER = "p1"
 
 
 def build_cache_key(
-    request: SummaryRequest, *, glossary_ver: int, model_ver: str, user_id: str
+    request: SummaryRequest, *, glossary_ver: int, model_ver: str, user_id: str | None
 ) -> SummaryCacheKey:
     # Identity dimensions (§11): summary varies by persona (2 variants), scope fixed to
     # full; translate varies by scope (abstract|full), persona-agnostic (single).
