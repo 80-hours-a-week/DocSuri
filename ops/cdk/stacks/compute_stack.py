@@ -228,7 +228,9 @@ class ComputeStack(Stack):
             # client_id is public (embedded in the auth URL) → plain env. The matching
             # GOOGLE_OIDC_CLIENT_SECRET arrives via Secrets Manager (see secrets= below).
             "GOOGLE_OIDC_CLIENT_ID": (
-                "505093491210-15equvtfs7ikb9f1f10ptfam277c3qp5.apps.googleusercontent.com"
+                # 2026-06-25: 이전 클라이언트(…15equ…)가 Google Console에서 삭제됨 → OAuth가
+                # "401 deleted_client"로 실패. 새 OAuth 클라이언트로 교체(시크릿도 함께 회전 필요).
+                "505093491210-55npim41bgaujn0udfj342p08vk6g8ne.apps.googleusercontent.com"
             ),
             # The browser must land first-party on docsuri.org for the session cookie to stick,
             # so this callback path is routed to the backend by a CloudFront behavior on the
