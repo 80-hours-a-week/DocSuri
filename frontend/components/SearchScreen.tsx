@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './SearchScreen.module.css';
+import { clearSearchSnapshot, getSearchSnapshot, setSearchSnapshot } from '@/lib/search/searchCache';
 import { StateView } from './StateView';
 import { ResultList } from './ResultList';
 import { SaveToLibraryButton } from './SaveToLibraryButton';
@@ -43,18 +44,39 @@ type ScreenState =
 
 export function SearchScreen() {
   const router = useRouter();
-  const [query, setQuery] = useState('');
-  const [state, setState] = useState<ScreenState>({ tag: 'idle' });
-  const [executedQuery, setExecutedQuery] = useState<string | null>(null);
+  // Restore the last in-session search (set when navigating away to a paper detail). A fresh
+  // page load has no snapshot → starts idle, so SSR and first client render agree.
+  const [query, setQuery] = useState(() => getSearchSnapshot()?.query ?? '');
+  const [state, setState] = useState<ScreenState>(() => {
+    const snap = getSearchSnapshot();
+    return snap ? { tag: 'outcome', outcome: snap.outcome } : { tag: 'idle' };
+  });
+  const [executedQuery, setExecutedQuery] = useState<string | null>(
+    () => getSearchSnapshot()?.executedQuery ?? null,
+  );
   const [inlineError, setInlineError] = useState<string | null>(null);
-  const [sort, setSort] = useState<SortKey>('relevance');
+  const [sort, setSort] = useState<SortKey>(() => getSearchSnapshot()?.sort ?? 'relevance');
   const inFlight = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
 
+  // Keep the snapshot in sync with the visible results/sort so a later back-navigation restores
+  // exactly what's on screen now (see searchCache).
+  useEffect(() => {
+    if (state.tag === 'outcome' && executedQuery) {
+      setSearchSnapshot({ query, executedQuery, outcome: state.outcome, sort });
+    }
+  }, [state, executedQuery, query, sort]);
+
   const clearQuery = useCallback(() => {
+    // ✕ dismisses the whole search — input, results, sort, and the saved snapshot — so a later
+    // back-navigation starts blank. (Leaving the tab/site likewise drops the in-memory snapshot.)
     setQuery('');
     setInlineError(null);
+    setExecutedQuery(null);
+    setSort('relevance');
+    setState({ tag: 'idle' });
+    clearSearchSnapshot();
     inputRef.current?.focus();
   }, []);
 
