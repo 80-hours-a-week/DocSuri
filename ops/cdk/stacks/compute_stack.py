@@ -676,6 +676,35 @@ class ComputeStack(Stack):
         )
         personalization_purge_alarm.add_alarm_action(cw_actions.SnsAction(ops_alerts))
 
+        # Email delivery failures (인시던트 2026-06-25): verification/reset emails silently failed for
+        # every signup because the prod RESEND_API_KEY was invalid (Resend 400 "API key is invalid") —
+        # accounts stuck PENDING with NO alert. The app emits EmailDeliveryFailureSignal on every
+        # soft-fallback failure (dimension error_type: "RuntimeError" for a Resend non-2xx, the boto
+        # exception class for SES), but it was unmonitored. Alarm on the SUM across ALL error_type
+        # values (SEARCH expr → single series) so a bad key / unverified sender domain pages ops
+        # instead of failing silently. threshold=0 → any failure in a 5-min window pages.
+        email_failure_alarm = cloudwatch.MathExpression(
+            expression=(
+                "SUM(SEARCH('{DocSuri/Production,error_type} "
+                "MetricName=\"EmailDeliveryFailureSignal\"', 'Sum', 300))"
+            ),
+            label="EmailDeliveryFailures",
+            period=Duration.minutes(5),
+            using_metrics={},
+        ).create_alarm(
+            self,
+            "EmailDeliveryFailureAlarm",
+            threshold=0,
+            evaluation_periods=1,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+            alarm_description=(
+                "DocSuri verification/reset email delivery failing "
+                "(e.g. invalid RESEND_API_KEY or unverified sender domain) — accounts stuck PENDING"
+            ),
+        )
+        email_failure_alarm.add_alarm_action(cw_actions.SnsAction(ops_alerts))
+
         # SLO 3 — cost burn: account budget mirroring the in-app cap ($1600), notifying at the same
         # 80% warning ratio ($1280 — cost_guard.warning_ratio). Budget emails the ops alias directly
         # (no SNS/topic policy needed). Account 028317349537 is dedicated to DocSuri → account
