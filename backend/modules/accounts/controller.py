@@ -225,6 +225,22 @@ def _clear_oidc_cookies(resp: RedirectResponse) -> None:
     resp.delete_cookie("oidc_nonce")
 
 
+def _clear_session_cookie(resp: Response) -> None:
+    """세션 쿠키를 set_cookie와 동일한 속성(httponly/secure/samesite=lax)으로 삭제한다.
+    삭제 시 속성을 비우면 일부 브라우저/프록시에서 set과 매칭되지 않아 쿠키가 남을 수 있어,
+    set_cookie와 동일 속성을 명시해 일관되게 제거한다."""
+    resp.delete_cookie(key="session_id", httponly=True, secure=True, samesite="lax")
+
+
+def _client_ip(request: Request) -> str | None:
+    """reCAPTCHA remoteip 신호용 클라이언트 IP. ALB/CloudFront 뒤이므로 X-Forwarded-For의
+    첫 홉(원 클라이언트)을 우선 사용하고, 없으면 직접 연결 주소로 폴백한다."""
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff:
+        return xff.split(",")[0].strip() or None
+    return request.client.host if request.client else None
+
+
 @router.post("/password-reset/request")
 async def password_reset_request(
     req: PasswordResetRequest,
@@ -291,7 +307,7 @@ async def change_password(
         principal = await session_mgr.verify(session_id)
         await mgmt_svc.change_password(principal.user_id, req.currentPassword, req.newPassword)
         db.commit()
-        response.delete_cookie(key="session_id")
+        _clear_session_cookie(response)
         return {"status": "success", "message": "비밀번호가 변경되었습니다. 새 비밀번호로 다시 로그인해 주세요."}
     except (UnauthorizedException, SessionExpiredException) as e:
         db.rollback()
@@ -377,7 +393,7 @@ async def delete_account(
         principal = await session_mgr.verify(session_id)
         await deletion_svc.request_deletion(principal.user_id)
         db.commit()
-        response.delete_cookie(key="session_id")
+        _clear_session_cookie(response)
         return {"status": "success", "message": "계정이 탈퇴 처리되었습니다. 유예 기간 내에는 복구할 수 있습니다."}
     except (UnauthorizedException, SessionExpiredException) as e:
         db.rollback()
@@ -532,6 +548,7 @@ async def signup(
 
 @router.post("/login")
 async def login(
+    request: Request,
     response: Response,
     req: LoginRequest,
     x_recaptcha_token: str | None = Header(None, alias="X-Recaptcha-Token"),
@@ -547,7 +564,8 @@ async def login(
         session_handle = await auth_svc.authenticate(
             email=req.email,
             password=req.password,
-            recaptcha_token=x_recaptcha_token
+            recaptcha_token=x_recaptcha_token,
+            remote_ip=_client_ip(request),
         )
         db.commit() # 실패 카운트 리셋 등 계정 상태 커밋
 

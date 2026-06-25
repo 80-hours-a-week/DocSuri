@@ -69,9 +69,10 @@ class PasswordResetService:
         if datetime.now(UTC).replace(tzinfo=None) > record.expires_at:
             self._repo.delete_reset_token(token_hash)
             raise DomainException(invalid_msg)
-        # BR-A1 정책 재적용 (10자+복잡도+로컬 블랙리스트).
-        if not PasswordPolicy.evaluate(new_password):
-            raise DomainException("비밀번호는 10자 이상이며 대/소문자·숫자·특수문자를 포함해야 합니다.")
+        # BR-A1 정책 재적용 (10자+복잡도+로컬 블랙리스트). evaluate는 위반 시
+        # InvalidPasswordException(=DomainException)을 raise하고 통과 시 True를 반환하므로
+        # 직접 호출한다(change_password와 동일 — 죽은 `if not` 분기 제거).
+        PasswordPolicy.evaluate(new_password)
         account = self._repo.get_by_email(record.email)
         if not account:
             self._repo.delete_reset_token(token_hash)
