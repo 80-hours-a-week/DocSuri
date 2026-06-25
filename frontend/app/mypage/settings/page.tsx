@@ -11,8 +11,8 @@ export default function MyPageSettingsPage() {
       <div className={styles.screen}>
         <AppHeader title="설정" backHref="/mypage" />
         <MyPageSettingsScreen />
-        <BottomNav />
       </div>
+      <BottomNav />
     </RouteGuard>
   );
 }

@@ -11,8 +11,8 @@ export default function MyPageSubscriptionPage() {
       <div className={styles.screen}>
         <AppHeader title="내 구독" backHref="/mypage" />
         <MyPageSubscriptionScreen />
-        <BottomNav />
       </div>
+      <BottomNav />
     </RouteGuard>
   );
 }

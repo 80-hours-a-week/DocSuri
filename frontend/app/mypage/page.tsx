@@ -12,8 +12,8 @@ export default function MyPagePage() {
       <div className={styles.screen}>
         <AppHeader title="DocSuri" />
         <MyPageScreen />
-        <BottomNav />
       </div>
+      <BottomNav />
     </RouteGuard>
   );
 }
