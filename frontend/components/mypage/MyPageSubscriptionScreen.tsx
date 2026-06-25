@@ -15,10 +15,7 @@ const SUBSCRIPTION_LABEL: Record<string, string> = {
   CANCELED: '해지 예약',
 };
 
-const PREMIUM_BENEFITS = [
-  '논문 AI 요약 · 번역 무제한 이용',
-  '관심 논문 신규 등재 시 우선 알림',
-];
+const PREMIUM_BENEFITS = ['논문 AI 요약 · 번역 무제한 이용', '관심 논문 신규 등재 시 우선 알림'];
 
 // 결제(PG) 미연동 — subscribe/cancel은 mock 빌링이라 실제 결제가 일어나지 않는다. 프로덕션
 // (실 API)에서는 가짜 결제 플로우를 노출하지 않도록 버튼을 '결제 준비중'으로 비활성화한다

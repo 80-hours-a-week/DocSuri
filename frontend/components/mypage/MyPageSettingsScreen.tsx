@@ -156,7 +156,8 @@ export function MyPageSettingsScreen() {
   };
 
   if (status === 'loading') return <StateView kind="loading" title="설정을 불러오는 중…" />;
-  if (status === 'error' || !consents) return <StateView kind="error" onRetry={() => void load()} />;
+  if (status === 'error' || !consents)
+    return <StateView kind="error" onRetry={() => void load()} />;
 
   return (
     <section className={styles.screen} data-testid="mypage-settings-screen">
@@ -196,7 +197,11 @@ export function MyPageSettingsScreen() {
           data-testid="mypage-change-password-form"
         >
           {pwError ? (
-            <p className={authStyles.formError} role="alert" data-testid="mypage-change-password-error">
+            <p
+              className={authStyles.formError}
+              role="alert"
+              data-testid="mypage-change-password-error"
+            >
               {pwError}
             </p>
           ) : null}
@@ -237,12 +242,20 @@ export function MyPageSettingsScreen() {
           data-testid="mypage-change-email-form"
         >
           {emailError ? (
-            <p className={authStyles.formError} role="alert" data-testid="mypage-change-email-error">
+            <p
+              className={authStyles.formError}
+              role="alert"
+              data-testid="mypage-change-email-error"
+            >
               {emailError}
             </p>
           ) : null}
           {emailNotice ? (
-            <p className={authStyles.formNotice} role="status" data-testid="mypage-change-email-notice">
+            <p
+              className={authStyles.formNotice}
+              role="status"
+              data-testid="mypage-change-email-notice"
+            >
               {emailNotice}
             </p>
           ) : null}

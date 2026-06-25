@@ -146,7 +146,11 @@ export function LoginForm() {
       <div className={styles.divider}>또는</div>
       {/* 소셜 로그인은 전체 페이지 리다이렉트(OIDC) — 엣지에서 백엔드 오리진으로 라우팅되는
           /auth/social/google/start로 직접 이동한다(BFF JSON 프록시 경유 아님). */}
-      <a className={styles.socialButton} href="/auth/social/google/start" data-testid="login-google">
+      <a
+        className={styles.socialButton}
+        href="/auth/social/google/start"
+        data-testid="login-google"
+      >
         Google로 계속하기
       </a>
     </form>
