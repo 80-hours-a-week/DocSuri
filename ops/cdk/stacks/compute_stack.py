@@ -233,6 +233,7 @@ class ComputeStack(Stack):
             # Long-input summaries: map-reduce band enqueues to the summary-job queue (async worker)
             # and returns `pending`; without this the MAP_REDUCE band abstains (input_too_long).
             "DOCSURI_MAP_REDUCE_ENABLED": "true",
+            "CITATION_GRAPH_ENABLED": "true",
             "PERSONALIZATION_ENABLED": "true",
             "PERSONALIZATION_RAW_EVENT_RETENTION_DAYS": "90",
             # --- U3 social login (FR-27, Google OIDC) ---
