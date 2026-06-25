@@ -4,10 +4,11 @@ export type BehaviorEventType =
   | 'library_added'
   | 'library_removed'
   | 'summary_translation_requested'
-  | 'source_anchor_clicked';
+  | 'source_anchor_clicked'
+  | 'glossary_updated';
 
 export interface BehaviorSubject {
-  kind: 'paper' | 'search' | 'summary' | 'translation' | 'source_anchor';
+  kind: 'paper' | 'search' | 'summary' | 'translation' | 'source_anchor' | 'glossary';
   paperId?: string;
   queryHash?: string;
   category?: string;

@@ -2,8 +2,10 @@ import { getApiClient } from '@/lib/api';
 import type { AnchorVM, Persona, SummarizeScope } from '@/types/generated';
 import type { BehaviorEventCreate } from '@/types/personalization';
 
-function suffix(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+const DEDUPE_BUCKET_MS = 30_000;
+
+function dedupeBucket(): number {
+  return Math.floor(Date.now() / DEDUPE_BUCKET_MS);
 }
 
 export function hashQuery(query: string): string {
@@ -15,48 +17,48 @@ export function hashQuery(query: string): string {
   return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
-export function recordBehaviorEvent(event: BehaviorEventCreate): void {
+function sendBehaviorEvent(event: BehaviorEventCreate): void {
   void getApiClient().recordBehaviorEvent(event).catch(() => undefined);
 }
 
 export function recordSearchExecuted(query: string, resultCount: number): void {
   const queryHash = hashQuery(query);
-  recordBehaviorEvent({
+  sendBehaviorEvent({
     eventType: 'search_executed',
     subject: { kind: 'search', queryHash },
     source: 'frontend_anchor',
     metadata: { resultCount },
-    dedupeKey: `search:${queryHash}:${suffix()}`,
+    dedupeKey: `search:${queryHash}:${dedupeBucket()}`,
   });
 }
 
 export function recordPaperOpened(paperId: string): void {
-  recordBehaviorEvent({
+  sendBehaviorEvent({
     eventType: 'paper_opened',
     subject: { kind: 'paper', paperId },
     source: 'frontend_anchor',
     metadata: { entrySurface: 'detail' },
-    dedupeKey: `paper:${paperId}:${suffix()}`,
+    dedupeKey: `paper:${paperId}:${dedupeBucket()}`,
   });
 }
 
 export function recordLibraryAdded(paperId: string): void {
-  recordBehaviorEvent({
+  sendBehaviorEvent({
     eventType: 'library_added',
     subject: { kind: 'paper', paperId },
     source: 'frontend_anchor',
     metadata: { savedSource: 'library' },
-    dedupeKey: `library:add:${paperId}:${suffix()}`,
+    dedupeKey: `library:add:${paperId}:${dedupeBucket()}`,
   });
 }
 
 export function recordLibraryRemoved(paperId: string): void {
-  recordBehaviorEvent({
+  sendBehaviorEvent({
     eventType: 'library_removed',
     subject: { kind: 'paper', paperId },
     source: 'frontend_anchor',
     metadata: {},
-    dedupeKey: `library:remove:${paperId}:${suffix()}`,
+    dedupeKey: `library:remove:${paperId}:${dedupeBucket()}`,
   });
 }
 
@@ -65,7 +67,7 @@ export function recordSummaryRequest(
   mode: 'summary' | 'translation',
   options: { persona?: Persona; scope?: SummarizeScope } = {},
 ): void {
-  recordBehaviorEvent({
+  sendBehaviorEvent({
     eventType: 'summary_translation_requested',
     subject: { kind: mode === 'summary' ? 'summary' : 'translation', paperId },
     source: 'frontend_anchor',
@@ -74,16 +76,26 @@ export function recordSummaryRequest(
       ...(options.persona ? { selectedPersona: options.persona } : {}),
       ...(options.scope ? { translationScope: options.scope } : {}),
     },
-    dedupeKey: `${mode}:${paperId}:${options.persona ?? options.scope ?? 'default'}:${suffix()}`,
+    dedupeKey: `${mode}:${paperId}:${options.persona ?? options.scope ?? 'default'}:${dedupeBucket()}`,
   });
 }
 
 export function recordSourceAnchorClicked(paperId: string, anchor: AnchorVM): void {
-  recordBehaviorEvent({
+  sendBehaviorEvent({
     eventType: 'source_anchor_clicked',
     subject: { kind: 'source_anchor', paperId, anchorId: anchor.field },
     source: 'frontend_anchor',
     metadata: { anchorId: anchor.field, sectionKind: anchor.target },
-    dedupeKey: `anchor:${paperId}:${anchor.field}:${suffix()}`,
+    dedupeKey: `anchor:${paperId}:${anchor.field}:${dedupeBucket()}`,
+  });
+}
+
+export function recordGlossaryUpdated(glossaryVersion: number): void {
+  sendBehaviorEvent({
+    eventType: 'glossary_updated',
+    subject: { kind: 'glossary' },
+    source: 'frontend_anchor',
+    metadata: { glossaryVersion },
+    dedupeKey: `glossary:${glossaryVersion}:${dedupeBucket()}`,
   });
 }
