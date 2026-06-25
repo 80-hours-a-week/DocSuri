@@ -676,13 +676,13 @@ class ComputeStack(Stack):
         )
         personalization_purge_alarm.add_alarm_action(cw_actions.SnsAction(ops_alerts))
 
-        # Email delivery failures (인시던트 2026-06-25): verification/reset emails silently failed for
-        # every signup because the prod RESEND_API_KEY was invalid (Resend 400 "API key is invalid") —
-        # accounts stuck PENDING with NO alert. The app emits EmailDeliveryFailureSignal on every
-        # soft-fallback failure (dimension error_type: "RuntimeError" for a Resend non-2xx, the boto
-        # exception class for SES), but it was unmonitored. Alarm on the SUM across ALL error_type
-        # values (SEARCH expr → single series) so a bad key / unverified sender domain pages ops
-        # instead of failing silently. threshold=0 → any failure in a 5-min window pages.
+        # Email delivery failures (incident 2026-06-25): verification/reset emails silently failed
+        # for every signup because the prod RESEND_API_KEY was invalid (Resend 400 "API key is
+        # invalid") — accounts stuck PENDING with NO alert. The app emits EmailDeliveryFailureSignal
+        # on every soft-fallback failure (dimension error_type: "RuntimeError" for a Resend non-2xx,
+        # the boto exception class for SES), but it was unmonitored. Alarm on the SUM across ALL
+        # error_type values (SEARCH expr → single series) so a bad key / unverified sender domain
+        # pages ops instead of failing silently. threshold=0 → any failure in a 5-min window pages.
         email_failure_alarm = cloudwatch.MathExpression(
             expression=(
                 "SUM(SEARCH('{DocSuri/Production,error_type} "
