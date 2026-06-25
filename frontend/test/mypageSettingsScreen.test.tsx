@@ -55,6 +55,32 @@ describe('MyPageSettingsScreen (U10)', () => {
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
   });
 
+  it('shows the dark-mode toggle pre-checked when the OS prefers dark and nothing is stored yet', async () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = (query: string) =>
+      ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }) as MediaQueryList;
+
+    renderScreen();
+    const toggle = await screen.findByTestId('mypage-dark-mode');
+    await waitFor(() => expect(toggle).toBeChecked());
+    // Reading the OS preference is display-only — it must not get persisted/applied until
+    // the user actually touches the toggle (otherwise every OS-dark visitor would silently
+    // "opt in" to a stored override they never asked for).
+    expect(document.documentElement.getAttribute('data-theme')).toBeNull();
+    expect(window.localStorage.getItem('docsuri-theme')).toBeNull();
+
+    window.matchMedia = originalMatchMedia;
+  });
+
   it('logs out via the shared session and redirects home', async () => {
     renderScreen();
     await screen.findByTestId('mypage-account-actions');

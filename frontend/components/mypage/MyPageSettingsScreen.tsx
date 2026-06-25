@@ -21,7 +21,7 @@ type BusyKey = 'consent' | 'logout' | 'withdraw' | 'password' | 'email' | null;
 
 export function MyPageSettingsScreen() {
   const { signOut } = useSession();
-  const { theme, setTheme } = useTheme();
+  const { effectiveTheme, setTheme } = useTheme();
   const router = useRouter();
   const [consents, setConsents] = useState<ConsentSettingsVM | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -178,7 +178,7 @@ export function MyPageSettingsScreen() {
           <span>다크 모드 (이 기기에만 적용)</span>
           <input
             type="checkbox"
-            checked={theme === 'dark'}
+            checked={effectiveTheme === 'dark'}
             onChange={(e) => onToggleDarkMode(e.target.checked)}
             data-testid="mypage-dark-mode"
           />

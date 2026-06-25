@@ -11,6 +11,10 @@ import { applyTheme, readStoredTheme, type Theme } from '@/lib/theme';
 interface ThemeValue {
   /** 사용자가 수동으로 고른 테마. `null`이면 OS 설정을 따른다(수동 전환 안 함). */
   theme: Theme | null;
+  /** 실제로 표시되는 테마 — `theme`이 null이면 마운트 시 1회 읽은 OS `prefers-color-scheme`
+   * 값으로 대체한다. 토글의 초기 체크 상태를 실제 화면 색과 맞추는 표시용 값일 뿐, 저장하거나
+   * `applyTheme`을 거치지 않는다(수동 선택 전까지는 계속 OS 설정을 따르는 게 맞음). */
+  effectiveTheme: Theme;
   setTheme: (theme: Theme | null) => void;
 }
 
@@ -18,9 +22,13 @@ const ThemeCtx = createContext<ThemeValue | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme | null>(null);
+  const [systemPrefersDark, setSystemPrefersDark] = useState(false);
 
   useEffect(() => {
     setThemeState(readStoredTheme());
+    if (typeof window.matchMedia === 'function') {
+      setSystemPrefersDark(window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
   }, []);
 
   const setTheme = useCallback((next: Theme | null) => {
@@ -28,7 +36,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setThemeState(next);
   }, []);
 
-  const value = useMemo<ThemeValue>(() => ({ theme, setTheme }), [theme, setTheme]);
+  const effectiveTheme: Theme = theme ?? (systemPrefersDark ? 'dark' : 'light');
+
+  const value = useMemo<ThemeValue>(
+    () => ({ theme, effectiveTheme, setTheme }),
+    [theme, effectiveTheme, setTheme],
+  );
 
   return <ThemeCtx.Provider value={value}>{children}</ThemeCtx.Provider>;
 }
