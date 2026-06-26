@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
+from docsuri_shared.dtos import DocModel
 
 from docsuri_ingestion.adapters.local import InMemoryControlPlaneStore, sample_metadata
 from docsuri_ingestion.domain.enums import DedupDecision, DedupStateKind
@@ -62,6 +63,39 @@ def test_chunker_produces_abstract_plus_body_chunks() -> None:
     assert [c.ordinal for c in first.chunks] == list(range(len(first.chunks)))
     # body chunks exist beyond the abstract
     assert {c.section for c in first.chunks} > {"abstract"}
+
+
+def test_docmodel_chunker_respects_max_chunk_limit_with_large_abstract() -> None:
+    doc = DocModel.model_validate(
+        {
+            "meta": {
+                "paperId": "2401.00001",
+                "version": 1,
+                "title": "T",
+                "provenance": {
+                    "sourceTier": "native_html",
+                    "parserVersion": "test",
+                    "schemaVersion": "1",
+                    "generatedAt": "1970-01-01T00:00:00Z",
+                },
+            },
+            "fullText": "Body",
+            "sections": [
+                {
+                    "id": "s1",
+                    "title": "Body",
+                    "blocks": [{"id": "s1.p1", "type": "paragraph", "text": "Body"}],
+                }
+            ],
+        }
+    )
+
+    chunks = Chunker(max_chunk_chars=10, overlap_chars=0, max_chunks_per_paper=2).chunk_doc_model(
+        doc, abstract="abstract " * 20
+    )
+
+    assert len(chunks.chunks) == 2
+    assert all(chunk.section == "abstract" for chunk in chunks.chunks)
 
 
 def test_dedup_guard_decisions_and_mark_ingested() -> None:

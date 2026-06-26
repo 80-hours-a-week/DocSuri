@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from docsuri_shared.dtos import DocModelResultDTO, SourceUnavailableDTO
+from docsuri_shared.dtos import DocModel, DocModelResultDTO, SourceUnavailableDTO
 
 from .asset_extraction import AssetExtractor
 from .config import CORPUS_SLICE_CATEGORIES
@@ -80,8 +80,8 @@ class IngestionPipelineService:
         self._asset_extractor = asset_extractor
         self._asset_store = asset_store
         self._asset_source = asset_source
-        # Lazy on-demand doc-model builder (BR-30/D6) — drives BUILD_DOC_MODEL jobs only;
-        # the index hot path (ingest_one) never touches it.
+        # Doc-model builder (BR-30/D6): eager in the phase-1 Corpus ingest path, lazy for
+        # BUILD_DOC_MODEL compatibility/backfill jobs.
         self._doc_model_builder = doc_model_builder
         self._embedding_v2 = embedding_v2
         self._vector_index_v2 = vector_index_v2
@@ -178,7 +178,12 @@ class IngestionPipelineService:
                 lambda: self._full_text_store.put_full_text(paper),
             )
             paper = replace(paper, stored_full_text_ref=object_ref)
-            chunks = self._chunker.chunk(paper)
+            doc_model = self._build_doc_model_before_index(metadata)
+            chunks = (
+                self._chunker.chunk_doc_model(doc_model, abstract=paper.abstract)
+                if doc_model is not None
+                else self._chunker.chunk(paper)
+            )
             vectors = self._resilience.dependency_call(
                 "bedrock",
                 "embed",
@@ -258,11 +263,9 @@ class IngestionPipelineService:
                 if exc.failure_class is FailureClass.PERMANENT:
                     self._failure_handler.send_to_dlq(
                         {
-                            "jobId": job.job_id,
-                            "kind": job.kind.value,
-                            "arxivRef": job.arxiv_ref,
-                            "eventId": job.event_id,
-                            "correlationId": job.correlation_id,
+                            **job.to_payload(),
+                            "failureStage": exc.stage,
+                            "failureReason": exc.public_error(),
                         },
                         reason=exc.public_error(),
                         job_id=job.job_id,
@@ -294,6 +297,8 @@ class IngestionPipelineService:
                     {"type": "dual_write_v2_tombstone_failed", "error": str(e)}
                 )
         self._control_plane.advance_watermark("arxiv", paper.updated_at)
+        if self._doc_model_builder is not None:
+            self._doc_model_builder.invalidate(paper.paper_id)
         self._remove_assets_best_effort(paper.paper_id)
         self._control_plane.record_job_finished(job.job_id, success=True, detail="tombstoned")
         self._observability.emit_metric("ingestion.paper.tombstoned", 1.0, {"kind": job.kind.value})
@@ -336,6 +341,24 @@ class IngestionPipelineService:
             self._asset_store.remove_assets(paper_id)
         except Exception:  # noqa: BLE001 - best-effort cleanup
             self._observability.emit_metric("ingestion.assets.remove_failed", 1.0, {})
+
+    def _build_doc_model_before_index(self, metadata) -> DocModel | None:
+        """Eagerly build/cache the doc-model before index exposure (phase-1 Corpus)."""
+        if self._doc_model_builder is None:
+            return None
+        result = self._doc_model_builder.build(metadata)
+        self._observability.emit_metric(
+            "ingestion.docmodel.eager_build",
+            1.0,
+            {"status": result.status, "cached": str(getattr(result, "cached", "")).lower()},
+        )
+        if isinstance(result, SourceUnavailableDTO):
+            raise PermanentIngestionError(
+                "doc-model source unavailable",
+                reason=FailureReason.PARSE_FAILURE,
+                stage="docmodel",
+            )
+        return result.docModel
 
 
 class RefreshOrchestrationService:

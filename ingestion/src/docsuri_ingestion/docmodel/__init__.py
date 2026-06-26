@@ -2,7 +2,7 @@
 
 Public surface:
   - ``parse_html_to_docmodel`` — pure parser (HTML -> validated ``DocModel``).
-  - ``DocModelBuilder`` — lazy on-demand builder with (paperId, version) cache (D6).
+  - ``DocModelBuilder`` — eager/lazy builder with (paperId, version) cache (D6).
 """
 
 from __future__ import annotations

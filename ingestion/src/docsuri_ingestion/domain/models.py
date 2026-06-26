@@ -6,7 +6,7 @@ from typing import Any
 
 from docsuri_shared.vector_spec import DIMENSIONS, IndexRecord
 
-from .enums import DedupDecision, DedupStateKind, JobKind
+from .enums import DedupDecision, DedupStateKind, JobKind, SourceName
 from .ids import ArxivIdentifier, content_fingerprint, normalize_arxiv_ref
 
 
@@ -88,6 +88,7 @@ class Chunk:
     section: str
     text: str
     chunk_id: str
+    block_refs: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,6 +140,29 @@ class IngestionJob:
     category_filter: CategoryFilter | None = None
     event_id: str | None = None
     correlation_id: str | None = None
+    source_name: SourceName | None = None
+    failure_stage: str | None = None
+    canonical_key: str | None = None
+    paper_id: str | None = None
+    version: int | None = None
+
+    def to_payload(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "jobId": self.job_id,
+            "kind": self.kind.value,
+            "arxivRef": self.arxiv_ref,
+            "eventId": self.event_id,
+            "correlationId": self.correlation_id,
+        }
+        optional = {
+            "sourceName": self.source_name.value if self.source_name else None,
+            "failureStage": self.failure_stage,
+            "canonicalKey": self.canonical_key,
+            "paperId": self.paper_id,
+            "version": self.version,
+        }
+        payload.update({key: value for key, value in optional.items() if value is not None})
+        return payload
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,6 +185,16 @@ class DedupState:
     fingerprint: str | None
     state: DedupStateKind
     ingested_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CanonicalDedupState:
+    canonical_key: str
+    paper_id: str
+    winning_source_tier: str
+    winning_version: int
+    fingerprint: str
+    seen_sources: tuple[SourceName, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

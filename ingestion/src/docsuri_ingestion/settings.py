@@ -24,9 +24,14 @@ class IngestionSettings(BaseModel):
     opensearch_index_v2: str = Field(
         default="docsuri-corpus-v2", alias="DOCSURI_OPENSEARCH_INDEX_V2"
     )
+    opensearch_alias: str = Field(default="docsuri-corpus", alias="DOCSURI_OPENSEARCH_ALIAS")
     control_plane_dsn: str | None = Field(default=None, alias="DOCSURI_CONTROL_PLANE_DSN")
     sqs_queue_url: str | None = Field(default=None, alias="DOCSURI_SQS_QUEUE_URL")
     sqs_dlq_url: str | None = Field(default=None, alias="DOCSURI_SQS_DLQ_URL")
+    corpus_sources: str = Field(
+        default="ARXIV,SEMANTIC_SCHOLAR,OPENALEX", alias="DOCSURI_CORPUS_SOURCES"
+    )
+    grobid_url: str | None = Field(default=None, alias="DOCSURI_GROBID_URL")
     request_timeout_seconds: float = Field(default=30.0, alias="DOCSURI_REQUEST_TIMEOUT_SECONDS")
     index_stats_ttl_seconds: float = Field(default=60.0, alias="DOCSURI_INDEX_STATS_TTL_SECONDS")
     arxiv_rate_per_second: float = Field(default=0.33, alias="DOCSURI_ARXIV_RATE_PER_SECOND")

@@ -21,6 +21,7 @@ from .adapters.local import (
 )
 from .adapters.postgres import PostgresControlPlaneStore
 from .application import IngestionPipelineService, RefreshOrchestrationService
+from .corpus_sources import CorpusSourceAdapterSet
 from .observability import LoggingObservabilityHub
 from .resilience import IngestFailureHandler, IngestionResilienceService
 from .settings import IngestionSettings
@@ -32,6 +33,7 @@ class RuntimeServices:
     refresh: RefreshOrchestrationService
     queue: object
     observability: object
+    corpus_sources: object | None = None
 
 
 def build_local_runtime() -> RuntimeServices:
@@ -70,6 +72,15 @@ def build_production_runtime(settings: IngestionSettings) -> RuntimeServices:
         timeout_seconds=settings.request_timeout_seconds,
         rate_limiter=None,
     )
+    grobid = None
+    if settings.grobid_url:
+        from .adapters.grobid import GrobidHttpClient
+
+        grobid = GrobidHttpClient(
+            base_url=settings.grobid_url,
+            timeout_seconds=settings.request_timeout_seconds,
+        )
+    corpus_sources = CorpusSourceAdapterSet(arxiv=arxiv, grobid=grobid)
     control = PostgresControlPlaneStore(settings.control_plane_dsn or "")
     queue = SqsQueue(
         queue_url=settings.sqs_queue_url or "",
@@ -103,9 +114,9 @@ def build_production_runtime(settings: IngestionSettings) -> RuntimeServices:
             prefix=settings.asset_s3_prefix,
             kms_key_id=settings.asset_kms_key_id,
         )
-    # Lazy on-demand doc-model builder (BR-30/D6): reuses the arXiv source (HTML→ar5iv tier)
-    # and the single bucket's doc-model/ prefix. Drives BUILD_DOC_MODEL jobs only — the index
-    # hot path is unaffected.
+    # Doc-model builder (BR-30/D6): reuses the arXiv source (HTML→ar5iv tier) and the
+    # single bucket's doc-model/ prefix. Phase-1 Corpus builds eagerly during ingest; the
+    # BUILD_DOC_MODEL job remains for misses/backfills.
     from .adapters.aws import S3DocModelStore
     from .docmodel import DocModelBuilder
 
@@ -155,5 +166,9 @@ def build_production_runtime(settings: IngestionSettings) -> RuntimeServices:
         observability=observability,
     )
     return RuntimeServices(
-        pipeline=pipeline, refresh=refresh, queue=queue, observability=observability
+        pipeline=pipeline,
+        refresh=refresh,
+        queue=queue,
+        observability=observability,
+        corpus_sources=corpus_sources,
     )

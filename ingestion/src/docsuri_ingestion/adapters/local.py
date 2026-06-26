@@ -12,6 +12,7 @@ from docsuri_shared.vector_spec import DIMENSIONS, IndexRecord
 from docsuri_ingestion.domain.enums import DedupDecision, DedupStateKind, FailureReason
 from docsuri_ingestion.domain.errors import RetriableIngestionError
 from docsuri_ingestion.domain.models import (
+    CanonicalDedupState,
     CategoryFilter,
     DedupResult,
     DedupState,
@@ -58,6 +59,7 @@ class FakeArxivSource:
 class InMemoryControlPlaneStore:
     def __init__(self) -> None:
         self._dedup: dict[str, DedupState] = {}
+        self._canonical: dict[str, CanonicalDedupState] = {}
         self._watermarks: dict[str, Watermark] = {}
         self._jobs: dict[str, dict[str, Any]] = {}
         self._rebuild_owner: str | None = None
@@ -137,6 +139,13 @@ class InMemoryControlPlaneStore:
                 ingested_at=datetime.now(UTC),
             )
             return True
+
+    def get_canonical_dedup_state(self, canonical_key: str) -> CanonicalDedupState | None:
+        return self._canonical.get(canonical_key)
+
+    def upsert_canonical_dedup_state(self, state: CanonicalDedupState) -> None:
+        with self._lock:
+            self._canonical[state.canonical_key] = state
 
     def acquire_rebuild_lock(self, owner: str) -> bool:
         with self._lock:
@@ -251,14 +260,7 @@ class InMemoryQueue:
                 InMemoryQueueMessage(
                     message_id=job.job_id,
                     receipt_handle=job.job_id,
-                    body={
-                        "type": "ingest_paper",
-                        "jobId": job.job_id,
-                        "kind": job.kind.value,
-                        "arxivRef": job.arxiv_ref,
-                        "eventId": job.event_id,
-                        "correlationId": job.correlation_id,
-                    },
+                    body={"type": "ingest_paper", **job.to_payload()},
                 )
             )
         self.jobs = self.jobs[max_messages:]

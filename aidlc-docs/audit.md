@@ -2015,3 +2015,67 @@ library_removed        저장 신호 철회 신호 가중치는 뭐에요??"
 **Context**: CONSTRUCTION — Code Generation Part 1 completion prompt logged before asking user for approval.
 
 ---
+
+## U1 Corpus Construction — Code Generation Part 2 시작
+**Timestamp**: 2026-06-26T12:52:07Z
+**User Input**: "continue to code generation part 2"
+**AI Response**: "Code Generation 계획 승인을 기록하고 Part 2 실행을 시작한다. 기존 docs 브랜치가 이미 merged된 상태라 origin/develop 기준 `feature/u1-corpus-code-generation` 브랜치를 만들고 계획 커밋을 cherry-pick한 뒤 Step 1부터 실행한다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation Part 2 execution.
+
+---
+
+## U1 Corpus Construction — Code Generation Step 11 완료
+**Timestamp**: 2026-06-26T13:13:26Z
+**User Input**: ""
+**AI Response**: "U7 summarization DocModel fixture에 required `fullText`를 반영하고, `InputRefiner.refine_doc_model`이 root `fullText`와 주요 본문 항목에서 불일치하지 않는 smoke assertion을 추가했다. `S3DocModelReader`의 bare paper id normalization 테스트는 유지했다. 번역/요약 LLM 흐름은 변경하지 않고, 번역 DocModel의 root `fullText`만 sections에서 재투영해 계약 일관성을 유지한다. targeted summarization tests 29개 통과."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation Part 2 Step 11.
+
+---
+
+## U1 Corpus Construction — Code Generation Step 12 완료
+**Timestamp**: 2026-06-26T13:16:05Z
+**User Input**: ""
+**AI Response**: "frontend generated DocModel type은 `fullText` required 상태를 유지하고, summarize/doc-model fixtures와 targeted tests의 DocModel literal에 `fullText`를 추가했다. `DocModelViewer` 렌더 구조와 화면 중복 렌더는 변경하지 않았다. frontend targeted vitest 5 files / 19 tests 통과."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation Part 2 Step 12.
+
+---
+
+## U1 Corpus Construction — Code Generation Step 13 완료
+**Timestamp**: 2026-06-26T13:17:40Z
+**User Input**: ""
+**AI Response**: "canonical key determinism/arXiv version suffix, source별 watermark monotonic/independence PBT를 추가했다. source adapter/GROBID fake tests와 raw PDF 미저장 negative assertion을 유지했다. ingestion targeted tests 36개 통과, targeted ruff 통과."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation Part 2 Step 13.
+
+---
+
+## U1 Corpus Construction — Code Generation Step 14 완료
+**Timestamp**: 2026-06-26T13:19:50Z
+**User Input**: ""
+**AI Response**: "fake adapters 기반 NEW/CHANGED eager DocModel smoke를 추가하고, 기존 retry/DLQ metadata, U7 doc-model endpoint/input, frontend doc-model viewer targeted tests를 갱신·확인했다. ingestion smoke 25 passed, summarization smoke 16 passed, frontend smoke 3 files / 9 tests 통과."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation Part 2 Step 14.
+
+---
+
+## U1 Corpus Construction — Code Generation Step 15 완료
+**Timestamp**: 2026-06-26T13:24:38Z
+**User Input**: ""
+**AI Response**: "최종 검증 명령을 실행했다. shared schema drift check 통과, ingestion pytest 121 passed / 1 skipped, ingestion ruff 통과, summarization pytest 116 passed / 3 skipped, frontend targeted vitest 5 files / 19 tests 통과, frontend typecheck 통과, git diff --check 통과."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation Part 2 Step 15.
+
+---
+
+## U1 Corpus Construction — Code Generation Step 16 완료 및 리뷰 게이트
+**Timestamp**: 2026-06-26T13:25:56Z
+**User Input**: ""
+**AI Response**: "코드 요약 문서 `aidlc-docs/construction/u1-ingestion/code/u1-corpus-code-summary.md`를 생성하고 수정/생성 파일, 설계 추적성, 테스트 결과, extension compliance를 기록했다. Code Generation 계획 체크박스를 모두 완료로 갱신하고 `aidlc-state.md`를 Code Generation 완료 리뷰 게이트로 갱신했다. 리뷰 요청: Request Changes 또는 Continue to Next Stage 중 하나를 선택해야 다음 단계로 진행한다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation completion prompt logged before asking user.
+
+---
+
+## U1 Corpus Construction — Code Generation 커밋 생성
+**Timestamp**: 2026-06-26T13:30:19Z
+**User Input**: ""
+**AI Response**: "Code Generation Part 2 산출물을 `feat: implement U1 corpus code generation` 커밋으로 생성했다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation commit.
+
+---

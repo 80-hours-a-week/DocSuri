@@ -1,8 +1,8 @@
-"""DocModelBuilder — lazy on-demand doc-model production with a (paperId, version) cache.
+"""DocModelBuilder — deterministic doc-model production with a (paperId, version) cache.
 
-Decision D6/Q5/BR-30: the doc-model is NOT built eagerly during ``ingestOne`` (it must not
-block the index hot path). It is produced on first summary/read/agent use: a consumer asks
-the builder, which serves the cached artifact or builds, caches, and returns it.
+Corpus phase-1 builds doc-models eagerly during ingestion; the same builder also serves the
+legacy lazy BUILD_DOC_MODEL path for misses, rebuilds, and phase-1 gaps. In both cases it
+serves the cached artifact or builds, caches, and returns it.
 
 The build is deterministic (D1) — the only non-deterministic input is ``provenance.generatedAt``
 (a clock read), which is metadata, not content. The fetch follows the Q6 fallback ladder
@@ -41,7 +41,7 @@ class _SystemClock:
 
 
 class DocModelBuilder:
-    """Produce (and cache) the structured doc-model for a paper version (BR-30, BLM §7)."""
+    """Produce and cache the structured doc-model for a paper version (BR-30, BLM §7)."""
 
     def __init__(
         self,

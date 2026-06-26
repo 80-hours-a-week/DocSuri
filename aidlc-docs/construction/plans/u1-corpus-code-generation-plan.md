@@ -57,118 +57,118 @@
 
 ### Step 1 — 공유 DocModel 계약 보정
 
-- [ ] `shared/dtos/docmodel.schema.json`에 required `fullText`를 추가한다.
-- [ ] `DocModel.fullText` 설명을 전문 텍스트 투영본으로 명확히 한다.
-- [ ] `DocModel`에는 image bytes, base64, presigned URL, `object_ref`가 들어가지 않도록 schema 설명과 negative validation을 유지한다.
-- [ ] `shared/python/tools/generate.py`로 Python DTO를 재생성한다.
-- [ ] `frontend/types/generated/docModel.ts`의 curated type에 `fullText: string`을 반영한다.
+- [x] `shared/dtos/docmodel.schema.json`에 required `fullText`를 추가한다.
+- [x] `DocModel.fullText` 설명을 전문 텍스트 투영본으로 명확히 한다.
+- [x] `DocModel`에는 image bytes, base64, presigned URL, `object_ref`가 들어가지 않도록 schema 설명과 negative validation을 유지한다.
+- [x] `shared/python/tools/generate.py`로 Python DTO를 재생성한다.
+- [x] `frontend/types/generated/docModel.ts`의 curated type에 `fullText: string`을 반영한다.
 
 ### Step 2 — DocModel parser fullText projection 구현
 
-- [ ] `ingestion/src/docsuri_ingestion/docmodel/parser.py`에서 생성된 section/block tree를 읽기 순서로 순회해 `fullText`를 만든다.
-- [ ] 포함 대상: section title, paragraph text, table caption/cells, formula LaTeX, figure caption, list item, code text.
-- [ ] 제외 대상: image bytes, URLs, internal object refs, LaTeXML note/footer noise.
-- [ ] 기존 paragraph/table/formula/figure/list/code parsing 로직은 재사용한다.
+- [x] `ingestion/src/docsuri_ingestion/docmodel/parser.py`에서 생성된 section/block tree를 읽기 순서로 순회해 `fullText`를 만든다.
+- [x] 포함 대상: section title, paragraph text, table caption/cells, formula LaTeX, figure caption, list item, code text.
+- [x] 제외 대상: image bytes, URLs, internal object refs, LaTeXML note/footer noise.
+- [x] 기존 paragraph/table/formula/figure/list/code parsing 로직은 재사용한다.
 
 ### Step 3 — DocModel parser 테스트 보강
 
-- [ ] `ingestion/tests/test_docmodel_parser.py`에 `fullText`가 모든 block type을 읽기 순서로 포함하는 예시 테스트를 추가한다.
-- [ ] `fullText`가 figure asset bytes/URL을 포함하지 않는 테스트를 추가한다.
-- [ ] 기존 결정성 테스트가 `fullText`까지 포함해 통과하도록 유지한다.
+- [x] `ingestion/tests/test_docmodel_parser.py`에 `fullText`가 모든 block type을 읽기 순서로 포함하는 예시 테스트를 추가한다.
+- [x] `fullText`가 figure asset bytes/URL을 포함하지 않는 테스트를 추가한다.
+- [x] 기존 결정성 테스트가 `fullText`까지 포함해 통과하도록 유지한다.
 
 ### Step 4 — U1 eager DocModel build 경로 추가
 
-- [ ] `DocModelBuilder`를 lazy 전용 문구에서 eager+lazy 공용 builder로 정리한다.
-- [ ] `IngestionPipelineService.ingest_one` NEW/CHANGED 경로에서 DocModel을 build/store한다.
-- [ ] source unavailable 또는 validation failure는 index write 전에 failure handler로 보낸다.
-- [ ] 기존 `BUILD_DOC_MODEL` lazy job은 cache miss/rebuild/backfill 호환 경로로 유지한다.
-- [ ] tombstone/version change 시 기존 `DocModelBuilder.invalidate` 경로를 호출한다.
+- [x] `DocModelBuilder`를 lazy 전용 문구에서 eager+lazy 공용 builder로 정리한다.
+- [x] `IngestionPipelineService.ingest_one` NEW/CHANGED 경로에서 DocModel을 build/store한다.
+- [x] source unavailable 또는 validation failure는 index write 전에 failure handler로 보낸다.
+- [x] 기존 `BUILD_DOC_MODEL` lazy job은 cache miss/rebuild/backfill 호환 경로로 유지한다.
+- [x] tombstone/version change 시 기존 `DocModelBuilder.invalidate` 경로를 호출한다.
 
 ### Step 5 — DocModel 기반 chunk 최소 전환
 
-- [ ] 기존 `Chunker`를 보존하되, DocModel이 있으면 block-aware text를 chunk 입력으로 사용한다.
-- [ ] chunk metadata에 DocModel block id 참조를 추가할 수 있는 최소 구조를 만든다.
-- [ ] 모든 chunk의 block ref가 DocModel 내 실제 id를 가리키는 assertion을 둔다.
-- [ ] 기존 OpenSearch record shape와 U2 호환성을 깨지 않는 범위에서 block ref를 lexical/metadata 필드에 반영한다.
+- [x] 기존 `Chunker`를 보존하되, DocModel이 있으면 block-aware text를 chunk 입력으로 사용한다.
+- [x] chunk metadata에 DocModel block id 참조를 추가할 수 있는 최소 구조를 만든다.
+- [x] 모든 chunk의 block ref가 DocModel 내 실제 id를 가리키는 assertion을 둔다.
+- [x] 기존 OpenSearch record shape와 U2 호환성을 깨지 않는 범위에서 block ref를 lexical/metadata 필드에 반영한다.
 
 ### Step 6 — Corpus source adapter 경계 확장
 
-- [ ] 기존 `ArxivSourcePort`를 바로 대체하지 않고 `CorpusSourceAdapterSet` 또는 동등한 얇은 wrapper를 추가한다.
-- [ ] arXiv adapter는 기존 `adapters/arxiv.py`를 재사용하고 HTML 우선, PDF fallback 정책을 명시한다.
-- [ ] Semantic Scholar/OpenAlex adapter는 PDF metadata/fetch boundary만 추가한다.
-- [ ] GROBID 호출은 내부 port/adapter로 감싸고, raw PDF bytes는 함수 스코프에서만 사용한다.
-- [ ] source별 permanent/retriable failure classification을 기존 `IngestFailureHandler`에 맞춘다.
+- [x] 기존 `ArxivSourcePort`를 바로 대체하지 않고 `CorpusSourceAdapterSet` 또는 동등한 얇은 wrapper를 추가한다.
+- [x] arXiv adapter는 기존 `adapters/arxiv.py`를 재사용하고 HTML 우선, PDF fallback 정책을 명시한다.
+- [x] Semantic Scholar/OpenAlex adapter는 PDF metadata/fetch boundary만 추가한다.
+- [x] GROBID 호출은 내부 port/adapter로 감싸고, raw PDF bytes는 함수 스코프에서만 사용한다.
+- [x] source별 permanent/retriable failure classification을 기존 `IngestFailureHandler`에 맞춘다.
 
 ### Step 7 — source별 watermark와 canonical dedup 저장
 
-- [ ] `ingestion/migrations/postgres/`에 source watermark, canonical dedup, paper version state, corpus generation/job item 스키마를 추가한다.
-- [ ] 기존 `PostgresControlPlaneStore`와 in-memory fake store에 최소 메서드를 추가한다.
-- [ ] DOI -> arXiv id -> normalized title/first author/year 순서의 canonical key를 구현한다.
-- [ ] losing duplicate는 index/embed 없이 provenance만 남긴다.
+- [x] `ingestion/migrations/postgres/`에 source watermark, canonical dedup, paper version state, corpus generation/job item 스키마를 추가한다.
+- [x] 기존 `PostgresControlPlaneStore`와 in-memory fake store에 최소 메서드를 추가한다.
+- [x] DOI -> arXiv id -> normalized title/first author/year 순서의 canonical key를 구현한다.
+- [x] losing duplicate는 index/embed 없이 provenance만 남긴다.
 
 ### Step 8 — retry/DLQ payload 보강
 
-- [ ] `IngestionJob` 또는 message body에 `sourceName`, `failureStage`, `canonicalKey`, `paperId`, `version`을 싣는다.
-- [ ] 기존 SQS queue/DLQ adapter를 재사용한다.
-- [ ] reprocess는 원 pipeline을 다시 타고 dedup/upsert idempotency로 중복을 방지한다.
+- [x] `IngestionJob` 또는 message body에 `sourceName`, `failureStage`, `canonicalKey`, `paperId`, `version`을 싣는다.
+- [x] 기존 SQS queue/DLQ adapter를 재사용한다.
+- [x] reprocess는 원 pipeline을 다시 타고 dedup/upsert idempotency로 중복을 방지한다.
 
 ### Step 9 — OpenSearch generation/alias 코드 경계
 
-- [ ] 기존 vector index adapter를 generation index name과 active alias를 받을 수 있게 확장한다.
-- [ ] candidate generation write와 active alias cutover를 분리한다.
-- [ ] validation 실패 시 alias cutover를 막고 기존 active alias를 유지한다.
-- [ ] rollback은 이전 alias target 유지/복귀로 처리한다.
+- [x] 기존 vector index adapter를 generation index name과 active alias를 받을 수 있게 확장한다.
+- [x] candidate generation write와 active alias cutover를 분리한다.
+- [x] validation 실패 시 alias cutover를 막고 기존 active alias를 유지한다.
+- [x] rollback은 이전 alias target 유지/복귀로 처리한다.
 
 ### Step 10 — runtime/settings/CDK wiring
 
-- [ ] `ingestion/src/docsuri_ingestion/settings.py`에 Corpus 관련 env를 추가한다.
-- [ ] `ingestion/src/docsuri_ingestion/runtime.py`에서 source adapters, GROBID, DocModel store, generation writer를 wiring한다.
-- [ ] `ops/cdk/stacks/ingestion_stack.py`는 기존 worker service를 재사용하고 GROBID sidecar/env/IAM만 필요한 만큼 추가한다.
-- [ ] 신규 queue/bucket/db는 만들지 않는다.
+- [x] `ingestion/src/docsuri_ingestion/settings.py`에 Corpus 관련 env를 추가한다.
+- [x] `ingestion/src/docsuri_ingestion/runtime.py`에서 source adapters, GROBID, DocModel store, generation writer를 wiring한다.
+- [x] `ops/cdk/stacks/ingestion_stack.py`는 기존 worker service를 재사용하고 GROBID sidecar/env/IAM만 필요한 만큼 추가한다.
+- [x] 신규 queue/bucket/db는 만들지 않는다.
 
 ### Step 11 — U7 소비자 정합
 
-- [ ] `backend/modules/summarization`의 DocModel fixture/tests에 required `fullText`를 반영한다.
-- [ ] `InputRefiner.refine_doc_model`이 `sections` 기반 투영을 유지하되, root `fullText`와 크게 불일치하지 않는 smoke assertion을 둔다.
-- [ ] `S3DocModelReader`는 기존 bare paper id key normalization을 유지한다.
-- [ ] summary/translation 로직은 바꾸지 않는다. 입력 계약만 보강한다.
+- [x] `backend/modules/summarization`의 DocModel fixture/tests에 required `fullText`를 반영한다.
+- [x] `InputRefiner.refine_doc_model`이 `sections` 기반 투영을 유지하되, root `fullText`와 크게 불일치하지 않는 smoke assertion을 둔다.
+- [x] `S3DocModelReader`는 기존 bare paper id key normalization을 유지한다.
+- [x] summary/translation 로직은 바꾸지 않는다. 입력 계약만 보강한다.
 
 ### Step 12 — frontend 소비자 정합
 
-- [ ] `frontend/types/generated/docModel.ts`와 fixtures/tests에 `fullText`를 추가한다.
-- [ ] `DocModelViewer` 렌더 구조는 유지한다.
-- [ ] `fullText`는 검색/접근성 fallback 또는 테스트 검증용 데이터로만 사용하고 화면 중복 렌더는 추가하지 않는다.
+- [x] `frontend/types/generated/docModel.ts`와 fixtures/tests에 `fullText`를 추가한다.
+- [x] `DocModelViewer` 렌더 구조는 유지한다.
+- [x] `fullText`는 검색/접근성 fallback 또는 테스트 검증용 데이터로만 사용하고 화면 중복 렌더는 추가하지 않는다.
 
 ### Step 13 — 단위 테스트와 PBT
 
-- [ ] shared schema validity/drift check를 통과시킨다.
-- [ ] ingestion DocModel parser/builder/eager build tests를 추가하거나 갱신한다.
-- [ ] canonical dedup/idempotency/source watermark에 property-based tests를 추가한다.
-- [ ] source adapter/GROBID는 network-free fake tests로 먼저 검증한다.
-- [ ] raw PDF 미저장 negative test를 둔다.
+- [x] shared schema validity/drift check를 통과시킨다.
+- [x] ingestion DocModel parser/builder/eager build tests를 추가하거나 갱신한다.
+- [x] canonical dedup/idempotency/source watermark에 property-based tests를 추가한다.
+- [x] source adapter/GROBID는 network-free fake tests로 먼저 검증한다.
+- [x] raw PDF 미저장 negative test를 둔다.
 
 ### Step 14 — 통합 smoke
 
-- [ ] fake adapters로 NEW/CHANGED paper가 FullText -> DocModel -> chunk -> embed -> index generation manifest까지 진행되는 smoke test를 추가한다.
-- [ ] DLQ/retry path가 stage/source metadata를 보존하는 테스트를 추가한다.
-- [ ] U7 `GET /api/papers/{id}/doc-model`과 summary input tests를 갱신한다.
-- [ ] frontend `classifyDocModel` / `useDocModel` / viewer targeted tests를 갱신한다.
+- [x] fake adapters로 NEW/CHANGED paper가 FullText -> DocModel -> chunk -> embed -> index generation manifest까지 진행되는 smoke test를 추가한다.
+- [x] DLQ/retry path가 stage/source metadata를 보존하는 테스트를 추가한다.
+- [x] U7 `GET /api/papers/{id}/doc-model`과 summary input tests를 갱신한다.
+- [x] frontend `classifyDocModel` / `useDocModel` / viewer targeted tests를 갱신한다.
 
 ### Step 15 — 검증 명령
 
-- [ ] `uv run python tools/generate.py --check`를 `shared/python/` 기준으로 실행한다.
-- [ ] `uv run pytest`를 `ingestion/` 기준으로 실행한다.
-- [ ] `uv run ruff check .`를 `ingestion/` 기준으로 실행한다.
-- [ ] `uv run pytest`를 `backend/modules/summarization/` 기준으로 실행한다.
-- [ ] frontend targeted vitest와 typecheck를 실행한다.
-- [ ] 변경 후 `git diff --check`를 실행한다.
+- [x] `uv run python tools/generate.py --check`를 `shared/python/` 기준으로 실행한다.
+- [x] `uv run pytest`를 `ingestion/` 기준으로 실행한다.
+- [x] `uv run ruff check .`를 `ingestion/` 기준으로 실행한다.
+- [x] `uv run pytest`를 `backend/modules/summarization/` 기준으로 실행한다.
+- [x] frontend targeted vitest와 typecheck를 실행한다.
+- [x] 변경 후 `git diff --check`를 실행한다.
 
 ### Step 16 — 코드 요약 문서 생성
 
-- [ ] `aidlc-docs/construction/u1-ingestion/code/u1-corpus-code-summary.md`를 생성한다.
-- [ ] 수정/생성 파일, 설계 추적성, 테스트 결과, extension compliance를 기록한다.
-- [ ] 계획 체크박스를 모두 `[x]`로 갱신한다.
-- [ ] `aidlc-state.md`를 Code Generation 완료 리뷰 게이트로 갱신한다.
+- [x] `aidlc-docs/construction/u1-ingestion/code/u1-corpus-code-summary.md`를 생성한다.
+- [x] 수정/생성 파일, 설계 추적성, 테스트 결과, extension compliance를 기록한다.
+- [x] 계획 체크박스를 모두 `[x]`로 갱신한다.
+- [x] `aidlc-state.md`를 Code Generation 완료 리뷰 게이트로 갱신한다.
 
 ## 4. 스토리/요구사항 추적성
 

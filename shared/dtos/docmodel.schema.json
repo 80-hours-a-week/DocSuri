@@ -72,16 +72,20 @@
     "DocModel": {
       "type": "object",
       "title": "DocModel",
-      "description": "The structured paper artifact: a nested section tree of typed content blocks. Tables are DATA (rows/cols), formulas are LaTeX, figures/table-images are webp references by assetId (pixels are NOT embedded — base64 bloat avoided; reuse assets/{paperId}/{version}/{assetId}.webp). Deterministic: same source HTML -> same DocModel (LLM extraction forbidden). Trace: D1, D8, P7.",
+      "description": "The structured paper artifact: fullText plus a nested section tree of typed content blocks. fullText is the complete reading-order text projection of the paper. Tables are DATA (rows/cols), formulas are LaTeX, figures/table-images are webp references by assetId (pixels are NOT embedded — base64 bloat avoided; reuse assets/{paperId}/{version}/{assetId}.webp). Deterministic: same source HTML -> same DocModel (LLM extraction forbidden). Trace: D1, D8, P7.",
       "properties": {
         "meta": { "$ref": "#/$defs/DocModelMeta" },
+        "fullText": {
+          "type": "string",
+          "description": "Complete reading-order text projection of the paper. Includes section titles, paragraphs, table captions/cells, formula LaTeX, figure captions, list items, and code text. Excludes image bytes, base64 payloads, presigned URLs, and internal object refs. Trace: FR-6, FR-18, QT-9."
+        },
         "sections": {
           "type": "array",
           "description": "Top-level sections in reading order; each may nest subsections (recursive). The rich-view DocTOC and the summary map-reduce split (P3) both consume this tree. Trace: Q1-decision (nested section tree).",
           "items": { "$ref": "#/$defs/Section" }
         }
       },
-      "required": ["meta", "sections"],
+      "required": ["meta", "fullText", "sections"],
       "additionalProperties": false
     },
 

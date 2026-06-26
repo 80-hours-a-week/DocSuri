@@ -123,6 +123,7 @@ def parse_html_to_docmodel(
                 "generatedAt": generated_at,
             },
         },
+        "fullText": _project_full_text(sections),
         "sections": sections,
     }
     return DocModel.model_validate(data)
@@ -427,3 +428,48 @@ def _int_attr(el: Tag, name: str) -> int:
         return int(raw) if raw is not None else 1
     except (TypeError, ValueError):
         return 1
+
+
+def _project_full_text(sections: list[dict]) -> str:
+    """Reading-order text projection for DocModel.fullText.
+
+    This is intentionally derived from the already-built block tree, so the contract stays in
+    one place: tables contribute rows/cells, figures contribute captions, formulas contribute
+    LaTeX, and AssetRef internals never enter the text projection.
+    """
+    parts: list[str] = []
+
+    def add(text: str | None) -> None:
+        cleaned = _WS_RE.sub(" ", text or "").strip()
+        if cleaned:
+            parts.append(cleaned)
+
+    def walk_section(section: dict) -> None:
+        add(section.get("title"))
+        for block in section.get("blocks", []):
+            kind = block.get("type")
+            if kind == "paragraph":
+                add(block.get("text"))
+            elif kind == "table":
+                label = block.get("anchorLabel")
+                caption = block.get("caption")
+                add(" ".join(v for v in (label, caption) if v))
+                for row in block.get("rows", []):
+                    add(" | ".join(cell.get("text", "") for cell in row.get("cells", [])))
+            elif kind == "formula":
+                add(block.get("latex"))
+            elif kind == "figure":
+                label = block.get("anchorLabel")
+                caption = block.get("caption")
+                add(" ".join(v for v in (label, caption) if v))
+            elif kind == "list":
+                for item in block.get("items", []):
+                    add(item.get("text"))
+            elif kind == "code":
+                add(block.get("text"))
+        for child in section.get("sections", []) or []:
+            walk_section(child)
+
+    for section in sections:
+        walk_section(section)
+    return "\n\n".join(parts)

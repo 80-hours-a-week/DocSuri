@@ -16,7 +16,7 @@ from docsuri_ingestion.adapters.local import (
     sample_metadata,
 )
 from docsuri_ingestion.application import RefreshOrchestrationService
-from docsuri_ingestion.domain.enums import DedupDecision, FailureReason, JobKind
+from docsuri_ingestion.domain.enums import DedupDecision, FailureReason, JobKind, SourceName
 from docsuri_ingestion.domain.errors import PermanentIngestionError, RetriableIngestionError
 from docsuri_ingestion.domain.models import IndexRecordBatch, IngestionJob
 from docsuri_ingestion.worker import job_from_payload, process_message
@@ -188,6 +188,30 @@ def test_worker_dispatches_legacy_type_less_ingest_job() -> None:
     assert seen[0].job_id == "job-1"
 
 
+def test_queue_payload_preserves_corpus_retry_metadata() -> None:
+    _, _, _, queue, _ = build_test_pipeline()
+    job = IngestionJob(
+        job_id="job-meta",
+        kind=JobKind.INCREMENTAL,
+        arxiv_ref="2401.00001v1",
+        source_name=SourceName.OPENALEX,
+        failure_stage="grobid",
+        canonical_key="doi:10.1000/x",
+        paper_id="p1",
+        version=3,
+    )
+    queue.send_job(job)
+
+    message = queue.receive_messages(max_messages=1)[0]
+    parsed = job_from_payload(message.body)
+
+    assert parsed.source_name is SourceName.OPENALEX
+    assert parsed.failure_stage == "grobid"
+    assert parsed.canonical_key == "doi:10.1000/x"
+    assert parsed.paper_id == "p1"
+    assert parsed.version == 3
+
+
 def test_worker_sends_unknown_message_type_to_dlq() -> None:
     _, _, _, queue, observability = build_test_pipeline()
     message = SimpleNamespace(
@@ -250,6 +274,57 @@ def test_opensearch_index_stats_reports_last_successful_write_timestamp() -> Non
     stats = index._fetch_stats()
 
     assert stats.last_write_timestamp is not None
+
+
+class FakeOpenSearchIndices:
+    def __init__(self, aliases):
+        self.aliases = aliases
+        self.update_body = None
+
+    def get_alias(self, *, name: str, ignore=None):
+        del name, ignore
+        return dict(self.aliases)
+
+    def update_aliases(self, *, body):
+        self.update_body = body
+
+
+class FakeOpenSearchAliasClient:
+    def __init__(self, *, count: int = 1, aliases=None) -> None:
+        self.indices = FakeOpenSearchIndices(aliases or {"old-index": {}})
+        self._count = count
+
+    def count(self, *, index: str):
+        del index
+        return {"count": self._count}
+
+
+def test_opensearch_generation_validation_blocks_empty_candidate() -> None:
+    index = OpenSearchVectorIndex.__new__(OpenSearchVectorIndex)
+    index._client = FakeOpenSearchAliasClient(count=0)
+    index._index_name = "candidate-index"
+    index._last_write_timestamp = None
+
+    with pytest.raises(PermanentIngestionError):
+        index.validate_generation(min_documents=1)
+
+
+def test_opensearch_switch_alias_cutover_is_separate_from_write() -> None:
+    client = FakeOpenSearchAliasClient(aliases={"old-index": {}, "unrelated": {}})
+    index = OpenSearchVectorIndex.__new__(OpenSearchVectorIndex)
+    index._client = client
+    index._index_name = "candidate-index"
+
+    index.switch_alias(
+        alias_name="docsuri-corpus", target_index="candidate-index", previous_index="old-index"
+    )
+
+    assert client.indices.update_body == {
+        "actions": [
+            {"remove": {"index": "old-index", "alias": "docsuri-corpus"}},
+            {"add": {"index": "candidate-index", "alias": "docsuri-corpus"}},
+        ]
+    }
 
 
 def test_poison_event_payload_becomes_permanent_error_for_dlq_boundary() -> None:

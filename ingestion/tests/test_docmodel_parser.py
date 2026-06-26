@@ -103,6 +103,34 @@ def test_meta_and_provenance() -> None:
     assert doc.meta.provenance.parserVersion == "docmodel-parser@1"
 
 
+def test_full_text_projects_all_block_text_in_reading_order() -> None:
+    doc = _parse()
+    assert doc.fullText.split("\n\n") == [
+        "Introduction",
+        "We study \\(x^{2}\\) models.",
+        "Second paragraph.",
+        "E = mc^{2}",
+        "Table 1 Main results.",
+        "Group | Acc",
+        "A | B | 0.92",
+        "Setup",
+        "Sub paragraph.",
+        "Figure 1 A plot.",
+        "first",
+        "second",
+        "def f(): return 1",
+        "Method",
+        "Method text.",
+    ]
+
+
+def test_full_text_excludes_image_and_asset_internals() -> None:
+    doc = _parse()
+    assert "x.png" not in doc.fullText
+    assert "assetId" not in doc.fullText
+    assert asset_id("2401.00001", 2, AssetType.FIGURE, 0) not in doc.fullText
+
+
 def test_nested_section_tree_and_ids() -> None:
     doc = _parse()
     assert [s.id for s in doc.sections] == ["s1", "s2"]
