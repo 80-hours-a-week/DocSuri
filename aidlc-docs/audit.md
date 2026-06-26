@@ -1658,5 +1658,83 @@
 **User Input**: "apply your findings to the codebase"
 **AI Response**: "U8 Citation Graph의 단위 리뷰 산출물(`aidlc-unit-review-u8.md`)에서 발견된 블로킹 이슈들을 수정함. 1) 백엔드 `CitationEdge` DTO를 프론트엔드(`frontend/types/citationGraph.ts`) 요구사항에 맞게 `source`, `target`으로 갱신. 2) 프론트엔드의 `UnresolvedCitation`을 백엔드의 구조화된 객체 형식에 맞게 갱신. 3) `RedisSnapshotStore`의 동기화된 I/O가 이벤트 루프를 블로킹하는 문제를 방지하기 위해 `redis.asyncio`를 도입하고 `get`/`set`을 비동기(`async`)로 갱신함. `test_citation_graph.py`의 관련 테스트들도 비동기 환경에 맞게 갱신함."
 **Context**: CONSTRUCTION — U8 Citation Graph 단위 리뷰(Unit Review) 결함 수정 완료.
+## Code Generation
+**Timestamp**: 2026-06-25T09:14:42Z
+**User Input**: "좋아요. 이제 버튼을 프론트에 만들어 연결하려고 합니다. mypage/setting에, 전에 만들었던 삭제와 초기화 기능을 여기다 자연스럽게 추가하고, 백엔드와 연결해 주세요."
+**AI Response**: "Added U9 personalization raw event deletion and profile reset controls to the mypage settings screen, connected them to ApiClient methods for POST /api/personalization/delete-events and POST /api/personalization/reset-profile, added mock transport handling, and covered the API/UI paths with focused tests."
+**Context**: U9 frontend settings controls implementation
+
+---
+## Code Update
+**Timestamp**: 2026-06-25T09:16:42Z
+**User Input**: "`개인맞춤 데이터` 라는 이름을 `맞춤 서비스`로 바꾸어 주세요. 또, 켜기/끄기는 왜 안만들었어요? 백엔드에 기능이 없는건가요?"
+**AI Response**: "Renamed the mypage settings section from `개인맞춤 데이터` to `맞춤 서비스` and checked the backend personalization settings contract. The backend currently exposes PATCH /api/personalization/settings but does not expose GET /api/personalization/settings, so the frontend cannot reliably render the current toggle state yet."
+**Context**: U9 mypage settings label update and backend settings contract clarification
+
+---
+## Code Generation
+**Timestamp**: 2026-06-25T09:17:58Z
+**User Input**: "좋아요. 그러면 백엔드에 상태 조회 기능도 추가해 주세요."
+**AI Response**: "Added GET /api/personalization/settings to return the current user's personalization settings, extended the existing backend personalization settings test to verify default and updated states, and updated the U9 code summary route table."
+**Context**: U9 backend personalization settings read endpoint
+
+---
+## Code Generation
+**Timestamp**: 2026-06-25T09:20:21Z
+**User Input**: "좋아요. 이제 프론트에 토글 버튼을 추가해 주세요."
+**AI Response**: "Added a personalization enabled toggle to the mypage settings screen, connected it to GET/PATCH /api/personalization/settings through ApiClient, added mock transport responses, and covered the API and UI toggle paths with focused tests."
+**Context**: U9 frontend personalization settings toggle implementation
+
+---
+## Bug Fix
+**Timestamp**: 2026-06-25T09:25:54Z
+**User Input**: "마이페이지 -> 설정에 만든거 맞아요? 설정 페이지가 접속이 안돼요."
+**AI Response**: "Confirmed the controls were added to /mypage/settings and fixed the settings page load path so U9 personalization settings lookup failure no longer blocks the whole settings screen. The page now loads consents as the required data and disables the personalization controls with a status message when the U9 settings endpoint is unavailable."
+**Context**: U9 frontend settings page availability fix
+
+---
+## Rollback
+**Timestamp**: 2026-06-25T09:28:31Z
+**User Input**: "좋아요. 테스트 환경에서 확인 했으니, 배포 환경 사용을 기준으로 롤백해 주세요."
+**AI Response**: "Rolled back the test-environment fail-open behavior in the mypage settings screen. The deployment-oriented behavior now treats GET /api/personalization/settings as required for the settings page, while keeping the U9 toggle/delete/reset controls."
+**Context**: U9 frontend settings deployment behavior rollback
+
+---
+## PR Documentation
+**Timestamp**: 2026-06-25T09:30:31Z
+**User Input**: "202606251830_PR.md와 커밋 메시지를 작성해 주세요."
+**AI Response**: "Created 202606251830_PR.md from the repository pull request template for the U9 mypage settings controls and prepared a commit message."
+**Context**: U9 settings PR documentation and commit message generation
+
+---
+## U8 Depth Two Citation Source Question
+**Timestamp**: 2026-06-26T00:18:53Z
+**User Input**: "먼저, U8에 대해 질문이 있어요. depth 1은 원 논문에서 추출한다 쳐도, depth 2의 논문은 어떻게 가져오나요?"
+**AI Response**: "U8 설계 문서와 citation_graph 구현을 확인하고 depth 2는 원 논문 추출이 아니라 expandNodeId 대상 논문의 backward references를 Semantic Scholar provider/snapshot에서 추가 조회하는 방식이라고 설명함."
+**Context**: Analysis — U8 citation graph depth 2 data source.
+
+---
+## U9 Frontend API Call Pattern Question
+**Timestamp**: 2026-06-26T00:26:27Z
+**User Input**: "U9에 대한 질문이 있어요. 프론트엔드에서 클릭 등으로 백엔드에 API 쿼리를 보낼 때, 타 유닛 + U9에 동시에 쿼리를 보내는 건가요?"
+**AI Response**: "U9 문서와 프론트/백엔드 구현을 확인하고, 현재 구조는 본 기능 API 성공 후 U9 행동 이벤트를 fire-and-forget으로 기록하며, 일부 개인화 결정은 U2/U7이 비차단 read-port로 조회하는 구조라고 설명함."
+**Context**: Analysis — U9 personalization frontend/backend call flow.
+
+---
+## U9 Signal Weight Question
+**Timestamp**: 2026-06-26T00:31:13Z
+**User Input**: "library_added          강한 양의 신호
+summary 요청           중간 신호
+paper_opened           약한 신호
+library_removed        저장 신호 철회 신호 가중치는 뭐에요??"
+**AI Response**: "U9 ProfileAggregator 구현을 확인하고 현재 원시 가중치가 library_added=3.0, summary_translation_requested=2.0, paper_opened=1.0, search_executed=category 0.5/keyword 0.25이며 library_removed는 paper signal 제거라고 설명함."
+**Context**: Analysis — U9 personalization signal weights.
+
+---
+## Cross Review Remediation
+**Timestamp**: 2026-06-26T00:41:31Z
+**User Input**: "Cross-Review.md 를 읽고, 문제점을 수정해 주세요. 이후, 202606261000_PR.md를 작성해 주세요."
+**AI Response**: "Read Cross-Review.md, moved personalization destructive-action confirmation outside busy handling, made personalization settings load a partial failure instead of blocking the entire mypage settings screen, added focused regression tests, ran frontend/backend checks, and created 202606261000_PR.md."
+**Context**: U9 mypage settings cross-review follow-up
 
 ---
