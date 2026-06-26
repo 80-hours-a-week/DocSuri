@@ -4,7 +4,7 @@
 - **프로젝트명**: DocSuri (연구 지원 애플리케이션)
 - **프로젝트 유형**: Greenfield(그린필드)
 - **시작일**: 2026-06-15T04:36:30Z
-- **현재 단계**: CONSTRUCTION - 재인셉션 페이즈 1 / U1 Corpus Build and Test 완료. 리뷰 게이트 대기.
+- **현재 단계**: OPERATIONS - 재인셉션 페이즈 1 / U1 Corpus Operations placeholder 확인 완료. 현 AI-DLC 워크플로우 종료.
 - **문서 언어**: 한국어(`aidlc-docs/` 산출물). 업스트림 룰셋(`AGENTS.md`, `.aidlc-rule-details/`)은 영어 유지.
 
 ## ⚠️ 검증 재기준선 (Verification Re-baseline) — 2026-06-16
@@ -220,6 +220,7 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 
 ### 🟡 OPERATIONS 단계
 - [~] Operations — **placeholder 확인 완료 (2026-06-16)**. `operations/operations-placeholder.md` 생성. 현재 룰셋상 배포·모니터링·운영 런북 실행은 future scope이며, 워크플로우는 Build and Test 이후 종료.
+- [x] **Operations placeholder — 재인셉션 페이즈 1 / U1 Corpus (2026-06-26)**. 사용자 승인으로 Build and Test 리뷰 게이트를 통과하고 Operations placeholder로 전환. `operations/operations-placeholder.md`를 U1 Corpus 최신 검증 결과(ingestion 129 passed/1 skipped, shared/ops/discovery/summarization/frontend 소비자 검증)와 남은 실제 운영 범위(source provider quota, GROBID capacity, bounded backfill, OpenSearch cutover, monitoring)로 갱신. 현 룰셋상 실행 가능한 Operations 단계는 없으므로 이번 AI-DLC 사이클은 여기서 종료.
 - [x] **Operations 하드닝 패스 (2026-06-18, PR #79·#84 → develop, 라이브 배포·검증 완료)** — CONSTRUCTION 종료 후 프로덕션 운영 첫 단계. 산출:
   - [x] **운영 런북** `operations/runbook.md` — 시스템 맵·함정(RETAIN 3종·ALB `/healthz` 서킷브레이커·SSO)·비용가드 강등표·복구절차·SLO 3개.
   - [x] **알림 마지막 1마일** (코드에 존재하나 사람에게 미연결이던 갭): G3 `CLOUDWATCH_NAMESPACE` env로 prod 관측 활성·G2 SES 토픽 ops 구독·G4 CloudWatch 알람(5xx·p95)+G1 AWS Budget($1280) → `OpsAlerts` 토픽/ops 메일. 전부 `compute_stack.py` (synth 검증).
