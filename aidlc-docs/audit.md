@@ -1967,3 +1967,11 @@ library_removed        저장 신호 철회 신호 가중치는 뭐에요??"
 **Context**: CONSTRUCTION — Pull request review follow-up comment.
 
 ---
+
+## U1 Corpus Construction — Infrastructure Design 단계 범위 정정
+**Timestamp**: 2026-06-26T08:32:21Z
+**User Input**: "we were in the infrastructure design phase. Apply the changes we've made until the same phase we were."
+**AI Response**: "Infrastructure Design 리뷰 게이트 상태에 맞추기 위해 PR #225에서 schema/code/test/frontend type 변경을 제거하고, DocModel `fullText` + multimodal blocks + AssetRef 저장 경계는 Functional/NFR/NFR Design/Infrastructure Design 문서까지만 반영한다. Code Generation은 시작하지 않는다."
+**Context**: CONSTRUCTION — Scope correction to current Infrastructure Design phase.
+
+---

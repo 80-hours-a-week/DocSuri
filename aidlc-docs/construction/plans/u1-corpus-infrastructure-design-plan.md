@@ -32,6 +32,7 @@ No new `[Answer]:` questions are required. The existing AWS deployment already f
 - [x] Review current CDK infrastructure mappings.
 - [x] Update `infrastructure-design.md` with Corpus resource mapping.
 - [x] Update `deployment-architecture.md` with Corpus deployment topology.
+- [x] Apply PR review correction within Infrastructure Design scope: DocModel `fullText`, multimodal blocks, AssetRef storage boundary, and removal of premature code/schema/test changes.
 - [x] Update `aidlc-state.md` for Infrastructure Design completion gate.
 - [x] Append Infrastructure Design completion prompt to `audit.md`.
 - [x] Run diff validation.

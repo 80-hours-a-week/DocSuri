@@ -47,8 +47,9 @@
 
 | Gate | Requirement |
 |---|---|
-| Schema gate | DocModel schema roundtrip and negative validation pass. |
+| Schema gate | DocModel `fullText` + paragraph/table/formula/figure/list/code block schema roundtrip and negative validation pass. |
 | BlockRef gate | Every CorpusIndexRecord `blockRefs[]` exists in its DocModel. |
+| AssetRef gate | Every figure/table `AssetRef` in DocModel resolves to an allowed private `assets/` object or explicit degraded fallback. |
 | Version gate | FullText, DocModel, chunks, S3 manifest, index records share `(paperId, version)`. |
 | Count gate | generation doc/chunk counts are within expected phase-1 bounds. |
 | Smoke gate | U2 search smoke and U7 DocModel read smoke pass against candidate generation. |
@@ -59,6 +60,7 @@
 
 - HTML/XML/TEI parsing disables external entity resolution and external DTD loading.
 - Parser enforces input size and block count limits before materializing DocModel.
+- Parser materializes `fullText` as a projection, not as a second source of truth; structured blocks remain authoritative for tables, formulas, figures, lists, and code.
 - Raw source markup is not rendered directly. DocModel is normalized data, and U5/U7 render trusted components.
 - GROBID output is untrusted input and must pass the same DocModel schema validation as arXiv HTML output.
 
@@ -69,7 +71,7 @@
 | multisource dedup idempotency | Property test with shuffled/duplicated DOI/arXiv/title-key records. |
 | source watermark monotonicity | Property test for per-source advance and rejected regression. |
 | `(paperId, version)` consistency | Unit/property test over generated manifests/chunks/index records. |
-| DocModel validation | Schema roundtrip + negative cases for missing/duplicate block ids and invalid SourceTier. |
+| DocModel validation | Schema roundtrip + negative cases for missing `fullText`, missing/duplicate block ids, invalid SourceTier, invalid table rows, invalid formula payload, and unresolved AssetRef. |
 | index blockRef existence | Build index records from generated DocModel and assert every ref resolves. |
 | retry/DLQ idempotency | Replay same DLQ item N times and assert no duplicate artifacts/index records. |
 | raw PDF non-storage | PDF path fake store assertion: no artifact key/contentType represents raw PDF. |

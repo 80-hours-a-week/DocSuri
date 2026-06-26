@@ -17,6 +17,7 @@
 - **source fan-out**: arXiv, Semantic Scholar, OpenAlex를 source별 job과 watermark로 분리한다. 한 source의 장애·쿼터가 다른 source의 watermark를 전진/정체시키면 안 된다.
 - **GROBID 처리량**: Semantic Scholar/OpenAlex PDF는 containerized internal GROBID 처리량을 별도 병목으로 본다. source fetch 동시성, GROBID 동시성, embedding batch 동시성은 각각 독립 quota를 갖는다.
 - **index generation**: DocModel 기반 index generation은 active alias 밖에서 bulk write하고, QT-9와 smoke check 통과 후 alias cutover한다. 기존 active index는 rollback window 동안 유지한다.
+- **DocModel 완성형**: phase-1 DocModel은 `fullText` 전문 텍스트 투영본과 `sections[].blocks[]` 멀티모달 구조를 함께 가져야 한다. 구조 블록은 paragraph/table/formula/figure/list/code를 보존하고, 이미지는 JSON에 base64/URL로 넣지 않고 `AssetRef`로 `assets/` 객체를 참조한다.
 
 ### 0.2 성능·최신성
 
@@ -42,7 +43,7 @@
 
 - raw PDF는 transient input이다. Semantic Scholar/OpenAlex PDF와 arXiv PDF fallback은 GROBID/추출 처리 후 저장하지 않는다.
 - GROBID는 internal-only로 둔다. 외부 공개 엔드포인트, 사용자 업로드 PDF 처리, raw PDF 다운로드는 범위 밖이다.
-- S3 artifact는 private + SSE + TLS를 유지한다. 저장 허용 대상은 normalized FullText, DocModel JSON, assets, generation manifest, source provenance다.
+- S3 artifact는 private + SSE + TLS를 유지한다. 저장 허용 대상은 normalized FullText, DocModel JSON, assets, generation manifest, source provenance다. DocModel JSON에는 이미지 바이트, presigned URL, raw PDF object reference를 넣지 않는다.
 - 외부 HTML/XML/TEI는 size limit, entity expansion/DTD 차단, schema validation, sanitize를 거친다.
 
 ### 0.6 관측성
@@ -53,7 +54,7 @@
 ### 0.7 PBT/QT-9
 
 - Hypothesis 기반 generator는 source record 중복/순서 섞기, DOI/arXiv/title-key 결측, version 변경, block id 누락, malformed DocModel, retry/DLQ replay를 포함해야 한다.
-- blocking invariant: multisource dedup idempotency, source watermark monotonicity, `(paperId, version)` consistency, DocModel schema roundtrip/negative validation, index record blockRef existence, retry/DLQ idempotency, raw PDF non-storage.
+- blocking invariant: multisource dedup idempotency, source watermark monotonicity, `(paperId, version)` consistency, DocModel `fullText` + multimodal block schema roundtrip/negative validation, index record blockRef existence, AssetRef object existence, retry/DLQ idempotency, raw PDF non-storage.
 
 ---
 

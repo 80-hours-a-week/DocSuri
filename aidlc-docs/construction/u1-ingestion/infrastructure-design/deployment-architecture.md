@@ -92,7 +92,7 @@ Corpus additions:
 3. Provision OpenSearch candidate generation index in the existing domain.
 4. Enable one source at a time: arXiv first, then Semantic Scholar, then OpenAlex.
 5. Run phase-1 budgeted backfill.
-6. Run QT-9 gates and U2/U7 smoke checks against candidate generation.
+6. Run QT-9 gates and U2/U7 smoke checks against candidate generation, including DocModel `fullText`, multimodal block coverage, blockRef integrity, and AssetRef object resolution.
 7. Switch active alias.
 8. Keep previous generation until burn-in completes, then retire.
 

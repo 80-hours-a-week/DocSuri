@@ -33,12 +33,12 @@
 | Prefix | Content | Lifecycle |
 |---|---|---|
 | `full-text/{paperId}/v{version}.txt` | normalized FullText projection | retained, private |
-| `doc-model/{paperId}/v{version}.json` | eager phase-1 DocModel | retained, private |
-| `assets/{paperId}/{version}/{assetId}.webp` | figure/table image assets | retained, private |
+| `doc-model/{paperId}/v{version}.json` | eager phase-1 DocModel: `fullText` projection + paragraph/table/formula/figure/list/code blocks + AssetRef ids | retained, private |
+| `assets/{paperId}/{version}/{assetId}.webp` | figure/table image assets referenced by DocModel AssetRef | retained, private |
 | `generation-manifests/{generationId}/{paperId}/v{version}.json` | artifact/index consistency manifest | retained until generation retired |
 | `source-provenance/{paperId}/v{version}.json` | source lineage and sourceTier | retained with DocModel |
 
-**Raw PDFs are not stored.** PDF bytes from arXiv/Semantic Scholar/OpenAlex are temporary GROBID/parser input only.
+**Raw PDFs are not stored.** PDF bytes from arXiv/Semantic Scholar/OpenAlex are temporary GROBID/parser input only. DocModel JSON also does not store image bytes, base64 payloads, or presigned URLs; it stores only stable AssetRef identifiers that resolve to private `assets/` objects.
 
 ### 0.3 Control-plane tables
 

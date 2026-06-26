@@ -123,7 +123,6 @@ def parse_html_to_docmodel(
                 "generatedAt": generated_at,
             },
         },
-        "fullText": _project_full_text(sections),
         "sections": sections,
     }
     return DocModel.model_validate(data)
@@ -428,43 +427,3 @@ def _int_attr(el: Tag, name: str) -> int:
         return int(raw) if raw is not None else 1
     except (TypeError, ValueError):
         return 1
-
-
-def _project_full_text(sections: list[dict]) -> str:
-    return "\n\n".join(part for section in sections for part in _section_text(section) if part)
-
-
-def _section_text(section: dict) -> list[str]:
-    parts: list[str] = []
-    if section.get("title"):
-        parts.append(section["title"])
-    parts.extend(_block_text(block) for block in section.get("blocks", []))
-    for child in section.get("sections", []):
-        parts.extend(_section_text(child))
-    return [p for p in parts if p]
-
-
-def _block_text(block: dict) -> str:
-    match block.get("type"):
-        case "paragraph" | "code":
-            return block.get("text", "")
-        case "formula":
-            label = block.get("anchorLabel", "")
-            return " ".join(p for p in (label, block.get("latex", "")) if p)
-        case "figure":
-            return " ".join(
-                p for p in (block.get("anchorLabel", ""), block.get("caption", "")) if p
-            )
-        case "list":
-            return "\n".join(item.get("text", "") for item in block.get("items", []))
-        case "table":
-            rows = [
-                " | ".join(cell.get("text", "") for cell in row.get("cells", []))
-                for row in block.get("rows", [])
-            ]
-            header = " ".join(
-                p for p in (block.get("anchorLabel", ""), block.get("caption", "")) if p
-            )
-            return "\n".join(p for p in (header, *rows) if p)
-        case _:
-            return ""

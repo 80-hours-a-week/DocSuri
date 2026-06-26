@@ -116,8 +116,6 @@ export interface DocModelMeta {
 /** The structured paper artifact: a nested section tree of typed content blocks. */
 export interface DocModel {
   meta: DocModelMeta;
-  /** Reading-order text projection; structured blocks remain authoritative for multimodal content. */
-  fullText: string;
   sections: DocSection[];
 }
 

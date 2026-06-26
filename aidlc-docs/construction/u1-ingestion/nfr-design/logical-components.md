@@ -19,9 +19,9 @@
 | **Corpus DLQ** | retry 소진 또는 permanent failure 격리. stage, sourceName, paperId/version, failureReason을 보존한다. | SQS DLQ |
 | **Ingestion Worker** | source fetch, license validate, GROBID/HTML extraction, canonical dedup, eager DocModel, Block chunk, embed, generation write를 오케스트레이션한다. | stateless compute |
 | **Internal GROBID Runtime** | Semantic Scholar/OpenAlex PDF와 arXiv PDF fallback을 TEI/structure로 추출한다. 외부 공개 endpoint가 아니다. | container/service/sidecar; Infra에서 배치 |
-| **DocModel Parser** | arXiv HTML/MathML과 GROBID TEI를 공통 DocModel schema로 변환한다. LLM extraction 없음. | stateless library |
+| **DocModel Parser** | arXiv HTML/MathML과 GROBID TEI를 공통 DocModel schema로 변환한다. `fullText` 전문 투영본과 paragraph/table/formula/figure/list/code blocks를 생성한다. LLM extraction 없음. | stateless library |
 | **Control Plane DB** | source watermark, canonical dedup state, generation state, parser/chunker version, job item state를 저장한다. | existing Postgres 우선 |
-| **Private Corpus S3** | normalized FullText, DocModel JSON, assets, generation manifest 저장. raw PDF 저장 금지. | S3 private SSE |
+| **Private Corpus S3** | normalized FullText, DocModel JSON, assets, generation manifest 저장. DocModel JSON은 AssetRef만 보유하고 이미지 바이트/URL은 `assets/`에 분리한다. raw PDF 저장 금지. | S3 private SSE |
 | **Bedrock Cohere Embed v4** | DocModelChunk embedding. active VectorSpec은 `specVersion=v2`, dimensions=1024, cosine이다. | Bedrock |
 | **OpenSearch Generation** | DocModel Block 기반 vector+lexical index generation. active alias 밖에서 검증 후 cutover한다. | OpenSearch |
 | **U6 ObservabilityHub** | source watermark lag, GROBID failure, DocModel validation failure, embedding spend, DLQ backlog, cutover status metric/log 수집. | `emitMetric`/`emitLog` |
