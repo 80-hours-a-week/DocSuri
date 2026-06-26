@@ -51,12 +51,14 @@ export function MyPageSettingsScreen() {
   const load = useCallback(async () => {
     setStatus('loading');
     try {
-      const [consentResult, personalizationResult] = await Promise.all([
-        getApiClient().getConsents(),
-        getApiClient().getPersonalizationSettings(),
-      ]);
+      const api = getApiClient();
+      const consentResult = await api.getConsents();
       setConsents(consentResult);
-      setPersonalization(personalizationResult);
+      try {
+        setPersonalization(await api.getPersonalizationSettings());
+      } catch {
+        setPersonalization(null);
+      }
       setStatus('ready');
     } catch {
       setStatus('error');
@@ -92,19 +94,21 @@ export function MyPageSettingsScreen() {
       setPersonalization(result);
     });
 
-  const onDeletePersonalizationEvents = () =>
-    withBusy('deletePersonalizationEvents', async () => {
-      if (!window.confirm('개인맞춤 행동 로그를 삭제할까요? 이 작업은 되돌릴 수 없습니다.')) return;
+  const onDeletePersonalizationEvents = () => {
+    if (!window.confirm('개인맞춤 행동 로그를 삭제할까요? 이 작업은 되돌릴 수 없습니다.')) return;
+    void withBusy('deletePersonalizationEvents', async () => {
       const result = await getApiClient().deletePersonalizationEvents();
       setActionNotice(`개인맞춤 행동 로그 ${result.deletedEvents}건을 삭제했습니다.`);
     });
+  };
 
-  const onResetPersonalizationProfile = () =>
-    withBusy('resetPersonalizationProfile', async () => {
-      if (!window.confirm('개인맞춤 프로필과 기본값을 초기화할까요?')) return;
+  const onResetPersonalizationProfile = () => {
+    if (!window.confirm('개인맞춤 프로필과 기본값을 초기화할까요?')) return;
+    void withBusy('resetPersonalizationProfile', async () => {
       await getApiClient().resetPersonalizationProfile();
       setActionNotice('개인맞춤 프로필을 초기화했습니다.');
     });
+  };
 
   const onLogout = () =>
     withBusy('logout', async () => {
@@ -193,7 +197,7 @@ export function MyPageSettingsScreen() {
   };
 
   if (status === 'loading') return <StateView kind="loading" title="설정을 불러오는 중…" />;
-  if (status === 'error' || !consents || !personalization)
+  if (status === 'error' || !consents)
     return <StateView kind="error" onRetry={() => void load()} />;
 
   return (
@@ -237,19 +241,24 @@ export function MyPageSettingsScreen() {
           <span>맞춤 서비스 사용</span>
           <input
             type="checkbox"
-            checked={personalization.enabled}
-            disabled={busy === 'personalization'}
+            checked={personalization?.enabled ?? false}
+            disabled={!personalization || busy === 'personalization'}
             onChange={(e) => void onTogglePersonalization(e.target.checked)}
             data-testid="mypage-personalization-enabled"
           />
         </label>
+        {!personalization ? (
+          <p className={styles.muted} role="status" data-testid="mypage-personalization-unavailable">
+            맞춤 서비스 설정을 불러오지 못했습니다.
+          </p>
+        ) : null}
         <p className={styles.muted}>
           행동 로그 삭제는 원천 기록을 지우고, 프로필 초기화는 분석된 관심사와 기본값을 지웁니다.
         </p>
         <button
           type="button"
           className={styles.danger}
-          disabled={busy === 'deletePersonalizationEvents'}
+          disabled={!personalization || busy === 'deletePersonalizationEvents'}
           onClick={() => void onDeletePersonalizationEvents()}
           data-testid="mypage-personalization-delete-events"
         >
@@ -258,7 +267,7 @@ export function MyPageSettingsScreen() {
         <button
           type="button"
           className={styles.action}
-          disabled={busy === 'resetPersonalizationProfile'}
+          disabled={!personalization || busy === 'resetPersonalizationProfile'}
           onClick={() => void onResetPersonalizationProfile()}
           data-testid="mypage-personalization-reset-profile"
         >

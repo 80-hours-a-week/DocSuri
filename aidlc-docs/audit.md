@@ -1701,3 +1701,34 @@
 **Context**: U9 settings PR documentation and commit message generation
 
 ---
+## U8 Depth Two Citation Source Question
+**Timestamp**: 2026-06-26T00:18:53Z
+**User Input**: "먼저, U8에 대해 질문이 있어요. depth 1은 원 논문에서 추출한다 쳐도, depth 2의 논문은 어떻게 가져오나요?"
+**AI Response**: "U8 설계 문서와 citation_graph 구현을 확인하고 depth 2는 원 논문 추출이 아니라 expandNodeId 대상 논문의 backward references를 Semantic Scholar provider/snapshot에서 추가 조회하는 방식이라고 설명함."
+**Context**: Analysis — U8 citation graph depth 2 data source.
+
+---
+## U9 Frontend API Call Pattern Question
+**Timestamp**: 2026-06-26T00:26:27Z
+**User Input**: "U9에 대한 질문이 있어요. 프론트엔드에서 클릭 등으로 백엔드에 API 쿼리를 보낼 때, 타 유닛 + U9에 동시에 쿼리를 보내는 건가요?"
+**AI Response**: "U9 문서와 프론트/백엔드 구현을 확인하고, 현재 구조는 본 기능 API 성공 후 U9 행동 이벤트를 fire-and-forget으로 기록하며, 일부 개인화 결정은 U2/U7이 비차단 read-port로 조회하는 구조라고 설명함."
+**Context**: Analysis — U9 personalization frontend/backend call flow.
+
+---
+## U9 Signal Weight Question
+**Timestamp**: 2026-06-26T00:31:13Z
+**User Input**: "library_added          강한 양의 신호
+summary 요청           중간 신호
+paper_opened           약한 신호
+library_removed        저장 신호 철회 신호 가중치는 뭐에요??"
+**AI Response**: "U9 ProfileAggregator 구현을 확인하고 현재 원시 가중치가 library_added=3.0, summary_translation_requested=2.0, paper_opened=1.0, search_executed=category 0.5/keyword 0.25이며 library_removed는 paper signal 제거라고 설명함."
+**Context**: Analysis — U9 personalization signal weights.
+
+---
+## Cross Review Remediation
+**Timestamp**: 2026-06-26T00:41:31Z
+**User Input**: "Cross-Review.md 를 읽고, 문제점을 수정해 주세요. 이후, 202606261000_PR.md를 작성해 주세요."
+**AI Response**: "Read Cross-Review.md, moved personalization destructive-action confirmation outside busy handling, made personalization settings load a partial failure instead of blocking the entire mypage settings screen, added focused regression tests, ran frontend/backend checks, and created 202606261000_PR.md."
+**Context**: U9 mypage settings cross-review follow-up
+
+---

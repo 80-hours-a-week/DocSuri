@@ -1,10 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MyPageSettingsScreen } from '@/components/mypage/MyPageSettingsScreen';
 import { SessionProvider } from '@/components/session/SessionContext';
 import { mockLogin } from '@/mocks/accountFixtures';
 import { resetMypageFixtures } from '@/mocks/mypageFixtures';
+import { ApiClient } from '@/lib/api/apiClient';
 
 const push = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -23,6 +24,10 @@ beforeEach(() => {
   mockLogin('mypage-settings-test@example.com');
   resetMypageFixtures();
   push.mockClear();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('MyPageSettingsScreen (U10)', () => {
@@ -52,6 +57,32 @@ describe('MyPageSettingsScreen (U10)', () => {
         '개인맞춤 프로필을 초기화했습니다.',
       ),
     );
+  });
+
+  it('keeps the settings page open when personalization settings are unavailable', async () => {
+    vi.spyOn(ApiClient.prototype, 'getPersonalizationSettings').mockRejectedValueOnce(
+      new Error('disabled'),
+    );
+    renderScreen();
+
+    expect(await screen.findByTestId('mypage-settings-screen')).toBeInTheDocument();
+    expect(screen.getByTestId('mypage-personalization-enabled')).toBeDisabled();
+    expect(screen.getByTestId('mypage-personalization-unavailable')).toHaveTextContent(
+      '맞춤 서비스 설정을 불러오지 못했습니다.',
+    );
+  });
+
+  it('does not call destructive personalization actions when confirmation is dismissed', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const deleteSpy = vi.spyOn(ApiClient.prototype, 'deletePersonalizationEvents');
+    renderScreen();
+
+    await screen.findByTestId('mypage-personalization-data');
+    await userEvent.click(screen.getByTestId('mypage-personalization-delete-events'));
+
+    expect(window.confirm).toHaveBeenCalled();
+    expect(deleteSpy).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('mypage-action-notice')).not.toBeInTheDocument();
   });
 
   it('toggles the personalization setting', async () => {
