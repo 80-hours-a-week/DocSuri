@@ -17,26 +17,27 @@
 
 ```
 <repo-root>/
-├── frontend/                      # U5 SSR (이번 패스 미베이스라인 — 별도 확인)
-├── backend/
-│   ├── middleware/                # U6 게이트웨이: auth·gateway·rate_limit·request_context·security_headers·wiring
-│   └── modules/
-│       ├── discovery/   (src-layout 별도 패키지 docsuri-discovery)
-│       ├── summarization/ (src-layout 별도 패키지)
-│       ├── citation_graph/  (controller.py만 — 얇음)
-│       ├── personalization/ (controller·service·repository·models·maintenance)
-│       ├── library/         (services/·repository/·authz·audit·history_consumer 등 풍부)
-│       ├── accounts/        (services/·repository/·integrations/ 풍부)
-│       ├── mypage/          (services/·repository/·ports — 코드 존재)  ← 문서엔 "미반영"
-│       └── ops/             (controller.py만)                         ← top-level ops/와 별개
-├── ingestion/                     # U1 워커 (docsuri_ingestion, src-layout)
-├── ops/                           # U6 ops 워커 (docsuri_ops, src-layout) + cdk/ + migrations/
-└── shared/
-    ├── dtos/         (JSON Schema: accounts·docmodel·library·mypage·search·summarization)
-    ├── events/       (account-signals·incidents·ingestion·search-executed)
-    ├── vector-spec/  (index-record.schema.json·vector-spec.yaml)
-    ├── ports/        (README = 인터페이스 SSOT, 데이터 스키마 아님)
-    └── python/       (docsuri_shared: dtos·events·ports·vector_spec·ids + _generated 스텁)
+|
++-- frontend/                  # U5 SSR (이번 패스 미베이스라인 — 별도 확인)
++-- backend/
+|     +-- middleware/          # U6 게이트웨이: auth/gateway/rate_limit/request_context/security_headers/wiring
+|     +-- modules/
+|           +-- discovery/        (src-layout 별도 패키지 docsuri-discovery)
+|           +-- summarization/    (src-layout 별도 패키지)
+|           +-- citation_graph/   (controller.py만 — 얇음)
+|           +-- personalization/  (controller/service/repository/models/maintenance)
+|           +-- library/          (services/repository/authz/audit/history_consumer 등 풍부)
+|           +-- accounts/         (services/repository/integrations 풍부)
+|           +-- mypage/           (services/repository/ports — 코드 존재)  [문서엔 "미반영"]
+|           +-- ops/              (controller.py만)  [top-level ops/와 별개]
++-- ingestion/                 # U1 워커 (docsuri_ingestion, src-layout)
++-- ops/                       # U6 ops 워커 (docsuri_ops) + cdk/ + migrations/
++-- shared/
+      +-- dtos/        (JSON Schema: accounts/docmodel/library/mypage/search/summarization)
+      +-- events/      (account-signals/incidents/ingestion/search-executed)
+      +-- vector-spec/ (index-record.schema.json / vector-spec.yaml)
+      +-- ports/       (README = 인터페이스 SSOT, 데이터 스키마 아님)
+      +-- python/      (docsuri_shared: dtos/events/ports/vector_spec/ids + _generated 스텁)
 ```
 
 > **U6 3분산 확인**: U6 책임이 **세 곳**에 산다 — ① `backend/middleware/`(게이트웨이),
@@ -49,7 +50,7 @@
 
 | 페이즈 | 영역 | 코드에 있는 것 | 없는 것(=신규) |
 |---|---|---|---|
-| **1** U1 Corpus | `ingestion/` | arXiv 어댑터·`docmodel/`(builder·parser·mathml)·`full_text_extraction`·`asset_extraction`·dedup 테스트·`migrate`·resilience·observability | **Semantic Scholar·OpenAlex 어댑터·GROBID 연동·HTML 우선 분기·Watermark 증분·DLQ 운영 표면** |
+| **1** U1 Corpus | `ingestion/` | arXiv 어댑터(**HTML 우선 → PDF 폴백**, SourceTier ar5iv/native_html)·**단일소스 watermark**(`postgres.py` `watermark` 테이블·`get/advance/reset_watermark`)·`docmodel/`(builder·parser·mathml)·`full_text_extraction`·`asset_extraction`·dedup 테스트·`migrate`·resilience·observability | **Semantic Scholar·OpenAlex 어댑터·GROBID 연동·cross-source watermark·DLQ/scheduler 운영 표면** |
 | **2** U2 검색 | `discovery/` | domain(retriever·ranker·assembler·validator·expander·grounding_adapter)·adapters(bedrock_embedding·opensearch·event_publisher)·ports/search_ports·mocks·real_wiring | 페이즈 8 개선 항목(reranker·LTR·click log 등) |
 | **3** U7 요약/번역 | `summarization/` | domain(refiner·grounding·map_reduce·structured_translator·glossary·source_selector·length_router·cache_key)·adapters(bedrock_llm·s3_docmodel·s3_full_text·s3_redis_store·rds_*·sqs_*)·worker | (요약/번역은 상당 구현됨 — 페이즈 3은 정합·개선 성격) |
 | **4** Grounding | `shared/ports`·`discovery/domain/grounding_adapter`·`summarization/domain/grounding` | **단일 프레임워크 통합**: enforce 단일권위(현재 U6) ↔ 도메인별 Validator(Search/Summary/**Agent**) 레지스트리 재조정 |

@@ -40,7 +40,7 @@
 | 영역 | 현행 문서 주장 | 실제 코드 | 처리 |
 |---|---|---|---|
 | 연구 에이전트 | U11 인셉션 완료(PR #170) | `backend/modules/`에 `research_agent` **모듈 부재** | 코드 기준 **그린필드**로 인셉션 |
-| U1 수집 소스 | "arXiv OA AI/ML 슬라이스" | `ingestion/adapters/`에 `arxiv.py`만. S2·OpenAlex·GROBID **어댑터 없음**. 단 `docmodel/`·`full_text_extraction.py`·dedup 테스트는 존재 | 멀티소스 수집 레이어 **신규 구축** |
+| U1 수집 소스 | "arXiv OA AI/ML 슬라이스" | **존재**: arXiv 어댑터 = **HTML 우선 → PDF 폴백**(`arxiv.py`, SourceTier ar5iv/native_html)·**단일 소스 watermark**(`postgres.py` `watermark` 테이블, `get/advance/reset_watermark`, name="arxiv")·`docmodel/`·`full_text_extraction.py`·dedup. **부재**: Semantic Scholar/OpenAlex/GROBID 어댑터·**cross-source watermark**·DLQ/scheduler 운영 표면 | 멀티소스·cross-source watermark·운영 표면 **신규 구축**(HTML 우선·단일 watermark는 재사용) |
 | 마이페이지(U10) | "타 팀원 구현 중·미반영" | `backend/modules/mypage` **코드 존재** | 코드 기준으로 유닛 정식화 |
 | U6 위치 | 게이트웨이(`backend/middleware/`) + ops 워커(`ops/`) | 추가로 `backend/modules/ops`도 존재 → **3군데 분산** | 재인셉션 때 경계 정리 |
 | `shared/ports` | 근거화·비용 후크 인터페이스 | 코드 존재 확인 | D3(grounding 확장)의 기반으로 채택 |
@@ -70,14 +70,24 @@
 **목표**: AI가 사용할 Corpus를 자동 구축하는 파이프라인 완성.
 **수집(순위대로 중복제거)**:
 ```
-arXiv         → HTML 우선, 없으면 PDF
-Semantic Scholar → PDF (GROBID)
-OpenAlex      → PDF (GROBID)
-        ↓ Source별 중복 제거
-        ↓ FullText 추출
-        ↓ DocModel 완성형 생성
-        ↓ Chunk → Embedding
-        ↓ OpenSearch 저장 + S3 저장
+arXiv             :  HTML 우선, 없으면 PDF      (존재)
+Semantic Scholar  :  PDF (GROBID)               (신규)
+OpenAlex          :  PDF (GROBID)               (신규)
+       |
+       v
+  Source별 중복 제거
+       |
+       v
+  FullText 추출
+       |
+       v
+  DocModel 완성형 생성
+       |
+       v
+  Chunk  -->  Embedding
+       |
+       v
+  OpenSearch 저장  +  S3 저장
 ```
 **운영**: Scheduler 주기 수집 · Watermark 기반 증분 갱신 · Retry/DLQ · 버전 관리.
 **결과**: 최근 AI/ML 1~2년 Corpus 구축 완료. U2/U7/Agent 데이터 기반 완성.
@@ -90,7 +100,7 @@ OpenAlex      → PDF (GROBID)
 ### 페이즈 2 — U2 검색
 **목표**: 원하는 논문을 빠르고 정확하게 찾는다.
 ```
-Query → Normalize → Hybrid Search(Lexical+Semantic) → Ranking → Grounding(페이즈 4) → Search Result
+Query --> Normalize --> Hybrid Search (Lexical + Semantic) --> Ranking --> Grounding (페이즈 4) --> Search Result
 ```
 **결과**: 검색 안정화 · 검색 API 완성 · Grounding(Search) 완성.
 
@@ -98,17 +108,21 @@ Query → Normalize → Hybrid Search(Lexical+Semantic) → Ranking → Groundin
 **목표**: 검색된 논문을 AI가 이해하기 쉽게 제공.
 **요약**:
 ```
-DocModel → Input Refine → LLM → Grounding(이때 페이즈 4 동시 적용) → Cache
+DocModel --> Input Refine --> LLM --> Grounding (이때 페이즈 4 동시 적용) --> Cache
 ```
 **번역**: 초록 = Metadata 저장 Abstract 사용 · 본문 = DocModel(v1) 사용.
 **결과**: 구조화 요약 · 초록 번역 · 본문 번역 · Cache · 비용 제어.
 
 ### 페이즈 4 — Grounding Framework 통합 (D3)
 ```
-            Grounding Framework  ← 철학 하나 · 인터페이스 하나 (shared/ports)
-        ┌────────┼────────┐
-   Search       Summary      Agent
-   Validator    Validator    Validator   ← 도메인별 분리
+Grounding Framework   (철학 하나 / 인터페이스 하나 ; shared/ports)
+    |
+    +--> Search  Validator
+    |
+    +--> Summary Validator
+    |
+    +--> Agent   Validator
+         (도메인별 분리)
 ```
 유닛 신설 없이 `shared/ports`의 근거화 후크를 도메인별 Validator 레지스트리로 확장한다.
 
@@ -118,15 +132,32 @@ DocModel → Input Refine → LLM → Grounding(이때 페이즈 4 동시 적용
 ### 페이즈 6 — 연구 아이디어 Agent (석현, 그린필드)
 **목표**: 기존 연구를 분석해 새 연구 아이디어를 제안.
 ```
-연구 주제 → [문헌탐색·근거형성 Agent(페이즈 5)] → Research Gap 탐색
-       → 미해결 문제 발견 → Novelty 분석 → 실험 아이디어 생성 → Research Proposal
+연구 주제
+     |
+     v
+[ 문헌탐색·근거형성 Agent (페이즈 5) ]
+     |
+     v
+Research Gap 탐색
+     |
+     v
+미해결 문제 발견
+     |
+     v
+Novelty 분석
+     |
+     v
+실험 아이디어 생성
+     |
+     v
+Research Proposal
 ```
 **사용 Tool**: Search · DocModel · Summary · Citation · 문헌탐색·근거형성 Agent.
 
 ### 페이즈 7 — Corpus 대량 구축 (준희)
 ```
-AI/ML 최근 1~2년 → 최근 5년 → 전체 → 타 분야 확장
-필요 시: DocModel 재생성 · Embedding 재생성 · OpenSearch Reindex
+AI/ML 최근 1~2년  -->  최근 5년  -->  전체  -->  타 분야 확장
+(필요 시: DocModel 재생성 / Embedding 재생성 / OpenSearch Reindex)
 ```
 
 ### 페이즈 8 — 검색 품질 개선
@@ -140,11 +171,12 @@ Query Expansion · Personalization · Feedback Learning · Click Log 기반 Rank
 페이즈 5·6을 **두 유닛으로 분리**하고, 6이 5를 포트로 의존하는 단방향 구조로 간다.
 
 ```
-[연구아이디어 유닛 / 석현]  ──(포트 의존)──▶  [문헌탐색·근거형성 유닛 / 본인]
-   오케스트레이션·생성·novelty                    추출·근거형성·기권
-        │ Tool로도 소비: Search · DocModel · Summary · Citation
-        ▼
-   Research Proposal
+연구아이디어 유닛 (석현)  ---- 포트 의존 ---->  문헌탐색·근거형성 유닛 (본인)
+  오케스트레이션 / 생성 / novelty                추출 / 근거형성 / 기권
+     |
+     +-- Tool로도 소비: Search / DocModel / Summary / Citation
+     v
+  Research Proposal
 ```
 
 **분리 근거**
@@ -163,13 +195,16 @@ Query Expansion · Personalization · Feedback Learning · Click Log 기반 Rank
 (U2를 Mock API로 선행 개발한 패턴과 동일), 계약을 먼저 동결하면 두 담당이 병렬로 간다.
 
 ```
-[준비] shared/ 에 에이전트 Tool 포트 계약 + 근거 출력 DTO 동결 (버전 고정)
-        │
-   ┌────┴───────────────────────────┐
- 본인: 페이즈5 실제 구현            석현: 페이즈6 (5의 녹화 fixture로 개발)
-   추출·근거형성·기권                  Gap·novelty·proposal
-        └──────────┬─────────────────┘
-   [통합 게이트] 5 실제본 착지 → 6을 실제 5로 재검증 → 6 "완료" 인정
+[준비]  shared/ 에 에이전트 Tool 포트 계약 + 근거 출력 DTO 동결 (버전 고정)
+           |
+           +----------------------------+----------------------------+
+           v                                                         v
+  본인: 페이즈5 실제 구현                         석현: 페이즈6 구현
+  (추출 / 근거형성 / 기권)                        (5의 녹화 fixture 기반)
+           |                                                         |
+           +----------------------------+----------------------------+
+                                        v
+  [통합 게이트]  5 실제본 착지  -->  6을 실제 5로 재검증  -->  6 "완료" 인정
 ```
 
 **전제 조건 (미충족 시 병렬 깨짐)**
