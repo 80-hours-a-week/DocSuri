@@ -18,12 +18,18 @@ export interface CitationEdge {
   target: string;
 }
 
+export interface UnresolvedCitation {
+  title: string;
+  year?: number | null;
+  reason: string;
+}
+
 export interface CitationTreeResponse {
   status: CitationTreeStatus;
   rootPaperId: string;
   nodes: CitationNode[];
   edges: CitationEdge[];
-  unresolved: string[];
+  unresolved: UnresolvedCitation[];
   depthReturned: number;
   truncated: boolean;
   remainingEstimate?: number | null;

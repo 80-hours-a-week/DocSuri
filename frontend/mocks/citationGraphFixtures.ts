@@ -80,7 +80,7 @@ export function mockCitationTree(paperId: string, expandNodeId?: string): Citati
     rootPaperId: paperId,
     nodes: rootNodes,
     edges: rootNodes.map((node) => ({ source: paperId, target: node.nodeId })),
-    unresolved: ['OpenReview workshop record without stable arXiv ID'],
+    unresolved: [{ title: 'OpenReview workshop record without stable arXiv ID', reason: 'unresolved' }],
     depthReturned: 1,
     truncated: true,
     remainingEstimate: 3,
