@@ -2079,3 +2079,26 @@ library_removed        저장 신호 철회 신호 가중치는 뭐에요??"
 **Context**: CONSTRUCTION — U1 Corpus Code Generation commit.
 
 ---
+
+## U1 Corpus Construction — Build and Test 시작
+**Timestamp**: 2026-06-26T13:34:03Z
+**User Input**: "continue to next stage"
+**AI Response**: "Code Generation 리뷰 게이트 승인을 기록하고 Build and Test 단계로 진행한다. 기존 U1 build-and-test 산출물은 멀티모달 슬라이스 기준이라, 현재 U1 Corpus Code Generation 결과에 맞는 build/unit/integration/performance/summary 지침으로 갱신한다."
+**Context**: CONSTRUCTION — U1 Corpus Build and Test.
+
+---
+
+## Build and Test Stage
+**Timestamp**: 2026-06-26T13:35:33Z
+**Build Status**: Success
+**Test Status**: Pass
+**Files Generated**:
+- build-instructions.md
+- unit-test-instructions.md
+- integration-test-instructions.md
+- performance-test-instructions.md
+- build-and-test-summary.md
+**AI Response**: "U1 Corpus Build and Test 지침과 summary를 생성/갱신했다. shared schema drift, ingestion, summarization, frontend targeted, typecheck, whitespace 검증 결과를 반영했다. 리뷰 요청: Request Changes 또는 Approve & Continue 중 하나를 선택해야 Operations placeholder로 진행한다."
+**Context**: CONSTRUCTION — U1 Corpus Build and Test completion prompt logged before asking user.
+
+---
