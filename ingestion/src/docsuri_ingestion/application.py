@@ -1,17 +1,26 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from docsuri_shared.dtos import DocModel, DocModelResultDTO, SourceUnavailableDTO
+from docsuri_shared.dtos import DocModel, DocModelResultDTO, SourceTier, SourceUnavailableDTO
 
 from .asset_extraction import AssetExtractor
-from .config import CORPUS_SLICE_CATEGORIES
+from .config import CORPUS_SLICE_CATEGORIES, WITHDRAWAL_MARKERS
+from .corpus_sources import CorpusSourceAdapterSet, SourcePaperRecord
 from .docmodel import DocModelBuilder
-from .domain.enums import DedupDecision, FailureClass, FailureReason, JobKind
+from .domain.canonical import canonical_key
+from .domain.enums import DedupDecision, FailureClass, FailureReason, JobKind, SourceName
 from .domain.errors import IngestionError, PermanentIngestionError
-from .domain.models import EmbeddingBatch, IngestionJob, Tombstone
+from .domain.models import (
+    CanonicalDedupState,
+    EmbeddingBatch,
+    IngestionJob,
+    ParsedPaper,
+    Tombstone,
+)
 from .ports import (
     ArxivSourcePort,
     AssetSourcePort,
@@ -31,6 +40,7 @@ from .processors import (
     FetchParseProcessor,
     IndexRecordAssembler,
     assert_writer_embedding_role,
+    normalize_text,
 )
 from .resilience import IngestFailureHandler, IngestionResilienceService
 
@@ -62,6 +72,7 @@ class IngestionPipelineService:
         doc_model_builder: DocModelBuilder | None = None,
         embedding_v2: EmbeddingPort | None = None,
         vector_index_v2: VectorIndexPort | None = None,
+        corpus_sources: CorpusSourceAdapterSet | None = None,
     ) -> None:
         assert_writer_embedding_role()
         self._arxiv = arxiv
@@ -85,6 +96,7 @@ class IngestionPipelineService:
         self._doc_model_builder = doc_model_builder
         self._embedding_v2 = embedding_v2
         self._vector_index_v2 = vector_index_v2
+        self._corpus_sources = corpus_sources
 
     def build_doc_model(
         self, job: IngestionJob
@@ -122,9 +134,9 @@ class IngestionPipelineService:
         return result
 
     def ingest_one(self, job: IngestionJob) -> DedupDecision:
-        if not job.arxiv_ref:
+        if not job.arxiv_ref and job.source_record is None:
             raise PermanentIngestionError(
-                "ingest_one requires arxiv_ref",
+                "ingest_one requires arxiv_ref or source_record",
                 reason=FailureReason.VALIDATION_VIOLATION,
                 stage="dispatch",
             )
@@ -138,6 +150,9 @@ class IngestionPipelineService:
         )
         self._control_plane.record_job_started(job)
         try:
+            if job.source_record is not None:
+                return self._ingest_source_record(job)
+
             metadata = self._resilience.dependency_call(
                 "arxiv",
                 "fetch_metadata",
@@ -150,110 +165,14 @@ class IngestionPipelineService:
             )
             paper = self._parser.parse(raw_document)
 
-            if paper.withdrawal_detected:
-                return self._tombstone(job, paper)
-
-            dedup = DeduplicationGuard(self._control_plane)
-            result = dedup.evaluate(paper)
-            if result.decision in {DedupDecision.DUPLICATE, DedupDecision.STALE}:
-                self._observability.emit_metric(
-                    "ingestion.short_circuit",
-                    1.0,
-                    {"decision": result.decision.value},
-                )
-                self._control_plane.record_job_finished(job.job_id, success=True, detail="dedup")
-                return result.decision
-
-            if not dedup_decision_applies_to_index(result.decision):
-                self._control_plane.record_job_finished(job.job_id, success=True, detail="skip")
-                return result.decision
-
-            if not dedup.begin_upsert(paper):
-                self._control_plane.record_job_finished(job.job_id, success=True, detail="stale")
-                return DedupDecision.STALE
-
-            object_ref = self._resilience.dependency_call(
-                "s3",
-                "put_full_text",
-                lambda: self._full_text_store.put_full_text(paper),
+            doc_model = self._build_doc_model_before_index(metadata, raw_document.text)
+            return self._index_paper(
+                job,
+                paper,
+                doc_model=doc_model,
+                watermark_name="arxiv",
+                asset_metadata=metadata,
             )
-            paper = replace(paper, stored_full_text_ref=object_ref)
-            doc_model = self._build_doc_model_before_index(metadata)
-            chunks = (
-                self._chunker.chunk_doc_model(doc_model, abstract=paper.abstract)
-                if doc_model is not None
-                else self._chunker.chunk(paper)
-            )
-            vectors = self._resilience.dependency_call(
-                "bedrock",
-                "embed",
-                lambda: self._embedding.embed_documents(
-                    [chunk.text for chunk in chunks.chunks],
-                    correlation_id=job.correlation_id,
-                ),
-            )
-            embeddings = EmbeddingBatch(
-                chunk_ids=tuple(chunk.chunk_id for chunk in chunks.chunks),
-                vectors=tuple(tuple(vector) for vector in vectors),
-            )
-            batch = self._assembler.assemble(paper, chunks, embeddings)
-
-            self._resilience.dependency_call(
-                "opensearch",
-                "bulk_upsert",
-                lambda: self._vector_index.bulk_upsert(batch),
-            )
-            self._resilience.dependency_call(
-                "opensearch",
-                "delete_stale_chunks",
-                lambda: self._vector_index.delete_stale_chunks(
-                    paper.paper_id,
-                    {record.chunkId for record in batch.records},
-                ),
-            )
-            if self._embedding_v2 and self._vector_index_v2:
-                try:
-                    vectors_v2 = self._resilience.dependency_call(
-                        "bedrock_v2",
-                        "embed",
-                        lambda: self._embedding_v2.embed_documents(
-                            [chunk.text for chunk in chunks.chunks],
-                            correlation_id=job.correlation_id,
-                        ),
-                    )
-                    embeddings_v2 = EmbeddingBatch(
-                        chunk_ids=tuple(chunk.chunk_id for chunk in chunks.chunks),
-                        vectors=tuple(tuple(vector) for vector in vectors_v2),
-                    )
-                    batch_v2 = self._assembler.assemble(paper, chunks, embeddings_v2)
-                    self._resilience.dependency_call(
-                        "opensearch_v2",
-                        "bulk_upsert",
-                        lambda: self._vector_index_v2.bulk_upsert(batch_v2),
-                    )
-                    self._resilience.dependency_call(
-                        "opensearch_v2",
-                        "delete_stale_chunks",
-                        lambda: self._vector_index_v2.delete_stale_chunks(
-                            paper.paper_id,
-                            {record.chunkId for record in batch_v2.records},
-                        ),
-                    )
-                except Exception as e:
-                    self._observability.emit_log(
-                        {"type": "dual_write_v2_failed", "jobId": job.job_id, "error": str(e)}
-                    )
-            dedup.mark_ingested(paper)
-            self._control_plane.advance_watermark("arxiv", paper.updated_at)
-            # FR-17 assets: best-effort, AFTER the index commit so it can never block (BR-27).
-            self._store_assets_best_effort(paper, metadata)
-            self._control_plane.record_job_finished(job.job_id, success=True)
-            self._observability.emit_metric(
-                "ingestion.paper.indexed",
-                1.0,
-                {"kind": job.kind.value, "chunks": str(len(batch.records))},
-            )
-            return result.decision
         except IngestionError as exc:
             self._control_plane.record_job_finished(
                 job.job_id, success=False, detail=exc.public_error()
@@ -272,7 +191,223 @@ class IngestionPipelineService:
                     )
             raise
 
-    def _tombstone(self, job: IngestionJob, paper) -> DedupDecision:
+    def _ingest_source_record(self, job: IngestionJob) -> DedupDecision:
+        if self._corpus_sources is None:
+            raise PermanentIngestionError(
+                "corpus source adapters are not configured",
+                reason=FailureReason.DEPENDENCY_UNAVAILABLE,
+                stage="source",
+            )
+        record = SourcePaperRecord.from_payload(job.source_record or {})
+        self._parser.validate_open_access(record.license_url)
+        candidate = self._resilience.dependency_call(
+            record.source_name.value.lower(),
+            "fetch_full_text",
+            lambda: self._corpus_sources.extract_record_text(record),
+        )
+        paper = self._paper_from_source_record(record, candidate.text, job)
+        key = job.canonical_key or self._canonical_key_for_record(record, paper.year)
+        existing = self._control_plane.get_canonical_dedup_state(key)
+        if existing is not None:
+            self._control_plane.upsert_canonical_dedup_state(
+                replace(
+                    existing,
+                    seen_sources=_append_source(existing.seen_sources, record.source_name),
+                )
+            )
+            self._control_plane.record_job_finished(
+                job.job_id, success=True, detail="canonical_duplicate"
+            )
+            self._observability.emit_metric(
+                "ingestion.canonical_duplicate",
+                1.0,
+                {"source": record.source_name.value},
+            )
+            return DedupDecision.DUPLICATE
+
+        doc_model = self._build_doc_model_from_paper(paper, SourceTier.pdf)
+        decision = self._index_paper(
+            job,
+            paper,
+            doc_model=doc_model,
+            watermark_name=record.source_name.value.lower(),
+            asset_metadata=None,
+        )
+        if dedup_decision_applies_to_index(decision):
+            self._control_plane.upsert_canonical_dedup_state(
+                CanonicalDedupState(
+                    canonical_key=key,
+                    paper_id=paper.paper_id,
+                    winning_source_tier=candidate.source_tier,
+                    winning_version=paper.version,
+                    fingerprint=paper.fingerprint,
+                    seen_sources=(record.source_name,),
+                )
+            )
+        return decision
+
+    def _index_paper(
+        self,
+        job: IngestionJob,
+        paper: ParsedPaper,
+        *,
+        doc_model: DocModel | None,
+        watermark_name: str,
+        asset_metadata,
+    ) -> DedupDecision:
+        if paper.withdrawal_detected:
+            return self._tombstone(job, paper, watermark_name=watermark_name)
+
+        dedup = DeduplicationGuard(self._control_plane)
+        result = dedup.evaluate(paper)
+        if result.decision in {DedupDecision.DUPLICATE, DedupDecision.STALE}:
+            self._observability.emit_metric(
+                "ingestion.short_circuit",
+                1.0,
+                {"decision": result.decision.value},
+            )
+            self._control_plane.record_job_finished(job.job_id, success=True, detail="dedup")
+            return result.decision
+
+        if not dedup_decision_applies_to_index(result.decision):
+            self._control_plane.record_job_finished(job.job_id, success=True, detail="skip")
+            return result.decision
+
+        if not dedup.begin_upsert(paper):
+            self._control_plane.record_job_finished(job.job_id, success=True, detail="stale")
+            return DedupDecision.STALE
+
+        object_ref = self._resilience.dependency_call(
+            "s3",
+            "put_full_text",
+            lambda: self._full_text_store.put_full_text(paper),
+        )
+        paper = replace(paper, stored_full_text_ref=object_ref)
+        chunks = (
+            self._chunker.chunk_doc_model(doc_model, abstract=paper.abstract)
+            if doc_model is not None
+            else self._chunker.chunk(paper)
+        )
+        vectors = self._resilience.dependency_call(
+            "bedrock",
+            "embed",
+            lambda: self._embedding.embed_documents(
+                [chunk.text for chunk in chunks.chunks],
+                correlation_id=job.correlation_id,
+            ),
+        )
+        embeddings = EmbeddingBatch(
+            chunk_ids=tuple(chunk.chunk_id for chunk in chunks.chunks),
+            vectors=tuple(tuple(vector) for vector in vectors),
+        )
+        batch = self._assembler.assemble(paper, chunks, embeddings)
+
+        self._resilience.dependency_call(
+            "opensearch",
+            "bulk_upsert",
+            lambda: self._vector_index.bulk_upsert(batch),
+        )
+        self._resilience.dependency_call(
+            "opensearch",
+            "delete_stale_chunks",
+            lambda: self._vector_index.delete_stale_chunks(
+                paper.paper_id,
+                {record.chunkId for record in batch.records},
+            ),
+        )
+        if self._embedding_v2 and self._vector_index_v2:
+            try:
+                vectors_v2 = self._resilience.dependency_call(
+                    "bedrock_v2",
+                    "embed",
+                    lambda: self._embedding_v2.embed_documents(
+                        [chunk.text for chunk in chunks.chunks],
+                        correlation_id=job.correlation_id,
+                    ),
+                )
+                embeddings_v2 = EmbeddingBatch(
+                    chunk_ids=tuple(chunk.chunk_id for chunk in chunks.chunks),
+                    vectors=tuple(tuple(vector) for vector in vectors_v2),
+                )
+                batch_v2 = self._assembler.assemble(paper, chunks, embeddings_v2)
+                self._resilience.dependency_call(
+                    "opensearch_v2",
+                    "bulk_upsert",
+                    lambda: self._vector_index_v2.bulk_upsert(batch_v2),
+                )
+                self._resilience.dependency_call(
+                    "opensearch_v2",
+                    "delete_stale_chunks",
+                    lambda: self._vector_index_v2.delete_stale_chunks(
+                        paper.paper_id,
+                        {record.chunkId for record in batch_v2.records},
+                    ),
+                )
+            except Exception as e:
+                self._observability.emit_log(
+                    {"type": "dual_write_v2_failed", "jobId": job.job_id, "error": str(e)}
+                )
+        dedup.mark_ingested(paper)
+        self._control_plane.advance_watermark(watermark_name, paper.updated_at)
+        # FR-17 assets: best-effort, AFTER the index commit so it can never block (BR-27).
+        if asset_metadata is not None:
+            self._store_assets_best_effort(paper, asset_metadata)
+        self._control_plane.record_job_finished(job.job_id, success=True)
+        self._observability.emit_metric(
+            "ingestion.paper.indexed",
+            1.0,
+            {"kind": job.kind.value, "chunks": str(len(batch.records))},
+        )
+        return result.decision
+
+    def _paper_from_source_record(
+        self, record: SourcePaperRecord, text: str, job: IngestionJob
+    ) -> ParsedPaper:
+        normalized_text = normalize_text(text)
+        if not normalized_text:
+            raise PermanentIngestionError(
+                "full text is empty",
+                reason=FailureReason.VALIDATION_VIOLATION,
+                stage="parse",
+            )
+        timestamp = record.updated_at or record.published_at or self._clock.now()
+        published = record.published_at or timestamp
+        year = record.year or published.year
+        key = job.canonical_key or self._canonical_key_for_record(record, year)
+        paper_id = job.paper_id or _paper_id_from_canonical_key(key)
+        abstract = normalize_text(record.abstract or record.title)
+        authors = tuple(normalize_text(author) for author in record.authors) or (
+            record.source_name.value,
+        )
+        categories = record.categories or ()
+        return ParsedPaper(
+            paper_id=paper_id,
+            version=job.version or record.version,
+            title=normalize_text(record.title),
+            authors=authors,
+            abstract=abstract,
+            categories=categories,
+            updated_at=timestamp,
+            year=year,
+            arxiv_url=record.html_url or record.pdf_url or "",
+            full_text=normalized_text,
+            license_url=record.license_url or "",
+            withdrawal_detected=detect_withdrawal_proxy(record.title, abstract, normalized_text),
+        )
+
+    def _canonical_key_for_record(self, record: SourcePaperRecord, year: int) -> str:
+        first_author = record.authors[0] if record.authors else None
+        return canonical_key(
+            title=record.title,
+            year=year,
+            doi=record.doi,
+            arxiv_id=record.arxiv_id,
+            first_author=first_author,
+        )
+
+    def _tombstone(
+        self, job: IngestionJob, paper, *, watermark_name: str = "arxiv"
+    ) -> DedupDecision:
         dedup = DeduplicationGuard(self._control_plane)
         if not dedup.begin_tombstone(paper):
             self._control_plane.record_job_finished(
@@ -296,7 +431,7 @@ class IngestionPipelineService:
                 self._observability.emit_log(
                     {"type": "dual_write_v2_tombstone_failed", "error": str(e)}
                 )
-        self._control_plane.advance_watermark("arxiv", paper.updated_at)
+        self._control_plane.advance_watermark(watermark_name, paper.updated_at)
         if self._doc_model_builder is not None:
             self._doc_model_builder.invalidate(paper.paper_id)
         self._remove_assets_best_effort(paper.paper_id)
@@ -342,22 +477,44 @@ class IngestionPipelineService:
         except Exception:  # noqa: BLE001 - best-effort cleanup
             self._observability.emit_metric("ingestion.assets.remove_failed", 1.0, {})
 
-    def _build_doc_model_before_index(self, metadata) -> DocModel | None:
+    def _build_doc_model_before_index(self, metadata, fallback_text: str) -> DocModel | None:
         """Eagerly build/cache the doc-model before index exposure (phase-1 Corpus)."""
         if self._doc_model_builder is None:
             return None
         result = self._doc_model_builder.build(metadata)
+        status = result.status
+        cached = str(getattr(result, "cached", "")).lower()
+        if isinstance(result, SourceUnavailableDTO):
+            result = self._doc_model_builder.build_from_text(
+                metadata, fallback_text, source_tier=SourceTier.pdf
+            )
+            status = "pdf_fallback"
+            cached = str(result.cached).lower()
         self._observability.emit_metric(
             "ingestion.docmodel.eager_build",
             1.0,
-            {"status": result.status, "cached": str(getattr(result, "cached", "")).lower()},
+            {"status": status, "cached": cached},
         )
-        if isinstance(result, SourceUnavailableDTO):
-            raise PermanentIngestionError(
-                "doc-model source unavailable",
-                reason=FailureReason.PARSE_FAILURE,
-                stage="docmodel",
-            )
+        return result.docModel
+
+    def _build_doc_model_from_paper(
+        self, paper: ParsedPaper, source_tier: SourceTier
+    ) -> DocModel | None:
+        if self._doc_model_builder is None:
+            return None
+        result = self._doc_model_builder.build_from_paper(
+            paper.paper_id,
+            paper.version,
+            paper.title,
+            paper.abstract,
+            paper.full_text,
+            source_tier=source_tier,
+        )
+        self._observability.emit_metric(
+            "ingestion.docmodel.eager_build",
+            1.0,
+            {"status": "pdf_fallback", "cached": str(result.cached).lower()},
+        )
         return result.docModel
 
 
@@ -370,12 +527,16 @@ class RefreshOrchestrationService:
         queue: QueuePort,
         observability: ObservabilityPort,
         clock: ClockPort | None = None,
+        corpus_sources: CorpusSourceAdapterSet | None = None,
+        enabled_sources: tuple[SourceName, ...] = (SourceName.ARXIV,),
     ) -> None:
         self._arxiv = arxiv
         self._control_plane = control_plane
         self._queue = queue
         self._observability = observability
         self._clock = clock or SystemClock()
+        self._corpus_sources = corpus_sources
+        self._enabled_sources = enabled_sources
 
     def trigger_full_rebuild(self, owner: str = "u1-worker") -> int:
         if not self._control_plane.acquire_rebuild_lock(owner):
@@ -414,20 +575,65 @@ class RefreshOrchestrationService:
                 "ingestion.incremental.deferred", 1.0, {"reason": "rebuild"}
             )
             return 0
-        watermark = self._control_plane.get_watermark("arxiv")
         queued = 0
-        for metadata in self._arxiv.fetch_incremental(
-            watermark.updated_at, CORPUS_SLICE_CATEGORIES
+        if SourceName.ARXIV in self._enabled_sources:
+            watermark = self._control_plane.get_watermark("arxiv")
+            for metadata in self._arxiv.fetch_incremental(
+                watermark.updated_at, CORPUS_SLICE_CATEGORIES
+            ):
+                self._queue.send_job(
+                    IngestionJob(
+                        job_id=new_job_id("incremental"),
+                        kind=JobKind.INCREMENTAL,
+                        arxiv_ref=metadata.arxiv_ref,
+                        source_name=SourceName.ARXIV,
+                    )
+                )
+                queued += 1
+        for source_name in self._enabled_sources:
+            if source_name is SourceName.ARXIV:
+                continue
+            queued += self._queue_external_incremental(source_name)
+        self._observability.emit_metric("ingestion.incremental.queued", float(queued), {})
+        return queued
+
+    def _queue_external_incremental(self, source_name: SourceName) -> int:
+        if self._corpus_sources is None or not self._corpus_sources.is_configured(source_name):
+            self._observability.emit_metric(
+                "ingestion.source.unconfigured",
+                1.0,
+                {"source": source_name.value},
+            )
+            return 0
+        watermark_name = source_name.value.lower()
+        watermark = self._control_plane.get_watermark(watermark_name)
+        queued = 0
+        for record in self._corpus_sources.fetch_incremental(
+            source_name, watermark.updated_at, CORPUS_SLICE_CATEGORIES
         ):
+            updated = record.updated_at or record.published_at or self._clock.now()
+            year = record.year or updated.year
             self._queue.send_job(
                 IngestionJob(
                     job_id=new_job_id("incremental"),
                     kind=JobKind.INCREMENTAL,
-                    arxiv_ref=metadata.arxiv_ref,
+                    source_name=source_name,
+                    source_record=record.to_payload(),
+                    canonical_key=canonical_key(
+                        title=record.title,
+                        year=year,
+                        doi=record.doi,
+                        arxiv_id=record.arxiv_id,
+                        first_author=record.authors[0] if record.authors else None,
+                    ),
                 )
             )
             queued += 1
-        self._observability.emit_metric("ingestion.incremental.queued", float(queued), {})
+        self._observability.emit_metric(
+            "ingestion.source.incremental.queued",
+            float(queued),
+            {"source": source_name.value},
+        )
         return queued
 
     def on_new_arxiv_event(self, event) -> bool:
@@ -449,3 +655,18 @@ class RefreshOrchestrationService:
 
 def new_job_id(prefix: str) -> str:
     return f"{prefix}-{uuid4()}"
+
+
+def _paper_id_from_canonical_key(key: str) -> str:
+    return "src-" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:24]
+
+
+def _append_source(seen_sources: tuple, source_name) -> tuple:
+    if source_name in seen_sources:
+        return seen_sources
+    return (*seen_sources, source_name)
+
+
+def detect_withdrawal_proxy(title: str, abstract: str, text: str) -> bool:
+    haystack = f"{title} {abstract} {text}".lower()
+    return any(marker in haystack for marker in WITHDRAWAL_MARKERS)

@@ -38,6 +38,11 @@
       "type": "string",
       "description": "Analyzed text field over title + abstract + body tokens — the BM25 lexical field for hybrid retrieval (FR-2). INTERNAL — not exposed in external DTOs (SEC-9). Trace: BR-6."
     },
+    "blockRefs": {
+      "type": "array",
+      "description": "DocModel block ids covered by this chunk. Empty for legacy/plain-text chunks. INTERNAL provenance used by QT-9 BlockRef validation; not searched or exposed externally. Trace: BR-C8, BR-C13, QT-9.",
+      "items": { "type": "string" }
+    },
     "title": {
       "type": "string",
       "description": "Card field (FR-4). Paper title. Projects to ResultCardVM.title (dtos.md §1.1)."
@@ -80,6 +85,7 @@
     "vector",
     "section",
     "lexicalTerms",
+    "blockRefs",
     "title",
     "authors",
     "year",

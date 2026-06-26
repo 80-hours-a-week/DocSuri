@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -78,7 +79,11 @@ class ParsedPaper:
 
     @property
     def fingerprint(self) -> str:
-        return content_fingerprint(self.paper_id, self.version)
+        try:
+            return content_fingerprint(self.paper_id, self.version)
+        except ValueError:
+            payload = f"{self.paper_id}:v{self.version}".encode()
+            return hashlib.sha256(payload).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,6 +150,7 @@ class IngestionJob:
     canonical_key: str | None = None
     paper_id: str | None = None
     version: int | None = None
+    source_record: dict[str, Any] | None = None
 
     def to_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -160,6 +166,7 @@ class IngestionJob:
             "canonicalKey": self.canonical_key,
             "paperId": self.paper_id,
             "version": self.version,
+            "sourceRecord": self.source_record,
         }
         payload.update({key: value for key, value in optional.items() if value is not None})
         return payload

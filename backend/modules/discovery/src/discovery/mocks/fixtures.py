@@ -53,6 +53,7 @@ def _record(
         vector=embed(" ".join(keywords)),
         section="abstract" if ordinal == 0 else f"body-{ordinal}",
         lexicalTerms=f"{title} {abstract}".lower(),
+        blockRefs=[],
         title=title,
         authors=authors,
         year=year,

@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
+from docsuri_shared.dtos import DocModel
 from docsuri_shared.vector_spec import DIMENSIONS, IndexRecord
 
 from docsuri_ingestion.adapters.aws import OpenSearchVectorIndex
@@ -16,12 +17,76 @@ from docsuri_ingestion.adapters.local import (
     sample_metadata,
 )
 from docsuri_ingestion.application import RefreshOrchestrationService
+from docsuri_ingestion.corpus_sources import CorpusSourceAdapterSet, SourcePaperRecord
+from docsuri_ingestion.docmodel.builder import DocModelBuilder
 from docsuri_ingestion.domain.enums import DedupDecision, FailureReason, JobKind, SourceName
 from docsuri_ingestion.domain.errors import PermanentIngestionError, RetriableIngestionError
 from docsuri_ingestion.domain.models import IndexRecordBatch, IngestionJob
 from docsuri_ingestion.worker import job_from_payload, process_message
 
 from .conftest import build_test_pipeline
+
+
+class _NoHtmlDocModelSource:
+    def fetch_html_source(self, arxiv_id: str):
+        del arxiv_id
+        return None
+
+
+class _DocModelStore:
+    def __init__(self) -> None:
+        self.docs: list[DocModel] = []
+
+    def get(self, paper_id: str, version: int) -> DocModel | None:
+        del paper_id, version
+        return None
+
+    def put(self, doc: DocModel) -> str:
+        self.docs.append(doc)
+        return "memory://doc-model"
+
+    def remove(self, paper_id: str) -> None:
+        del paper_id
+
+
+class _ExternalSource:
+    def __init__(self, record: SourcePaperRecord) -> None:
+        self.record = record
+        self.fetched_pdf_for: SourcePaperRecord | None = None
+
+    def fetch_incremental(self, since, categories):
+        del since, categories
+        return (self.record,)
+
+    def fetch_pdf(self, record: SourcePaperRecord) -> bytes:
+        self.fetched_pdf_for = record
+        return b"%PDF"
+
+
+class _Grobid:
+    def __init__(self, text: str = "PDF extracted full text") -> None:
+        self.text = text
+        self.seen_pdf: bytes | None = None
+
+    def extract_text(self, pdf: bytes) -> str:
+        self.seen_pdf = pdf
+        return self.text
+
+
+def _external_record() -> SourcePaperRecord:
+    return SourcePaperRecord(
+        source_name=SourceName.OPENALEX,
+        source_id="oa-1",
+        title="External PDF Paper",
+        abstract="External abstract",
+        authors=("Ada Lovelace",),
+        categories=("cs.LG",),
+        updated_at=datetime(2026, 1, 2, tzinfo=UTC),
+        published_at=datetime(2026, 1, 1, tzinfo=UTC),
+        pdf_url="https://example.test/paper.pdf",
+        license_url="https://creativecommons.org/licenses/by/4.0/",
+        doi="10.1000/external",
+    )
 
 
 def test_successful_ingestion_end_to_end_with_fake_adapters() -> None:
@@ -190,6 +255,7 @@ def test_worker_dispatches_legacy_type_less_ingest_job() -> None:
 
 def test_queue_payload_preserves_corpus_retry_metadata() -> None:
     _, _, _, queue, _ = build_test_pipeline()
+    source_record = _external_record().to_payload()
     job = IngestionJob(
         job_id="job-meta",
         kind=JobKind.INCREMENTAL,
@@ -199,6 +265,7 @@ def test_queue_payload_preserves_corpus_retry_metadata() -> None:
         canonical_key="doi:10.1000/x",
         paper_id="p1",
         version=3,
+        source_record=source_record,
     )
     queue.send_job(job)
 
@@ -210,6 +277,7 @@ def test_queue_payload_preserves_corpus_retry_metadata() -> None:
     assert parsed.canonical_key == "doi:10.1000/x"
     assert parsed.paper_id == "p1"
     assert parsed.version == 3
+    assert parsed.source_record == source_record
 
 
 def test_worker_sends_unknown_message_type_to_dlq() -> None:
@@ -260,6 +328,7 @@ def test_opensearch_index_stats_reports_last_successful_write_timestamp() -> Non
         vector=[0.0] * DIMENSIONS,
         section="abstract",
         lexicalTerms="retrieval augmented generation",
+        blockRefs=[],
         title="A Test Paper",
         authors=["A. Author"],
         year=2024,
@@ -359,6 +428,81 @@ def test_rebuild_lock_defers_incremental_and_event_paths() -> None:
         type("Event", (), {"eventId": "e1", "arxivRef": "2401.00001v1"})()
     )
     assert not queue.jobs
+
+
+def test_refresh_wires_configured_external_sources_into_queue() -> None:
+    control = InMemoryControlPlaneStore()
+    queue = InMemoryQueue()
+    observability = type(
+        "Obs",
+        (),
+        {
+            "metrics": [],
+            "emit_metric": lambda self, name, value, tags=None: self.metrics.append(
+                (name, value, tags or {})
+            ),
+            "emit_log": lambda self, entry: None,
+            "emit_failure_signal": lambda self, job_id, stage, error: None,
+        },
+    )()
+    record = _external_record()
+    provider = _ExternalSource(record)
+    corpus_sources = CorpusSourceAdapterSet(
+        arxiv=FakeArxivSource([sample_metadata()]),
+        openalex=provider,
+        grobid=_Grobid(),
+    )
+    service = RefreshOrchestrationService(
+        arxiv=FakeArxivSource([sample_metadata()]),
+        control_plane=control,
+        queue=queue,
+        observability=observability,
+        corpus_sources=corpus_sources,
+        enabled_sources=(SourceName.OPENALEX,),
+    )
+
+    assert service.on_schedule_tick() == 1
+
+    job = queue.jobs[0]
+    assert job.source_name is SourceName.OPENALEX
+    assert job.source_record == record.to_payload()
+    assert job.canonical_key == "doi:10.1000/external"
+
+
+def test_source_record_ingest_uses_grobid_docmodel_and_source_watermark() -> None:
+    record = _external_record()
+    provider = _ExternalSource(record)
+    grobid = _Grobid("GROBID text with equations and tables")
+    corpus_sources = CorpusSourceAdapterSet(
+        arxiv=FakeArxivSource([sample_metadata()]),
+        openalex=provider,
+        grobid=grobid,
+    )
+    store = _DocModelStore()
+    builder = DocModelBuilder(source=_NoHtmlDocModelSource(), store=store)
+    pipeline, control, index, _, _ = build_test_pipeline(
+        doc_model_builder=builder,
+        corpus_sources=corpus_sources,
+    )
+
+    result = pipeline.ingest_one(
+        IngestionJob(
+            job_id="openalex-1",
+            kind=JobKind.INCREMENTAL,
+            source_name=SourceName.OPENALEX,
+            source_record=record.to_payload(),
+            canonical_key="doi:10.1000/external",
+        )
+    )
+
+    assert result is DedupDecision.NEW
+    assert provider.fetched_pdf_for == record
+    assert grobid.seen_pdf == b"%PDF"
+    assert store.docs and store.docs[0].fullText == "GROBID text with equations and tables"
+    assert index.records
+    assert any(record.blockRefs == ["s1.p1"] for record in index.records.values())
+    assert control.get_watermark("openalex").updated_at == record.updated_at
+    assert control.get_canonical_dedup_state("doi:10.1000/external") is not None
 
 
 def test_changed_version_replaces_stale_chunks() -> None:

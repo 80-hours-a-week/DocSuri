@@ -22,6 +22,7 @@ INDEX_BODY = {
             },
             "section": {"type": "keyword"},
             "lexicalTerms": {"type": "text"},
+            "blockRefs": {"type": "keyword"},
             "title": {"type": "text"},
             "authors": {"type": "keyword"},
             "year": {"type": "integer"},

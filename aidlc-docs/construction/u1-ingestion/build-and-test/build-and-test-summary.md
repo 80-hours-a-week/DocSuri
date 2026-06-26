@@ -18,8 +18,11 @@
 ### Unit Tests
 
 - `shared/python`: `uv run python tools/generate.py --check` -> passed.
-- `ingestion`: `uv run pytest` -> 121 passed, 1 skipped.
+- `shared/python`: `uv run pytest` -> 66 passed.
+- `ingestion`: `uv run pytest` -> 129 passed, 1 skipped.
 - `ingestion`: `uv run ruff check .` -> passed.
+- `ops`: `uv run pytest` -> 42 passed.
+- `backend/modules/discovery`: `uv run pytest` -> 53 passed, 3 skipped.
 - `backend/modules/summarization`: `uv run pytest` -> 116 passed, 3 skipped.
 - `frontend`: targeted `pnpm exec vitest ...` -> 5 files, 19 tests passed.
 - `frontend`: `pnpm exec tsc --noEmit` -> passed.
@@ -28,7 +31,10 @@
 ### Integration Smoke
 
 - NEW/CHANGED fake ingestion path covers FullText -> DocModel -> chunk -> embed -> index.
+- External source-record smoke covers OpenAlex PDF -> GROBID -> DocModel -> structured `blockRefs[]` -> source watermark.
+- arXiv HTML-miss smoke covers PDF/full-text fallback DocModel instead of DLQ.
 - Retry/DLQ path preserves source and stage metadata.
+- GROBID 429 remains retriable; malformed-PDF 400 remains permanent.
 - U7 DocModel endpoint and input refiner consume required `fullText`.
 - Frontend classify/useDocModel/viewer targeted tests consume required `fullText` without duplicate rendering.
 
@@ -41,6 +47,7 @@
 
 - Raw PDF bytes remain transient for GROBID extraction.
 - GROBID is wired as an internal sidecar, not a public endpoint.
+- Provider-backed Semantic Scholar/OpenAlex sources are queued through source-specific jobs; unconfigured providers are skipped with telemetry rather than failing the scheduler.
 - OpenSearch alias cutover is separated from candidate writes and blocked by validation failure.
 - DLQ/retry payloads preserve enough metadata for source-aware reprocess.
 

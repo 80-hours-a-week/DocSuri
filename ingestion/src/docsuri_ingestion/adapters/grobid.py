@@ -5,6 +5,8 @@ import xml.etree.ElementTree as ET
 from docsuri_ingestion.domain.enums import FailureReason
 from docsuri_ingestion.domain.errors import PermanentIngestionError, RetriableIngestionError
 
+_TEMPORARY_4XX = {408, 409, 423, 425, 429}
+
 
 class GrobidHttpClient:
     """Internal GROBID client. The PDF bytes are posted and discarded in-process."""
@@ -36,6 +38,17 @@ class GrobidHttpClient:
             raise RetriableIngestionError(
                 "GROBID server error",
                 reason=FailureReason.DEPENDENCY_UNAVAILABLE,
+                stage="grobid",
+            )
+        if response.status_code in _TEMPORARY_4XX:
+            reason = (
+                FailureReason.RATE_LIMITED
+                if response.status_code == 429
+                else FailureReason.DEPENDENCY_UNAVAILABLE
+            )
+            raise RetriableIngestionError(
+                "GROBID temporary rejection",
+                reason=reason,
                 stage="grobid",
             )
         if response.status_code >= 400:

@@ -129,6 +129,49 @@ def parse_html_to_docmodel(
     return DocModel.model_validate(data)
 
 
+def parse_text_to_docmodel(
+    text: str,
+    *,
+    paper_id: str,
+    version: int,
+    title: str,
+    abstract: str | None,
+    source_tier: SourceTier,
+    parser_version: str,
+    schema_version: str,
+    generated_at: datetime,
+) -> DocModel:
+    """Build a minimal validated DocModel from normalized full text.
+
+    This is the last-rung PDF/GROBID fallback: it preserves the DocModel contract and stable
+    block refs even when no rich HTML source exists. It intentionally produces a single
+    paragraph block rather than inventing structure the source did not provide.
+    """
+    body = _WS_RE.sub(" ", text or "").strip()
+    section = {
+        "id": "s1",
+        "title": "",
+        "blocks": ([{"id": "s1.p1", "type": "paragraph", "text": body}] if body else []),
+    }
+    data = {
+        "meta": {
+            "paperId": paper_id,
+            "version": version,
+            "title": title,
+            **({"abstract": abstract} if abstract else {}),
+            "provenance": {
+                "sourceTier": source_tier.value,
+                "parserVersion": parser_version,
+                "schemaVersion": schema_version,
+                "generatedAt": generated_at,
+            },
+        },
+        "fullText": body,
+        "sections": [section],
+    }
+    return DocModel.model_validate(data)
+
+
 # --------------------------------------------------------------------------- sections
 
 

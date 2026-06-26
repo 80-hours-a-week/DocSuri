@@ -2102,3 +2102,27 @@ library_removed        저장 신호 철회 신호 가중치는 뭐에요??"
 **Context**: CONSTRUCTION — U1 Corpus Build and Test completion prompt logged before asking user.
 
 ---
+
+## U1 Corpus Construction — Review Fix 시작
+**Timestamp**: 2026-06-26T13:52:01Z
+**User Input**: "fix the issues"
+**AI Response**: "리뷰 지적 4건을 Code Generation 보정으로 처리한다: configured non-arXiv source wiring, DocModel PDF/GROBID fallback, structured `blockRefs` index contract, temporary GROBID 4xx retriable classification."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation review fix.
+
+---
+
+## U1 Corpus Construction — Review Fix 완료
+**Timestamp**: 2026-06-26T14:11:51Z
+**User Input**: ""
+**AI Response**: "리뷰 지적 4건을 수정했다. `CorpusSourceAdapterSet`을 refresh/pipeline에 주입하고 sourceRecord ingest 경로를 추가했으며, arXiv HTML 미가용 시 PDF/full-text fallback DocModel을 생성한다. `IndexRecord.blockRefs[]`를 구조화 필드로 추가하고 GROBID 429/일시적 4xx를 retriable로 분류했다. 검증: shared drift check 통과, ingestion pytest 129 passed / 1 skipped, ingestion ruff 통과."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation review fix verification.
+
+---
+
+## U1 Corpus Construction — Review Fix 추가 검증
+**Timestamp**: 2026-06-26T14:13:44Z
+**User Input**: ""
+**AI Response**: "shared/ops/discovery/summarization/frontend 소비자 검증을 추가 실행했다. shared pytest 66 passed, ops pytest 42 passed, discovery pytest 53 passed / 3 skipped, summarization pytest 116 passed / 3 skipped, frontend targeted vitest 19 passed, frontend typecheck passed, git diff --check passed."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation review fix cross-package verification.
+
+---

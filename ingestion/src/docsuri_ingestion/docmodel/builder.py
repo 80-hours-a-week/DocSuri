@@ -14,9 +14,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Protocol, runtime_checkable
 
-from docsuri_shared.dtos import DocModel, DocModelResultDTO, SourceUnavailableDTO
+from docsuri_shared.dtos import DocModel, DocModelResultDTO, SourceTier, SourceUnavailableDTO
 
-from docsuri_ingestion.docmodel.parser import parse_html_to_docmodel
+from docsuri_ingestion.docmodel.parser import parse_html_to_docmodel, parse_text_to_docmodel
 from docsuri_ingestion.domain.models import MetadataRecord
 from docsuri_ingestion.ports import DocModelSourcePort, DocModelStorePort
 
@@ -80,6 +80,61 @@ class DocModelBuilder:
             version=version,
             title=metadata.title,
             abstract=metadata.abstract or None,
+            source_tier=source_tier,
+            parser_version=self._parser_version,
+            schema_version=self._schema_version,
+            generated_at=self._clock.now(),
+        )
+        self._store.put(doc)
+        return DocModelResultDTO(status="ok", cached=False, docModel=doc)
+
+    def build_from_text(
+        self,
+        metadata: MetadataRecord,
+        text: str,
+        *,
+        source_tier: SourceTier = SourceTier.pdf,
+    ) -> DocModelResultDTO:
+        """Return/cache a minimal doc-model from already-fetched PDF/GROBID text."""
+        paper_id = metadata.paper_id
+        version = metadata.version
+        cached = self._store.get(paper_id, version)
+        if cached is not None:
+            return DocModelResultDTO(status="ok", cached=True, docModel=cached)
+        doc = parse_text_to_docmodel(
+            text,
+            paper_id=paper_id,
+            version=version,
+            title=metadata.title,
+            abstract=metadata.abstract or None,
+            source_tier=source_tier,
+            parser_version=self._parser_version,
+            schema_version=self._schema_version,
+            generated_at=self._clock.now(),
+        )
+        self._store.put(doc)
+        return DocModelResultDTO(status="ok", cached=False, docModel=doc)
+
+    def build_from_paper(
+        self,
+        paper_id: str,
+        version: int,
+        title: str,
+        abstract: str,
+        text: str,
+        *,
+        source_tier: SourceTier = SourceTier.pdf,
+    ) -> DocModelResultDTO:
+        """Return/cache a minimal doc-model for non-arXiv source records."""
+        cached = self._store.get(paper_id, version)
+        if cached is not None:
+            return DocModelResultDTO(status="ok", cached=True, docModel=cached)
+        doc = parse_text_to_docmodel(
+            text,
+            paper_id=paper_id,
+            version=version,
+            title=title,
+            abstract=abstract or None,
             source_tier=source_tier,
             parser_version=self._parser_version,
             schema_version=self._schema_version,

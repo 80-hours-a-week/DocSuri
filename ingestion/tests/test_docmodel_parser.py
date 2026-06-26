@@ -20,7 +20,7 @@ from docsuri_shared.dtos import (
     TableBlock,
 )
 
-from docsuri_ingestion.docmodel.parser import parse_html_to_docmodel
+from docsuri_ingestion.docmodel.parser import parse_html_to_docmodel, parse_text_to_docmodel
 from docsuri_ingestion.domain.assets import asset_id
 from docsuri_ingestion.domain.enums import AssetType
 
@@ -259,3 +259,24 @@ def test_span_only_fallback_when_no_sections() -> None:
     para = _blocks(doc.sections[0])[0]
     assert isinstance(para, ParagraphBlock)
     assert para.text == "Just a note."
+
+
+def test_text_fallback_docmodel_has_stable_paragraph_block_ref() -> None:
+    doc = parse_text_to_docmodel(
+        "First line.\n\nSecond line.",
+        paper_id="src-abc",
+        version=1,
+        title="PDF Only",
+        abstract="Abstract",
+        source_tier=SourceTier.pdf,
+        parser_version="docmodel-parser@1",
+        schema_version="1.0.0",
+        generated_at=_FIXED_TS,
+    )
+
+    assert doc.fullText == "First line. Second line."
+    block = doc.sections[0].blocks[0].root
+    assert isinstance(block, ParagraphBlock)
+    assert block.id == "s1.p1"
+    assert block.text == doc.fullText
+    assert doc.meta.provenance.sourceTier is SourceTier.pdf

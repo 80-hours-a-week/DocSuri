@@ -127,7 +127,7 @@ def test_ingest_one_eagerly_builds_doc_model_before_index() -> None:
     assert result.name == "NEW"
     assert len(store.put_calls) == 1
     assert index.bulk_calls == 1  # index write happened after the doc-model build
-    assert any("s1.p1" in record.lexicalTerms for record in index.records.values())
+    assert any(record.blockRefs == ["s1.p1"] for record in index.records.values())
     assert any(m[0] == "ingestion.docmodel.eager_build" for m in observability.metrics)
 
 
@@ -162,18 +162,24 @@ def test_ingest_one_eager_doc_model_new_and_changed_smoke() -> None:
 
     assert len(store.put_calls) == 2
     assert all(record.version == 2 for record in index.records.values())
-    assert any("s1.p1" in record.lexicalTerms for record in index.records.values())
+    assert any(record.blockRefs == ["s1.p1"] for record in index.records.values())
     assert index.index_stats().total_documents == len(index.records)
 
 
-def test_ingest_one_blocks_index_when_eager_doc_model_source_unavailable() -> None:
-    pipeline, _, index, _, _ = build_test_pipeline(
+def test_ingest_one_falls_back_to_text_doc_model_when_html_unavailable() -> None:
+    pipeline, _, index, _, observability = build_test_pipeline(
         doc_model_builder=_builder(_FakeSource(None), _FakeStore())
     )
 
-    with pytest.raises(PermanentIngestionError):
-        pipeline.ingest_one(
-            IngestionJob(job_id="i-2", kind=JobKind.INCREMENTAL, arxiv_ref="2401.00001v1")
-        )
+    result = pipeline.ingest_one(
+        IngestionJob(job_id="i-2", kind=JobKind.INCREMENTAL, arxiv_ref="2401.00001v1")
+    )
 
-    assert index.bulk_calls == 0
+    assert result is DedupDecision.NEW
+    assert index.bulk_calls == 1
+    assert any(record.blockRefs == ["s1.p1"] for record in index.records.values())
+    assert any(
+        metric[0] == "ingestion.docmodel.eager_build"
+        and metric[2]["status"] == "pdf_fallback"
+        for metric in observability.metrics
+    )

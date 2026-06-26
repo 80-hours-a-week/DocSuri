@@ -21,23 +21,27 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
 
 - `ingestion/src/docsuri_ingestion/application.py`
   - full-text 저장 후 index write 전에 DocModel을 eager build한다.
-  - DocModel source unavailable은 terminal parse failure로 처리해 불완전한 index 노출을 막는다.
+  - arXiv HTML/ar5iv가 없으면 이미 확보된 PDF/full-text fallback 텍스트로 최소 DocModel을 생성한다.
+  - Semantic Scholar/OpenAlex `sourceRecord` job도 PDF -> GROBID -> FullText -> DocModel -> chunk/embed/index 공통 경로를 탄다.
+  - source별 watermark와 canonical dedup state를 ingestion 완료 시 갱신한다.
   - tombstone 시 DocModel cache invalidation을 수행한다.
 
 - `ingestion/src/docsuri_ingestion/processors.py`
   - `Chunker.chunk_doc_model()`을 추가해 DocModel block 단위 chunk를 생성한다.
-  - chunk에 `block_refs`를 보존하고, 기존 OpenSearch DTO schema 변경 없이 `lexicalTerms`에 block id를 포함한다.
+  - chunk에 `block_refs`를 보존하고, `IndexRecord.blockRefs[]` 구조화 필드로 저장한다.
+  - `blockRefs`는 provenance/QT-9 검증용이며 BM25 `lexicalTerms` 검색 토큰에는 섞지 않는다.
 
 - `ingestion/src/docsuri_ingestion/corpus_sources.py`
   - arXiv HTML/PDF 우선순위는 기존 adapter를 재사용한다.
   - Semantic Scholar/OpenAlex는 PDF bytes를 메모리에서만 GROBID로 넘기고, 반환 artifact에는 PDF bytes를 저장하지 않는다.
+  - provider가 주입된 source는 incremental metadata와 PDF fetch 경로를 제공하며, 미주입 source는 refresh에서 metric으로 건너뛴다.
 
 - `ingestion/src/docsuri_ingestion/domain/canonical.py`
   - canonical key 우선순위는 DOI -> arXiv id -> title/author/year hash다.
   - source별 dedup state 저장 포트를 in-memory/Postgres에 추가했다.
 
 - `ingestion/src/docsuri_ingestion/domain/models.py`, `worker.py`, queue adapters
-  - retry/DLQ payload에 `sourceName`, `failureStage`, `canonicalKey`, `paperId`, `version`을 포함한다.
+  - retry/DLQ payload에 `sourceName`, `sourceRecord`, `failureStage`, `canonicalKey`, `paperId`, `version`을 포함한다.
 
 - `ingestion/src/docsuri_ingestion/adapters/aws.py`
   - OpenSearch candidate generation validation과 alias cutover 메서드를 추가했다.
@@ -45,6 +49,7 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
 
 - `ingestion/src/docsuri_ingestion/adapters/grobid.py`, `runtime.py`, `settings.py`
   - GROBID HTTP client와 runtime wiring을 추가했다.
+  - 429/일시적 4xx는 retriable로 분류하고, malformed PDF 성격의 4xx만 permanent로 둔다.
   - `DOCSURI_OPENSEARCH_ALIAS`, `DOCSURI_CORPUS_SOURCES`, `DOCSURI_GROBID_URL` 설정을 추가했다.
 
 - `ops/cdk/stacks/ingestion_stack.py`
@@ -73,8 +78,11 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
 ## 검증 결과
 
 - `shared/python`: `uv run python tools/generate.py --check` -> passed
-- `ingestion`: `uv run pytest` -> 121 passed, 1 skipped
+- `shared/python`: `uv run pytest` -> 66 passed
+- `ingestion`: `uv run pytest` -> 129 passed, 1 skipped
 - `ingestion`: `uv run ruff check .` -> passed
+- `ops`: `uv run pytest` -> 42 passed
+- `backend/modules/discovery`: `uv run pytest` -> 53 passed, 3 skipped
 - `backend/modules/summarization`: `uv run pytest` -> 116 passed, 3 skipped
 - `frontend`: targeted `pnpm exec vitest ...` -> 5 files, 19 tests passed
 - `frontend`: `pnpm exec tsc --noEmit` -> passed
@@ -87,7 +95,7 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
 - US-I1 Corpus seed/indexing: fake adapter NEW/CHANGED smoke test로 FullText -> DocModel -> chunk -> embed -> index path 확인.
 - US-I2 source별 incremental update: source enum, source adapter boundary, source별 watermark PBT.
 - US-I3 retry/DLQ/reprocess: DLQ payload metadata 보존 테스트.
-- QT-9 DocModel/index invariant: parser fullText projection, block_refs validation, schema drift check.
+- QT-9 DocModel/index invariant: parser fullText projection, structured `blockRefs[]`, block_refs validation, schema drift check.
 
 ## Extension Compliance
 

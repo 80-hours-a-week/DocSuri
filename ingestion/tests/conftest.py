@@ -25,6 +25,7 @@ def build_test_pipeline(
     arxiv=None,
     retry_attempts: int = 1,
     doc_model_builder=None,
+    corpus_sources=None,
 ):
     metadata = sample_metadata()
     arxiv = arxiv or FakeArxivSource([metadata])
@@ -49,5 +50,6 @@ def build_test_pipeline(
         resilience=resilience,
         failure_handler=IngestFailureHandler(queue, observability),
         doc_model_builder=doc_model_builder,
+        corpus_sources=corpus_sources,
     )
     return pipeline, control, vector_index, queue, observability

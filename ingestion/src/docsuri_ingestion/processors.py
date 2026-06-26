@@ -226,8 +226,7 @@ class IndexRecordAssembler:
         chunk: Chunk,
         vector: Sequence[float],
     ) -> IndexRecord:
-        block_refs = " ".join(chunk.block_refs)
-        lexical_terms = normalize_text(f"{paper.title} {paper.abstract} {chunk.text} {block_refs}")
+        lexical_terms = normalize_text(f"{paper.title} {paper.abstract} {chunk.text}")
         return IndexRecord(
             chunkId=chunk.chunk_id,
             paperId=paper.paper_id,
@@ -235,6 +234,7 @@ class IndexRecordAssembler:
             vector=list(vector),
             section=chunk.section,
             lexicalTerms=lexical_terms,
+            blockRefs=list(chunk.block_refs),
             title=paper.title,
             authors=list(paper.authors),
             year=paper.year,

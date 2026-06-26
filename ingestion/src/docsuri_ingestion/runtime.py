@@ -22,6 +22,7 @@ from .adapters.local import (
 from .adapters.postgres import PostgresControlPlaneStore
 from .application import IngestionPipelineService, RefreshOrchestrationService
 from .corpus_sources import CorpusSourceAdapterSet
+from .domain.enums import SourceName
 from .observability import LoggingObservabilityHub
 from .resilience import IngestFailureHandler, IngestionResilienceService
 from .settings import IngestionSettings
@@ -81,6 +82,7 @@ def build_production_runtime(settings: IngestionSettings) -> RuntimeServices:
             timeout_seconds=settings.request_timeout_seconds,
         )
     corpus_sources = CorpusSourceAdapterSet(arxiv=arxiv, grobid=grobid)
+    enabled_sources = _enabled_sources(settings.corpus_sources)
     control = PostgresControlPlaneStore(settings.control_plane_dsn or "")
     queue = SqsQueue(
         queue_url=settings.sqs_queue_url or "",
@@ -148,6 +150,7 @@ def build_production_runtime(settings: IngestionSettings) -> RuntimeServices:
         asset_store=asset_store,
         asset_source=asset_source,
         doc_model_builder=doc_model_builder,
+        corpus_sources=corpus_sources,
         embedding_v2=BedrockCohereEmbeddingPort(
             model_id=settings.bedrock_model_id_v2,
             region_name=settings.aws_region,
@@ -164,6 +167,8 @@ def build_production_runtime(settings: IngestionSettings) -> RuntimeServices:
         control_plane=control,
         queue=queue,
         observability=observability,
+        corpus_sources=corpus_sources,
+        enabled_sources=enabled_sources,
     )
     return RuntimeServices(
         pipeline=pipeline,
@@ -172,3 +177,8 @@ def build_production_runtime(settings: IngestionSettings) -> RuntimeServices:
         observability=observability,
         corpus_sources=corpus_sources,
     )
+
+
+def _enabled_sources(raw: str) -> tuple[SourceName, ...]:
+    sources = tuple(SourceName(part.strip()) for part in raw.split(",") if part.strip())
+    return sources or (SourceName.ARXIV,)

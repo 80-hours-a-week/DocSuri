@@ -45,6 +45,10 @@ class IndexRecord(BaseModel):
         ...,
         description='Analyzed text field over title + abstract + body tokens — the BM25 lexical field for hybrid retrieval (FR-2). INTERNAL — not exposed in external DTOs (SEC-9). Trace: BR-6.',
     )
+    blockRefs: list[str] = Field(
+        ...,
+        description='DocModel block ids covered by this chunk. Empty for legacy/plain-text chunks. INTERNAL provenance used by QT-9 BlockRef validation; not searched or exposed externally. Trace: BR-C8, BR-C13, QT-9.',
+    )
     title: str = Field(
         ...,
         description='Card field (FR-4). Paper title. Projects to ResultCardVM.title (dtos.md §1.1).',
