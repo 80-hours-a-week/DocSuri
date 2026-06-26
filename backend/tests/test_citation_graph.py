@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
-from types import SimpleNamespace
 from uuid import uuid4
 
 import httpx
