@@ -1983,3 +1983,11 @@ library_removed        저장 신호 철회 신호 가중치는 뭐에요??"
 **Context**: CONSTRUCTION — Pull request review follow-up comment.
 
 ---
+
+## U1 Corpus Construction — PR #225 브랜치명 CI 실패 정정
+**Timestamp**: 2026-06-26T08:37:18Z
+**User Input**: "CI failed because of the branch name."
+**AI Response**: "Branch name check 워크플로우가 `feature/`, `fix/`, `ci/`, `chore/`, `docs/`, `infra/` prefix만 허용하는 것을 확인했다. 현재 head branch `construction/u1-corpus-functional-design`를 문서 PR에 맞는 `docs/u1-corpus-construction-design`로 변경해 PR #225 CI를 재실행한다."
+**Context**: CONSTRUCTION — PR branch-name CI correction.
+
+---
