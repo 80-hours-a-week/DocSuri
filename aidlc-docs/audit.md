@@ -1975,3 +1975,11 @@ library_removed        저장 신호 철회 신호 가중치는 뭐에요??"
 **Context**: CONSTRUCTION — Scope correction to current Infrastructure Design phase.
 
 ---
+
+## U1 Corpus Construction — PR #225 Infrastructure 범위 정정 코멘트 게시
+**Timestamp**: 2026-06-26T08:34:34Z
+**User Input**: ""
+**AI Response**: "PR #225에 Infrastructure Design 단계 범위 정정 코멘트를 게시했다: https://github.com/80-hours-a-week/DocSuri/pull/225#issuecomment-4807882700"
+**Context**: CONSTRUCTION — Pull request review follow-up comment.
+
+---
