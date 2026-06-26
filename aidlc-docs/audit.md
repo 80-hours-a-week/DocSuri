@@ -1855,3 +1855,147 @@ library_removed        저장 신호 철회 신호 가중치는 뭐에요??"
 **Context**: PR preparation — temporary PR body correction.
 
 ---
+
+## U1 Corpus Construction — Functional Design 시작
+**Timestamp**: 2026-06-26T07:37:52Z
+**User Input**: "Good. Now move on th the next stage."
+**AI Response**: "U1 Corpus INCEPTION 산출물을 기준으로 Construction 단계의 U1 Functional Design을 시작한다. 작업 브랜치는 `construction/u1-corpus-functional-design`이며, 기존 U1 Functional Design의 arXiv-only/lazy DocModel/단일 watermark 문구를 U1 Corpus 기준으로 정정한다."
+**Context**: CONSTRUCTION — U1 Ingestion Functional Design.
+
+---
+
+## U1 Corpus Construction — Functional Design 완료 게이트
+**Timestamp**: 2026-06-26T07:42:16Z
+**User Input**: ""
+**AI Response**: "# 🔧 Functional Design Complete - U1 Ingestion\n\nU1 Corpus Functional Design 개정을 완료했다. `domain-entities.md`, `business-logic-model.md`, `business-rules.md`에 2026-06-26 Corpus 우선 적용 섹션을 추가해 멀티소스 수집, GROBID transient PDF, source-priority dedup, eager DocModel, DocModel Block chunking, OpenSearch generation/alias, source별 watermark, retry/DLQ, QT-9 불변식을 반영했다. 승인 요청: Functional Design을 검토한 뒤 승인하면 U1 NFR Requirements로 진행한다."
+**Context**: CONSTRUCTION — Functional Design completion prompt logged before asking user for approval.
+
+---
+
+## U1 Corpus Construction — NFR Requirements 시작
+**Timestamp**: 2026-06-26T07:44:51Z
+**User Input**: "continue to the next stage"
+**AI Response**: "Functional Design 승인을 기록하고 U1 NFR Requirements로 진행한다. 새 질문 없이 기존 U1 Corpus 결정(Q1~Q12=A), 현재 인프라 선택(OpenSearch, SQS, EventBridge, Bedrock Cohere v4, AWS Budget $1600)을 상속해 NFR 문서에 최소 우선 적용 개정을 추가한다."
+**Context**: CONSTRUCTION — U1 Ingestion NFR Requirements.
+
+---
+
+## U1 Corpus Construction — NFR Requirements 완료 게이트
+**Timestamp**: 2026-06-26T07:47:43Z
+**User Input**: ""
+**AI Response**: "# 📊 NFR Requirements Complete - U1 Ingestion\n\nU1 Corpus NFR Requirements 개정을 완료했다. `nfr-requirements.md`와 `tech-stack-decisions.md`에 2026-06-26 Corpus 우선 적용 섹션을 추가해 phase-1 범위, internal GROBID, Cohere Embed v4/specVersion v2, OpenSearch generation/alias, EventBridge+SQS/DLQ, private S3, $1600 account budget + U1 per-run hard stop, raw PDF transient, QT-9/PBT를 반영했다. 승인 요청: NFR Requirements를 검토한 뒤 승인하면 U1 NFR Design으로 진행한다."
+**Context**: CONSTRUCTION — NFR Requirements completion prompt logged before asking user for approval.
+
+---
+
+## U1 Corpus Construction — NFR Design 시작
+**Timestamp**: 2026-06-26T07:57:09Z
+**User Input**: "continue to the next stage"
+**AI Response**: "NFR Requirements 승인을 기록하고 U1 NFR Design으로 진행한다. 새 질문 없이 기존 NFR Requirements의 확정 스택(OpenSearch generation/alias, internal GROBID, SQS/DLQ, EventBridge, private S3, Bedrock Cohere v4, $1600 budget)을 logical components와 NFR design patterns에 최소 우선 적용 섹션으로 반영한다."
+**Context**: CONSTRUCTION — U1 Ingestion NFR Design.
+
+---
+
+## U1 Corpus Construction — NFR Design 완료 게이트
+**Timestamp**: 2026-06-26T07:59:53Z
+**User Input**: ""
+**AI Response**: "# 🎨 NFR Design Complete - U1 Ingestion\n\nU1 Corpus NFR Design 개정을 완료했다. `logical-components.md`에 EventBridge source scheduler, Corpus work queue/DLQ, Ingestion Worker, internal GROBID runtime, DocModel parser, Control Plane DB, private Corpus S3, Bedrock Cohere Embed v4, OpenSearch generation, ObservabilityHub를 추가했고, `nfr-design-patterns.md`에 stage-aware retry/DLQ, source-specific circuit breaker, cost hard-stop, generation cutover/rollback, parser hardening, QT-9 verification pattern을 추가했다. 승인 요청: NFR Design을 검토한 뒤 승인하면 U1 Infrastructure Design으로 진행한다."
+**Context**: CONSTRUCTION — NFR Design completion prompt logged before asking user for approval.
+
+---
+
+## U1 Corpus Construction — 설계 커밋 및 Infrastructure Design 시작
+**Timestamp**: 2026-06-26T08:02:26Z
+**User Input**: "commit and continue to the infrastructure design"
+**AI Response**: "U1 Corpus Functional Design, NFR Requirements, NFR Design 산출물을 커밋한 뒤 Infrastructure Design 단계로 진행한다."
+**Context**: CONSTRUCTION — Commit requested and Infrastructure Design continuation.
+
+---
+
+## U1 Corpus Construction — Infrastructure Design 완료 게이트
+**Timestamp**: 2026-06-26T08:05:42Z
+**User Input**: ""
+**AI Response**: "# 🏢 Infrastructure Design Complete - U1 Ingestion\n\nU1 Corpus Infrastructure Design 개정을 완료했다. 기존 AWS 인프라(EventBridge, SQS/DLQ, ECS Fargate ingestion worker, S3 papers bucket, RDS, OpenSearch, Bedrock, AWS Budget)를 재사용하고, internal GROBID sidecar, source별 scheduler, Corpus S3 prefixes, control-plane tables, IAM/network/alarms, rollout/rollback, alias cutover 순서를 추가했다. 승인 요청: Infrastructure Design을 검토한 뒤 승인하면 U1 Code Generation으로 진행한다."
+**Context**: CONSTRUCTION — Infrastructure Design completion prompt logged before asking user for approval.
+
+---
+
+## U1 Corpus Construction — develop 대상 PR 생성 요청
+**Timestamp**: 2026-06-26T08:08:44Z
+**User Input**: "make a PR to develop in Korean"
+**AI Response**: "U1 Corpus Infrastructure Design 산출물을 커밋하고 origin/develop 대상 PR을 한국어 제목과 본문으로 생성한다."
+**Context**: CONSTRUCTION — Infrastructure Design PR preparation.
+
+---
+
+## U1 Corpus Construction — develop 대상 PR 생성 완료
+**Timestamp**: 2026-06-26T08:10:00Z
+**User Input**: ""
+**AI Response**: "origin/develop 대상 PR #225를 생성했다: https://github.com/80-hours-a-week/DocSuri/pull/225"
+**Context**: CONSTRUCTION — Pull request created for review.
+
+---
+
+## U1 Corpus Construction — DocModel 전문 포함 리뷰 지적
+**Timestamp**: 2026-06-26T08:12:05Z
+**User Input**: "DocModel을 이번에 전문을 포함하도록 완성해야 하는데, 지금 DocModel이 그렇게 되어 있지 않은 것 같아."
+**AI Response**: "DocModel 계약과 실제 parser/schema를 확인한 결과 root DocModel에 전문 필드가 required로 보장되지 않는 갭을 확인했다. shared schema, generated DTO, parser, 최소 테스트, 관련 설계 문서에 전문 포함 계약을 반영한다."
+**Context**: CONSTRUCTION — PR #225 review correction before Code Generation.
+
+---
+
+## U1 Corpus Construction — DocModel 멀티모달 포함 리뷰 지적
+**Timestamp**: 2026-06-26T08:17:45Z
+**User Input**: "텍스트 뿐만 아니라 이미지, 수식, 도표 등을 포함해야 해"
+**AI Response**: "DocModel 완성형은 `fullText` 전문 텍스트 투영본만이 아니라 `sections[].blocks[]`에 paragraph/table/formula/figure/list/code를 보존해야 한다. 이미지 바이트는 포함하지 않고 AssetRef로 참조하며, 수식은 LaTeX, 표는 rows/cols 데이터로 유지하도록 schema, parser, tests, shared/U1 설계 문서를 보정한다."
+**Context**: CONSTRUCTION — PR #225 review correction before Code Generation.
+
+---
+
+## U1 Corpus Construction — DocModel 완성형 리뷰 보정 완료
+**Timestamp**: 2026-06-26T08:23:17Z
+**User Input**: ""
+**AI Response**: "DocModel schema에 required `fullText`를 추가하고 `sections[].blocks[]` 멀티모달 구조를 완성형 계약으로 명시했다. parser는 `fullText`를 읽기 순서로 생성하고, U7 structured translation은 번역된 blocks에서 `fullText`를 재투영한다. generated DTO, frontend type/mock, tests, shared/U1 설계 문서를 갱신했다. 검증: schema drift check, ingestion docmodel tests, summarization docmodel/orchestrator tests, frontend targeted vitest, frontend tsc, ruff, git diff --check 통과."
+**Context**: CONSTRUCTION — PR #225 review correction completed before committing.
+
+---
+
+## U1 Corpus Construction — PR #225 DocModel 보정 코멘트 게시
+**Timestamp**: 2026-06-26T08:25:52Z
+**User Input**: ""
+**AI Response**: "PR #225에 DocModel 완성형 계약 보정 요약과 검증 결과를 한국어 코멘트로 게시했다: https://github.com/80-hours-a-week/DocSuri/pull/225#issuecomment-4807778387"
+**Context**: CONSTRUCTION — Pull request review follow-up comment.
+
+---
+
+## U1 Corpus Construction — Infrastructure Design 단계 범위 정정
+**Timestamp**: 2026-06-26T08:32:21Z
+**User Input**: "we were in the infrastructure design phase. Apply the changes we've made until the same phase we were."
+**AI Response**: "Infrastructure Design 리뷰 게이트 상태에 맞추기 위해 PR #225에서 schema/code/test/frontend type 변경을 제거하고, DocModel `fullText` + multimodal blocks + AssetRef 저장 경계는 Functional/NFR/NFR Design/Infrastructure Design 문서까지만 반영한다. Code Generation은 시작하지 않는다."
+**Context**: CONSTRUCTION — Scope correction to current Infrastructure Design phase.
+
+---
+
+## U1 Corpus Construction — PR #225 Infrastructure 범위 정정 코멘트 게시
+**Timestamp**: 2026-06-26T08:34:34Z
+**User Input**: ""
+**AI Response**: "PR #225에 Infrastructure Design 단계 범위 정정 코멘트를 게시했다: https://github.com/80-hours-a-week/DocSuri/pull/225#issuecomment-4807882700"
+**Context**: CONSTRUCTION — Pull request review follow-up comment.
+
+---
+
+## U1 Corpus Construction — PR #225 브랜치명 CI 실패 정정
+**Timestamp**: 2026-06-26T08:37:18Z
+**User Input**: "CI failed because of the branch name."
+**AI Response**: "Branch name check 워크플로우가 `feature/`, `fix/`, `ci/`, `chore/`, `docs/`, `infra/` prefix만 허용하는 것을 확인했다. 현재 head branch `construction/u1-corpus-functional-design`를 문서 PR에 맞는 `docs/u1-corpus-construction-design`로 변경해 PR #225 CI를 재실행한다."
+**Context**: CONSTRUCTION — PR branch-name CI correction.
+
+---
+
+## U1 Corpus Construction — 브랜치명 정정 대체 PR 생성
+**Timestamp**: 2026-06-26T08:40:42Z
+**User Input**: ""
+**AI Response**: "GitHub branch rename 후 기존 PR #225가 closed 상태가 되어, 허용 브랜치명 `docs/u1-corpus-construction-design`에서 develop 대상 대체 PR #226을 생성했다: https://github.com/80-hours-a-week/DocSuri/pull/226. 새 Branch name check는 성공했고 나머지 CI는 진행 중이다."
+**Context**: CONSTRUCTION — Replacement pull request created with compliant branch name.
+
+---
