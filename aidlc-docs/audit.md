@@ -1653,6 +1653,38 @@
 
 ---
 
+## U1 Corpus 재인셉션 — Requirements Analysis 재개
+**Timestamp**: 2026-06-26T06:50:55Z
+**User Input**: "PR #220 is merged. now continue to the next task"
+**AI Response**: "PR #220 머지 후 다음 작업으로 U1 Corpus 생성 파이프라인 Requirements Analysis를 재개. 작업 기준을 `origin/develop`로 맞추기 위해 현재 브랜치가 `review/pr-221-fixes`이고 PR #221 관련 로컬 변경 3건이 남아 있음을 확인한 뒤, 해당 변경을 `codex-preserve-pr221-local-changes-before-u1-corpus` stash로 보존하고 `develop`로 전환했다. 이후 PR #220 산출물(`reinception-2026-06-charter.md`, `code-baseline-2026-06.md`, `requirement-verification-questions-u1-corpus.md`)을 읽고, 차터 D6 기준 답변 확정 및 `requirements.md` 반영 작업을 시작했다."
+**Context**: INCEPTION — Requirements Analysis 재진입(U1 Corpus). 기준 브랜치 정리 및 질문지 답변/요구사항 개정 착수.
+
+---
+
+## U1 Corpus 재인셉션 — Requirements Analysis 완료 게이트
+**Timestamp**: 2026-06-26T07:00:27Z
+**User Input**: ""
+**AI Response**: "U1 Corpus Requirements Analysis 개정을 완료하고 승인 게이트를 제시한다. 변경 내용: Q1~Q12 전부 A 확정, FR-6 멀티소스 Corpus 파이프라인 전면 개정, FR-18 phase-1 eager DocModel 정정, NFR-C1 U1 비용 게이트, RES-7/8/9 멀티소스 운영 신호, QT-9 U1 Corpus 불변식, C-1/§12 PDF 원문 미저장·transient GROBID 카브아웃, 추적성/aidlc-state 업데이트. 검증: `git diff --check` 통과, 빈 `[Answer]` 없음. 승인 요청: Requirements Analysis 산출물을 승인하면 User Stories/Workflow Planning으로 진행."
+**Context**: INCEPTION — Requirements Analysis completion prompt logged before asking user for approval.
+
+---
+
+## U1 Corpus 재인셉션 — User Stories 재개
+**Timestamp**: 2026-06-26T07:02:33Z
+**User Input**: "Approved. Continue to the next task."
+**AI Response**: "Requirements Analysis 승인으로 기록하고 User Stories 단계로 진행. 기존 `stories.md`에 인제스천 에픽(US-I1~I3)이 이미 있어 신규 에픽/페르소나를 만들지 않고, U1 Corpus 요구사항에 맞춰 기존 스토리를 최소 수정하는 방식으로 진행한다."
+**Context**: INCEPTION — User Stories Part 1/2 amendment for U1 Corpus.
+
+---
+
+## U1 Corpus 재인셉션 — User Stories 완료 게이트
+**Timestamp**: 2026-06-26T07:06:35Z
+**User Input**: ""
+**AI Response**: "# 📚 User Stories Complete\n\nUser stories generation has updated the existing Ingestion epic for U1 Corpus without adding a new epic or persona. Updated artifacts: `stories.md`, `personas.md`, `u1-corpus-user-stories-assessment.md`, `u1-corpus-story-generation-plan.md`. Review required before Workflow Planning."
+**Context**: INCEPTION — User Stories completion prompt logged before asking user for approval.
+
+---
+
 ## U8 Citation Graph — Code Fix
 **Timestamp**: 2026-06-26T00:55:00Z
 **User Input**: "apply your findings to the codebase"
@@ -1749,5 +1781,77 @@ library_removed        저장 신호 철회 신호 가중치는 뭐에요??"
 5. Updated `events.md` to add `DocModelBuildRequestedEvent` for the lazy doc-model build trigger queue.
 (Note: Gap 5 AccountDeleted DLQ tracking was already addressed via AccountPurged in U3)."
 **Context**: INCEPTION — Application Design (Design Critique Follow-up)
+
+---
+
+## U1 Corpus 재인셉션 — Workflow Planning 재개
+**Timestamp**: 2026-06-26T07:08:14Z
+**User Input**: "Approved. Continue to workflow planning."
+**AI Response**: "User Stories 승인으로 기록하고 Workflow Planning 단계로 진행. 기존 전역 `execution-plan.md`를 크게 재작성하지 않고 U1 Corpus 범위의 실행 계획을 `aidlc-docs/inception/plans/u1-corpus-workflow-plan.md`로 생성한다."
+**Context**: INCEPTION — Workflow Planning for U1 Corpus.
+
+---
+
+## U1 Corpus 재인셉션 — Workflow Planning 완료 게이트
+**Timestamp**: 2026-06-26T07:10:33Z
+**User Input**: ""
+**AI Response**: "# 📋 Workflow Planning Complete\n\nU1 Corpus 실행 계획을 생성했다. Application Design과 Units Generation은 기존 U1 경계 유지로 건너뛰고, Construction에서는 U1 Functional Design, NFR Requirements, NFR Design, Infrastructure Design, Code Generation, Build and Test를 실행한다. 계획 파일은 `aidlc-docs/inception/plans/u1-corpus-workflow-plan.md`이며 Mermaid 시각화와 텍스트 대체를 포함한다. 승인 요청: 계획을 승인하면 U1 Functional Design으로 진행."
+**Context**: INCEPTION — Workflow Planning completion prompt logged before asking user for approval.
+
+---
+
+## U1 Corpus 재인셉션 — Workflow Planning Skip Decision Review
+**Timestamp**: 2026-06-26T07:13:54Z
+**User Input**: "Review whether we should skip the application design and the units generation"
+**AI Response**: "Workflow Planning의 Application Design/Units Generation skip 결정을 재검토한다. 기준 파일 `application-design.md`, `units-generation.md`, U1 Corpus workflow plan, requirements/stories, 기존 application-design/unit-of-work 산출물과 현재 코드의 DocModel/GROBID/multisource 관련 상태를 대조한다."
+**Context**: INCEPTION — Review of Workflow Planning stage decisions before proceeding to Construction.
+
+---
+
+## U1 Corpus 재인셉션 — Application Design 개정 재개
+**Timestamp**: 2026-06-26T07:16:04Z
+**User Input**: "okay, continue to the next task."
+**AI Response**: "Skip decision review 결과를 승인한 것으로 기록하고, Units Generation은 계속 skip하되 Application Design은 U1-only amendment로 최소 실행한다. 전역 재설계나 신규 유닛 생성 없이 U1의 arXiv-only 설계를 멀티소스 Corpus/GROBID/eager DocModel/DocModel Block indexing 설계로 정정한다."
+**Context**: INCEPTION — Application Design amendment for U1 Corpus.
+
+---
+
+## U1 Corpus 재인셉션 — Application Design 완료 게이트
+**Timestamp**: 2026-06-26T07:16:04Z
+**User Input**: ""
+**AI Response**: "# 🏗️ Application Design Complete\n\nU1 Corpus Application Design 개정을 완료했다. 변경 범위는 U1 관련 Application Design 문서 5개와 U1 workflow/state tracking이며, Units Generation은 신규 유닛이 없어 계속 skip한다. 승인 요청: Application Design 개정을 승인하면 U1 Functional Design으로 진행."
+**Context**: INCEPTION — Application Design completion prompt logged before asking user for approval.
+
+---
+
+## U1 Corpus 재인셉션 — Units Generation 리뷰 재개
+**Timestamp**: 2026-06-26T07:24:00Z
+**User Input**: "2. I think we should at least review the units."
+**AI Response**: "사용자가 Units Generation 리뷰를 요청했으므로, 신규 유닛 생성 없이 기존 unit-of-work 산출물을 검토·최소 개정한다. 검토 기준: U1이 여전히 owner인지, U2/U7/U11이 capability read 소비자인지, 코드 의존 그래프가 비순환인지, arXiv-only 문구가 남아 있는지."
+**Context**: INCEPTION — Units Generation review for U1 Corpus.
+
+---
+
+## U1 Corpus 재인셉션 — Units Generation 완료 게이트
+**Timestamp**: 2026-06-26T07:26:23Z
+**User Input**: ""
+**AI Response**: "# 🔧 Units Generation Complete\n\nU1 Corpus Units Generation 리뷰를 완료했다. 신규 유닛은 만들지 않고 기존 U1 Ingestion owner를 유지했다. `unit-of-work.md`, `unit-of-work-dependency.md`, `unit-of-work-story-map.md`, `u1-corpus-units-review-plan.md`, `u1-corpus-workflow-plan.md`, `aidlc-state.md`를 갱신했다. 승인 요청: Units Generation 리뷰를 승인하면 U1 Functional Design으로 진행."
+**Context**: INCEPTION — Units Generation completion prompt logged before asking user for approval.
+
+---
+
+## U1 Corpus 재인셉션 — INCEPTION 승인 및 PR 작성
+**Timestamp**: 2026-06-26T07:28:29Z
+**User Input**: "Approved. Since the inception stage is finished, Add it as a PR to develop in Korean."
+**AI Response**: "Units Generation 리뷰 승인으로 기록하고 U1 Corpus INCEPTION을 완료 상태로 표시한다. 한국어 PR 본문 `202606261630_PR.md`를 작성한 뒤 브랜치 `docs/u1-corpus-requirements`를 `develop` 대상으로 PR 생성한다."
+**Context**: INCEPTION — Final approval, PR preparation against develop.
+
+---
+
+## U1 Corpus 재인셉션 — PR 임시 파일 정정
+**Timestamp**: 2026-06-26T07:30:00Z
+**User Input**: "wait, I thought  202606261630_PR.md as a temporate file."
+**AI Response**: "`202606261630_PR.md`는 커밋 대상에서 제외하고 repo copy를 삭제한다. 동일한 PR 본문은 `/tmp/docsuri-u1-corpus-pr-body.md`에 임시로 보관해 `gh pr create --body-file` 입력으로만 사용한다."
+**Context**: PR preparation — temporary PR body correction.
 
 ---
