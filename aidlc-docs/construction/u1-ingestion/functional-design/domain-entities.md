@@ -31,7 +31,7 @@
 |---|---|---|
 | **FullTextCandidate** | `sourceTier`, `payloadRef`, `payloadKind`(`HTML`/`PDF`), `licenseDecision`, `retrievedAt` | arXiv는 HTML 우선, 없으면 PDF. Semantic Scholar/OpenAlex는 PDF를 GROBID 입력으로만 사용한다. 원시 PDF는 transient이며 저장 대상이 아니다(C-1). |
 | **FullText** | `paperId`, `version`, `sourceTier`, `plainText`, `sections?`, `tables?`, `formulas?`, `figures?`, `qualitySignals` | DocModel 생성 입력. 저장 가능 대상은 정규화 결과와 provenance뿐이며 원시 PDF는 제외한다. |
-| **DocModel** | `paperId`, `version`, `sections[]`, `blocks[]`, `provenance`, `parserVersion`, `schemaVersion` | phase-1 Corpus 논문은 수집 시점에 eager 생성한다. Section/Block, table rows/cols, formula LaTeX/MathML, figure AssetRef, SourceTier를 포함한다. 이미지 비전 추론은 제외한다. |
+| **DocModel** | `paperId`, `version`, `fullText`, `sections[]`, `blocks[]`, `provenance`, `parserVersion`, `schemaVersion` | phase-1 Corpus 논문은 수집 시점에 eager 생성한다. `fullText`는 전문 텍스트 투영본이고, Section/Block은 paragraph/table/formula/figure/list/code를 보존한다. table rows/cols, formula LaTeX/MathML, figure AssetRef, SourceTier를 포함한다. 이미지 비전 추론은 제외한다. |
 | **DocModelBlockRef** | `paperId`, `version`, `sectionId`, `blockId`, `blockType` | chunk와 index record가 참조하는 근거 anchor. QT-9에서 모든 index record의 block id 존재성을 검증한다. |
 | **AssetRef** | `assetId`, `paperId`, `version`, `sourceTier`, `caption?`, `objectRef?` | 그림/표 이미지 자산 참조. 표의 주 표현은 DocModel table rows/cols이고, 비-HTML 폴백 시 표 crop 이미지는 보조 자산이다. |
 | **StoredCorpusArtifact** | `artifactType`(`FULLTEXT`/`DOCMODEL`/`ASSET`/`INDEX_GENERATION_MANIFEST`), `paperId`, `version`, `objectRef`, `checksum` | S3 저장 단위. public access 금지, 원시 PDF 저장 금지, `(paperId, version)` 정합 필수. |

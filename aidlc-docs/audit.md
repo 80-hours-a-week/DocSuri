@@ -1935,3 +1935,27 @@ library_removed        저장 신호 철회 신호 가중치는 뭐에요??"
 **Context**: CONSTRUCTION — Pull request created for review.
 
 ---
+
+## U1 Corpus Construction — DocModel 전문 포함 리뷰 지적
+**Timestamp**: 2026-06-26T08:12:05Z
+**User Input**: "DocModel을 이번에 전문을 포함하도록 완성해야 하는데, 지금 DocModel이 그렇게 되어 있지 않은 것 같아."
+**AI Response**: "DocModel 계약과 실제 parser/schema를 확인한 결과 root DocModel에 전문 필드가 required로 보장되지 않는 갭을 확인했다. shared schema, generated DTO, parser, 최소 테스트, 관련 설계 문서에 전문 포함 계약을 반영한다."
+**Context**: CONSTRUCTION — PR #225 review correction before Code Generation.
+
+---
+
+## U1 Corpus Construction — DocModel 멀티모달 포함 리뷰 지적
+**Timestamp**: 2026-06-26T08:17:45Z
+**User Input**: "텍스트 뿐만 아니라 이미지, 수식, 도표 등을 포함해야 해"
+**AI Response**: "DocModel 완성형은 `fullText` 전문 텍스트 투영본만이 아니라 `sections[].blocks[]`에 paragraph/table/formula/figure/list/code를 보존해야 한다. 이미지 바이트는 포함하지 않고 AssetRef로 참조하며, 수식은 LaTeX, 표는 rows/cols 데이터로 유지하도록 schema, parser, tests, shared/U1 설계 문서를 보정한다."
+**Context**: CONSTRUCTION — PR #225 review correction before Code Generation.
+
+---
+
+## U1 Corpus Construction — DocModel 완성형 리뷰 보정 완료
+**Timestamp**: 2026-06-26T08:23:17Z
+**User Input**: ""
+**AI Response**: "DocModel schema에 required `fullText`를 추가하고 `sections[].blocks[]` 멀티모달 구조를 완성형 계약으로 명시했다. parser는 `fullText`를 읽기 순서로 생성하고, U7 structured translation은 번역된 blocks에서 `fullText`를 재투영한다. generated DTO, frontend type/mock, tests, shared/U1 설계 문서를 갱신했다. 검증: schema drift check, ingestion docmodel tests, summarization docmodel/orchestrator tests, frontend targeted vitest, frontend tsc, ruff, git diff --check 통과."
+**Context**: CONSTRUCTION — PR #225 review correction completed before committing.
+
+---

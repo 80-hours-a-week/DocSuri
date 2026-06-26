@@ -25,6 +25,7 @@ const translationOk = {
   translation: {
     docModel: {
       meta: { paperId: '1', version: 1, title: '', provenance: {} },
+      fullText: '한국어',
       sections: [{ id: 's1', title: '', blocks: [{ id: 's1.p1', type: 'paragraph', text: '한국어' }] }],
     },
     keptTerms: ['Transformer'],

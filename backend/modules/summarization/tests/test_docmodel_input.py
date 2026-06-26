@@ -28,6 +28,10 @@ def _doc() -> DocModel:
                     "generatedAt": "2026-06-23T00:00:00Z",
                 },
             },
+            "fullText": (
+                "Results\n\nWe report accuracy.\n\nTable 1 Scores.\n\nModel | Acc\n\n"
+                "Ours | 0.953\n\nE=mc^2\n\nAblation\n\nSub finding."
+            ),
             "sections": [
                 {
                     "id": "s1",

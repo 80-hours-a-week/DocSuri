@@ -87,6 +87,7 @@ class StructuredTranslator:
         for i, (_sid, original, setter) in enumerate(fields):
             ko = translations.get(str(i))
             setter(ko if ko and ko.strip() else original)
+        doc_dict["fullText"] = project_full_text(doc_dict.get("sections") or [])
 
         return TranslationDraft(
             doc_model=DocModel.model_validate(doc_dict), kept_terms=tuple(kept)
@@ -122,6 +123,40 @@ def iter_text_fields(
 ) -> Iterator[tuple[str, str, Callable[[str], None]]]:
     for section in doc_dict.get("sections") or []:
         yield from _iter_section(section)
+
+
+def project_full_text(sections: list[dict[str, Any]]) -> str:
+    return "\n\n".join(part for section in sections for part in _section_text(section) if part)
+
+
+def _section_text(section: dict[str, Any]) -> list[str]:
+    parts: list[str] = []
+    if section.get("title"):
+        parts.append(section["title"])
+    parts.extend(_block_text(block) for block in section.get("blocks") or [])
+    for child in section.get("sections") or []:
+        parts.extend(_section_text(child))
+    return [p for p in parts if p]
+
+
+def _block_text(block: dict[str, Any]) -> str:
+    kind = block.get("type")
+    if kind in {"paragraph", "code"}:
+        return block.get("text", "")
+    if kind == "formula":
+        return " ".join(p for p in (block.get("anchorLabel", ""), block.get("latex", "")) if p)
+    if kind == "figure":
+        return " ".join(p for p in (block.get("anchorLabel", ""), block.get("caption", "")) if p)
+    if kind == "list":
+        return "\n".join(item.get("text", "") for item in block.get("items") or [])
+    if kind == "table":
+        rows = [
+            " | ".join(cell.get("text", "") for cell in row.get("cells", []))
+            for row in block.get("rows") or []
+        ]
+        header = " ".join(p for p in (block.get("anchorLabel", ""), block.get("caption", "")) if p)
+        return "\n".join(p for p in (header, *rows) if p)
+    return ""
 
 
 def _iter_section(

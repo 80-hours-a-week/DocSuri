@@ -370,16 +370,20 @@ class Section(BaseModel):
 
 class DocModel(BaseModel):
     """
-    The structured paper artifact: a nested section tree of typed content blocks. Tables are DATA (rows/cols), formulas are LaTeX, figures/table-images are webp references by assetId (pixels are NOT embedded — base64 bloat avoided; reuse assets/{paperId}/{version}/{assetId}.webp). Deterministic: same source HTML -> same DocModel (LLM extraction forbidden). Trace: D1, D8, P7.
+    The complete structured paper artifact: `fullText` is the reading-order normalized text projection, while `sections` preserve typed multimodal blocks. Tables are DATA (rows/cols), formulas are LaTeX, and figures/table-images are webp references by assetId (pixels are NOT embedded — base64 bloat avoided; reuse assets/{paperId}/{version}/{assetId}.webp). Deterministic: same source HTML -> same DocModel (LLM extraction forbidden). Trace: D1, D8, P7.
     """
 
     model_config = ConfigDict(
         extra='forbid',
     )
     meta: DocModelMeta
+    fullText: str = Field(
+        ...,
+        description='Reading-order normalized text projection of the complete paper, derived from every text-bearing section/block: section titles, paragraphs, table captions/cells, formula LaTeX, figure captions, list items, and code. This is for text-only consumers; multimodal consumers MUST use `sections` and `assetRef` so images, formulas, and tables remain structured.',
+    )
     sections: list[Section] = Field(
         ...,
-        description='Top-level sections in reading order; each may nest subsections (recursive). The rich-view DocTOC and the summary map-reduce split (P3) both consume this tree. Trace: Q1-decision (nested section tree).',
+        description='Top-level sections in reading order; each may nest subsections (recursive). The rich-view DocTOC, summary map-reduce split (P3), full-document translation, grounding, and agents all consume this tree so text, tables, formulas, figures, lists, and code stay addressable by deterministic ids. Trace: Q1-decision (nested section tree).',
     )
 
 

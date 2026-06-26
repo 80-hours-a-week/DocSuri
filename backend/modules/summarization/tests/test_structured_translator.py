@@ -43,6 +43,11 @@ def _rich_doc() -> DocModel:
                     "generatedAt": "1970-01-01T00:00:00Z",
                 },
             },
+            "fullText": (
+                "Introduction\n\nWe propose a model.\n\nE=mc^2\n\nprint('x')\n\n"
+                "Table 1 Accuracy comparison\n\nMethod | 95.3\n\nfirst point\n"
+                "second point\n\nBackground\n\nPrior work."
+            ),
             "sections": [
                 {
                     "id": "s1",
@@ -104,6 +109,10 @@ def test_translates_text_fields_and_preserves_structure() -> None:
     # formula latex + code text verbatim (never translated)
     assert blocks["s1.eq1"].latex == "E=mc^2"
     assert blocks["s1.code1"].text == "print('x')"
+    assert "번역:Introduction" in doc.fullText
+    assert "번역:We propose a model." in doc.fullText
+    assert "E=mc^2" in doc.fullText
+    assert "Method | 95.3" in doc.fullText
     # ids preserved, kept terms surfaced
     assert blocks["s1.tbl1"].anchorLabel == "Table 1"
     assert draft.kept_terms == ("BERT",)
@@ -138,6 +147,7 @@ def test_duplicate_block_ids_translate_independently() -> None:
                     "generatedAt": "1970-01-01T00:00:00Z",
                 },
             },
+            "fullText": "first\n\nsecond",
             "sections": [
                 {
                     "id": "s1",

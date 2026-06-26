@@ -103,6 +103,19 @@ def test_meta_and_provenance() -> None:
     assert doc.meta.provenance.parserVersion == "docmodel-parser@1"
 
 
+def test_full_text_projection_covers_text_and_multimodal_captions() -> None:
+    doc = _parse()
+    assert "Introduction" in doc.fullText
+    assert "We study \\(x^{2}\\) models." in doc.fullText
+    assert "(1) E = mc^{2}" in doc.fullText
+    assert "Table 1 Main results." in doc.fullText
+    assert "Group | Acc" in doc.fullText
+    assert "A | B | 0.92" in doc.fullText
+    assert "Figure 1 A plot." in doc.fullText
+    assert "def f():\n    return 1" in doc.fullText
+    assert "Method text." in doc.fullText
+
+
 def test_nested_section_tree_and_ids() -> None:
     doc = _parse()
     assert [s.id for s in doc.sections] == ["s1", "s2"]

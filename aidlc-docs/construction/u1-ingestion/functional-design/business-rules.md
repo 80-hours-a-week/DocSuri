@@ -23,7 +23,7 @@
 | **BR-C4 (PaperId 일반화)** | `PaperId`는 더 이상 arXiv id 전용이 아니다. DOI/arXiv id/normalized tuple 기반 canonical id이며, 모든 저장·인덱스·DocModel 참조는 `(paperId, version)`을 공통 키로 사용한다. | FR-6, FR-18, QT-9, U1 Corpus Q9=A |
 | **BR-C5 (phase-1 범위와 비용 게이트)** | 초기 구축은 최근 AI/ML 1-2년, OA/허용 라이선스, eager 비용 상한 안으로 제한한다. 비용 임계치 도달 시 후순위 item은 보류 또는 backfill/DLQ 경로로 이월하며 기존 active index를 손상하지 않는다. | NFR-C1, U1 Corpus Q12=A |
 | **BR-C6 (eager DocModel)** | phase-1 Corpus에 편입된 논문은 수집 시점에 DocModel 완성형을 eager 생성한다. lazy/on-demand build는 누락분, 재빌드, 백필, phase-1 밖 논문 보강에만 허용한다. | FR-6, FR-18, U1 Corpus Q5=A |
-| **BR-C7 (DocModel 완성형)** | DocModel은 Section/Block, table rows/cols, formula LaTeX/MathML, figure AssetRef, provenance/sourceTier를 포함한다. 이미지 비전 추론은 하지 않는다. | FR-6, FR-17, FR-18, U1 Corpus Q4=A |
+| **BR-C7 (DocModel 완성형)** | DocModel은 `fullText` 전문 텍스트 투영본과 Section/Block 구조를 모두 포함한다. 구조 블록은 paragraph/table/formula/figure/list/code이며, table rows/cols, formula LaTeX/MathML, figure AssetRef, provenance/sourceTier를 포함한다. 이미지 바이트/base64/서명 URL은 넣지 않고 AssetRef로 참조한다. 이미지 비전 추론은 하지 않는다. | FR-6, FR-17, FR-18, U1 Corpus Q4=A |
 | **BR-C8 (DocModel Block chunking)** | 인덱싱 source는 FullText plain text가 아니라 DocModel Block이다. Chunk는 block boundary를 존중하고 section context를 포함하며, 모든 chunk/index record는 실재 DocModel block id를 참조해야 한다. | FR-6, FR-5, QT-9, U1 Corpus Q6/Q7=A |
 | **BR-C9 (Embedding/vector spec)** | Cohere Embed v4/specVersion v2를 유지한다. 이번 작업은 임베딩 모델 변경이 아니라 index source/schema generation 전환이다. | FR-6, FR-21, U1 Corpus Q8=A |
 | **BR-C10 (Index generation cutover)** | DocModel 기반 OpenSearch index generation을 새로 만들고, QT-9와 smoke check 통과 전 alias를 전환하지 않는다. partial generation은 검색에 노출하지 않는다. | FR-6, NFR-R1, QT-9 |
@@ -40,7 +40,7 @@
 | **P-C1 multisource dedup idempotency** | 같은 SourcePaperRecord 집합을 임의 순서/중복으로 처리해도 canonical `(paperId, version)`과 winning source가 동일하다. | PBT-07/08 |
 | **P-C2 source watermark monotonicity** | `advanceWatermark(source)`는 source별로만 전진하며 역행하지 않는다. | PBT-08 |
 | **P-C3 version consistency** | 모든 StoredCorpusArtifact, DocModelChunk, CorpusIndexRecord, generation manifest가 같은 `(paperId, version)`을 공유한다. | PBT-08/09 |
-| **P-C4 DocModel schema validation** | 유효 DocModel은 schema roundtrip을 통과하고, block id 누락/중복/잘못된 AssetRef/잘못된 SourceTier는 negative validation에서 실패한다. | PBT-09 |
+| **P-C4 DocModel schema validation** | 유효 DocModel은 `fullText`와 멀티모달 Section/Block schema roundtrip을 통과하고, block id 누락/중복/잘못된 AssetRef/잘못된 SourceTier는 negative validation에서 실패한다. | PBT-09 |
 | **P-C5 block reference integrity** | 모든 CorpusIndexRecord의 `blockRefs[]`는 해당 DocModel 안에 존재한다. | PBT-08/09 |
 | **P-C6 retry/DLQ idempotency** | retry와 DLQ reprocess를 반복해도 index record, DocModel artifact, provenance가 중복 생성되지 않는다. | PBT-08 |
 | **P-C7 raw PDF non-storage** | PDF 입력 경로를 처리해도 영속 artifact 목록에 raw PDF content/object가 존재하지 않는다. | PBT-02/03 |
@@ -86,7 +86,7 @@
 | **BR-20 (전문 보관·공개 차단)** | **Q2=C 활성**: OA 전문 원천을 오브젝트 스토리지 보관(StoredFullText/ObjectRef), **공개 차단(SEC-9)**, 재구축·재처리 재사용. at-rest 암호화/TLS(SEC-1, NFR Q17). | **SEC-9**, SEC-1, RES-2 |
 | **BR-21 (본문 크기 정책)** | **Q2=B**: 인덱싱 대상=초록만이므로 본문 크기가 벡터 비용에 영향 없음. 전문은 S3 보관만(BR-20) — 과대 전문 취득 제한은 S3 스토리지 비용 관점에서만 적용. | FR-6, NFR-C1 |
 | **BR-29 (전문 추출 소스·형식)** | **결정 D 활성**(FD plan `사후 결정` Q18=D; #139 근원=추출 소스·형식 미설계). 전문은 **arXiv HTML 우선(native → ar5iv) → PDF 폴백**으로 취득한다 — HTML은 *가장 깨끗한 평문을 뽑는 소스*, PDF는 폴백(커버리지 스파이크: native 단독 34%·ar5iv 포함 90% → **ar5iv 필수**, HTML 전무 ~9%는 PDF 폴백 실필요). **보관=정규화 평문(`.txt`)** — **인덱스 청킹·검색 투영용으로 유지**(인덱싱 권위; Q4: doc-model=진실원천, `.txt`=파생 평문). **e-print(LaTeX) 미해제 디코딩 금지** — gzip/tar 페이로드를 텍스트로 디코딩하지 않음(`arxiv.py:73` 결함 제거); 단 doc-model 폴백 단계에서 *해제 후* LaTeX 파싱은 허용(BR-30, Q6 폴백 사다리). HTML 부재는 폴백(거부 아님); 추출·평문화 실패는 BR-15 분류(PARSE/FETCH). **피벗(doc-model)**: 수식·표·그림의 리치 렌더/보관은 더 이상 범위 밖이 아님 — **doc-model로 구조화**(BR-30)하고 자체 리치뷰가 렌더(D4). 앵커 하이라이트 계약 유지(BR-SF). on-demand 비전은 에이전트 단계(D5). | **D**, Q4, Q6, SEC-5, BR-15/19/20/30 |
-| **BR-30 (doc-model 구조·생성, 피벗 2026-06-23)** | **결정 D1·D2·D6 활성**(SSOT=`construction/plans/docmodel-foundation-pivot-plan.md`). doc-model = arXiv HTML **결정적 파싱 → JSON**(`doc-model/{paperId}/v{ver}.json`): 섹션/블록·앵커 · **표=구조화 데이터(rows/cols)** · **수식=LaTeX(MathML 변환)** · **그림/표이미지=webp `assetId` 참조**(픽셀·메타는 §6/FR-17 산출물 재사용 — **재추출 0**). **LLM 추출 금지**(표 숫자 환각 방지) — 결정적 파서만, 동일 HTML→동일 doc-model(P7). **생성=lazy on-demand + `(paperId, version)` 캐시**(D6): 첫 요약/열람/에이전트 사용 시 생성, version 변경 시 무효화(Q5); `ingestOne` eager 아님(인덱스 hot path 비차단). 생성 폴백 사다리=`native HTML → ar5iv → e-print LaTeX → (최후) PDF 파싱`(Q6). 알고리즘은 BLM §7. | **D1/D2/D6**, Q4/Q5/Q6, BR-29, FR-17 |
+| **BR-30 (doc-model 구조·생성, 피벗 2026-06-23; Corpus 개정 2026-06-26)** | **결정 D1·D2·D6 활성**(SSOT=`construction/plans/docmodel-foundation-pivot-plan.md`). doc-model = HTML/GROBID 결과의 **결정적 파싱 → JSON**(`doc-model/{paperId}/v{ver}.json`): **`fullText` 전문 텍스트 투영본** · 섹션/블록·앵커 · **표=구조화 데이터(rows/cols)** · **수식=LaTeX(MathML 변환)** · **그림/표이미지=webp `assetId` 참조**(픽셀·메타는 §6/FR-17 산출물 재사용 — **재추출 0**). **LLM 추출 금지**(표 숫자 환각 방지) — 결정적 파서만, 동일 소스→동일 doc-model(P7). **Corpus phase-1 생성=eager + `(paperId, version)` 캐시**(BR-C6): legacy lazy on-demand는 누락분·재빌드·백필 호환 경로다. 생성 폴백 사다리=`native HTML → ar5iv → e-print LaTeX → (최후) PDF/GROBID 파싱`(Q6). 알고리즘은 BLM §7. | **D1/D2/D6**, Q4/Q5/Q6, BR-29, FR-17 |
 
 ---
 
