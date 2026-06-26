@@ -68,6 +68,9 @@ export async function GET(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
 export async function POST(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
   return proxy(req, (await ctx.params).path);
 }
+export async function PATCH(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
+  return proxy(req, (await ctx.params).path);
+}
 export async function DELETE(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
   return proxy(req, (await ctx.params).path);
 }
