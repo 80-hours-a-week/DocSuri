@@ -119,7 +119,8 @@ async def test_redis_snapshot_store_roundtrips_with_ttl(monkeypatch) -> None:
             assert url == "redis://cache"
             return fake_client
 
-    monkeypatch.setitem(sys.modules, "redis.asyncio", SimpleNamespace(Redis=FakeRedis))
+    import redis.asyncio
+    monkeypatch.setattr(redis.asyncio, "Redis", FakeRedis)
     monkeypatch.setenv("CITATION_GRAPH_SNAPSHOT_TTL_SECONDS", "30")
 
     store = controller.RedisSnapshotStore("redis://cache", "cg:")
