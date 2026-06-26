@@ -1911,3 +1911,19 @@ library_removed        저장 신호 철회 신호 가중치는 뭐에요??"
 **Context**: CONSTRUCTION — Commit requested and Infrastructure Design continuation.
 
 ---
+
+## U1 Corpus Construction — Infrastructure Design 완료 게이트
+**Timestamp**: 2026-06-26T08:05:42Z
+**User Input**: ""
+**AI Response**: "# 🏢 Infrastructure Design Complete - U1 Ingestion\n\nU1 Corpus Infrastructure Design 개정을 완료했다. 기존 AWS 인프라(EventBridge, SQS/DLQ, ECS Fargate ingestion worker, S3 papers bucket, RDS, OpenSearch, Bedrock, AWS Budget)를 재사용하고, internal GROBID sidecar, source별 scheduler, Corpus S3 prefixes, control-plane tables, IAM/network/alarms, rollout/rollback, alias cutover 순서를 추가했다. 승인 요청: Infrastructure Design을 검토한 뒤 승인하면 U1 Code Generation으로 진행한다."
+**Context**: CONSTRUCTION — Infrastructure Design completion prompt logged before asking user for approval.
+
+---
+
+## U1 Corpus Construction — develop 대상 PR 생성 요청
+**Timestamp**: 2026-06-26T08:08:44Z
+**User Input**: "make a PR to develop in Korean"
+**AI Response**: "U1 Corpus Infrastructure Design 산출물을 커밋하고 origin/develop 대상 PR을 한국어 제목과 본문으로 생성한다."
+**Context**: CONSTRUCTION — Infrastructure Design PR preparation.
+
+---
