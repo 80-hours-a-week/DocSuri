@@ -1959,3 +1959,11 @@ library_removed        저장 신호 철회 신호 가중치는 뭐에요??"
 **Context**: CONSTRUCTION — PR #225 review correction completed before committing.
 
 ---
+
+## U1 Corpus Construction — PR #225 DocModel 보정 코멘트 게시
+**Timestamp**: 2026-06-26T08:25:52Z
+**User Input**: ""
+**AI Response**: "PR #225에 DocModel 완성형 계약 보정 요약과 검증 결과를 한국어 코멘트로 게시했다: https://github.com/80-hours-a-week/DocSuri/pull/225#issuecomment-4807778387"
+**Context**: CONSTRUCTION — Pull request review follow-up comment.
+
+---
