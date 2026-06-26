@@ -1652,6 +1652,12 @@
 **Context**: CONSTRUCTION — U3 Accounts FR-27 OIDC 조정 코어 완료·검증. 리뷰 게이트 대기. 다음=FR-27 OIDC 트랜스포트+컨트롤러 또는 일시정지(비용).
 
 ---
+
+## U8 Citation Graph — Code Fix
+**Timestamp**: 2026-06-26T00:55:00Z
+**User Input**: "apply your findings to the codebase"
+**AI Response**: "U8 Citation Graph의 단위 리뷰 산출물(`aidlc-unit-review-u8.md`)에서 발견된 블로킹 이슈들을 수정함. 1) 백엔드 `CitationEdge` DTO를 프론트엔드(`frontend/types/citationGraph.ts`) 요구사항에 맞게 `source`, `target`으로 갱신. 2) 프론트엔드의 `UnresolvedCitation`을 백엔드의 구조화된 객체 형식에 맞게 갱신. 3) `RedisSnapshotStore`의 동기화된 I/O가 이벤트 루프를 블로킹하는 문제를 방지하기 위해 `redis.asyncio`를 도입하고 `get`/`set`을 비동기(`async`)로 갱신함. `test_citation_graph.py`의 관련 테스트들도 비동기 환경에 맞게 갱신함."
+**Context**: CONSTRUCTION — U8 Citation Graph 단위 리뷰(Unit Review) 결함 수정 완료.
 ## Code Generation
 **Timestamp**: 2026-06-25T09:14:42Z
 **User Input**: "좋아요. 이제 버튼을 프론트에 만들어 연결하려고 합니다. mypage/setting에, 전에 만들었던 삭제와 초기화 기능을 여기다 자연스럽게 추가하고, 백엔드와 연결해 주세요."
