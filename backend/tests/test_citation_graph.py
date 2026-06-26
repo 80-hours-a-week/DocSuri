@@ -257,9 +257,75 @@ def test_semantic_scholar_provider_url_encodes_path(monkeypatch) -> None:
 
     monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
 
-    asyncio.run(controller.SemanticScholarProvider().references("10.1/a b/../../x", 1))
+    asyncio.run(controller.SemanticScholarProvider().references("ARXIV:1706.03762v7", 1))
 
-    assert captured["url"].endswith("/paper/10.1%2Fa%20b%2F..%2F..%2Fx/references")
+    assert captured["url"].endswith("/paper/ARXIV%3A1706.03762/references")
+
+
+def test_semantic_scholar_provider_prefixes_raw_arxiv_ids(monkeypatch) -> None:
+    captured = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def raise_for_status(self) -> None:
+            pass
+
+        def json(self):
+            return {"data": []}
+
+    class FakeClient:
+        def __init__(self, timeout: float) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args) -> None:
+            pass
+
+        async def get(self, url: str, params, headers):
+            captured["url"] = url
+            return FakeResponse()
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+
+    asyncio.run(controller.SemanticScholarProvider().references("1706.03762v7", 1))
+
+    assert captured["url"].endswith("/paper/ARXIV%3A1706.03762/references")
+
+
+def test_semantic_scholar_provider_prefixes_raw_doi_ids(monkeypatch) -> None:
+    captured = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def raise_for_status(self) -> None:
+            pass
+
+        def json(self):
+            return {"data": []}
+
+    class FakeClient:
+        def __init__(self, timeout: float) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args) -> None:
+            pass
+
+        async def get(self, url: str, params, headers):
+            captured["url"] = url
+            return FakeResponse()
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+
+    asyncio.run(controller.SemanticScholarProvider().references("10.5555/3295222.3295349", 1))
+
+    assert captured["url"].endswith("/paper/DOI%3A10.5555%2F3295222.3295349/references")
 
 
 def test_emit_ignores_observability_without_emit_log() -> None:
