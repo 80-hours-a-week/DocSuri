@@ -32,12 +32,12 @@ export function recordSearchExecuted(query: string, resultCount: number): void {
   });
 }
 
-export function recordPaperOpened(paperId: string): void {
+export function recordPaperOpened(paperId: string, title?: string): void {
   sendBehaviorEvent({
     eventType: 'paper_opened',
     subject: { kind: 'paper', paperId },
     source: 'frontend_anchor',
-    metadata: { entrySurface: 'detail' },
+    metadata: { entrySurface: 'detail', ...(title ? { title } : {}) },
     dedupeKey: `paper:${paperId}:${dedupeBucket()}`,
   });
 }
