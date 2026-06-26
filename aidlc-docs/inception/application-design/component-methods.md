@@ -167,7 +167,7 @@
 
 | 컴포넌트 | 시그니처 | 목적 | 입력 → 출력 |
 |---|---|---|---|
-| ApiGatewayMiddleware | `handle(request: HttpRequest, next: DomainHandler) -> HttpResponse` | 전처리 체인 적용→핸들러 위임; U2 라우트는 응답 엣지에서 GroundingEnforcementHook.enforce 적용; 미처리 예외 fail-closed 변환 | HttpRequest, DomainHandler → HttpResponse(정상 \| 일반화 에러) |
+| ApiGatewayMiddleware | `handle(request: HttpRequest, next: DomainHandler) -> HttpResponse` | 전처리 체인 적용→핸들러 위임; U2 라우트는 응답 엣지에서 GroundingEnforcementHook.enforce 적용; enforce에서 발생한 모든 예외는 명시적으로 catch하여 fail-closed(toProductionError) 처리함으로써 우회 차단 | HttpRequest, DomainHandler → HttpResponse(정상 \| 일반화 에러) |
 | ApiGatewayMiddleware | `applySecurityHeaders(response: HttpResponse) -> HttpResponse` | 제한 CSP·보안 헤더 부착(frame-ancestors=self 카브아웃) | HttpResponse → HttpResponse |
 | ApiGatewayMiddleware | `toProductionError(err: Throwable, requestId: RequestId) -> HttpResponse` | 내부 예외를 스택 트레이스 비노출 일반화 에러로 매핑(fail-closed) | Throwable, RequestId → HttpResponse(generic) |
 | AuthnAuthzGuard | `authenticate(request: HttpRequest) -> Result<Principal, AuthError>` | 세션/토큰 서버측 검증(U3.SessionVerifier 위임) | HttpRequest → Result<Principal, AuthError> |
