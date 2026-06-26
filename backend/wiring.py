@@ -482,7 +482,7 @@ def _mount_personalization(app: FastAPI, settings: Settings, result: MountResult
 # (minus the `_mount_` prefix) labels it in MountResult / `/readyz`.
 _INTEGRATIONS = (
     _mount_accounts,
-    _mount_library,    # library before discovery so session_factory is available for direct publisher
+    _mount_library,    # before discovery: session_factory must be on app.state first
     _mount_discovery,
     _mount_mypage,
     _mount_ops,
