@@ -67,6 +67,7 @@ def test_citation_tree_bounds_and_unresolved(monkeypatch) -> None:
     assert body["nodes"][0]["nodeId"] == "2101.00001"
     assert body["nodes"][0]["saveable"] is True
     assert body["unresolved"][0]["title"] == "Unresolved paper"
+    assert body["unresolved"][0]["year"] == 2020
 
 
 def test_citation_tree_marks_nodes_that_exist_in_corpus() -> None:

@@ -16,6 +16,7 @@ export interface CitationNode {
 export interface CitationEdge {
   source: string;
   target: string;
+  depth: number;
 }
 
 export interface UnresolvedCitation {
