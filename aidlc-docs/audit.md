@@ -1855,3 +1855,59 @@ library_removed        저장 신호 철회 신호 가중치는 뭐에요??"
 **Context**: PR preparation — temporary PR body correction.
 
 ---
+
+## U1 Corpus Construction — Functional Design 시작
+**Timestamp**: 2026-06-26T07:37:52Z
+**User Input**: "Good. Now move on th the next stage."
+**AI Response**: "U1 Corpus INCEPTION 산출물을 기준으로 Construction 단계의 U1 Functional Design을 시작한다. 작업 브랜치는 `construction/u1-corpus-functional-design`이며, 기존 U1 Functional Design의 arXiv-only/lazy DocModel/단일 watermark 문구를 U1 Corpus 기준으로 정정한다."
+**Context**: CONSTRUCTION — U1 Ingestion Functional Design.
+
+---
+
+## U1 Corpus Construction — Functional Design 완료 게이트
+**Timestamp**: 2026-06-26T07:42:16Z
+**User Input**: ""
+**AI Response**: "# 🔧 Functional Design Complete - U1 Ingestion\n\nU1 Corpus Functional Design 개정을 완료했다. `domain-entities.md`, `business-logic-model.md`, `business-rules.md`에 2026-06-26 Corpus 우선 적용 섹션을 추가해 멀티소스 수집, GROBID transient PDF, source-priority dedup, eager DocModel, DocModel Block chunking, OpenSearch generation/alias, source별 watermark, retry/DLQ, QT-9 불변식을 반영했다. 승인 요청: Functional Design을 검토한 뒤 승인하면 U1 NFR Requirements로 진행한다."
+**Context**: CONSTRUCTION — Functional Design completion prompt logged before asking user for approval.
+
+---
+
+## U1 Corpus Construction — NFR Requirements 시작
+**Timestamp**: 2026-06-26T07:44:51Z
+**User Input**: "continue to the next stage"
+**AI Response**: "Functional Design 승인을 기록하고 U1 NFR Requirements로 진행한다. 새 질문 없이 기존 U1 Corpus 결정(Q1~Q12=A), 현재 인프라 선택(OpenSearch, SQS, EventBridge, Bedrock Cohere v4, AWS Budget $1600)을 상속해 NFR 문서에 최소 우선 적용 개정을 추가한다."
+**Context**: CONSTRUCTION — U1 Ingestion NFR Requirements.
+
+---
+
+## U1 Corpus Construction — NFR Requirements 완료 게이트
+**Timestamp**: 2026-06-26T07:47:43Z
+**User Input**: ""
+**AI Response**: "# 📊 NFR Requirements Complete - U1 Ingestion\n\nU1 Corpus NFR Requirements 개정을 완료했다. `nfr-requirements.md`와 `tech-stack-decisions.md`에 2026-06-26 Corpus 우선 적용 섹션을 추가해 phase-1 범위, internal GROBID, Cohere Embed v4/specVersion v2, OpenSearch generation/alias, EventBridge+SQS/DLQ, private S3, $1600 account budget + U1 per-run hard stop, raw PDF transient, QT-9/PBT를 반영했다. 승인 요청: NFR Requirements를 검토한 뒤 승인하면 U1 NFR Design으로 진행한다."
+**Context**: CONSTRUCTION — NFR Requirements completion prompt logged before asking user for approval.
+
+---
+
+## U1 Corpus Construction — NFR Design 시작
+**Timestamp**: 2026-06-26T07:57:09Z
+**User Input**: "continue to the next stage"
+**AI Response**: "NFR Requirements 승인을 기록하고 U1 NFR Design으로 진행한다. 새 질문 없이 기존 NFR Requirements의 확정 스택(OpenSearch generation/alias, internal GROBID, SQS/DLQ, EventBridge, private S3, Bedrock Cohere v4, $1600 budget)을 logical components와 NFR design patterns에 최소 우선 적용 섹션으로 반영한다."
+**Context**: CONSTRUCTION — U1 Ingestion NFR Design.
+
+---
+
+## U1 Corpus Construction — NFR Design 완료 게이트
+**Timestamp**: 2026-06-26T07:59:53Z
+**User Input**: ""
+**AI Response**: "# 🎨 NFR Design Complete - U1 Ingestion\n\nU1 Corpus NFR Design 개정을 완료했다. `logical-components.md`에 EventBridge source scheduler, Corpus work queue/DLQ, Ingestion Worker, internal GROBID runtime, DocModel parser, Control Plane DB, private Corpus S3, Bedrock Cohere Embed v4, OpenSearch generation, ObservabilityHub를 추가했고, `nfr-design-patterns.md`에 stage-aware retry/DLQ, source-specific circuit breaker, cost hard-stop, generation cutover/rollback, parser hardening, QT-9 verification pattern을 추가했다. 승인 요청: NFR Design을 검토한 뒤 승인하면 U1 Infrastructure Design으로 진행한다."
+**Context**: CONSTRUCTION — NFR Design completion prompt logged before asking user for approval.
+
+---
+
+## U1 Corpus Construction — 설계 커밋 및 Infrastructure Design 시작
+**Timestamp**: 2026-06-26T08:02:26Z
+**User Input**: "commit and continue to the infrastructure design"
+**AI Response**: "U1 Corpus Functional Design, NFR Requirements, NFR Design 산출물을 커밋한 뒤 Infrastructure Design 단계로 진행한다."
+**Context**: CONSTRUCTION — Commit requested and Infrastructure Design continuation.
+
+---

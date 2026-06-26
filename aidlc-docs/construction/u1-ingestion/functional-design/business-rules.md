@@ -7,6 +7,57 @@
 
 > **⚠️ 개정(2026-06-25, U1 유닛리뷰 — SSOT 재정합):** 아래 **BR-2·BR-5·BR-6·§4 본문 깊이·속성 P4**의 "제목+초록만 인덱싱·논문당 1벡터"(Q2=B, issue #120) 결정은 **본문 시맨틱 검색 전환(PR #143)으로 폐기**되었다. 현행 구현(`processors.py` `Chunker`)은 **초록 청크 + 섹션 분할 본문 청크(논문당 최대 128청크)**를 임베딩·인덱싱한다 — 즉 `|upserted IndexRecords| == 1`(P4)은 더 이상 성립하지 않는다. 해당 규칙 문구는 코드와 불일치하므로 본 개정 배너를 우선한다(규칙 본문 미수정, 추적 보존). **불변**: VectorSpec(§6, 1024-dim/v4/cosine)·전문 S3 보관(BR-20)·디덥/멱등/INV-1 커밋 순서.
 
+> **⚠️ U1 Corpus 우선 적용 개정(2026-06-26):** 재인셉션 D6/FR-6에 따라 아래 **§0 Corpus 규칙**이 최신 권위다. 기존 BR-2/5/6/7/10/11/20/21/29/30, §3 PBT, §4 production scope, §5 traceability가 §0과 충돌하면 **§0을 우선한다**. 특히 phase-1 Corpus에서는 **멀티소스 수집, source별 watermark, eager DocModel, DocModel Block chunking, raw PDF 미저장, index generation/alias cutover**가 필수다.
+
+---
+
+## 0. U1 Corpus 비즈니스 규칙 (2026-06-26 우선 적용)
+
+### 0.1 규칙
+
+| ID | 규칙 | 근거 |
+|---|---|---|
+| **BR-C1 (소스 범위·우선순위)** | phase-1 수집 소스는 arXiv, Semantic Scholar, OpenAlex이다. 우선순위는 arXiv > Semantic Scholar > OpenAlex. arXiv는 HTML 우선/PDF 폴백, Semantic Scholar/OpenAlex는 PDF -> GROBID이다. | FR-6, U1 Corpus Q1/Q3=A |
+| **BR-C2 (라이선스·원시 PDF 미저장)** | OA/인덱싱 허용 라이선스만 저장·인덱싱한다. Semantic Scholar/OpenAlex PDF와 arXiv fallback PDF는 transient GROBID/추출 입력으로만 사용하고 원시 PDF를 S3/DB/다운로드용으로 저장하지 않는다. | C-1, SEC-9, U1 Corpus Q3/Q12=A |
+| **BR-C3 (canonical dedup)** | 동일 논문 판정 키는 DOI -> arXiv id -> normalized(title + first author + year) 순서다. 중복 수집 시 canonical `(paperId, version)`은 하나만 인덱싱하고 losing source는 provenance만 보존한다. | FR-6, QT-9, U1 Corpus Q2=A |
+| **BR-C4 (PaperId 일반화)** | `PaperId`는 더 이상 arXiv id 전용이 아니다. DOI/arXiv id/normalized tuple 기반 canonical id이며, 모든 저장·인덱스·DocModel 참조는 `(paperId, version)`을 공통 키로 사용한다. | FR-6, FR-18, QT-9, U1 Corpus Q9=A |
+| **BR-C5 (phase-1 범위와 비용 게이트)** | 초기 구축은 최근 AI/ML 1-2년, OA/허용 라이선스, eager 비용 상한 안으로 제한한다. 비용 임계치 도달 시 후순위 item은 보류 또는 backfill/DLQ 경로로 이월하며 기존 active index를 손상하지 않는다. | NFR-C1, U1 Corpus Q12=A |
+| **BR-C6 (eager DocModel)** | phase-1 Corpus에 편입된 논문은 수집 시점에 DocModel 완성형을 eager 생성한다. lazy/on-demand build는 누락분, 재빌드, 백필, phase-1 밖 논문 보강에만 허용한다. | FR-6, FR-18, U1 Corpus Q5=A |
+| **BR-C7 (DocModel 완성형)** | DocModel은 Section/Block, table rows/cols, formula LaTeX/MathML, figure AssetRef, provenance/sourceTier를 포함한다. 이미지 비전 추론은 하지 않는다. | FR-6, FR-17, FR-18, U1 Corpus Q4=A |
+| **BR-C8 (DocModel Block chunking)** | 인덱싱 source는 FullText plain text가 아니라 DocModel Block이다. Chunk는 block boundary를 존중하고 section context를 포함하며, 모든 chunk/index record는 실재 DocModel block id를 참조해야 한다. | FR-6, FR-5, QT-9, U1 Corpus Q6/Q7=A |
+| **BR-C9 (Embedding/vector spec)** | Cohere Embed v4/specVersion v2를 유지한다. 이번 작업은 임베딩 모델 변경이 아니라 index source/schema generation 전환이다. | FR-6, FR-21, U1 Corpus Q8=A |
+| **BR-C10 (Index generation cutover)** | DocModel 기반 OpenSearch index generation을 새로 만들고, QT-9와 smoke check 통과 전 alias를 전환하지 않는다. partial generation은 검색에 노출하지 않는다. | FR-6, NFR-R1, QT-9 |
+| **BR-C11 (source별 watermark)** | watermark는 source별로 단조 증가한다. 한 source 실패가 다른 source watermark를 역행시키거나 공유 watermark를 오염시키면 안 된다. | RES-2, RES-7, QT-9, U1 Corpus Q10=A |
+| **BR-C12 (retry/DLQ/reprocess 멱등)** | source, GROBID, DocModel, embedding, index write 단계별 retry와 DLQ를 둔다. DLQ reprocess는 같은 canonical pipeline을 다시 타며 중복 DocModel/chunk/index record를 만들지 않아야 한다. | US-I3, RES-9, QT-9, U1 Corpus Q11=A |
+| **BR-C13 (commit 정합성)** | `(paperId, version)` 단위로 FullText, DocModel, chunks, embeddings, index records, S3 object refs, generation manifest가 서로 맞아야 한다. 불일치하면 generation cutover 차단이다. | FR-6, FR-18, QT-9 |
+| **BR-C14 (관측성 신호)** | U1 실패 신호는 내부 이름과 무관하게 `ObservabilityHub.emitMetric`/`emitLog`로 라우팅한다. source watermark 지연, GROBID 실패, DocModel validation 실패, embedding 실패, DLQ 적체는 별도 tag를 가져야 한다. | RES-7, NFR-O1, U1 Corpus Q11=A |
+| **BR-C15 (레거시 규칙 폐기 범위)** | `PaperId=versionless arXiv id`, 단일 전역 `Watermark`, `Chunker.chunk(parsed)` 기반 인덱싱, phase-1 lazy DocModel, 원시 PDF 저장 가능 해석은 U1 Corpus 범위에서 폐기한다. | FR-6, FR-18, QT-9 |
+
+### 0.2 QT-9 / PBT 속성
+
+| 속성 | 진술 | 차단성 |
+|---|---|---|
+| **P-C1 multisource dedup idempotency** | 같은 SourcePaperRecord 집합을 임의 순서/중복으로 처리해도 canonical `(paperId, version)`과 winning source가 동일하다. | PBT-07/08 |
+| **P-C2 source watermark monotonicity** | `advanceWatermark(source)`는 source별로만 전진하며 역행하지 않는다. | PBT-08 |
+| **P-C3 version consistency** | 모든 StoredCorpusArtifact, DocModelChunk, CorpusIndexRecord, generation manifest가 같은 `(paperId, version)`을 공유한다. | PBT-08/09 |
+| **P-C4 DocModel schema validation** | 유효 DocModel은 schema roundtrip을 통과하고, block id 누락/중복/잘못된 AssetRef/잘못된 SourceTier는 negative validation에서 실패한다. | PBT-09 |
+| **P-C5 block reference integrity** | 모든 CorpusIndexRecord의 `blockRefs[]`는 해당 DocModel 안에 존재한다. | PBT-08/09 |
+| **P-C6 retry/DLQ idempotency** | retry와 DLQ reprocess를 반복해도 index record, DocModel artifact, provenance가 중복 생성되지 않는다. | PBT-08 |
+| **P-C7 raw PDF non-storage** | PDF 입력 경로를 처리해도 영속 artifact 목록에 raw PDF content/object가 존재하지 않는다. | PBT-02/03 |
+
+### 0.3 최신 추적성
+
+| 요구사항 | 랜딩 |
+|---|---|
+| **FR-6** U1 Corpus 생성 파이프라인 | BR-C1~C14, BLM §0, domain-entities §0 |
+| **FR-18** phase-1 eager DocModel / lazy 보강 | BR-C6/C7/C13 |
+| **FR-17** 표·그림 DocModel/AssetRef | BR-C7, 기존 §7 멀티모달 규칙 |
+| **C-1 / SEC-9** 라이선스·원시 PDF 미저장·비공개 저장 | BR-C2, BR-C7/P-C7 |
+| **NFR-C1** 비용 상한 | BR-C5, BR-C14 |
+| **RES-2 / RES-7 / RES-8 / RES-9** 재구축·watermark·쿼터·장애 처리 | BR-C10~C14 |
+| **QT-9** Corpus 품질/불변식 | P-C1~P-C7 |
+| **US-I1 / US-I2 / US-I3** | BR-C1~C14 |
+
 ---
 
 ## 1. 비즈니스 규칙 (BR)
