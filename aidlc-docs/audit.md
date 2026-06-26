@@ -1999,3 +1999,19 @@ library_removed        저장 신호 철회 신호 가중치는 뭐에요??"
 **Context**: CONSTRUCTION — Replacement pull request created with compliant branch name.
 
 ---
+
+## U1 Corpus Construction — Code Generation 시작
+**Timestamp**: 2026-06-26T12:43:24Z
+**User Input**: "continue to code generation"
+**AI Response**: "Infrastructure Design 승인을 기록하고 U1 Corpus Code Generation으로 진행한다. AIDLC Code Generation 규칙에 따라 먼저 Part 1 계획을 생성하고, 실제 앱 코드는 계획 승인 후 실행한다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation Part 1 planning.
+
+---
+
+## U1 Corpus Construction — Code Generation 계획 승인 프롬프트
+**Timestamp**: 2026-06-26T12:44:06Z
+**User Input**: ""
+**AI Response**: "U1 Corpus Code Generation 계획서 `aidlc-docs/construction/plans/u1-corpus-code-generation-plan.md`를 생성했다. 계획 범위는 DocModel `fullText` 계약 보정, parser fullText projection, eager DocModel build, DocModel block-aware chunk/index metadata, multi-source adapter/GROBID boundary, source별 watermark/canonical dedup, retry/DLQ, OpenSearch generation/alias, U7/frontend 정합, targeted tests다. 승인 요청: 계획을 검토한 뒤 승인하면 Code Generation Part 2에서 앱 코드 생성을 시작한다."
+**Context**: CONSTRUCTION — Code Generation Part 1 completion prompt logged before asking user for approval.
+
+---
