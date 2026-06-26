@@ -2134,3 +2134,11 @@ library_removed        저장 신호 철회 신호 가중치는 뭐에요??"
 **Context**: OPERATIONS — U1 Corpus placeholder acknowledgement.
 
 ---
+
+## U1 Corpus PR 생성 요청
+**Timestamp**: 2026-06-26T14:22:18Z
+**User Input**: "add a PR to develop in Korean"
+**AI Response**: "현재 브랜치 `feature/u1-corpus-code-generation`에서 `develop` 대상으로 한국어 PR을 생성한다. 중복 PR 여부를 확인한 뒤 감사 로그를 커밋하고 원격 브랜치를 갱신한다."
+**Context**: PR — U1 Corpus Code Generation and Operations placeholder.
+
+---
