@@ -26,6 +26,7 @@ U1이 쓰고 U2가 읽는 인덱스 문서. **논문당 다수 청크 레코드*
 | `chunkId` | string | `chunkId(paperId, ordinal)` 결정적 — **인덱스 문서 ID(멱등 upsert 키)** | BR-5/9, PBT P2/P3 |
 | `paperId` | string | 버전 없는 arXiv ID(정규 식별자) | BR-3 |
 | `version` | int | arXiv vN(현재 인덱싱된 버전) | BR-3/14 |
+| `modelVer` | string | **런타임 임베딩 모델 버전**(VectorSpec PIN 런타임 태그) | §4 |
 | `vector` | float[1024] | 청크 임베딩(cosine, search_document) | §1 |
 | `section` | string | 청크 출처 섹션(초록/본문 섹션) | BR-5 |
 | `lexicalTerms` | text(분석됨) | 제목+초록+본문 토큰 — **BM25 lexical 필드**(하이브리드 FR-2) | BR-6 |
@@ -46,6 +47,7 @@ U1이 쓰고 U2가 읽는 인덱스 문서. **논문당 다수 청크 레코드*
 - **per-paperId 멱등 삭제/tombstone**(BR-14): `paperId` 기준 전 청크 삭제 가능해야 함(버전 단조 가드는 제어평면, logical-components §3.3).
 - 인덱스명·샤드·레플리카·구체 매핑 JSON은 **Infra Design**.
 
-## 4. 동일-공간 불변식 (writer ↔ reader)
+## 4. 동일-공간 불변식 (writer ↔ reader) 및 런타임 호환성 게이트
 - U1.EmbeddingGatewayAdapter(`embedBatch`, search_document)와 U2.QueryUnderstandingExpander(`expand`, search_query)는 **동일 `model`·`dimensions`·`distanceMetric`·`specVersion`** 사용.
-- `specVersion` 불일치 또는 model/dim 변경 → **인덱스 비정합**(검색 무효) → 전체 재임베딩 필요. CI/배포에서 writer·reader specVersion 일치 검증 권장(Infra/NFR Design).
+- **PIN 소유권과 런타임 검증**: VectorSpec의 초기 PIN은 U1(빌드 #1)이 설정하지만, 이후 계약은 **공유 임베딩 게이트웨이 레이어**가 소유한다. U1은 `IndexRecord`에 `modelVer`를 런타임 태그로 삽입하여 기록하며, U2 `HybridRetriever`는 쿼리 실행 시 이 `modelVer`가 자신의 구동 `specVersion`과 일치하는지 단언(assert)한다. 불일치 감지 시 U2는 즉각 텔레메트리를 방출하고 해당 쿼리를 lexical-only 모드로 우아하게 저하시켜(degrade) 혼합-공간(mixed-space) 임베딩의 시맨틱 오염을 런타임에 방지한다.
+- `specVersion` 불일치 또는 model/dim 변경 → **인덱스 비정합**(검색 무효) → **전체 재임베딩 필수**. 이 경우 `RefreshScheduler.triggerFullRebuild`를 통해 새로운 빈 인덱스로 전환하여 재구축을 수행해야 한다.

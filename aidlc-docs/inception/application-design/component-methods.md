@@ -167,16 +167,16 @@
 
 | 컴포넌트 | 시그니처 | 목적 | 입력 → 출력 |
 |---|---|---|---|
-| ApiGatewayMiddleware | `handle(request: HttpRequest, next: DomainHandler) -> HttpResponse` | 전처리 체인 적용→핸들러 위임; U2 라우트는 응답 엣지에서 GroundingEnforcementHook.enforce 적용; 미처리 예외 fail-closed 변환 | HttpRequest, DomainHandler → HttpResponse(정상 \| 일반화 에러) |
+| ApiGatewayMiddleware | `handle(request: HttpRequest, next: DomainHandler) -> HttpResponse` | 전처리 체인 적용→핸들러 위임; U2 라우트는 응답 엣지에서 GroundingEnforcementHook.enforce 적용; enforce에서 발생한 모든 예외는 명시적으로 catch하여 fail-closed(toProductionError) 처리함으로써 우회 차단 | HttpRequest, DomainHandler → HttpResponse(정상 \| 일반화 에러) |
 | ApiGatewayMiddleware | `applySecurityHeaders(response: HttpResponse) -> HttpResponse` | 제한 CSP·보안 헤더 부착(frame-ancestors=self 카브아웃) | HttpResponse → HttpResponse |
 | ApiGatewayMiddleware | `toProductionError(err: Throwable, requestId: RequestId) -> HttpResponse` | 내부 예외를 스택 트레이스 비노출 일반화 에러로 매핑(fail-closed) | Throwable, RequestId → HttpResponse(generic) |
 | AuthnAuthzGuard | `authenticate(request: HttpRequest) -> Result<Principal, AuthError>` | 세션/토큰 서버측 검증(U3.SessionVerifier 위임) | HttpRequest → Result<Principal, AuthError> |
 | AuthnAuthzGuard | `authorize(principal: Principal, resource: ResourceRef, action: Action) -> AuthzDecision` | **객체 단위 소유권 결정을 U3.AuthorizationGuard에 위임(재구현 아님); 미들웨어는 강제 이음새. 관리자 MFA 확인.** | Principal, ResourceRef, Action → AuthzDecision(allow \| deny) |
 | InputValidationGuard | `validate(payload: RawPayload, schemaId: SchemaId) -> Result<ValidatedPayload, ValidationError>` | 선언적 스키마 검증·새니타이즈·인라인 에러 | RawPayload, SchemaId → Result<ValidatedPayload, ValidationError> |
 | RateLimiter | `checkLimit(scope: LimitScope, key: ClientKey) -> LimitDecision` | 출처별 슬라이딩 윈도 한도 평가(검색·가입·남용 완화) | LimitScope, ClientKey → LimitDecision(allow \| throttle \| reject) |
-| CostGuardCircuitBreaker | `getBudgetState() -> BudgetState` | 준실시간 임계 상태·권고 저하 모드 반환(동기 폴백 분기 지원) | (none) → BudgetState{tier, degradeMode, circuitState} |
-| CostGuardCircuitBreaker | `recordSpend(usage: UsageEvent) -> void` | 사용량/지출 누적·임계 평가·급증 신호화 트리거 | UsageEvent → void |
-| CostGuardCircuitBreaker | `evaluateCircuit() -> CircuitTransition` | 임계 도달 시 OPEN/반-개방/CLOSE 전이·저하 지시 갱신 | (internal snapshot) → CircuitTransition |
+| CostGuardCircuitBreaker | `getBudgetState() -> BudgetState` | 준실시간 임계 상태·권고 저하 모드 반환(동기 폴백 분기 지원). 원자적 카운터를 읽어 TOCTOU 경합을 제거함 | (none) → BudgetState{tier, degradeMode, circuitState} |
+| CostGuardCircuitBreaker | `recordSpend(usage: UsageEvent) -> void` | 사용량/지출 누적(원자적 카운터 증분)·급증 신호화 트리거 | UsageEvent → void |
+| CostGuardCircuitBreaker | `evaluateCircuit() -> CircuitTransition` | 비동기 주기적 실행으로 임계 도달 시 OPEN/반-개방/CLOSE 전이·저하 지시 갱신 | (internal snapshot) → CircuitTransition |
 | **GroundingEnforcementHook** | `enforce(candidate: CandidateResponse, retrieved: RetrievedRecordSet) -> GroundingDecision` | **FR-5/QT-1 단일 권위 런타임 게이트. 실재 레코드 매핑·AI 텍스트 출처 검증·통과/차단/기권. 위반 시 HallucinationDetector로 신호.** | CandidateResponse, RetrievedRecordSet → GroundingDecision{verdict: pass\|block\|abstain, violations[]} |
 | GroundingEnforcementHook | `runEvalSet(evalSet: GroundingEvalSet) -> GroundingEvalReport` | QT-1 평가셋 동일 후크로 실행·날조 0건/코퍼스 밖 기권 보고(OP/팀 소유) | GroundingEvalSet → GroundingEvalReport |
 | **ReliabilityEvalProbe** | `runReliabilityEvalSet(evalSet: ReliabilityEvalSet) -> ReliabilityEvalReport` | **QT-3 신뢰성/우아한 저하 인수 평가 — 업스트림 장애·빈 결과 경로 동작 검증·보고** | ReliabilityEvalSet → ReliabilityEvalReport{cases[], degradedBehaviorOk} |
