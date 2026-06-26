@@ -1991,3 +1991,11 @@ library_removed        저장 신호 철회 신호 가중치는 뭐에요??"
 **Context**: CONSTRUCTION — PR branch-name CI correction.
 
 ---
+
+## U1 Corpus Construction — 브랜치명 정정 대체 PR 생성
+**Timestamp**: 2026-06-26T08:40:42Z
+**User Input**: ""
+**AI Response**: "GitHub branch rename 후 기존 PR #225가 closed 상태가 되어, 허용 브랜치명 `docs/u1-corpus-construction-design`에서 develop 대상 대체 PR #226을 생성했다: https://github.com/80-hours-a-week/DocSuri/pull/226. 새 Branch name check는 성공했고 나머지 CI는 진행 중이다."
+**Context**: CONSTRUCTION — Replacement pull request created with compliant branch name.
+
+---
