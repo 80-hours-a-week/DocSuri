@@ -40,14 +40,11 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
   const router = useRouter();
   const openedRef = useRef<string | null>(null);
 
-  // meta 로드 완료 후 title을 포함해 기록 (최근 본 논문 목록에 사용)
-  const paperMeta = meta.status === 'done' ? meta.meta : undefined;
   useEffect(() => {
-    if (!paperMeta) return;
     if (openedRef.current === paperId) return;
     openedRef.current = paperId;
-    recordPaperOpened(paperId, paperMeta.title);
-  }, [paperId, paperMeta]);
+    recordPaperOpened(paperId);
+  }, [paperId]);
 
   // 본문 / 본문 번역 are in-app routes (Link). A summary source anchor navigates to the 본문
   // route scrolled to the matching block (label carried via the query).

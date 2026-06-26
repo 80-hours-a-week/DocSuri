@@ -116,7 +116,7 @@ class InMemoryPersonalizationRepository:
                 paper_id = e.subject.paperId
                 if not paper_id or paper_id in seen:
                     continue
-                title = str(e.metadata.get('title', ''))
+                title = str(e.metadata.get("title") or paper_id)
                 seen[paper_id] = (paper_id, title, e.occurredAt)
                 if len(seen) >= limit:
                     break
@@ -333,7 +333,7 @@ class SqlPersonalizationRepository:
             paper_id = row.subject.get('paperId', '')
             if not paper_id or paper_id in seen:
                 continue
-            title = str(row.metadata_json.get('title', ''))
+            title = str(row.metadata_json.get("title") or paper_id)
             seen[paper_id] = (paper_id, title, row.occurred_at)
             if len(seen) >= limit:
                 break
