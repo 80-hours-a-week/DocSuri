@@ -193,7 +193,9 @@ def test_api_settings_disable_recording(monkeypatch) -> None:
     repo = InMemoryPersonalizationRepository()
     client = _client(monkeypatch, principal, repo)
 
+    assert client.get("/api/personalization/settings").json()["enabled"] is True
     assert client.patch("/api/personalization/settings", json={"enabled": False}).status_code == 200
+    assert client.get("/api/personalization/settings").json()["enabled"] is False
     resp = client.post(
         "/api/personalization/events",
         json={

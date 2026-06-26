@@ -90,6 +90,15 @@ async def summary_defaults(
     )
 
 
+@router.get("/settings", response_model=PersonalizationSettings)
+async def get_settings(
+    request: Request,
+    principal: Principal = PRINCIPAL_DEP,
+    repo: PersonalizationRepository = REPO_DEP,
+) -> PersonalizationSettings:
+    return PersonalizationSettingsService(repo, _observability(request)).get(principal.user_id)
+
+
 @router.patch("/settings", response_model=PersonalizationSettings)
 async def update_settings(
     dto: SettingsUpdate,
