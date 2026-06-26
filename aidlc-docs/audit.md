@@ -1732,3 +1732,16 @@ library_removed        저장 신호 철회 신호 가중치는 뭐에요??"
 **Context**: U9 mypage settings cross-review follow-up
 
 ---
+## Design Review — Medium Severity Findings (Gap Analysis)
+**Timestamp**: 2026-06-26T02:53:00Z
+**User Input**: "start modifying the design documents" (followed by continuation confirmations)
+**AI Response**: "Addressed all remaining medium-severity findings and gap analysis items from the `aidlc-design-reviewer` report:
+1. Updated U4 `business-logic-model.md` to include Contract Test requirements for `SearchGatewayPort` (Real Binding Verification).
+2. Updated `shared/vector-spec.md` with `modelVer` tagging and runtime checking in U2 to define the PIN ownership transfer process.
+3. Updated `components.md` and `services.md` to define the previously missing U10 Mypage module. Skipped U11 definitions as per user note that U11 is under construction in PR #183.
+4. Updated U7 `domain-entities.md` to define the `PendingDTO` async polling API contract.
+5. Updated `events.md` to add `DocModelBuildRequestedEvent` for the lazy doc-model build trigger queue.
+(Note: Gap 5 AccountDeleted DLQ tracking was already addressed via AccountPurged in U3)."
+**Context**: INCEPTION — Application Design (Design Critique Follow-up)
+
+---

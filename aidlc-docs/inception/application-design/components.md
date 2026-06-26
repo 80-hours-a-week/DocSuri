@@ -68,6 +68,10 @@ DQ6 재조정에 따라 사용자向 검색 READ는 동기 REST(NFR-P1 P50<3s). 
 | **CredentialStore** | 자격증명(해시) 영속·검증. 평문 미저장·미반환. | 적응형 해싱(메모리-하드 KDF, SEC-12); 상수시간 의도 검증·재해싱 필요 플래그; 자격증명 영속·조회(평문·시크릿 비로깅, SEC-3); 계정↔식별자 소유권 데이터(SEC-8) | `createCredential`, `verifyCredential`, `rehash` | FR-7, SEC-12, SEC-8, SEC-3 |
 | **PasswordPolicy** | 비밀번호 정책·유출 검사 규칙. | 길이·복잡도·차단목록(SEC-12); 유출 검사(breach 어댑터 위임, SEC-12); 구조화 사유 코드 | `evaluate` | SEC-12, US-A1 |
 | **SessionStore** | 세션 상태 영속 어댑터(공유 데이터 레이어). | 세션 레코드 영속·조회·삭제; 서버측 무효화 즉시성(US-A2); 계정/세션 메타 RPO~24h 백업 분류(RES-2) | `persist`, `load`, `remove` | FR-7, US-A2, SEC-8, RES-2 |
+| **AccountDeletionService** | 계정 소프트 삭제 및 파기 오케스트레이션. | 계정 비활성화, 파기 잡 스케줄링, `AccountDeleted` 발행 및 `AccountPurged` 캐스케이드 추적(GDPR) | `requestDeletion`, `purgeJob` | FR-28, US-A6, SEC-8 |
+| **PasswordResetService** | 비밀번호 분실 재설정 흐름. | 토큰 해시 영속화, 재설정 메일 발송 위임, 토큰 검증 후 비밀번호 재해싱 갱신(전 세션 무효화) | `requestReset`, `confirmReset` | FR-26, BR-A8 |
+| **EmailVerificationService** | 계정 이메일 인증 및 변경. | 토큰 발급, 이메일 변경 절차 시 기존 메일 알림, 상태 활성화 전환 | `verifyEmail`, `requestEmailChange`, `confirmEmailChange` | BR-A5, BR-A10 |
+| **SocialLoginService** | 소셜(OIDC) 로그인 오케스트레이션. | OIDC 인가 시작, 콜백(CSRF 방어), 기존 계정 매핑 및 pre-hijacking 방어 | `start`, `callback` | FR-27, BR-A9 |
 
 ---
 
@@ -125,3 +129,13 @@ DQ5 전용 횡단 계층의 정문 + 운영(관측성·비용 가드·헬스·AI
 | **AiIncidentDetectorSuite** | RES-11 AI 인시던트 탐지 계층(별도 워커, DQ1). **세 탐지기를 1급 서브컴포넌트로 선언.** | (a) **CostExplosionDetector**: 지출·레이트 신호 급증 탐지(RES-11(a), US-R3); (b) **HallucinationDetector**: 근거화 위반·QT-1 결과 날조 패턴 탐지(RES-11(b), US-R1); (c) **PartialResultDetector**: 완결성/저하 마커·의존성 장애 탐지(RES-11(c), US-R2); 각 인시던트 분류·심각도 부여 후 IncidentEventPublisher로 방출 | `onTelemetryEvent`, `classify` (서브컴포넌트: CostExplosionDetector, HallucinationDetector, PartialResultDetector) | RES-11, NFR-O1, US-R1, US-R2, US-R3, US-R4, FR-11, NFR-R1, NFR-R2, **QT-3**(PartialResultDetector 저하 검증) |
 | **IncidentEventPublisher** | 탐지 인시던트·경보를 이벤트 백본에 표준 스키마로 발행하는 어댑터. **U2/U6 인시던트 발행의 실재 단일 대상(팬텀 IncidentSignalPublisher 대체).** | typed 인시던트(class a/b/c·심각도·요청 ID 상관) 발행(RES-11); IR 라우팅·COE 컨텍스트 첨부(RES-11, US-R4); 발행 감사(SEC-14) | `publishIncident`, `publishAlert` | RES-11, RES-7, SEC-14, US-R4 |
 | **OpsDashboardService** | OP 운영 대시보드 데이터 제공(NFR-O1, RES-5). | 집계 텔레메트리를 뷰 모델로(NFR-O1, US-R4); 세 인시던트 클래스 상태·경보 이력(RES-11, US-R4); 비용 상한 대비 지출(서킷 상태)·인제스천 건강도(RES-7) | `GET /ops/dashboard`, `GET /ops/incidents` (관리자 인가 SEC-8/MFA SEC-12) | NFR-O1, RES-5, RES-7, RES-11, SEC-12, US-R4 |
+| **RealSearchGatewayAdapter** | U4 rerun(SearchGatewayPort) 요청을 U2 검색 처리로 중계하는 실제 어댑터. | `StubSearchGateway`를 대체하여 주입됨; 게이트웨이 파이프라인(비용/근거화 후크 등)의 강제 로직을 재사용·통과하도록 통합 위임 | `search` (SearchGatewayPort 구현) | INV-L2 |
+## U10 — Mypage (사용자 마이페이지 도메인 모듈)
+
+사용자 프로필 설정, 보안 제어(비밀번호/이메일 변경), 그리고 애플리케이션 내의 다양한 개인화 및 도메인 데이터 관리를 담당하는 모듈. 다른 모듈(U3 계정, U9 개인화 등)의 제어 UI를 통합 제공하며, U3/U9/U4의 API를 동기적으로 호출하여 상태를 조회 및 변경한다.
+
+| 컴포넌트 | 목적 | 핵심 책임 | 인터페이스 | Trace |
+|---|---|---|---|---|
+| **MypageController** | 마이페이지 기능 동기 REST 진입점. | 라우트 매핑; 프로필 조회, 개인화 설정 변경, 데이터 내보내기/삭제 위임; 인증 컨텍스트 전파(SEC-8) | `GET /api/mypage/profile`, `PUT /api/mypage/settings`, `GET /api/mypage/export` | US-A5, US-P6, SEC-8 |
+| **UserPreferencesService** | 개인 설정(개인화, UI 테마 등) 관리 오케스트레이션. | 사용자 설정 조회 및 변경; U9 개인화 선호도 갱신 위임; U3 연동 | `getPreferences`, `updatePreferences` | US-P6, SEC-8 |
+| **DataExportService** | 사용자 데이터(이력, 저장 검색, 라이브러리) 내보내기. | GDPR 준수 데이터 내보내기(Data Portability); U4 등 도메인 데이터 조회 후 JSON/CSV 등 형식 변환 다운로드 제공 | `exportUserData` | FR-28, SEC-8 |

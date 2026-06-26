@@ -26,7 +26,7 @@
 | **BR-11 (워터마크 역행)** | max-clamp(전진만, 역행 무시). 예외: SEED_REBUILD만 의도적 리셋(BR-13 보호). | RES-2, Q17=A |
 | **BR-12 (이벤트 멱등·포이즌)** | 이벤트 at-least-once 소비(**Q12=B 활성**). 멱등=DeduplicationGuard DUPLICATE 단일 백스톱(이벤트-레벨 dedup 없음). 처리 후 ackEvent. 포이즌→DLQ. | RES-7, **Q15=A, Q12=B** |
 | **BR-13 (재구축↔증분/이벤트 상호배제)** | 단일 writer 보호: SEED_REBUILD 활성 중 INCREMENTAL·EVENT 보류/거부(REBUILD_LOCK). | NFR-R1, RES-2, **Q16=A** |
-| **BR-14 (철회·tombstone · 버전 단조 순서)** | **Q13=B 활성**: 철회 탐지(메타+전문 withdrawal 공지) → tombstone(전 청크); INV-1 순서. **순서 규칙 = highest-vN-wins, 제어평면 `current_version`(paperId별)에 대한 원자적 compare-and-set로 강제**(— `isNew`는 인서트 스킵 판정일 뿐 **삭제 가드가 아님**): **upsert(vN)**는 `vN ≥ current_version`일 때만 적용(→ current_version:=vN, INDEXED); **tombstone(vW)**는 `vW ≥ current_version`일 때만 적용(→ current_version:=vW, TOMBSTONED), **`current_version > vW`면 삭제 무시**(strictly-newer-vN-wins). 원자적이라 {철회 vW·인서트 vN} **도착 순서 무관**하게 최고 버전 성격으로 수렴(v2 삭제·v3 인서트 경쟁 시 v3 생존). 재구축 시 능동 재탐지. | **Q13=B** |
+| **BR-14 (철회·tombstone · 버전 단조 순서)** | **Q13=B 활성**: 철회 탐지(메타+전문 withdrawal 공지) → tombstone(전 청크) 및 **`PaperRetractedEvent` 발행(공용 이벤트 버스)**; INV-1 순서. **순서 규칙 = highest-vN-wins, 제어평면 `current_version`(paperId별)에 대한 원자적 compare-and-set로 강제**(— `isNew`는 인서트 스킵 판정일 뿐 **삭제 가드가 아님**): **upsert(vN)**는 `vN ≥ current_version`일 때만 적용(→ current_version:=vN, INDEXED); **tombstone(vW)**는 `vW ≥ current_version`일 때만 적용(→ current_version:=vW, TOMBSTONED, 이벤트 발행), **`current_version > vW`면 삭제 무시**(strictly-newer-vN-wins). 원자적이라 {철회 vW·인서트 vN} **도착 순서 무관**하게 최고 버전 성격으로 수렴(v2 삭제·v3 인서트 경쟁 시 v3 생존). 재구축 시 능동 재탐지. | **Q13=B** |
 | **BR-15 (실패 분류)** | RETRIABLE=네트워크/타임아웃/5xx/429; PERMANENT=파싱·검증·비-OA·404. (전문 취득·임베딩·쓰기 실패 포함.) | RES-9, Q9=A |
 | **BR-16 (재시도·쿼터)** | 지수 백오프+지터, arXiv 보수 쿼터(RES-8), 소진→DLQ. **수치는 NFR Q14 확정.** | RES-8/9, Q10=A |
 | **BR-17 (DLQ·경보)** | 소진/영구→DLQ 격리 + 구조화 실패 신호 U6.ObservabilityHub. 잡 계속; 실패율 임계 초과→갱신 실패 경보. | RES-7, NFR-O1, NFR-R1, Q11=A |
@@ -112,6 +112,7 @@
 
 - U1.EmbeddingGatewayAdapter(writer)·U2.QueryUnderstandingExpander(reader)는 **동일 VectorSpec(차원·모델·거리 — NFR Requirements PIN)**. 동일 임베딩 공간 불변식.
 - 계약 산출물 소유=공유 임베딩 게이트웨이 레이어(UQ5=A); U1(빌드 #1)이 값을 PIN, 후속 유닛 재결정 없음(NS-5). 선택 스토어 ANN 인덱스가 PIN된 차원·거리 메트릭 지원 확인(ANN 호환 게이트).
+- **런타임 호환성 검증(VectorSpec Version Tagging)**: `VectorSpec` 계약의 강제력을 런타임으로 확장하기 위해, `VectorIndexWriter.upsert()`는 생성된 모든 `IndexRecord`에 임베딩 모델의 버전을 식별할 수 있는 메타데이터 필드(`modelVer`)를 포함하여 기록한다. 이는 읽기 측(U2)에서 혼합 공간 조회를 방지하는 방어 기제로 작용한다.
 - 단일 writer(U1)/단일 reader(U2) 경계.
 
 ---
