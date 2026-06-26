@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getApiClient, UserFacingError } from '@/lib/api';
 import { validateEmail, validateRequiredPassword } from '@/lib/api/validate';
 import { useSession } from '../session/SessionContext';
+import { useTheme } from '../theme/ThemeContext';
 import { StateView } from '../StateView';
 import { AuthField } from '../AuthField';
 import styles from './MyPageScreen.module.css';
@@ -30,6 +31,7 @@ type BusyKey =
 
 export function MyPageSettingsScreen() {
   const { signOut } = useSession();
+  const { effectiveTheme, setTheme } = useTheme();
   const router = useRouter();
   const [consents, setConsents] = useState<ConsentSettingsVM | null>(null);
   const [personalization, setPersonalization] = useState<PersonalizationSettings | null>(null);
@@ -109,6 +111,9 @@ export function MyPageSettingsScreen() {
       setActionNotice('개인맞춤 프로필을 초기화했습니다.');
     });
   };
+
+  // 다크모드는 기기(브라우저)별 설정 — 계정에 저장하지 않으므로 API 호출이 필요 없다.
+  const onToggleDarkMode = (checked: boolean) => setTheme(checked ? 'dark' : 'light');
 
   const onLogout = () =>
     withBusy('logout', async () => {
@@ -212,6 +217,19 @@ export function MyPageSettingsScreen() {
           {actionNotice}
         </p>
       ) : null}
+
+      <section className={styles.card} data-testid="mypage-display">
+        <h2 className={styles.cardTitle}>화면</h2>
+        <label className={styles.toggleRow}>
+          <span>다크 모드 (이 기기에만 적용)</span>
+          <input
+            type="checkbox"
+            checked={effectiveTheme === 'dark'}
+            onChange={(e) => onToggleDarkMode(e.target.checked)}
+            data-testid="mypage-dark-mode"
+          />
+        </label>
+      </section>
 
       <section className={styles.card} data-testid="mypage-consents">
         <h2 className={styles.cardTitle}>동의 철회</h2>

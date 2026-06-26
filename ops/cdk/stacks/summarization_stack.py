@@ -3,7 +3,7 @@
 infra-design §2.3 (summary queue) + §2.4 (worker, deploy unit ④). Long-input summaries
 (map-reduce, BR-S6/BR-S12) run here as a background job: the API enqueues onto
 ``docsuri-summary-job-queue`` and the worker (this stack) consumes, runs map-reduce inline
-(no gateway timeout), and write-throughs the result to ``summary/`` in the papers bucket so the
+(no gateway timeout), and write-throughs the result to ``summaries/`` in the papers bucket so the
 client's poll hits the cache. Reuses the ``docsuri-api`` image with the worker entrypoint.
 
 NOTE: code/synth only — deploy is owned by the team. The worker carries the real summarization
@@ -152,10 +152,24 @@ class SummarizationStack(Stack):
                 actions=["s3:GetObject"], resources=[f"{papers_bucket_arn}/doc-model/*"],
             )
         )
+        # Full-text source (S3FullTextSource reads full-text/{paperId}/v{n}.txt). The worker payload
+        # carries only paperId/version/abstract, so the worker re-reads the body from S3; with the
+        # doc-model viewer off here that full-text read is its only real input source. Without this
+        # the read hits AccessDenied, which the source-selector swallows into a silent degrade to
+        # abstract — long async summaries quietly stop working. Mirrors the API task role.
+        task_def.add_to_task_role_policy(
+            iam.PolicyStatement(
+                actions=["s3:GetObject"], resources=[f"{papers_bucket_arn}/full-text/*"],
+            )
+        )
         task_def.add_to_task_role_policy(
             iam.PolicyStatement(
                 actions=["s3:GetObject", "s3:PutObject"],
-                resources=[f"{papers_bucket_arn}/summary/*"],
+                # Store writes under ``summaries/`` (plural — SummaryCacheKey.object_path,
+                # infra-design §2.1); grant must match or the worker's cache write-through hits
+                # AccessDenied (put is uncaught → async summary fails, nothing cached). Mirror of
+                # the API task role in compute_stack. Was ``summary/`` (typo).
+                resources=[f"{papers_bucket_arn}/summaries/*"],
             )
         )
         task_def.add_to_task_role_policy(

@@ -22,10 +22,14 @@
   }
 
   .frame {
-    /* Galaxy logical width (S20 Ultra / A-series, ≈412×915 CSS px) — wider than iPhone's 390. */
+    /* Galaxy logical screen (S20 Ultra / A-series, ≈412×915 CSS px) — wider than iPhone's 390.
+       Pin the mockup to a real phone screen size: width 412, height the phone's 915 but never
+       taller than the desktop window (minus the 24px top/bottom stage padding = 48px), so the
+       whole phone is always visible without the page scrolling. Content scrolls INSIDE the frame
+       (overflow-y below). min-height:0 overrides the mobile-base 100dvh so this height takes. */
     width: 412px;
-    min-height: 880px;
-    max-height: 90dvh;
+    min-height: 0;
+    height: clamp(480px, calc(100dvh - 48px), 915px);
     border-radius: 28px;
     border: 1px solid var(--color-border);
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
