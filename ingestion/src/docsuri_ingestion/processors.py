@@ -110,9 +110,8 @@ class Chunker:
             raise ValidationViolationError("paper produced no chunks", stage="chunk")
         return ChunkSet(paper_id=paper.paper_id, version=paper.version, chunks=tuple(chunks))
 
-    def chunk_doc_model(self, doc: DocModel, *, abstract: str = "") -> ChunkSet:
+    def chunk_doc_model(self, doc: DocModel) -> ChunkSet:
         """Chunk structured doc-model blocks while preserving block id refs internally."""
-        del abstract
         block_ids: set[tuple[str, str, str]] = set()
         entries: list[tuple[str, str, tuple[ChunkBlockRef, ...]]] = []
 

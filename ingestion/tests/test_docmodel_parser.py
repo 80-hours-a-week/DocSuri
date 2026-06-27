@@ -94,6 +94,10 @@ def _blocks(section):
     return [b.root for b in section.blocks]
 
 
+def _body_sections(doc):
+    return [section for section in doc.sections if section.id != "s0"]
+
+
 def test_meta_and_provenance() -> None:
     doc = _parse()
     assert doc.meta.paperId == "2401.00001"
@@ -106,6 +110,8 @@ def test_meta_and_provenance() -> None:
 def test_full_text_projects_all_block_text_in_reading_order() -> None:
     doc = _parse()
     assert doc.fullText.split("\n\n") == [
+        "Abstract",
+        "An abstract.",
         "Introduction",
         "We study \\(x^{2}\\) models.",
         "Second paragraph.",
@@ -133,23 +139,26 @@ def test_full_text_excludes_image_and_asset_internals() -> None:
 
 def test_nested_section_tree_and_ids() -> None:
     doc = _parse()
-    assert [s.id for s in doc.sections] == ["s1", "s2"]
-    assert doc.sections[0].title == "Introduction"
-    subs = doc.sections[0].sections
+    sections = _body_sections(doc)
+    assert [s.id for s in doc.sections] == ["s0", "s1", "s2"]
+    assert doc.sections[0].title == "Abstract"
+    assert doc.sections[0].blocks[0].root.text == "An abstract."
+    assert sections[0].title == "Introduction"
+    subs = sections[0].sections
     assert subs is not None and [s.id for s in subs] == ["s1.1"]
     assert subs[0].title == "Setup"
 
 
 def test_paragraph_blocks_with_inline_math() -> None:
     doc = _parse()
-    paras = [b for b in _blocks(doc.sections[0]) if isinstance(b, ParagraphBlock)]
+    paras = [b for b in _blocks(_body_sections(doc)[0]) if isinstance(b, ParagraphBlock)]
     assert [p.id for p in paras] == ["s1.p1", "s1.p2"]
     assert paras[0].text == "We study \\(x^{2}\\) models."
 
 
 def test_formula_block_latex_and_anchor() -> None:
     doc = _parse()
-    formula = next(b for b in _blocks(doc.sections[0]) if isinstance(b, FormulaBlock))
+    formula = next(b for b in _blocks(_body_sections(doc)[0]) if isinstance(b, FormulaBlock))
     assert formula.id == "s1.eq1"
     assert formula.latex == "E = mc^{2}"
     assert formula.display is True
@@ -158,7 +167,7 @@ def test_formula_block_latex_and_anchor() -> None:
 
 def test_table_block_is_structured_data() -> None:
     doc = _parse()
-    table = next(b for b in _blocks(doc.sections[0]) if isinstance(b, TableBlock))
+    table = next(b for b in _blocks(_body_sections(doc)[0]) if isinstance(b, TableBlock))
     assert table.id == "s1.tbl1"
     assert table.caption == "Main results."
     assert table.anchorLabel == "Table 1"
@@ -174,7 +183,7 @@ def test_table_block_is_structured_data() -> None:
 
 def test_figure_links_existing_webp_asset_by_ordinal() -> None:
     doc = _parse()
-    sub = doc.sections[0].sections[0]
+    sub = _body_sections(doc)[0].sections[0]
     figure = next(b for b in _blocks(sub) if isinstance(b, FigureBlock))
     assert figure.id == "s1.1.fig1"
     assert figure.anchorLabel == "Figure 1"
@@ -186,7 +195,7 @@ def test_figure_links_existing_webp_asset_by_ordinal() -> None:
 
 def test_list_and_code_blocks() -> None:
     doc = _parse()
-    sub = doc.sections[0].sections[0]
+    sub = _body_sections(doc)[0].sections[0]
     list_block = next(b for b in _blocks(sub) if isinstance(b, ListBlock))
     assert list_block.ordered is True
     assert [i.text for i in list_block.items] == ["first", "second"]
@@ -196,7 +205,7 @@ def test_list_and_code_blocks() -> None:
 
 def test_block_ids_reset_per_section() -> None:
     doc = _parse()
-    method_paras = [b for b in _blocks(doc.sections[1]) if isinstance(b, ParagraphBlock)]
+    method_paras = [b for b in _blocks(_body_sections(doc)[1]) if isinstance(b, ParagraphBlock)]
     assert method_paras[0].id == "s2.p1"  # s2 numbering independent of s1
 
 
@@ -233,8 +242,9 @@ def test_appendix_is_top_level_section_with_nested_subsections() -> None:
     """ltx_appendix is a section: it stays a top-level node and keeps its subsections nested,
     rather than flattening them up into the body (FD Q2=B — appendices preserved)."""
     doc = _parse(APPENDIX_HTML)
-    assert [s.id for s in doc.sections] == ["s1", "s2"]
-    appendix = doc.sections[1]
+    sections = _body_sections(doc)
+    assert [s.id for s in doc.sections] == ["s0", "s1", "s2"]
+    appendix = sections[1]
     assert appendix.title == "Extra Details"
     assert appendix.sections is not None
     assert [s.title for s in appendix.sections] == ["Setup"]
@@ -245,7 +255,7 @@ def test_footnote_excluded_from_paragraph_body() -> None:
     """An inline ltx_note (footnote) must not leak into the sentence text (it would corrupt
     the LLM input and the rich view)."""
     doc = _parse(APPENDIX_HTML)
-    para = _blocks(doc.sections[0])[0]
+    para = _blocks(_body_sections(doc)[0])[0]
     assert isinstance(para, ParagraphBlock)
     assert para.text == "We release the code for review."
     assert "example.org" not in para.text
@@ -254,9 +264,10 @@ def test_footnote_excluded_from_paragraph_body() -> None:
 def test_span_only_fallback_when_no_sections() -> None:
     html = '<html><body><div class="ltx_para"><p class="ltx_p">Just a note.</p></div></body></html>'
     doc = _parse(html)
-    assert [s.id for s in doc.sections] == ["s1"]
-    assert doc.sections[0].title == ""
-    para = _blocks(doc.sections[0])[0]
+    sections = _body_sections(doc)
+    assert [s.id for s in doc.sections] == ["s0", "s1"]
+    assert sections[0].title == ""
+    para = _blocks(sections[0])[0]
     assert isinstance(para, ParagraphBlock)
     assert para.text == "Just a note."
 
@@ -267,16 +278,19 @@ def test_text_fallback_docmodel_has_stable_paragraph_block_ref() -> None:
         paper_id="src-abc",
         version=1,
         title="PDF Only",
-        abstract="Abstract",
+        abstract="PDF abstract.",
         source_tier=SourceTier.pdf,
         parser_version="docmodel-parser@1",
         schema_version="1.0.0",
         generated_at=_FIXED_TS,
     )
 
-    assert doc.fullText == "First line. Second line."
-    block = doc.sections[0].blocks[0].root
+    assert doc.fullText == "Abstract\n\nPDF abstract.\n\nFirst line. Second line."
+    abstract_block = doc.sections[0].blocks[0].root
+    assert abstract_block.id == "s0.p1"
+    assert abstract_block.text == "PDF abstract."
+    block = doc.sections[1].blocks[0].root
     assert isinstance(block, ParagraphBlock)
     assert block.id == "s1.p1"
-    assert block.text == doc.fullText
+    assert block.text == "First line. Second line."
     assert doc.meta.provenance.sourceTier is SourceTier.pdf

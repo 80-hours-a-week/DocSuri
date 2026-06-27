@@ -304,7 +304,7 @@ class IngestionPipelineService:
         )
         paper = replace(paper, stored_full_text_ref=object_ref)
         chunks = (
-            self._chunker.chunk_doc_model(doc_model, abstract=paper.abstract)
+            self._chunker.chunk_doc_model(doc_model)
             if doc_model is not None
             else self._chunker.chunk(paper)
         )

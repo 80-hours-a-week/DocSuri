@@ -17,6 +17,7 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
 
 - `ingestion/src/docsuri_ingestion/docmodel/parser.py`
   - section/block tree에서 paragraph, table, formula, figure caption, list, code 텍스트를 읽기 순서로 투영해 `fullText`를 생성한다.
+  - abstract metadata를 `s0.p1` DocModel paragraph block으로도 모델링해 semantic embedding 대상에 포함한다.
   - asset internals와 raw binary는 projection에 포함하지 않는다.
 
 - `ingestion/src/docsuri_ingestion/application.py`
@@ -33,7 +34,7 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
 - `ingestion/src/docsuri_ingestion/processors.py`
   - `Chunker.chunk_doc_model()`을 추가해 DocModel block 단위 chunk를 생성한다.
   - chunk에 section/block/type metadata를 보존하고, `IndexRecord.blockRefs[]`를 `{paperId, version, sectionId, blockId, blockType}` 구조화 필드로 저장한다.
-  - DocModel 기반 chunking에서는 별도 abstract chunk를 만들지 않아 모든 DocModel-derived index record가 실제 DocModel block을 참조한다.
+  - DocModel 기반 chunking은 DocModel block만 사용하므로 모든 DocModel-derived index record가 실제 DocModel block을 참조한다.
   - `blockRefs`는 provenance/QT-9 검증용이며 BM25 `lexicalTerms` 검색 토큰에는 섞지 않는다.
 
 - `ingestion/src/docsuri_ingestion/corpus_sources.py`
@@ -52,6 +53,7 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
 - `ingestion/src/docsuri_ingestion/adapters/aws.py`
   - OpenSearch candidate generation validation과 alias cutover 메서드를 추가했다.
   - validation 실패 시 alias switch를 호출하지 않는 경계를 테스트했다.
+  - OpenSearch mapping은 shared `papers_index_body()`를 SSOT로 사용하며, `blockRefs`는 검색하지 않는 provenance라 non-indexed object로 저장한다.
 
 - `ingestion/src/docsuri_ingestion/adapters/grobid.py`, `runtime.py`, `settings.py`
   - GROBID HTTP client와 runtime wiring을 추가했다.
@@ -112,6 +114,15 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
 - 2026-06-27 blockRef re-review follow-up: `uv run --directory ops pytest -q` -> 42 passed
 - 2026-06-27 blockRef re-review follow-up: `uv run --directory backend/modules/discovery pytest -q` -> 53 passed, 3 skipped
 - 2026-06-27 blockRef re-review follow-up: `git diff --check` -> passed
+- 2026-06-27 abstract/mapping re-review follow-up: `uv run --directory ingestion pytest tests/test_docmodel_parser.py tests/test_docmodel_build_job.py tests/test_domain_units.py tests/test_orchestration.py -q` -> 54 passed
+- 2026-06-27 abstract/mapping re-review follow-up: `uv run --directory shared/python pytest tests/test_vector_spec.py -q` -> 9 passed
+- 2026-06-27 abstract/mapping re-review follow-up: `uv run --directory shared/python ruff check .` -> passed
+- 2026-06-27 abstract/mapping re-review follow-up: `uv run --directory ingestion ruff check .` -> passed
+- 2026-06-27 abstract/mapping re-review follow-up: `uv run --directory shared/python python tools/generate.py --check` -> passed
+- 2026-06-27 abstract/mapping re-review follow-up: `uv run --directory shared/python pytest -q` -> 68 passed
+- 2026-06-27 abstract/mapping re-review follow-up: `uv run --directory ingestion pytest -q -rA` -> 133 passed, 1 skipped
+- 2026-06-27 abstract/mapping re-review follow-up: `uv run --directory ops pytest -q` -> 42 passed
+- 2026-06-27 abstract/mapping re-review follow-up: `uv run --directory backend/modules/discovery pytest -q` -> 53 passed, 3 skipped
 
 ## 추적성
 

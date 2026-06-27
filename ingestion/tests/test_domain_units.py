@@ -65,7 +65,7 @@ def test_chunker_produces_abstract_plus_body_chunks() -> None:
     assert {c.section for c in first.chunks} > {"abstract"}
 
 
-def test_docmodel_chunker_ignores_unanchored_abstract_copy() -> None:
+def test_docmodel_chunker_uses_docmodel_blocks_only() -> None:
     doc = DocModel.model_validate(
         {
             "meta": {
@@ -90,9 +90,11 @@ def test_docmodel_chunker_ignores_unanchored_abstract_copy() -> None:
         }
     )
 
-    chunks = Chunker(max_chunk_chars=10, overlap_chars=0, max_chunks_per_paper=2).chunk_doc_model(
-        doc, abstract="abstract " * 20
-    )
+    chunks = Chunker(
+        max_chunk_chars=10,
+        overlap_chars=0,
+        max_chunks_per_paper=2,
+    ).chunk_doc_model(doc)
 
     assert len(chunks.chunks) == 1
     assert chunks.chunks[0].section == "Body"

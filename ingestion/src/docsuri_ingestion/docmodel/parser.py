@@ -109,6 +109,7 @@ def parse_html_to_docmodel(
         # No LaTeXML sectioning (e.g. a short note): fold all body content into one
         # span-only section so the doc-model is still well-formed (BR-S3 fallback).
         sections = [_span_only_section(root, doc_ctx)]
+    sections = _with_abstract_section(sections, abstract)
 
     data = {
         "meta": {
@@ -148,11 +149,13 @@ def parse_text_to_docmodel(
     paragraph block rather than inventing structure the source did not provide.
     """
     body = _WS_RE.sub(" ", text or "").strip()
+    sections = _with_abstract_section([], abstract)
     section = {
         "id": "s1",
         "title": "",
         "blocks": ([{"id": "s1.p1", "type": "paragraph", "text": body}] if body else []),
     }
+    sections.append(section)
     data = {
         "meta": {
             "paperId": paper_id,
@@ -166,8 +169,8 @@ def parse_text_to_docmodel(
                 "generatedAt": generated_at,
             },
         },
-        "fullText": body,
-        "sections": [section],
+        "fullText": _project_full_text(sections),
+        "sections": sections,
     }
     return DocModel.model_validate(data)
 
@@ -223,6 +226,20 @@ def _span_only_section(root: Tag, doc_ctx: _DocCtx) -> dict:
     sec_ctx = _SectionCtx(section_id="s1")
     blocks = _collect_blocks(root, sec_ctx, doc_ctx, skip_sections=False)
     return {"id": "s1", "title": "", "blocks": blocks}
+
+
+def _with_abstract_section(sections: list[dict], abstract: str | None) -> list[dict]:
+    text = _WS_RE.sub(" ", abstract or "").strip()
+    if not text:
+        return sections
+    return [
+        {
+            "id": "s0",
+            "title": "Abstract",
+            "blocks": [{"id": "s0.p1", "type": "paragraph", "text": text}],
+        },
+        *sections,
+    ]
 
 
 def _section_title(section_el: Tag) -> str:

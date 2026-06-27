@@ -507,7 +507,9 @@ def test_source_record_ingest_uses_grobid_docmodel_and_source_watermark() -> Non
     assert result is DedupDecision.NEW
     assert provider.fetched_pdf_for == record
     assert grobid.seen_pdf == b"%PDF"
-    assert store.docs and store.docs[0].fullText == "GROBID text with equations and tables"
+    assert store.docs
+    assert "External abstract" in store.docs[0].fullText
+    assert "GROBID text with equations and tables" in store.docs[0].fullText
     assert index.records
     assert any(
         any(ref.blockId == "s1.p1" for ref in record.blockRefs)

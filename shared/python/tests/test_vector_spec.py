@@ -10,6 +10,7 @@ from conftest import load_schema, valid_index_record_dict
 from pydantic import ValidationError
 
 from docsuri_shared import vector_spec as vs
+from docsuri_shared.index_spec import papers_index_body
 
 # Every top-level vector-spec.yaml key must be mirrored by a Python constant.
 _EXPECTED_YAML_KEYS = {
@@ -78,6 +79,11 @@ def test_index_record_block_refs_are_structured():
 
     with pytest.raises(ValidationError):
         vs.IndexRecord.model_validate({**valid_index_record_dict(), "blockRefs": ["s1.p1"]})
+
+
+def test_block_refs_mapping_is_non_indexed_provenance():
+    mapping = papers_index_body()["mappings"]["properties"]["blockRefs"]
+    assert mapping == {"type": "object", "enabled": False}
 
 
 def test_assert_same_space():
