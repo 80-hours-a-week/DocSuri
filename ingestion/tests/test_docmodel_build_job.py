@@ -74,15 +74,22 @@ def test_build_doc_model_builds_and_caches_on_miss() -> None:
     assert source.calls  # builder fetched the HTML source
 
 
-def test_build_doc_model_source_unavailable_is_terminal() -> None:
-    # Builder source returns None → SourceUnavailableDTO (ack, no redelivery).
-    pipeline, _, _, _, _ = build_test_pipeline(
-        doc_model_builder=_builder(_FakeSource(None), _FakeStore())
+def test_build_doc_model_falls_back_to_text_when_html_unavailable() -> None:
+    store = _FakeStore()
+    pipeline, _, _, _, observability = build_test_pipeline(
+        doc_model_builder=_builder(_FakeSource(None), store)
     )
     result = pipeline.build_doc_model(
         IngestionJob(job_id="b-2", kind=JobKind.BUILD_DOC_MODEL, arxiv_ref="2401.00001v1")
     )
-    assert result.status == "source_unavailable"
+    assert result.status == "ok"
+    assert result.docModel.meta.provenance.sourceTier is SourceTier.pdf
+    assert result.docModel.fullText
+    assert len(store.put_calls) == 1
+    assert any(
+        metric[0] == "ingestion.docmodel.build" and metric[2]["status"] == "pdf_fallback"
+        for metric in observability.metrics
+    )
 
 
 def test_build_doc_model_requires_arxiv_ref() -> None:

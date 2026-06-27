@@ -22,8 +22,10 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
 - `ingestion/src/docsuri_ingestion/application.py`
   - full-text 저장 후 index write 전에 DocModel을 eager build한다.
   - arXiv HTML/ar5iv가 없으면 이미 확보된 PDF/full-text fallback 텍스트로 최소 DocModel을 생성한다.
+  - lazy `BUILD_DOC_MODEL`도 arXiv HTML 미가용 시 동일한 PDF/full-text fallback DocModel 정책을 사용한다.
   - Semantic Scholar/OpenAlex `sourceRecord` job도 PDF -> GROBID -> FullText -> DocModel -> chunk/embed/index 공통 경로를 탄다.
-  - source별 watermark와 canonical dedup state를 ingestion 완료 시 갱신한다.
+  - arXiv와 외부 source 모두 canonical dedup state를 갱신하고, source priority(arXiv > Semantic Scholar > OpenAlex)를 적용한다.
+  - 이미 상위 priority source가 이긴 canonical key는 PDF/GROBID fetch 전에 duplicate로 종료하고, 상위 source가 나중에 도착하면 기존 하위 source chunk를 tombstone 처리한다.
   - tombstone 시 DocModel cache invalidation을 수행한다.
 
 - `ingestion/src/docsuri_ingestion/processors.py`
@@ -35,6 +37,7 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
   - arXiv HTML/PDF 우선순위는 기존 adapter를 재사용한다.
   - Semantic Scholar/OpenAlex는 PDF bytes를 메모리에서만 GROBID로 넘기고, 반환 artifact에는 PDF bytes를 저장하지 않는다.
   - provider가 주입된 source는 incremental metadata와 PDF fetch 경로를 제공하며, 미주입 source는 refresh에서 metric으로 건너뛴다.
+  - Semantic Scholar/OpenAlex 실 HTTP provider 구현과 credential/quota 운영 결정은 이 PR 범위 밖이며 Operations/follow-up에서 처리한다.
 
 - `ingestion/src/docsuri_ingestion/domain/canonical.py`
   - canonical key 우선순위는 DOI -> arXiv id -> title/author/year hash다.
@@ -87,6 +90,10 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
 - `frontend`: targeted `pnpm exec vitest ...` -> 5 files, 19 tests passed
 - `frontend`: `pnpm exec tsc --noEmit` -> passed
 - repo root: `git diff --check` -> passed
+- 2026-06-27 review follow-up: `uv run --directory ingestion pytest tests/test_orchestration.py tests/test_docmodel_build_job.py tests/test_corpus_sources.py tests/test_canonical_dedup.py -q` -> 39 passed
+- 2026-06-27 review follow-up: `uv run --directory ingestion ruff check src tests/test_orchestration.py tests/test_docmodel_build_job.py` -> passed
+- 2026-06-27 review follow-up: `uv run --directory ingestion pytest -q -rA` -> 132 passed, 1 skipped
+- 2026-06-27 review follow-up: `uv run --directory ingestion ruff check .` -> passed
 
 ## 추적성
 

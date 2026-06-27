@@ -2142,3 +2142,19 @@ library_removed        저장 신호 철회 신호 가중치는 뭐에요??"
 **Context**: PR — U1 Corpus Code Generation and Operations placeholder.
 
 ---
+
+## U1 Corpus Construction — Additional Review Feedback Fix
+**Timestamp**: 2026-06-27T00:29:46Z
+**User Input**: "ok, apply the feedback."
+**AI Response**: "팀원 PR 리뷰 후속을 Code Generation 보정으로 처리했다. lazy `BUILD_DOC_MODEL` 경로를 eager ingest와 동일한 PDF/full-text fallback DocModel 정책으로 통일하고, canonical dedup state에 arXiv도 기록하며 source priority(arXiv > Semantic Scholar > OpenAlex)를 적용했다. 하위 priority external source는 PDF/GROBID fetch 전에 duplicate skip하고, 상위 source가 나중에 도착하면 기존 하위 source chunks를 tombstone 처리한다. Semantic Scholar/OpenAlex 실 HTTP provider, legacy reindex의 DocModel chunk 전환, vision-model asset rollout은 Operations/follow-up 경계로 문서화했다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation additional review fix.
+
+---
+
+## U1 Corpus Construction — Additional Review Feedback Validation
+**Timestamp**: 2026-06-27T00:32:31Z
+**User Input**: ""
+**AI Response**: "추가 리뷰 보정 검증을 완료했다. Focused ingestion tests 39 passed, full ingestion pytest 132 passed / 1 skipped, ingestion ruff clean, git diff --check passed."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation additional review fix validation.
+
+---

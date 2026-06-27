@@ -20,6 +20,7 @@ for transition.
 
 - U1 Corpus Functional Design / NFR Requirements / NFR Design / Infrastructure Design: complete and approved.
 - U1 Corpus Code Generation: complete, review findings fixed, and pushed.
+- 2026-06-27 follow-up review fix: lazy/eager DocModel fallback policy is unified, and canonical dedup now records arXiv plus applies source priority before external PDF/GROBID work.
 - U1 Corpus Build and Test: complete and approved for Operations placeholder transition.
 - Latest validation:
   - `shared/python`: schema drift check passed, `pytest` 66 passed
@@ -35,10 +36,12 @@ for transition.
 U1 Corpus is not marked production deployable from this placeholder stage because these
 items remain outside the current Operations workflow:
 
-- Production source-provider credentials/quota decisions for Semantic Scholar/OpenAlex
+- Production Semantic Scholar/OpenAlex HTTP provider implementation plus credentials/quota decisions
 - GROBID sidecar production capacity tuning
 - Corpus backfill batch sizing and budget stop threshold
 - OpenSearch generation cutover execution
+- Existing corpus backfill/reindex to rebuild legacy chunks through DocModel-based chunking
+- Multimodal asset rollout for vision-model inputs: flag enablement, non-arXiv/PDF figure strategy, and validation that asset refs resolve to stored private assets
 - Production monitoring dashboards and alert routing for the Corpus run
 
 These should be handled by an executable deployment/operations workflow before production

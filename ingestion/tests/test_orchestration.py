@@ -21,7 +21,7 @@ from docsuri_ingestion.corpus_sources import CorpusSourceAdapterSet, SourcePaper
 from docsuri_ingestion.docmodel.builder import DocModelBuilder
 from docsuri_ingestion.domain.enums import DedupDecision, FailureReason, JobKind, SourceName
 from docsuri_ingestion.domain.errors import PermanentIngestionError, RetriableIngestionError
-from docsuri_ingestion.domain.models import IndexRecordBatch, IngestionJob
+from docsuri_ingestion.domain.models import CanonicalDedupState, IndexRecordBatch, IngestionJob
 from docsuri_ingestion.worker import job_from_payload, process_message
 
 from .conftest import build_test_pipeline
@@ -503,6 +503,90 @@ def test_source_record_ingest_uses_grobid_docmodel_and_source_watermark() -> Non
     assert any(record.blockRefs == ["s1.p1"] for record in index.records.values())
     assert control.get_watermark("openalex").updated_at == record.updated_at
     assert control.get_canonical_dedup_state("doi:10.1000/external") is not None
+
+
+def test_source_record_skips_pdf_fetch_when_higher_priority_winner_exists() -> None:
+    record = _external_record()
+    provider = _ExternalSource(record)
+    corpus_sources = CorpusSourceAdapterSet(
+        arxiv=FakeArxivSource([sample_metadata()]),
+        openalex=provider,
+        grobid=_Grobid(),
+    )
+    pipeline, control, index, _, _ = build_test_pipeline(corpus_sources=corpus_sources)
+    control.upsert_canonical_dedup_state(
+        CanonicalDedupState(
+            canonical_key="doi:10.1000/external",
+            paper_id="2401.00001",
+            winning_source_tier="ARXIV_HTML",
+            winning_version=1,
+            fingerprint="fp",
+            seen_sources=(SourceName.ARXIV,),
+        )
+    )
+
+    result = pipeline.ingest_one(
+        IngestionJob(
+            job_id="openalex-duplicate",
+            kind=JobKind.INCREMENTAL,
+            source_name=SourceName.OPENALEX,
+            source_record=record.to_payload(),
+            canonical_key="doi:10.1000/external",
+        )
+    )
+
+    state = control.get_canonical_dedup_state("doi:10.1000/external")
+    assert result is DedupDecision.DUPLICATE
+    assert provider.fetched_pdf_for is None
+    assert index.records == {}
+    assert state is not None
+    assert state.seen_sources == (SourceName.ARXIV, SourceName.OPENALEX)
+
+
+def test_arxiv_replaces_lower_priority_canonical_winner() -> None:
+    old_paper_id = "src-old-openalex"
+    arxiv_key = "arxiv:2401.00001"
+    pipeline, control, index, _, _ = build_test_pipeline()
+    control.upsert_canonical_dedup_state(
+        CanonicalDedupState(
+            canonical_key=arxiv_key,
+            paper_id=old_paper_id,
+            winning_source_tier="OPENALEX_GROBID",
+            winning_version=1,
+            fingerprint="old-fp",
+            seen_sources=(SourceName.OPENALEX,),
+        )
+    )
+    index.records["old-openalex:0000"] = IndexRecord(
+        chunkId="old-openalex:0000",
+        paperId=old_paper_id,
+        version=1,
+        vector=[0.0] * DIMENSIONS,
+        section="body",
+        lexicalTerms="old duplicate",
+        blockRefs=[],
+        title="Old Duplicate",
+        authors=["Old"],
+        year=2024,
+        arxivId="",
+        abstract="old",
+        abstractSnippet="old",
+        arxivUrl="https://example.test/old",
+        categories=["cs.LG"],
+    )
+
+    result = pipeline.ingest_one(
+        IngestionJob(job_id="arxiv-replaces", kind=JobKind.INCREMENTAL, arxiv_ref="2401.00001v1")
+    )
+
+    state = control.get_canonical_dedup_state(arxiv_key)
+    assert result is DedupDecision.NEW
+    assert state is not None
+    assert state.paper_id == "2401.00001"
+    assert state.winning_source_tier == "ARXIV_HTML"
+    assert state.seen_sources == (SourceName.OPENALEX, SourceName.ARXIV)
+    assert all(record.paperId != old_paper_id for record in index.records.values())
+    assert index.tombstones[-1].reason == "CANONICAL_SOURCE_REPLACED"
 
 
 def test_changed_version_replaces_stale_chunks() -> None:

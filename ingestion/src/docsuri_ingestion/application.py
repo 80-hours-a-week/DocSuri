@@ -105,9 +105,10 @@ class IngestionPipelineService:
 
         Dispatched as a BUILD_DOC_MODEL queue job by a consumer (U7 viewer/summary) on a cache
         miss — the read side enqueues, this worker produces. Idempotent: the builder serves the
-        cached artifact on a hit, so duplicate enqueues are cheap (no rebuild). A genuine source
-        miss returns ``SourceUnavailableDTO`` (terminal — ack, no redelivery); transient arXiv
-        metadata failures raise through resilience (retriable redelivery)."""
+        cached artifact on a hit, so duplicate enqueues are cheap (no rebuild). If rich HTML is
+        unavailable, the worker falls back to the same PDF/text DocModel policy as eager ingest;
+        transient arXiv metadata/full-text failures raise through resilience (retriable redelivery).
+        """
         if self._doc_model_builder is None:
             raise PermanentIngestionError(
                 "doc-model builder not configured",
@@ -126,10 +127,23 @@ class IngestionPipelineService:
             lambda: self._arxiv.fetch_metadata(job.arxiv_ref or ""),
         )
         result = self._doc_model_builder.build(metadata)
+        status = result.status
+        cached = str(getattr(result, "cached", "")).lower()
+        if isinstance(result, SourceUnavailableDTO):
+            raw_document = self._resilience.dependency_call(
+                "arxiv",
+                "fetch_full_text",
+                lambda: self._arxiv.fetch_full_text(metadata),
+            )
+            result = self._doc_model_builder.build_from_text(
+                metadata, raw_document.text, source_tier=SourceTier.pdf
+            )
+            status = "pdf_fallback"
+            cached = str(result.cached).lower()
         self._observability.emit_metric(
             "ingestion.docmodel.build",
             1.0,
-            {"status": result.status, "cached": str(getattr(result, "cached", "")).lower()},
+            {"status": status, "cached": cached},
         )
         return result
 
@@ -166,13 +180,29 @@ class IngestionPipelineService:
             paper = self._parser.parse(raw_document)
 
             doc_model = self._build_doc_model_before_index(metadata, raw_document.text)
-            return self._index_paper(
+            key = canonical_key(
+                title=metadata.title,
+                year=paper.year,
+                arxiv_id=metadata.identifier.arxiv_id,
+                first_author=metadata.authors[0] if metadata.authors else None,
+            )
+            existing = self._control_plane.get_canonical_dedup_state(key)
+            decision = self._index_paper(
                 job,
                 paper,
                 doc_model=doc_model,
                 watermark_name="arxiv",
                 asset_metadata=metadata,
             )
+            if decision is not DedupDecision.STALE:
+                self._record_canonical_winner(
+                    key,
+                    paper,
+                    "ARXIV_PDF" if "/pdf/" in raw_document.source_url else "ARXIV_HTML",
+                    SourceName.ARXIV,
+                    existing,
+                )
+            return decision
         except IngestionError as exc:
             self._control_plane.record_job_finished(
                 job.job_id, success=False, detail=exc.public_error()
@@ -200,30 +230,23 @@ class IngestionPipelineService:
             )
         record = SourcePaperRecord.from_payload(job.source_record or {})
         self._parser.validate_open_access(record.license_url)
+        updated = record.updated_at or record.published_at or self._clock.now()
+        key = job.canonical_key or self._canonical_key_for_record(
+            record, record.year or updated.year
+        )
+        existing = self._control_plane.get_canonical_dedup_state(key)
+        if existing is not None and not _source_can_replace(
+            existing.winning_source_tier, record.source_name
+        ):
+            self._record_canonical_duplicate(job, existing, record.source_name)
+            return DedupDecision.DUPLICATE
+
         candidate = self._resilience.dependency_call(
             record.source_name.value.lower(),
             "fetch_full_text",
             lambda: self._corpus_sources.extract_record_text(record),
         )
         paper = self._paper_from_source_record(record, candidate.text, job)
-        key = job.canonical_key or self._canonical_key_for_record(record, paper.year)
-        existing = self._control_plane.get_canonical_dedup_state(key)
-        if existing is not None:
-            self._control_plane.upsert_canonical_dedup_state(
-                replace(
-                    existing,
-                    seen_sources=_append_source(existing.seen_sources, record.source_name),
-                )
-            )
-            self._control_plane.record_job_finished(
-                job.job_id, success=True, detail="canonical_duplicate"
-            )
-            self._observability.emit_metric(
-                "ingestion.canonical_duplicate",
-                1.0,
-                {"source": record.source_name.value},
-            )
-            return DedupDecision.DUPLICATE
 
         doc_model = self._build_doc_model_from_paper(paper, SourceTier.pdf)
         decision = self._index_paper(
@@ -233,16 +256,13 @@ class IngestionPipelineService:
             watermark_name=record.source_name.value.lower(),
             asset_metadata=None,
         )
-        if dedup_decision_applies_to_index(decision):
-            self._control_plane.upsert_canonical_dedup_state(
-                CanonicalDedupState(
-                    canonical_key=key,
-                    paper_id=paper.paper_id,
-                    winning_source_tier=candidate.source_tier,
-                    winning_version=paper.version,
-                    fingerprint=paper.fingerprint,
-                    seen_sources=(record.source_name,),
-                )
+        if decision is not DedupDecision.STALE:
+            self._record_canonical_winner(
+                key,
+                paper,
+                candidate.source_tier,
+                record.source_name,
+                existing,
             )
         return decision
 
@@ -404,6 +424,73 @@ class IngestionPipelineService:
             arxiv_id=record.arxiv_id,
             first_author=first_author,
         )
+
+    def _record_canonical_duplicate(
+        self,
+        job: IngestionJob,
+        existing: CanonicalDedupState,
+        source_name: SourceName,
+    ) -> None:
+        self._control_plane.upsert_canonical_dedup_state(
+            replace(
+                existing,
+                seen_sources=_append_source(existing.seen_sources, source_name),
+            )
+        )
+        self._control_plane.record_job_finished(
+            job.job_id, success=True, detail="canonical_duplicate"
+        )
+        self._observability.emit_metric(
+            "ingestion.canonical_duplicate",
+            1.0,
+            {"source": source_name.value},
+        )
+
+    def _record_canonical_winner(
+        self,
+        key: str,
+        paper: ParsedPaper,
+        source_tier: str,
+        source_name: SourceName,
+        existing: CanonicalDedupState | None,
+    ) -> None:
+        if existing is not None and existing.paper_id != paper.paper_id:
+            self._remove_canonical_loser(existing)
+        self._control_plane.upsert_canonical_dedup_state(
+            CanonicalDedupState(
+                canonical_key=key,
+                paper_id=paper.paper_id,
+                winning_source_tier=source_tier,
+                winning_version=paper.version,
+                fingerprint=paper.fingerprint,
+                seen_sources=_append_source(
+                    existing.seen_sources if existing is not None else (), source_name
+                ),
+            )
+        )
+
+    def _remove_canonical_loser(self, existing: CanonicalDedupState) -> None:
+        tombstone = Tombstone(
+            paper_id=existing.paper_id,
+            version=existing.winning_version,
+            reason="CANONICAL_SOURCE_REPLACED",
+        )
+        self._resilience.dependency_call(
+            "opensearch",
+            "tombstone_canonical_loser",
+            lambda: self._vector_index.tombstone_paper(tombstone),
+        )
+        if self._vector_index_v2:
+            try:
+                self._resilience.dependency_call(
+                    "opensearch_v2",
+                    "tombstone_canonical_loser",
+                    lambda: self._vector_index_v2.tombstone_paper(tombstone),
+                )
+            except Exception as e:
+                self._observability.emit_log(
+                    {"type": "dual_write_v2_canonical_loser_failed", "error": str(e)}
+                )
 
     def _tombstone(
         self, job: IngestionJob, paper, *, watermark_name: str = "arxiv"
@@ -665,6 +752,29 @@ def _append_source(seen_sources: tuple, source_name) -> tuple:
     if source_name in seen_sources:
         return seen_sources
     return (*seen_sources, source_name)
+
+
+def _source_can_replace(winning_source_tier: str, candidate: SourceName) -> bool:
+    return _source_priority(candidate) < _source_priority_from_tier(winning_source_tier)
+
+
+def _source_priority(source_name: SourceName) -> int:
+    return {
+        SourceName.ARXIV: 0,
+        SourceName.SEMANTIC_SCHOLAR: 1,
+        SourceName.OPENALEX: 2,
+    }[source_name]
+
+
+def _source_priority_from_tier(source_tier: str) -> int:
+    normalized = source_tier.upper()
+    if "ARXIV" in normalized or source_tier in {"native_html", "ar5iv", "eprint_latex", "pdf"}:
+        return _source_priority(SourceName.ARXIV)
+    if "SEMANTIC_SCHOLAR" in normalized:
+        return _source_priority(SourceName.SEMANTIC_SCHOLAR)
+    if "OPENALEX" in normalized:
+        return _source_priority(SourceName.OPENALEX)
+    return _source_priority(SourceName.OPENALEX)
 
 
 def detect_withdrawal_proxy(title: str, abstract: str, text: str) -> bool:
