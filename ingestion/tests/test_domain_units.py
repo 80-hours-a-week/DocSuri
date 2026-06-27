@@ -1,16 +1,23 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
 from docsuri_shared.dtos import DocModel
+from docsuri_shared.vector_spec import DIMENSIONS
 
 from docsuri_ingestion.adapters.local import InMemoryControlPlaneStore, sample_metadata
 from docsuri_ingestion.domain.enums import DedupDecision, DedupStateKind
 from docsuri_ingestion.domain.errors import LicenseRejectedError
 from docsuri_ingestion.domain.ids import content_fingerprint, normalize_arxiv_ref
-from docsuri_ingestion.domain.models import RawDocument, Watermark
-from docsuri_ingestion.processors import Chunker, FetchParseProcessor, detect_withdrawal
+from docsuri_ingestion.domain.models import EmbeddingBatch, RawDocument, Watermark
+from docsuri_ingestion.processors import (
+    Chunker,
+    FetchParseProcessor,
+    IndexRecordAssembler,
+    detect_withdrawal,
+)
 
 
 def test_arxiv_id_normalization_and_version_parsing() -> None:
@@ -130,6 +137,34 @@ def test_docmodel_chunker_falls_back_to_full_text_for_textless_blocks() -> None:
 
     assert chunks.chunks[0].text == "Results"
     assert chunks.chunks[0].block_refs[0].block_id == "s1.tbl1"
+
+
+def test_index_record_lexical_terms_are_body_chunk_only() -> None:
+    metadata = replace(
+        sample_metadata(),
+        title="Unique Title Only",
+        abstract="Unique Abstract Only",
+    )
+    paper = FetchParseProcessor().parse(
+        RawDocument(
+            metadata=metadata,
+            text="INTRODUCTION\nBody chunk only terms",
+            source_url="local://paper",
+        )
+    )
+    chunks = Chunker(max_chunk_chars=200, overlap_chars=0).chunk(paper)
+    embedding_batch = EmbeddingBatch(
+        chunk_ids=tuple(chunk.chunk_id for chunk in chunks.chunks),
+        vectors=tuple(tuple([0.0] * DIMENSIONS) for _ in chunks.chunks),
+    )
+
+    records = IndexRecordAssembler().assemble(paper, chunks, embedding_batch).records
+    body_record = next(
+        record for record in records if record.lexicalTerms == "INTRODUCTION Body chunk only terms"
+    )
+
+    assert "Unique Title Only" not in body_record.lexicalTerms
+    assert "Unique Abstract Only" not in body_record.lexicalTerms
 
 
 def test_dedup_guard_decisions_and_mark_ingested() -> None:

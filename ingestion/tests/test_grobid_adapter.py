@@ -45,6 +45,7 @@ def test_corpus_build_preflight_rejects_expensive_or_incomplete_config() -> None
 
     assert "DOCSURI_MULTIMODAL_ASSETS_ENABLED" in str(exc.value)
     assert "DOCSURI_BEDROCK_MODEL_ID_V2" in str(exc.value)
+    assert "DOCSURI_CORPUS_BUILD_ROLLOUT_CONFIRMED" in str(exc.value)
     assert "DOCSURI_GROBID_URL" in str(exc.value)
 
 
@@ -55,6 +56,7 @@ def test_corpus_build_preflight_accepts_ready_config() -> None:
             "DOCSURI_CORPUS_SOURCES": "ARXIV,SEMANTIC_SCHOLAR,OPENALEX",
             "DOCSURI_GROBID_URL": "http://grobid.internal:8070",
             "DOCSURI_MULTIMODAL_ASSETS_ENABLED": "true",
+            "DOCSURI_CORPUS_BUILD_ROLLOUT_CONFIRMED": "true",
         }
     )
 

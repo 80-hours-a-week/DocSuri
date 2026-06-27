@@ -247,7 +247,7 @@ class IndexRecordAssembler:
         chunk: Chunk,
         vector: Sequence[float],
     ) -> IndexRecord:
-        lexical_terms = normalize_text(f"{paper.title} {paper.abstract} {chunk.text}")
+        lexical_terms = normalize_text(chunk.text)
         return IndexRecord(
             chunkId=chunk.chunk_id,
             paperId=paper.paper_id,

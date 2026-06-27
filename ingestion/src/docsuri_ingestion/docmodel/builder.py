@@ -63,7 +63,7 @@ class DocModelBuilder:
         paper_id = metadata.paper_id
         version = metadata.version
 
-        cached = self._store.get(paper_id, version)
+        cached = self._fresh_cached(paper_id, version)
         if cached is not None:
             return DocModelResultDTO(status="ok", cached=True, docModel=cached)
 
@@ -98,7 +98,7 @@ class DocModelBuilder:
         """Return/cache a minimal doc-model from already-fetched PDF/GROBID text."""
         paper_id = metadata.paper_id
         version = metadata.version
-        cached = self._store.get(paper_id, version)
+        cached = self._fresh_cached(paper_id, version)
         if cached is not None:
             return DocModelResultDTO(status="ok", cached=True, docModel=cached)
         doc = parse_text_to_docmodel(
@@ -126,7 +126,7 @@ class DocModelBuilder:
         source_tier: SourceTier = SourceTier.pdf,
     ) -> DocModelResultDTO:
         """Return/cache a minimal doc-model for non-arXiv source records."""
-        cached = self._store.get(paper_id, version)
+        cached = self._fresh_cached(paper_id, version)
         if cached is not None:
             return DocModelResultDTO(status="ok", cached=True, docModel=cached)
         doc = parse_text_to_docmodel(
@@ -148,4 +148,16 @@ class DocModelBuilder:
         self._store.remove(paper_id)
 
     def get_cached(self, paper_id: str, version: int) -> DocModel | None:
-        return self._store.get(paper_id, version)
+        return self._fresh_cached(paper_id, version)
+
+    def _fresh_cached(self, paper_id: str, version: int) -> DocModel | None:
+        cached = self._store.get(paper_id, version)
+        if cached is None:
+            return None
+        provenance = cached.meta.provenance
+        if (
+            provenance.parserVersion == self._parser_version
+            and provenance.schemaVersion == self._schema_version
+        ):
+            return cached
+        return None

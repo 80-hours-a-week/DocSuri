@@ -118,7 +118,7 @@
 
 | 엔티티 | 필드(개념) | 비고 |
 |---|---|---|
-| **IndexRecord** | `chunkId`, `paperId`, `version`, `vector`, **카드 필드**(title·authors·year·arxivId·abstractSnippet·arxivUrl) + `categories` + `abstract` + `section` + `lexicalTerms` | **Q4=A·Q2=C: 청크당 1 레코드(논문당 다수).** FR-2 하이브리드(lexical=제목+초록+본문 토큰) + FR-4 카드 + FR-5 해소 가능 ID/링크. |
+| **IndexRecord** | `chunkId`, `paperId`, `version`, `vector`, **카드 필드**(title·authors·year·arxivId·abstractSnippet·arxivUrl) + `categories` + `abstract` + `section` + `lexicalTerms` | **Q4=A·Q2=C: 청크당 1 레코드(논문당 다수).** FR-2 하이브리드 lexical write는 `title`/`abstract`/본문전용 `lexicalTerms`로 분리하고, FR-4 카드 + FR-5 해소 가능 ID/링크를 보존한다. |
 | **IndexRecordBatch** | `records[]`(한 논문의 전 청크), `paperId`, `jobRef?` | `VectorIndexWriter.upsert` 입력 = **논문 단위 원자 커밋 단위**(Q8=A/BR-7). **프로덕션: 논문당 다중 IndexRecord 전부 또는 전무.** PBT P3/P4 대상. |
 | **StoredFullText** | `paperId`, `version`, `objectRef`, `contentType` | **Q2=C·SEC-9 활성**: OA 전문 오브젝트 스토리지 보관(공개 차단). 재구축·재처리 재사용(arXiv 재취득 회피). |
 | **WriteResult** | `written`, `skipped`, `failed[]` | upsert/tombstone 결과. `failed[]`→IngestionResilienceService. |

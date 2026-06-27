@@ -90,12 +90,13 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
 ## 2026-06-27 코퍼스 빌드 전 리뷰 보정
 
 - DocModel 계약을 FROZEN으로 전환하고, footnote/references/page 제외 및 PDF/GROBID 단일 paragraph degrade를 명시했다.
-- `lexicalTerms`는 title+abstract+chunk text 단일 BM25 필드로 확정했다. field split/boost는 v1 write 계약 밖이며 변경 시 전량 재색인이다.
+- `lexicalTerms`는 본문 청크 전용 analyzed 필드로 줄이고, `title`/`abstract`는 기존 analyzed 표시 필드를 lexical 검색에도 재사용한다. 현재 U2 reader는 세 필드를 equal-weight `multi_match`로 조회하고, boost 튜닝은 재색인 없이 query 변경으로 적용한다.
 - Semantic Scholar/OpenAlex 실 HTTP provider를 추가했다. production runtime은 GROBID 설정이 있을 때만 외부 provider를 배선해 PDF fetch 후 기존 GROBID/DocModel/index 경로로 보낸다.
 - `migrate.py backfill`은 legacy `chunk()` 직접 재색인을 제거하고, OAI metadata를 기존 ingestion pipeline에 넣어 DocModel blockRefs 기반으로 재임베딩한다.
 - local runtime에 in-memory DocModelBuilder를 주입해 local/prod indexing path를 맞췄다.
 - HTML 본문에 `meta.abstract`와 동일한 abstract section이 있으면 첫 abstract section을 제거해 semantic embedding 이중계상을 막는다.
-- `trigger-full-rebuild` preflight가 production corpus build 전에 multimodal assets ON, external source용 GROBID URL, `DOCSURI_BEDROCK_MODEL_ID_V2` unset을 강제한다.
+- `DocModelBuilder` cache hit는 cached provenance `parserVersion`/`schemaVersion`이 현재 builder와 일치할 때만 재사용한다. 오래된 lazy-build S3 artifact는 자동으로 재빌드/덮어쓴다.
+- `trigger-full-rebuild` preflight가 production corpus build 전에 multimodal assets ON, external source용 GROBID URL, `DOCSURI_BEDROCK_MODEL_ID_V2` unset, worker rollout 완료 및 harvest redeploy freeze 확인(`DOCSURI_CORPUS_BUILD_ROLLOUT_CONFIRMED=true`)을 강제한다.
 
 ## 검증 결과
 

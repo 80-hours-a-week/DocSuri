@@ -43,13 +43,17 @@ Expected:
 
 Run after deploying migration and worker task:
 
-1. Enable only arXiv source first: `DOCSURI_CORPUS_SOURCES=ARXIV`.
-2. Ingest one known OA paper.
-3. Confirm S3 full text and `doc-model/{paperId}/v{version}.json` exist.
-4. Confirm OpenSearch candidate index document count is greater than zero.
-5. Run generation validation.
-6. Switch alias only after validation passes.
-7. Query U7 `GET /api/papers/{id}/doc-model?version={version}`.
+1. Wait for ECS rollout completion: every ingestion task must run the new task definition.
+2. Freeze ingestion worker redeploys for the harvest window.
+3. Set `DOCSURI_CORPUS_BUILD_ROLLOUT_CONFIRMED=true` and `DOCSURI_MULTIMODAL_ASSETS_ENABLED=true`; keep `DOCSURI_BEDROCK_MODEL_ID_V2` unset.
+4. Provision the new OpenSearch on-disk candidate index.
+5. Enable only arXiv source first: `DOCSURI_CORPUS_SOURCES=ARXIV`.
+6. Ingest one known OA paper.
+7. Confirm S3 full text and `doc-model/{paperId}/v{version}.json` exist.
+8. Confirm OpenSearch candidate index document count is greater than zero.
+9. Run generation validation.
+10. Switch alias only after validation passes.
+11. Query U7 `GET /api/papers/{id}/doc-model?version={version}`.
 
 ## Cleanup
 

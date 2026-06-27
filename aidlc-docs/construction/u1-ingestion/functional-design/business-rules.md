@@ -32,6 +32,7 @@
 | **BR-C13 (commit 정합성)** | `(paperId, version)` 단위로 FullText, DocModel, chunks, embeddings, index records, S3 object refs, generation manifest가 서로 맞아야 한다. 불일치하면 generation cutover 차단이다. | FR-6, FR-18, QT-9 |
 | **BR-C14 (관측성 신호)** | U1 실패 신호는 내부 이름과 무관하게 `ObservabilityHub.emitMetric`/`emitLog`로 라우팅한다. source watermark 지연, GROBID 실패, DocModel validation 실패, embedding 실패, DLQ 적체는 별도 tag를 가져야 한다. | RES-7, NFR-O1, U1 Corpus Q11=A |
 | **BR-C15 (레거시 규칙 폐기 범위)** | `PaperId=versionless arXiv id`, 단일 전역 `Watermark`, `Chunker.chunk(parsed)` 기반 인덱싱, phase-1 lazy DocModel, 원시 PDF 저장 가능 해석은 U1 Corpus 범위에서 폐기한다. | FR-6, FR-18, QT-9 |
+| **BR-C16 (lexical write split)** | `IndexRecord.lexicalTerms`는 본문 청크 텍스트만 저장한다. 제목/초록은 `title`/`abstract` analyzed 필드를 검색 필드로 재사용하며, boost 튜닝은 재색인 없이 U2 query 변경으로 적용한다. | FR-2, BR-6 |
 
 ### 0.2 QT-9 / PBT 속성
 

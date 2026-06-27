@@ -45,6 +45,9 @@ class IngestionSettings(BaseModel):
     multimodal_assets_enabled: bool = Field(
         default=False, alias="DOCSURI_MULTIMODAL_ASSETS_ENABLED"
     )
+    corpus_build_rollout_confirmed: bool = Field(
+        default=False, alias="DOCSURI_CORPUS_BUILD_ROLLOUT_CONFIRMED"
+    )
     asset_s3_prefix: str = Field(default="assets", alias="DOCSURI_ASSET_S3_PREFIX")
     asset_max_longest_side: int = Field(default=2048, alias="DOCSURI_ASSET_MAX_LONGEST_SIDE")
     asset_max_pixels: int = Field(default=30_000_000, alias="DOCSURI_ASSET_MAX_PIXELS")
@@ -94,6 +97,11 @@ def validate_corpus_build_settings(settings: IngestionSettings) -> None:
         errors.append("DOCSURI_MULTIMODAL_ASSETS_ENABLED must be true before corpus build")
     if settings.bedrock_model_id_v2:
         errors.append("DOCSURI_BEDROCK_MODEL_ID_V2 must be unset before corpus build")
+    if not settings.corpus_build_rollout_confirmed:
+        errors.append(
+            "DOCSURI_CORPUS_BUILD_ROLLOUT_CONFIRMED must be true after worker rollout "
+            "completion and during a worker deployment freeze"
+        )
     if sources.intersection({"SEMANTIC_SCHOLAR", "OPENALEX"}) and not settings.grobid_url:
         errors.append("DOCSURI_GROBID_URL is required for Semantic Scholar/OpenAlex corpus build")
     if errors:

@@ -167,9 +167,6 @@ class IngestionStack(Stack):
                 "DOCSURI_OPENSEARCH_ALIAS": "docsuri-corpus",
                 "DOCSURI_CORPUS_SOURCES": "ARXIV,SEMANTIC_SCHOLAR,OPENALEX",
                 "DOCSURI_GROBID_URL": "http://127.0.0.1:8070",
-                # FR-21 v4 dual-write: setting *_V2 flips runtime.build_production_runtime to
-                # fan writes into the clean v2 index (Fail-Open — v2 errors never block v1).
-                "DOCSURI_BEDROCK_MODEL_ID_V2": _BEDROCK_MODEL_ID,
                 "DOCSURI_OPENSEARCH_INDEX_V2": "docsuri-corpus-v2",
                 "DOCSURI_CONTROL_PLANE_DSN": control_plane_dsn,
                 "DOCSURI_SQS_QUEUE_URL": self.queue.queue_url,

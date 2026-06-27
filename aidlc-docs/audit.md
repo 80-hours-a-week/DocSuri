@@ -2390,3 +2390,58 @@ DOCSURI_BEDROCK_MODEL_ID_V2 미설정(설정 시 임베딩 이중 비용)
 **Context**: CONSTRUCTION — U1 Corpus Code Generation pre-corpus build review validation.
 
 ---
+
+## U1 Corpus Construction — Pre-build Parser Cache and Deployment Guard Review Fix
+**Timestamp**: 2026-06-27T05:17:56Z
+**User Input**:
+```text
+This is the new review from our team.
+
+U1 Corpus — 빌드 전 추가로 볼 사항 2건 + 배포 순서
+
+게이트 항목 대부분(DocModel 확정·멀티소스·migrate·local 등)은 닫혔습니다. 코퍼스를 실제로 채우기 전에 한 번 더 정리하면 좋을 항목 2건과, 롤링 배포라서 챙겨야 할 순서를 추가합니다. 모두 "지금 처리하면 미래 재작업/혼합 데이터를 없애는" 성격입니다.
+
+1. DocModelBuilder 캐시가 parserVersion을 검사하지 않음 — 문서-코드 불일치
+
+docmodel.md는 *"provenance.parserVersion/schemaVersion 변경 시 무효화"*라고 명시.
+그러나 DocModelBuilder.build()는 캐시를 (paperId, version)로만 조회하고, 캐시된 DocModel의 parserVersion을 현재 빌더 버전과 비교하지 않음 → 옛 파서로 만든 DocModel이 S3에 있으면 재빌드 없이 그대로 재사용(stale).
+영향: 이번 빌드에서도 과거 lazy-build로 생성돼 S3 doc-model/에 남은 논문들은 옛 포맷(예: abstract 블록 없는 버전)을 물고 올 수 있음. 또 앞으로 파서를 개선(예: Phase 7 PDF 구조화)할 때마다 자동 무효화가 안 됨.
+제안(코드 수정): build()에서 캐시 히트 시 cached.meta.provenance.parserVersion/schemaVersion이 현재 빌더 버전과 다르면 재빌드. (사실상 캐시 키를 (paperId, version, parserVersion)로) — 문서가 약속한 동작을 코드가 실제로 하게 만드는 것.
+대안(운영): 빌드 전 S3 doc-model/ prefix 비우기. 다만 매번 수동 + 누락 위험이라 코드 수정을 권장.
+2. lexicalTerms — "필드 write 분리"를 v1에 포함할지 재검토
+
+현재 v1 결정 = 단일 lexicalTerms(제목+초록+본문 concat) 유지, 분리는 추후 재색인. 가중치 튜닝을 데이터 생긴 뒤(검색 품질 단계)로 미루는 것은 타당합니다.
+다만 검색 가중치(weight)와 필드 저장(write)은 분리 가능한 결정입니다:
+text 필드는 검색(분석)과 표시(원본 반환)를 한 필드로 겸함 → 제목/초록을 별도 필드로만 두고 lexicalTerms를 본문만으로 줄이면 중복 저장 제거 + 표시도 같은 필드로 처리.
+이렇게 write만 지금 분리해두면, 추후 검색 가중치(multi_match title^bN…)는 재색인 없이 쿼리 변경만으로 적용 가능.
+현재처럼 concat으로 채우면, 추후 분리 시 전량 재색인(벡터 재사용은 가능하나 레코드 전수 재기록; 현 migrate.py 경로는 재임베딩까지 동반)이 강제됩니다.
+제안: v1에서 필드 write 분리만 채택(가중치는 검색 품질 단계로 유지)할지 판단. 미래 재색인을 없애는 쪽이라 빌드 전에 결정하는 게 이득.
+3. 배포 순서 — 롤링 배포라 혼합 포맷 위험 (운영 절차)
+
+ingestion 워커는 ECS 롤링 배포(FargateService 기본 컨트롤러 + DeploymentCircuitBreaker(rollback=True)). 즉 배포 시 옛/새 task가 한동안 동시에 SQS 잡을 소비합니다.
+롤아웃 윈도우 동안 잡이 처리되면: 옛 task는 옛 포맷(full-text 청크·blockRefs/abstract 블록 없음), 새 task는 새 포맷(DocModel 블록)을 써서 인덱스/S3에 혼합 포맷이 섞여 들어감.
+권장 순서:
+새 워커 코드 배포 → 롤아웃 완전 종료까지 대기(모든 task 새 버전)
+새 on_disk 인덱스 provision
+그 다음에 harvest 트리거 (롤아웃 끝난 뒤에만)
+긴 대량 harvest 도중에는 워커 재배포 동결 — 진행 중 롤링이 들어가면 그 윈도우 잡이 옛 코드로 처리될 수 있음.
+참고: 빌드 실행 시 저장 동작
+
+파이프라인 실행 시 DocModel/full-text(+assets)는 S3에, 청크 임베딩은 OpenSearch에 자동 저장.
+OpenSearch: on_disk 매핑은 새 인덱스가 필요(옛 corpus는 lucene) → blue-green(새 인덱스 채움 → alias switch → 옛 인덱스 drop). cutover 동안 옛/새 인덱스 공존 = 일시 2배, 옛 인덱스 drop 시 해소. (이 인덱스 blue-green은 위 3번의 서비스 롤링과 다른 층입니다 — 둘 다 챙겨야 함.)
+S3: {paperId}/v{version} 키 기반 덮어쓰기라 중복 저장(2배) 없음. 단 위 1번(parserVersion stale)으로 옛 DocModel이 재사용될 수 있음.
+
+This time, find and resolve all potential issues.
+```
+**AI Response**: "추가 리뷰 항목을 U1 Corpus Code Generation 보정으로 처리한다. DocModelBuilder 캐시 히트는 provenance parserVersion/schemaVersion이 현재 빌더와 일치할 때만 재사용하고, IndexRecord write 계약은 title/abstract/body lexical 필드로 분리하며 현재 검색 호환용 `lexicalTerms`는 본문 청크 전용으로 유지한다. Production `trigger-full-rebuild`에는 worker rollout 완료 및 harvest freeze 확인 preflight를 추가해 롤링 배포 중 혼합 포맷 수집을 막는다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation parser cache, lexical write split, and deployment guard fix.
+
+---
+
+## U1 Corpus Construction — Pre-build Parser Cache and Deployment Guard Validation
+**Timestamp**: 2026-06-27T05:26:52Z
+**User Input**: ""
+**AI Response**: "추가 리뷰 보정 검증을 완료했다. Focused ingestion DocModel/domain/preflight tests passed, focused discovery OpenSearch adapter tests passed, shared vector spec tests passed, shared generate --check passed. Broader validation: ingestion pytest passed with expected skip, shared pytest 68 passed, discovery pytest passed with expected skips, ops pytest 42 passed. Ruff passed for ingestion/shared/discovery/ops, and git diff --check passed."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation parser cache, lexical write split, and deployment guard validation.
+
+---

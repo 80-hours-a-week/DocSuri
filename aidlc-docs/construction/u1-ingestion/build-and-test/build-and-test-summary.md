@@ -48,6 +48,7 @@
 - Raw PDF bytes remain transient for GROBID extraction.
 - GROBID is wired as an internal sidecar, not a public endpoint.
 - Provider-backed Semantic Scholar/OpenAlex sources are queued through source-specific jobs; unconfigured providers are skipped with telemetry rather than failing the scheduler.
+- Production corpus build preflight requires worker rollout completion/redeploy freeze confirmation before harvest can be queued.
 - OpenSearch alias cutover is separated from candidate writes and blocked by validation failure.
 - DLQ/retry payloads preserve enough metadata for source-aware reprocess.
 
