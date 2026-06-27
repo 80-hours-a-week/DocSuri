@@ -26,7 +26,9 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
   - Semantic Scholar/OpenAlex `sourceRecord` job도 PDF -> GROBID -> FullText -> DocModel -> chunk/embed/index 공통 경로를 탄다.
   - arXiv와 외부 source 모두 canonical dedup state를 갱신하고, source priority(arXiv > Semantic Scholar > OpenAlex)를 적용한다.
   - 이미 상위 priority source가 이긴 canonical key는 PDF/GROBID fetch 전에 duplicate로 종료하고, 상위 source가 나중에 도착하면 기존 하위 source chunk를 tombstone 처리한다.
+  - withdrawal-detected paper는 tombstone 후 canonical winner로 기록하지 않아 정상 외부 복본을 삭제하지 않는다.
   - tombstone 시 DocModel cache invalidation을 수행한다.
+  - canonical loser 제거 시에도 index tombstone, DocModel cache invalidation, asset cleanup을 대칭 수행한다.
 
 - `ingestion/src/docsuri_ingestion/processors.py`
   - `Chunker.chunk_doc_model()`을 추가해 DocModel block 단위 chunk를 생성한다.
@@ -94,6 +96,11 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
 - 2026-06-27 review follow-up: `uv run --directory ingestion ruff check src tests/test_orchestration.py tests/test_docmodel_build_job.py` -> passed
 - 2026-06-27 review follow-up: `uv run --directory ingestion pytest -q -rA` -> 132 passed, 1 skipped
 - 2026-06-27 review follow-up: `uv run --directory ingestion ruff check .` -> passed
+- 2026-06-27 re-review follow-up: `uv run --directory ingestion pytest tests/test_orchestration.py tests/test_docmodel_build_job.py tests/test_canonical_dedup.py -q` -> 34 passed
+- 2026-06-27 re-review follow-up: `uv run --directory ingestion ruff check src tests/test_orchestration.py tests/test_docmodel_build_job.py tests/test_canonical_dedup.py` -> passed
+- 2026-06-27 re-review follow-up: `uv run --directory ingestion pytest -q -rA` -> 133 passed, 1 skipped
+- 2026-06-27 re-review follow-up: `uv run --directory ingestion ruff check .` -> passed
+- 2026-06-27 re-review follow-up: `git diff --check` -> passed
 
 ## 추적성
 

@@ -36,6 +36,7 @@ class _NoHtmlDocModelSource:
 class _DocModelStore:
     def __init__(self) -> None:
         self.docs: list[DocModel] = []
+        self.removed: list[str] = []
 
     def get(self, paper_id: str, version: int) -> DocModel | None:
         del paper_id, version
@@ -46,7 +47,15 @@ class _DocModelStore:
         return "memory://doc-model"
 
     def remove(self, paper_id: str) -> None:
-        del paper_id
+        self.removed.append(paper_id)
+
+
+class _AssetStore:
+    def __init__(self) -> None:
+        self.removed: list[str] = []
+
+    def remove_assets(self, paper_id: str) -> None:
+        self.removed.append(paper_id)
 
 
 class _ExternalSource:
@@ -546,7 +555,13 @@ def test_source_record_skips_pdf_fetch_when_higher_priority_winner_exists() -> N
 def test_arxiv_replaces_lower_priority_canonical_winner() -> None:
     old_paper_id = "src-old-openalex"
     arxiv_key = "arxiv:2401.00001"
-    pipeline, control, index, _, _ = build_test_pipeline()
+    store = _DocModelStore()
+    builder = DocModelBuilder(source=_NoHtmlDocModelSource(), store=store)
+    asset_store = _AssetStore()
+    pipeline, control, index, _, _ = build_test_pipeline(
+        doc_model_builder=builder,
+        asset_store=asset_store,
+    )
     control.upsert_canonical_dedup_state(
         CanonicalDedupState(
             canonical_key=arxiv_key,
@@ -587,6 +602,56 @@ def test_arxiv_replaces_lower_priority_canonical_winner() -> None:
     assert state.seen_sources == (SourceName.OPENALEX, SourceName.ARXIV)
     assert all(record.paperId != old_paper_id for record in index.records.values())
     assert index.tombstones[-1].reason == "CANONICAL_SOURCE_REPLACED"
+    assert store.removed == [old_paper_id]
+    assert asset_store.removed == [old_paper_id]
+
+
+def test_withdrawn_arxiv_does_not_replace_external_canonical_winner() -> None:
+    old_paper_id = "src-old-openalex"
+    arxiv_key = "arxiv:2401.00001"
+    arxiv = FakeArxivSource(
+        [sample_metadata()],
+        full_text={"2401.00001v1": "This paper has been withdrawn by the authors."},
+    )
+    pipeline, control, index, _, _ = build_test_pipeline(arxiv=arxiv)
+    control.upsert_canonical_dedup_state(
+        CanonicalDedupState(
+            canonical_key=arxiv_key,
+            paper_id=old_paper_id,
+            winning_source_tier="OPENALEX_GROBID",
+            winning_version=1,
+            fingerprint="old-fp",
+            seen_sources=(SourceName.OPENALEX,),
+        )
+    )
+    index.records["old-openalex:0000"] = IndexRecord(
+        chunkId="old-openalex:0000",
+        paperId=old_paper_id,
+        version=1,
+        vector=[0.0] * DIMENSIONS,
+        section="body",
+        lexicalTerms="old duplicate",
+        blockRefs=[],
+        title="Old Duplicate",
+        authors=["Old"],
+        year=2024,
+        arxivId="",
+        abstract="old",
+        abstractSnippet="old",
+        arxivUrl="https://example.test/old",
+        categories=["cs.LG"],
+    )
+
+    result = pipeline.ingest_one(
+        IngestionJob(job_id="withdrawn-arxiv", kind=JobKind.INCREMENTAL, arxiv_ref="2401.00001v1")
+    )
+
+    state = control.get_canonical_dedup_state(arxiv_key)
+    assert result is DedupDecision.CHANGED
+    assert state is not None
+    assert state.paper_id == old_paper_id
+    assert any(record.paperId == old_paper_id for record in index.records.values())
+    assert all(tombstone.paper_id != old_paper_id for tombstone in index.tombstones)
 
 
 def test_changed_version_replaces_stale_chunks() -> None:

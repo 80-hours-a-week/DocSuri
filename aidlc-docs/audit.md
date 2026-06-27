@@ -2158,3 +2158,62 @@ library_removed        저장 신호 철회 신호 가중치는 뭐에요??"
 **Context**: CONSTRUCTION — U1 Corpus Code Generation additional review fix validation.
 
 ---
+
+## U1 Corpus Construction — Additional Re-review Feedback Fix
+**Timestamp**: 2026-06-27T01:40:07Z
+**User Input**: "There's a new review from our team:
+
+U1 Corpus 재검토 — cf923a8 (리뷰 반영 커밋)
+
+8244f25 → cf923a8 변경(주로 application.py +176/tests)을 검토했습니다. 본댓글 지적 중 **②(소스 tier 우선순위)·③(lazy/eager 폴백 불일치)**를 정조준해 고쳤고 테스트도 붙었습니다. 다만 새 replace 로직에 엣지 버그 1건이 들어왔습니다.
+
+✅ 잘 고친 것
+
+② 소스 간 tier 우선순위 — 구현 + 테스트 완료
+
+_source_priority: arXiv(0) < Semantic Scholar(1) < OpenAlex(2). canonical key 충돌 시 _source_can_replace로 더 높은 우선순위만 교체, 교체 시 _remove_canonical_loser가 기존 패자를 인덱스에서 tombstone. 낮은 우선순위는 duplicate.
+tier 문자열 복원(_source_priority_from_tier) 안전 — source_record가 "{SOURCE}_GROBID"(예: SEMANTIC_SCHOLAR_GROBID)로 저장돼 pdf로 오인 매핑되는 함정 회피. 레거시 raw tier→arXiv 매핑 가드도 합리적.
+부수 개선: no-replace 판정이 extract_record_text(PDF fetch/GROBID) 이전으로 이동 → 버릴 중복은 GROBID 안 돌림. (test_source_record_skips_pdf_fetch_when_higher_priority_winner_exists)
+교체 케이스 test_arxiv_replaces_lower_priority_canonical_winner 커버.
+③ lazy/eager 폴백 통일
+
+build_doc_model(lazy 읽기 경로)도 SourceUnavailable 시 fetch_full_text → build_from_text(PDF) 폴백 → eager와 동일 정책. (test_build_doc_model_falls_back_to_text_when_html_unavailable)
+⚠️ 새로 들어온 엣지 버그 (머지 전 검토 요망)
+
+🅐 철회(withdrawn) arXiv 논문이 canonical winner로 기록되고 외부 복본을 삭제함
+
+ingest_one → _index_paper
+  paper.withdrawal_detected → _tombstone() → return CHANGED   ← 철회인데 CHANGED
+복귀: if decision is not STALE:  ← CHANGED 통과
+        _record_canonical_winner(...)            ← 철회 논문을 winner로 기록
+          existing(외부 src-<hash>) paper_id 다름 → _remove_canonical_loser → 외부 복본 tombstone
+결과: arXiv 논문은 철회로 인덱스에서 빠졌는데 같은 canonical key의 정상 외부(SS/OpenAlex) 복본까지 tombstone → 코퍼스에서 통째로 사라지고 dedup 상태는 철회 논문을 winner로 가리킴.
+원인: _tombstone도 정상 인덱싱도 둘 다 CHANGED 반환 → is not STALE로 구분 불가.
+권고: canonical winner 기록을 paper.withdrawal_detected일 때 건너뛰기(또는 _index_paper가 tombstone을 별도 decision으로 신호). 엣지지만 "철회가 멀쩡한 복본을 삭제"는 데이터 손실이라 막는 게 맞습니다.
+🅑 _remove_canonical_loser 정리 비대칭 (사소)
+
+_tombstone은 인덱스 tombstone + doc_model_builder.invalidate + _remove_assets_best_effort까지 하는데, _remove_canonical_loser는 인덱스 tombstone만. 패자의 DocModel S3 산출물·assets·full-text S3가 고아로 남음(비용 누수, 검색 영향 없음).
+발생: arXiv가 외부 복본 교체 시만(실 arxiv id vs 파생 src-<hash> → paper_id 다름). 외부끼리(SS↔OpenAlex)는 파생 paper_id가 같아 같은 id로 재색인 → 고아 없음.
+권고: _remove_canonical_loser에도 docmodel invalidate + asset 제거를 대칭 추가.
+변동 없음 (이 커밋 범위 밖 — 그대로 남음)
+
+① 멀티소스 실 HTTP provider 미구현(여전히 arXiv 단독 실수집)
+④ migrate.py 재처리 경로 아직 legacy chunk(paper)(D6 미적용)
+⑤ local runtime builder 미주입(local≠prod)
+⑥ 그림 비전모델 입력(multimodal flag OFF, arXiv 한정) / ⑦ PDF-fallback 무구조
+⑧ 매핑 정의 중복 / ⑨ lexical 필드 설계 (별도 인덱스 설계 코멘트 참조)
+정리
+
+②③는 정확히, 테스트까지 붙여 해결. 🅐(철회가 외부 복본 삭제) 데이터 손실 엣지는 머지 전 수정 권장, 🅑는 사소하니 같이 묶어 처리. ①④⑤⑥⑦은 페이즈 범위 결정 사항, ⑧⑨는 인덱스 설계 코멘트대로."
+**AI Response**: "팀 재검토 지적 2건을 Code Generation 보정으로 처리한다. withdrawal-detected paper는 tombstone 후 canonical winner 기록을 건너뛰도록 하고, canonical loser 제거를 normal tombstone cleanup과 대칭으로 맞춘다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation re-review fix.
+
+---
+
+## U1 Corpus Construction — Additional Re-review Feedback Validation
+**Timestamp**: 2026-06-27T01:41:39Z
+**User Input**: ""
+**AI Response**: "재검토 보정 검증을 완료했다. Focused ingestion tests 34 passed, full ingestion pytest 133 passed / 1 skipped, ingestion ruff clean, git diff --check passed."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation re-review fix validation.
+
+---

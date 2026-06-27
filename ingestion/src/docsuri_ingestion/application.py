@@ -194,7 +194,7 @@ class IngestionPipelineService:
                 watermark_name="arxiv",
                 asset_metadata=metadata,
             )
-            if decision is not DedupDecision.STALE:
+            if decision is not DedupDecision.STALE and not paper.withdrawal_detected:
                 self._record_canonical_winner(
                     key,
                     paper,
@@ -256,7 +256,7 @@ class IngestionPipelineService:
             watermark_name=record.source_name.value.lower(),
             asset_metadata=None,
         )
-        if decision is not DedupDecision.STALE:
+        if decision is not DedupDecision.STALE and not paper.withdrawal_detected:
             self._record_canonical_winner(
                 key,
                 paper,
@@ -491,6 +491,9 @@ class IngestionPipelineService:
                 self._observability.emit_log(
                     {"type": "dual_write_v2_canonical_loser_failed", "error": str(e)}
                 )
+        if self._doc_model_builder is not None:
+            self._doc_model_builder.invalidate(existing.paper_id)
+        self._remove_assets_best_effort(existing.paper_id)
 
     def _tombstone(
         self, job: IngestionJob, paper, *, watermark_name: str = "arxiv"
