@@ -101,6 +101,37 @@ def test_docmodel_chunker_uses_docmodel_blocks_only() -> None:
     assert chunks.chunks[0].block_refs[0].block_id == "s1.p1"
 
 
+def test_docmodel_chunker_falls_back_to_full_text_for_textless_blocks() -> None:
+    doc = DocModel.model_validate(
+        {
+            "meta": {
+                "paperId": "2401.00001",
+                "version": 1,
+                "title": "T",
+                "provenance": {
+                    "sourceTier": "native_html",
+                    "parserVersion": "test",
+                    "schemaVersion": "1",
+                    "generatedAt": "1970-01-01T00:00:00Z",
+                },
+            },
+            "fullText": "Results",
+            "sections": [
+                {
+                    "id": "s1",
+                    "title": "Results",
+                    "blocks": [{"id": "s1.tbl1", "type": "table", "rows": []}],
+                }
+            ],
+        }
+    )
+
+    chunks = Chunker().chunk_doc_model(doc)
+
+    assert chunks.chunks[0].text == "Results"
+    assert chunks.chunks[0].block_refs[0].block_id == "s1.tbl1"
+
+
 def test_dedup_guard_decisions_and_mark_ingested() -> None:
     store = InMemoryControlPlaneStore()
     metadata = sample_metadata()

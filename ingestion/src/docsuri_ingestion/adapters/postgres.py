@@ -208,6 +208,11 @@ class PostgresControlPlaneStore:
             )
             conn.commit()
 
+    def delete_canonical_dedup_state_for_paper(self, paper_id: str) -> None:
+        with self._connect() as conn:
+            conn.execute("DELETE FROM canonical_dedup_state WHERE paper_id = %s", (paper_id,))
+            conn.commit()
+
     def acquire_rebuild_lock(self, owner: str) -> bool:
         with self._connect() as conn:
             row = conn.execute(

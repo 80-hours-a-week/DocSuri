@@ -45,6 +45,23 @@ def test_in_memory_store_round_trips_canonical_dedup_state() -> None:
     assert store.get_canonical_dedup_state("doi:10.1000/x") == state
 
 
+def test_in_memory_store_deletes_canonical_state_by_paper_id() -> None:
+    store = InMemoryControlPlaneStore()
+    state = CanonicalDedupState(
+        canonical_key="arxiv:2401.00001",
+        paper_id="2401.00001",
+        winning_source_tier="ARXIV_HTML",
+        winning_version=1,
+        fingerprint="fp",
+        seen_sources=(SourceName.ARXIV,),
+    )
+    store.upsert_canonical_dedup_state(state)
+
+    store.delete_canonical_dedup_state_for_paper("2401.00001")
+
+    assert store.get_canonical_dedup_state("arxiv:2401.00001") is None
+
+
 _TEXT = st.text(
     alphabet=st.characters(blacklist_categories=("Cs",)),
     min_size=1,

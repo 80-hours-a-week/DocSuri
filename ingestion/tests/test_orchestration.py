@@ -659,6 +659,36 @@ def test_withdrawn_arxiv_does_not_replace_external_canonical_winner() -> None:
     assert all(tombstone.paper_id != old_paper_id for tombstone in index.tombstones)
 
 
+def test_withdrawn_arxiv_clears_itself_as_canonical_winner() -> None:
+    arxiv_key = "arxiv:2401.00001"
+    arxiv = FakeArxivSource(
+        [sample_metadata()],
+        full_text={"2401.00001v1": "This paper has been withdrawn by the authors."},
+    )
+    pipeline, control, _, _, _ = build_test_pipeline(arxiv=arxiv)
+    control.upsert_canonical_dedup_state(
+        CanonicalDedupState(
+            canonical_key=arxiv_key,
+            paper_id="2401.00001",
+            winning_source_tier="ARXIV_HTML",
+            winning_version=1,
+            fingerprint="fp",
+            seen_sources=(SourceName.ARXIV,),
+        )
+    )
+
+    result = pipeline.ingest_one(
+        IngestionJob(
+            job_id="withdrawn-canonical-winner",
+            kind=JobKind.INCREMENTAL,
+            arxiv_ref="2401.00001v1",
+        )
+    )
+
+    assert result is DedupDecision.CHANGED
+    assert control.get_canonical_dedup_state(arxiv_key) is None
+
+
 def test_changed_version_replaces_stale_chunks() -> None:
     v1_meta = sample_metadata("2401.00001v1")
     v2_meta = sample_metadata("2401.00001v2")

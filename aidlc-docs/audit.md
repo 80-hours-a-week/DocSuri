@@ -2329,3 +2329,19 @@ provision_v2_index.py는 아직 INDEX_BODY 하드코딩(papers_index_body 미imp
 **Context**: CONSTRUCTION — U1 Corpus Code Generation abstract and mapping re-review fix validation.
 
 ---
+
+## U1 Corpus Construction — FullText Fallback and Canonical Cleanup Fix
+**Timestamp**: 2026-06-27T02:52:56Z
+**User Input**: "add 🅔 and canonical-state cleanup for withdrawn current winners too"
+**AI Response**: "요청한 🅔와 철회 winner canonical cleanup을 Code Generation 보정으로 처리한다. text-bearing block이 없는 DocModel은 `fullText` fallback chunk를 첫 실제 block ref에 연결하고, successful tombstone은 해당 paperId의 canonical dedup state rows를 삭제한다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation fullText fallback and canonical cleanup fix.
+
+---
+
+## U1 Corpus Construction — FullText Fallback and Canonical Cleanup Validation
+**Timestamp**: 2026-06-27T02:55:11Z
+**User Input**: ""
+**AI Response**: "fullText/canonical cleanup 보정 검증을 완료했다. Focused ingestion tests 39 passed, full ingestion pytest 135 passed / 1 skipped, ingestion ruff clean, shared generate --check passed, git diff --check passed."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation fullText fallback and canonical cleanup validation.
+
+---

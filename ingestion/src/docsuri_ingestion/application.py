@@ -522,6 +522,7 @@ class IngestionPipelineService:
                     {"type": "dual_write_v2_tombstone_failed", "error": str(e)}
                 )
         self._control_plane.advance_watermark(watermark_name, paper.updated_at)
+        self._control_plane.delete_canonical_dedup_state_for_paper(paper.paper_id)
         if self._doc_model_builder is not None:
             self._doc_model_builder.invalidate(paper.paper_id)
         self._remove_assets_best_effort(paper.paper_id)

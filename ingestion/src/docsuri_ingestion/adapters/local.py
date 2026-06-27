@@ -147,6 +147,13 @@ class InMemoryControlPlaneStore:
         with self._lock:
             self._canonical[state.canonical_key] = state
 
+    def delete_canonical_dedup_state_for_paper(self, paper_id: str) -> None:
+        with self._lock:
+            for key in [
+                key for key, state in self._canonical.items() if state.paper_id == paper_id
+            ]:
+                del self._canonical[key]
+
     def acquire_rebuild_lock(self, owner: str) -> bool:
         with self._lock:
             if self._rebuild_owner is not None:

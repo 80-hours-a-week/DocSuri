@@ -28,6 +28,7 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
   - arXiv와 외부 source 모두 canonical dedup state를 갱신하고, source priority(arXiv > Semantic Scholar > OpenAlex)를 적용한다.
   - 이미 상위 priority source가 이긴 canonical key는 PDF/GROBID fetch 전에 duplicate로 종료하고, 상위 source가 나중에 도착하면 기존 하위 source chunk를 tombstone 처리한다.
   - withdrawal-detected paper는 tombstone 후 canonical winner로 기록하지 않아 정상 외부 복본을 삭제하지 않는다.
+  - successful tombstone은 해당 `paperId`의 canonical winner rows를 삭제해 철회된 winner가 후속 외부 복본 ingest를 막지 않는다.
   - tombstone 시 DocModel cache invalidation을 수행한다.
   - canonical loser 제거 시에도 index tombstone, DocModel cache invalidation, asset cleanup을 대칭 수행한다.
 
@@ -35,6 +36,7 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
   - `Chunker.chunk_doc_model()`을 추가해 DocModel block 단위 chunk를 생성한다.
   - chunk에 section/block/type metadata를 보존하고, `IndexRecord.blockRefs[]`를 `{paperId, version, sectionId, blockId, blockType}` 구조화 필드로 저장한다.
   - DocModel 기반 chunking은 DocModel block만 사용하므로 모든 DocModel-derived index record가 실제 DocModel block을 참조한다.
+  - text-bearing block이 없는 DocModel은 `fullText`를 첫 실제 block ref에 연결해 fallback chunk를 생성한다.
   - `blockRefs`는 provenance/QT-9 검증용이며 BM25 `lexicalTerms` 검색 토큰에는 섞지 않는다.
 
 - `ingestion/src/docsuri_ingestion/corpus_sources.py`
@@ -123,6 +125,12 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
 - 2026-06-27 abstract/mapping re-review follow-up: `uv run --directory ingestion pytest -q -rA` -> 133 passed, 1 skipped
 - 2026-06-27 abstract/mapping re-review follow-up: `uv run --directory ops pytest -q` -> 42 passed
 - 2026-06-27 abstract/mapping re-review follow-up: `uv run --directory backend/modules/discovery pytest -q` -> 53 passed, 3 skipped
+- 2026-06-27 fullText/canonical cleanup follow-up: `uv run --directory ingestion pytest tests/test_domain_units.py tests/test_canonical_dedup.py tests/test_orchestration.py -q` -> 39 passed
+- 2026-06-27 fullText/canonical cleanup follow-up: `uv run --directory ingestion ruff check src tests/test_domain_units.py tests/test_canonical_dedup.py tests/test_orchestration.py` -> passed
+- 2026-06-27 fullText/canonical cleanup follow-up: `uv run --directory ingestion pytest -q -rA` -> 135 passed, 1 skipped
+- 2026-06-27 fullText/canonical cleanup follow-up: `uv run --directory ingestion ruff check .` -> passed
+- 2026-06-27 fullText/canonical cleanup follow-up: `uv run --directory shared/python python tools/generate.py --check` -> passed
+- 2026-06-27 fullText/canonical cleanup follow-up: `git diff --check` -> passed
 
 ## 추적성
 

@@ -114,8 +114,10 @@ class Chunker:
         """Chunk structured doc-model blocks while preserving block id refs internally."""
         block_ids: set[tuple[str, str, str]] = set()
         entries: list[tuple[str, str, tuple[ChunkBlockRef, ...]]] = []
+        fallback_refs: tuple[ChunkBlockRef, ...] = ()
 
         def walk(section) -> None:
+            nonlocal fallback_refs
             section_id = getattr(section, "id", "")
             section_label = normalize_text(section.title or section.id)
             for block in section.blocks:
@@ -137,7 +139,17 @@ class Chunker:
                         if block_id
                         else ()
                     )
+                    if refs and not fallback_refs:
+                        fallback_refs = refs
                     entries.append((section_label, text, refs))
+                elif block_id and not fallback_refs:
+                    fallback_refs = (
+                        ChunkBlockRef(
+                            section_id=section_id,
+                            block_id=block_id,
+                            block_type=block_type,
+                        ),
+                    )
             for child in section.sections or []:
                 walk(child)
 
@@ -164,6 +176,22 @@ class Chunker:
                 )
             if len(chunks) >= self.max_chunks_per_paper:
                 break
+
+        if not chunks and doc.fullText and fallback_refs:
+            for part in split_text(doc.fullText, self.max_chunk_chars, self.overlap_chars):
+                ordinal = len(chunks)
+                chunks.append(
+                    Chunk(
+                        paper_id=doc.meta.paperId,
+                        ordinal=ordinal,
+                        section="body",
+                        text=part,
+                        chunk_id=chunk_id(doc.meta.paperId, ordinal),
+                        block_refs=fallback_refs,
+                    )
+                )
+                if len(chunks) >= self.max_chunks_per_paper:
+                    break
 
         referenced = {
             (ref.section_id, ref.block_id, ref.block_type)
