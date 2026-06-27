@@ -2217,3 +2217,63 @@ _tombstone은 인덱스 tombstone + doc_model_builder.invalidate + _remove_asset
 **Context**: CONSTRUCTION — U1 Corpus Code Generation re-review fix validation.
 
 ---
+
+## U1 Corpus Construction — BlockRef Re-review Feedback Fix
+**Timestamp**: 2026-06-27T01:53:15Z
+**User Input**: "here's another review from our team:
+
+리뷰 범위
+
+재리뷰 대상 HEAD: cf923a8 (fix: align U1 corpus review feedback)
+이전 리뷰 대상 HEAD: 8244f2580faf6689db4d3155c23a8387432f2c8f
+현재 브랜치: feature/u1-corpus-code-generation
+리뷰 기준: develop...HEAD (49ef24d8aeb0129f551df7ec25f19f0e7c80e6b3)
+diff 규모: 61개 파일, 3045줄 추가, 274줄 삭제
+untracked 파일: CodeReview.md, u1-corpus-code-generation.md
+판정
+
+변경 요청
+
+수정 커밋으로 canonical dedup/source priority 경로는 상당 부분 보강됐습니다. 다만 DocModel/index anchor 계약은 아직 설계와 맞지 않아 머지 전 수정이 필요합니다.
+
+확인된 개선 사항
+
+lazy BUILD_DOC_MODEL도 HTML 미가용 시 PDF/full-text fallback DocModel을 만들도록 보정됐습니다.
+source_record duplicate는 기존 상위 priority winner가 있으면 PDF/GROBID fetch 전에 종료합니다.
+arXiv 경로도 canonical state를 기록하고, 같은 canonical key에서 상위 priority source가 나중에 오면 기존 하위 source index chunk를 tombstone 처리합니다.
+관련 regression test가 일부 추가됐습니다: duplicate fetch skip, arXiv winner replacement.
+지적 사항
+
+심각도	참조	파일:라인	문제	수정 방향
+blocking	FR-18, QT-9, U1 FD DocModelBlockRef	shared/vector-spec/index-record.schema.json:41, shared/python/src/docsuri_shared/_generated/vector_spec/index_record_schema.py:48, ingestion/src/docsuri_ingestion/processors.py:237	blockRefs가 여전히 list[str]입니다. U1 Functional Design은 DocModelBlockRef를 {paperId, version, sectionId, blockId, blockType} 구조체로 정의하고, 브랜치 메모도 "구조화 blockRefs"를 주장합니다. 현재 index record만으로는 version/section/type lineage를 검증할 수 없습니다.	shared vector schema와 generated model을 구조화된 blockRefs[] 객체로 바꾸세요. Chunk 단계에서 section id와 block type을 유지하고, assembler에서 paper/version/section/block/type을 채우세요.
+blocking	QT-9, U1 NFR §0.7	ingestion/src/docsuri_ingestion/processors.py:134	DocModel 기반 indexing이 abstract chunk를 먼저 만들지만, 그 chunk는 block_refs가 비어 있습니다. QT-9는 누락 DocModel block reference를 cutover blocker로 정의하고, U1 FD는 모든 index record가 존재하는 DocModel block id를 참조해야 한다고 정의합니다.	abstract를 DocModel block으로 모델링해 참조하게 하거나, DocModel 경로에서는 별도 abstract chunk를 만들지 마세요. 모든 DocModel-derived index record가 비어 있지 않은 refs를 갖고 실제 block으로 resolve되는 테스트를 추가하세요.
+should-fix	U1 FD SourceProvenance	ingestion/src/docsuri_ingestion/application.py:251, ingestion/src/docsuri_ingestion/corpus_sources.py:176, shared/vector-spec/index-record.schema.json:41	외부 GROBID record는 SEMANTIC_SCHOLAR_GROBID / OPENALEX_GROBID를 만들지만, DocModel provenance는 SourceTier.pdf로 축약되고 index record에도 설계상 요구된 sourceProvenance가 없습니다. 실제 source lineage가 검색 record에서 사라집니다.	DocModel/source provenance 계약을 확장하거나 설계대로 index sourceProvenance를 추가하세요. generic PDF fallback과 별도로 source name/tier/retrieved URL을 보존하세요.
+should-fix	U1 plan Step 7, SourcePriority	ingestion/src/docsuri_ingestion/application.py:183, ingestion/tests/test_orchestration.py:546	canonical priority 보정은 같은 canonical key일 때만 동작합니다. 그런데 arXiv path는 DOI를 알 수 없어 arxiv:<id> key만 기록하고, 외부 source는 DOI가 있으면 doi:<doi> key를 기록합니다. 테스트도 lower-priority external winner를 arxiv:2401.00001로 수동 seed해서 실제 DOI-only external record와 arXiv metadata 충돌을 검증하지 않습니다.	외부 source가 arXiv id를 제공하지 않는 DOI-only case를 명시적으로 follow-up 범위로 제한하거나, canonical alias/merge table을 추가해 DOI key와 arXiv key를 연결하세요. 최소한 regression test로 현재 한계를 고정하세요.
+nit	repo hygiene	aidlc-docs/construction/u1-ingestion/code/u1-corpus-code-summary.md:3	git diff --check develop...HEAD가 3-4라인 trailing whitespace 때문에 실패합니다. u1-corpus-code-generation.md의 검증 메모에는 git diff --check 통과라고 되어 있어 현재 상태와 맞지 않습니다.	trailing space 2개를 제거하고 검증 메모를 실제 결과와 맞추세요.
+테스트 갭
+
+모든 DocModel-derived index record의 blockRefs가 비어 있지 않고 실제 DocModel block으로 resolve되는지 검증하는 테스트가 없습니다.
+구조화된 DocModelBlockRef schema roundtrip/negative test가 없습니다.
+DOI-only external record가 먼저 들어오고 arXiv metadata가 나중에 들어오는 실제 cross-source duplicate case가 없습니다.
+U1 NFR §0.7의 source-record duplicate/order invariant에 대한 PBT coverage는 아직 부족합니다.
+검증 결과
+
+git diff --check develop...HEAD 실패: u1-corpus-code-summary.md 3-4라인 trailing whitespace.
+.venv\Scripts\python.exe -m ruff check ingestion\src\docsuri_ingestion ingestion\tests\test_orchestration.py ingestion\tests\test_docmodel_build_job.py ingestion\tests\test_canonical_dedup.py 통과.
+Extension Compliance
+
+Security Baseline: 리뷰한 U1 worker 경로에서 신규 injection/authz 문제는 발견하지 못했습니다. SQL 경로는 bound parameter를 사용합니다. 이 worker 경로와 무관한 security rule은 N/A입니다.
+Resiliency Baseline: canonical duplicate fetch-skip은 개선됐습니다. 다만 DOI/arXiv canonical alias 한계는 잔여 risk입니다.
+Property-Based Testing: U1 QT-9/source dedup invariant 기준 non-compliant입니다. blockRef completeness와 cross-source duplicate ordering PBT가 부족합니다."
+**AI Response**: "재검토 blocking 2건과 whitespace nit를 Code Generation 보정으로 처리한다. `IndexRecord.blockRefs[]`를 구조화 객체 배열로 바꾸고, DocModel 기반 indexing에서 unanchored abstract chunk를 제거해 모든 DocModel-derived index record가 실제 DocModel block을 참조하도록 한다. SourceProvenance와 DOI/arXiv alias는 should-fix follow-up 범위로 유지한다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation blockRef re-review fix.
+
+---
+
+## U1 Corpus Construction — BlockRef Re-review Feedback Validation
+**Timestamp**: 2026-06-27T01:55:26Z
+**User Input**: ""
+**AI Response**: "blockRef 재검토 보정 검증을 완료했다. Focused shared vector spec 8 passed, focused ingestion 39 passed, shared generate --check passed, shared pytest 67 passed, shared ruff clean, ingestion pytest 133 passed / 1 skipped, ingestion ruff clean, ops pytest 42 passed, discovery pytest 53 passed / 3 skipped, git diff --check passed."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation blockRef re-review fix validation.
+
+---

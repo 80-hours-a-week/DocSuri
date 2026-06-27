@@ -8,6 +8,19 @@
     "ArxivCategory": {
       "type": "string",
       "description": "An arXiv category code within the corpus slice (e.g. cs.LG, cs.AI, cs.CL, cs.CV, stat.ML). Trace: C-6."
+    },
+    "DocModelBlockRef": {
+      "type": "object",
+      "description": "Structured DocModel block reference covered by this chunk. Trace: FR-18, QT-9.",
+      "properties": {
+        "paperId": { "type": "string" },
+        "version": { "type": "integer" },
+        "sectionId": { "type": "string" },
+        "blockId": { "type": "string" },
+        "blockType": { "type": "string" }
+      },
+      "required": ["paperId", "version", "sectionId", "blockId", "blockType"],
+      "additionalProperties": false
     }
   },
   "properties": {
@@ -40,8 +53,8 @@
     },
     "blockRefs": {
       "type": "array",
-      "description": "DocModel block ids covered by this chunk. Empty for legacy/plain-text chunks. INTERNAL provenance used by QT-9 BlockRef validation; not searched or exposed externally. Trace: BR-C8, BR-C13, QT-9.",
-      "items": { "type": "string" }
+      "description": "Structured DocModel block refs covered by this chunk. Empty only for legacy/plain-text chunks. INTERNAL provenance used by QT-9 BlockRef validation; not searched or exposed externally. Trace: BR-C8, BR-C13, QT-9.",
+      "items": { "$ref": "#/$defs/DocModelBlockRef" }
     },
     "title": {
       "type": "string",

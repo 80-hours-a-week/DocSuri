@@ -22,6 +22,7 @@ from .vector_spec import (
     DIMENSIONS,
     EMBEDDING_SPEC,
     SPEC_VERSION,
+    DocModelBlockRef,
     IndexRecord,
     VectorSpec,
     assert_same_space,
@@ -36,6 +37,7 @@ __all__ = [
     "ids",
     # vector-spec (FROZEN)
     "IndexRecord",
+    "DocModelBlockRef",
     "VectorSpec",
     "EMBEDDING_SPEC",
     "SPEC_VERSION",

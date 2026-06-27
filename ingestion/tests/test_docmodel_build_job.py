@@ -59,6 +59,31 @@ def _builder(source: _FakeSource, store: _FakeStore) -> DocModelBuilder:
     return DocModelBuilder(source=source, store=store)
 
 
+def _doc_block_index(doc: DocModel) -> set[tuple[str, str, str]]:
+    refs: set[tuple[str, str, str]] = set()
+
+    def walk(section) -> None:
+        for block in section.blocks:
+            b = block.root
+            refs.add((section.id, b.id, b.type))
+        for child in section.sections or []:
+            walk(child)
+
+    for section in doc.sections:
+        walk(section)
+    return refs
+
+
+def _assert_index_refs_doc_model(index, doc: DocModel) -> None:
+    refs = _doc_block_index(doc)
+    for record in index.records.values():
+        assert record.blockRefs
+        for ref in record.blockRefs:
+            assert ref.paperId == doc.meta.paperId
+            assert ref.version == doc.meta.version
+            assert (ref.sectionId, ref.blockId, ref.blockType) in refs
+
+
 def test_build_doc_model_builds_and_caches_on_miss() -> None:
     source = _FakeSource((_HTML, SourceTier.native_html))
     store = _FakeStore(cached=None)
@@ -134,7 +159,7 @@ def test_ingest_one_eagerly_builds_doc_model_before_index() -> None:
     assert result.name == "NEW"
     assert len(store.put_calls) == 1
     assert index.bulk_calls == 1  # index write happened after the doc-model build
-    assert any(record.blockRefs == ["s1.p1"] for record in index.records.values())
+    _assert_index_refs_doc_model(index, store.put_calls[0])
     assert any(m[0] == "ingestion.docmodel.eager_build" for m in observability.metrics)
 
 
@@ -169,13 +194,14 @@ def test_ingest_one_eager_doc_model_new_and_changed_smoke() -> None:
 
     assert len(store.put_calls) == 2
     assert all(record.version == 2 for record in index.records.values())
-    assert any(record.blockRefs == ["s1.p1"] for record in index.records.values())
+    _assert_index_refs_doc_model(index, store.put_calls[-1])
     assert index.index_stats().total_documents == len(index.records)
 
 
 def test_ingest_one_falls_back_to_text_doc_model_when_html_unavailable() -> None:
+    store = _FakeStore()
     pipeline, _, index, _, observability = build_test_pipeline(
-        doc_model_builder=_builder(_FakeSource(None), _FakeStore())
+        doc_model_builder=_builder(_FakeSource(None), store)
     )
 
     result = pipeline.ingest_one(
@@ -184,7 +210,7 @@ def test_ingest_one_falls_back_to_text_doc_model_when_html_unavailable() -> None
 
     assert result is DedupDecision.NEW
     assert index.bulk_calls == 1
-    assert any(record.blockRefs == ["s1.p1"] for record in index.records.values())
+    _assert_index_refs_doc_model(index, store.put_calls[0])
     assert any(
         metric[0] == "ingestion.docmodel.eager_build"
         and metric[2]["status"] == "pdf_fallback"

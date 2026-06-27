@@ -87,13 +87,20 @@ class ParsedPaper:
 
 
 @dataclass(frozen=True, slots=True)
+class ChunkBlockRef:
+    section_id: str
+    block_id: str
+    block_type: str
+
+
+@dataclass(frozen=True, slots=True)
 class Chunk:
     paper_id: str
     ordinal: int
     section: str
     text: str
     chunk_id: str
-    block_refs: tuple[str, ...] = ()
+    block_refs: tuple[ChunkBlockRef, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

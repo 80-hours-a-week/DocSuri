@@ -45,7 +45,16 @@ def papers_index_body(*, on_disk: bool = False) -> dict[str, Any]:
                 "vector": vector,
                 "section": {"type": "keyword"},
                 "lexicalTerms": {"type": "text"},
-                "blockRefs": {"type": "keyword"},
+                "blockRefs": {
+                    "type": "nested",
+                    "properties": {
+                        "paperId": {"type": "keyword"},
+                        "version": {"type": "integer"},
+                        "sectionId": {"type": "keyword"},
+                        "blockId": {"type": "keyword"},
+                        "blockType": {"type": "keyword"},
+                    },
+                },
                 "title": {"type": "text"},
                 "authors": {"type": "keyword"},
                 "year": {"type": "integer"},

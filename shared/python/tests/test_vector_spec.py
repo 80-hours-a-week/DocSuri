@@ -60,6 +60,26 @@ def test_index_record_enforces_vector_dimension():
         vs.IndexRecord.model_validate(bad)
 
 
+def test_index_record_block_refs_are_structured():
+    payload = {
+        **valid_index_record_dict(),
+        "blockRefs": [
+            {
+                "paperId": "2106.01234",
+                "version": 1,
+                "sectionId": "s1",
+                "blockId": "s1.p1",
+                "blockType": "paragraph",
+            }
+        ],
+    }
+    record = vs.IndexRecord.model_validate(payload)
+    assert record.blockRefs[0].blockId == "s1.p1"
+
+    with pytest.raises(ValidationError):
+        vs.IndexRecord.model_validate({**valid_index_record_dict(), "blockRefs": ["s1.p1"]})
+
+
 def test_assert_same_space():
     vs.assert_same_space(vs.EMBEDDING_SPEC, vs.EMBEDDING_SPEC)  # identical → no raise
     # A space-defining field differing must raise — including the silent failure mode

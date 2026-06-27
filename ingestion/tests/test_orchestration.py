@@ -509,7 +509,10 @@ def test_source_record_ingest_uses_grobid_docmodel_and_source_watermark() -> Non
     assert grobid.seen_pdf == b"%PDF"
     assert store.docs and store.docs[0].fullText == "GROBID text with equations and tables"
     assert index.records
-    assert any(record.blockRefs == ["s1.p1"] for record in index.records.values())
+    assert any(
+        any(ref.blockId == "s1.p1" for ref in record.blockRefs)
+        for record in index.records.values()
+    )
     assert control.get_watermark("openalex").updated_at == record.updated_at
     assert control.get_canonical_dedup_state("doi:10.1000/external") is not None
 

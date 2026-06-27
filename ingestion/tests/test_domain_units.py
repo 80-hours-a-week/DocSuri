@@ -65,7 +65,7 @@ def test_chunker_produces_abstract_plus_body_chunks() -> None:
     assert {c.section for c in first.chunks} > {"abstract"}
 
 
-def test_docmodel_chunker_respects_max_chunk_limit_with_large_abstract() -> None:
+def test_docmodel_chunker_ignores_unanchored_abstract_copy() -> None:
     doc = DocModel.model_validate(
         {
             "meta": {
@@ -94,8 +94,9 @@ def test_docmodel_chunker_respects_max_chunk_limit_with_large_abstract() -> None
         doc, abstract="abstract " * 20
     )
 
-    assert len(chunks.chunks) == 2
-    assert all(chunk.section == "abstract" for chunk in chunks.chunks)
+    assert len(chunks.chunks) == 1
+    assert chunks.chunks[0].section == "Body"
+    assert chunks.chunks[0].block_refs[0].block_id == "s1.p1"
 
 
 def test_dedup_guard_decisions_and_mark_ingested() -> None:

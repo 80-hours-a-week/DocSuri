@@ -13,6 +13,7 @@ from .domain.enums import DedupDecision
 from .domain.errors import LicenseRejectedError, ValidationViolationError
 from .domain.models import (
     Chunk,
+    ChunkBlockRef,
     ChunkSet,
     DedupResult,
     EmbeddingBatch,
@@ -111,19 +112,33 @@ class Chunker:
 
     def chunk_doc_model(self, doc: DocModel, *, abstract: str = "") -> ChunkSet:
         """Chunk structured doc-model blocks while preserving block id refs internally."""
-        block_ids: set[str] = set()
-        entries: list[tuple[str, str, tuple[str, ...]]] = []
+        del abstract
+        block_ids: set[tuple[str, str, str]] = set()
+        entries: list[tuple[str, str, tuple[ChunkBlockRef, ...]]] = []
 
         def walk(section) -> None:
+            section_id = getattr(section, "id", "")
             section_label = normalize_text(section.title or section.id)
             for block in section.blocks:
                 b = block.root
                 block_id = getattr(b, "id", "")
+                block_type = getattr(b, "type", "")
                 if block_id:
-                    block_ids.add(block_id)
+                    block_ids.add((section_id, block_id, block_type))
                 text = _docmodel_block_text(b)
                 if text:
-                    entries.append((section_label, text, (block_id,) if block_id else ()))
+                    refs = (
+                        (
+                            ChunkBlockRef(
+                                section_id=section_id,
+                                block_id=block_id,
+                                block_type=block_type,
+                            ),
+                        )
+                        if block_id
+                        else ()
+                    )
+                    entries.append((section_label, text, refs))
             for child in section.sections or []:
                 walk(child)
 
@@ -131,19 +146,6 @@ class Chunker:
             walk(section)
 
         chunks: list[Chunk] = []
-        if abstract:
-            for text in split_text(abstract, self.max_chunk_chars, self.overlap_chars):
-                if len(chunks) >= self.max_chunks_per_paper:
-                    break
-                chunks.append(
-                    Chunk(
-                        paper_id=doc.meta.paperId,
-                        ordinal=len(chunks),
-                        section="abstract",
-                        text=text,
-                        chunk_id=chunk_id(doc.meta.paperId, len(chunks)),
-                    )
-                )
         for section, text, refs in entries:
             if len(chunks) >= self.max_chunks_per_paper:
                 break
@@ -164,19 +166,11 @@ class Chunker:
             if len(chunks) >= self.max_chunks_per_paper:
                 break
 
-        if not chunks and doc.fullText:
-            for text in split_text(doc.fullText, self.max_chunk_chars, self.overlap_chars):
-                ordinal = len(chunks)
-                chunks.append(
-                    Chunk(
-                        paper_id=doc.meta.paperId,
-                        ordinal=ordinal,
-                        section="body",
-                        text=text,
-                        chunk_id=chunk_id(doc.meta.paperId, ordinal),
-                    )
-                )
-        referenced = {ref for chunk in chunks for ref in chunk.block_refs}
+        referenced = {
+            (ref.section_id, ref.block_id, ref.block_type)
+            for chunk in chunks
+            for ref in chunk.block_refs
+        }
         if not referenced.issubset(block_ids):
             raise ValidationViolationError(
                 "chunk references unknown doc-model block", stage="chunk"
@@ -234,7 +228,16 @@ class IndexRecordAssembler:
             vector=list(vector),
             section=chunk.section,
             lexicalTerms=lexical_terms,
-            blockRefs=list(chunk.block_refs),
+            blockRefs=[
+                {
+                    "paperId": paper.paper_id,
+                    "version": paper.version,
+                    "sectionId": ref.section_id,
+                    "blockId": ref.block_id,
+                    "blockType": ref.block_type,
+                }
+                for ref in chunk.block_refs
+            ],
             title=paper.title,
             authors=list(paper.authors),
             year=paper.year,

@@ -1,7 +1,7 @@
 # U1 Corpus 실행 계획
 
-**단계**: INCEPTION -> Workflow Planning  
-**일자**: 2026-06-26  
+**단계**: INCEPTION -> Workflow Planning
+**일자**: 2026-06-26
 **입력**: 재인셉션 차터 D6, `requirements.md` U1 Corpus 개정, `stories.md` 에픽 4 개정, 코드 베이스라인 1차 패스
 
 ## 상세 분석 요약

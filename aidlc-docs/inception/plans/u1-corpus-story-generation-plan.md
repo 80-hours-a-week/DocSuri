@@ -1,7 +1,7 @@
 # U1 Corpus 스토리 개정 계획
 
-**단계**: INCEPTION -> 사용자 스토리(Part 1/2)  
-**일자**: 2026-06-26  
+**단계**: INCEPTION -> 사용자 스토리(Part 1/2)
+**일자**: 2026-06-26
 **입력**: `requirements.md` U1 Corpus 개정, 기존 `stories.md`, `personas.md`
 
 본 계획은 기존 인제스천 스토리를 U1 Corpus 요구사항에 맞게 갱신하는 최소 계획이다. 신규 에픽/신규 페르소나는 만들지 않는다.
