@@ -1999,3 +1999,509 @@ library_removed        저장 신호 철회 신호 가중치는 뭐에요??"
 **Context**: CONSTRUCTION — Replacement pull request created with compliant branch name.
 
 ---
+
+## U1 Corpus Construction — Code Generation 시작
+**Timestamp**: 2026-06-26T12:43:24Z
+**User Input**: "continue to code generation"
+**AI Response**: "Infrastructure Design 승인을 기록하고 U1 Corpus Code Generation으로 진행한다. AIDLC Code Generation 규칙에 따라 먼저 Part 1 계획을 생성하고, 실제 앱 코드는 계획 승인 후 실행한다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation Part 1 planning.
+
+---
+
+## U1 Corpus Construction — Code Generation 계획 승인 프롬프트
+**Timestamp**: 2026-06-26T12:44:06Z
+**User Input**: ""
+**AI Response**: "U1 Corpus Code Generation 계획서 `aidlc-docs/construction/plans/u1-corpus-code-generation-plan.md`를 생성했다. 계획 범위는 DocModel `fullText` 계약 보정, parser fullText projection, eager DocModel build, DocModel block-aware chunk/index metadata, multi-source adapter/GROBID boundary, source별 watermark/canonical dedup, retry/DLQ, OpenSearch generation/alias, U7/frontend 정합, targeted tests다. 승인 요청: 계획을 검토한 뒤 승인하면 Code Generation Part 2에서 앱 코드 생성을 시작한다."
+**Context**: CONSTRUCTION — Code Generation Part 1 completion prompt logged before asking user for approval.
+
+---
+
+## U1 Corpus Construction — Code Generation Part 2 시작
+**Timestamp**: 2026-06-26T12:52:07Z
+**User Input**: "continue to code generation part 2"
+**AI Response**: "Code Generation 계획 승인을 기록하고 Part 2 실행을 시작한다. 기존 docs 브랜치가 이미 merged된 상태라 origin/develop 기준 `feature/u1-corpus-code-generation` 브랜치를 만들고 계획 커밋을 cherry-pick한 뒤 Step 1부터 실행한다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation Part 2 execution.
+
+---
+
+## U1 Corpus Construction — Code Generation Step 11 완료
+**Timestamp**: 2026-06-26T13:13:26Z
+**User Input**: ""
+**AI Response**: "U7 summarization DocModel fixture에 required `fullText`를 반영하고, `InputRefiner.refine_doc_model`이 root `fullText`와 주요 본문 항목에서 불일치하지 않는 smoke assertion을 추가했다. `S3DocModelReader`의 bare paper id normalization 테스트는 유지했다. 번역/요약 LLM 흐름은 변경하지 않고, 번역 DocModel의 root `fullText`만 sections에서 재투영해 계약 일관성을 유지한다. targeted summarization tests 29개 통과."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation Part 2 Step 11.
+
+---
+
+## U1 Corpus Construction — Code Generation Step 12 완료
+**Timestamp**: 2026-06-26T13:16:05Z
+**User Input**: ""
+**AI Response**: "frontend generated DocModel type은 `fullText` required 상태를 유지하고, summarize/doc-model fixtures와 targeted tests의 DocModel literal에 `fullText`를 추가했다. `DocModelViewer` 렌더 구조와 화면 중복 렌더는 변경하지 않았다. frontend targeted vitest 5 files / 19 tests 통과."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation Part 2 Step 12.
+
+---
+
+## U1 Corpus Construction — Code Generation Step 13 완료
+**Timestamp**: 2026-06-26T13:17:40Z
+**User Input**: ""
+**AI Response**: "canonical key determinism/arXiv version suffix, source별 watermark monotonic/independence PBT를 추가했다. source adapter/GROBID fake tests와 raw PDF 미저장 negative assertion을 유지했다. ingestion targeted tests 36개 통과, targeted ruff 통과."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation Part 2 Step 13.
+
+---
+
+## U1 Corpus Construction — Code Generation Step 14 완료
+**Timestamp**: 2026-06-26T13:19:50Z
+**User Input**: ""
+**AI Response**: "fake adapters 기반 NEW/CHANGED eager DocModel smoke를 추가하고, 기존 retry/DLQ metadata, U7 doc-model endpoint/input, frontend doc-model viewer targeted tests를 갱신·확인했다. ingestion smoke 25 passed, summarization smoke 16 passed, frontend smoke 3 files / 9 tests 통과."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation Part 2 Step 14.
+
+---
+
+## U1 Corpus Construction — Code Generation Step 15 완료
+**Timestamp**: 2026-06-26T13:24:38Z
+**User Input**: ""
+**AI Response**: "최종 검증 명령을 실행했다. shared schema drift check 통과, ingestion pytest 121 passed / 1 skipped, ingestion ruff 통과, summarization pytest 116 passed / 3 skipped, frontend targeted vitest 5 files / 19 tests 통과, frontend typecheck 통과, git diff --check 통과."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation Part 2 Step 15.
+
+---
+
+## U1 Corpus Construction — Code Generation Step 16 완료 및 리뷰 게이트
+**Timestamp**: 2026-06-26T13:25:56Z
+**User Input**: ""
+**AI Response**: "코드 요약 문서 `aidlc-docs/construction/u1-ingestion/code/u1-corpus-code-summary.md`를 생성하고 수정/생성 파일, 설계 추적성, 테스트 결과, extension compliance를 기록했다. Code Generation 계획 체크박스를 모두 완료로 갱신하고 `aidlc-state.md`를 Code Generation 완료 리뷰 게이트로 갱신했다. 리뷰 요청: Request Changes 또는 Continue to Next Stage 중 하나를 선택해야 다음 단계로 진행한다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation completion prompt logged before asking user.
+
+---
+
+## U1 Corpus Construction — Code Generation 커밋 생성
+**Timestamp**: 2026-06-26T13:30:19Z
+**User Input**: ""
+**AI Response**: "Code Generation Part 2 산출물을 `feat: implement U1 corpus code generation` 커밋으로 생성했다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation commit.
+
+---
+
+## U1 Corpus Construction — Build and Test 시작
+**Timestamp**: 2026-06-26T13:34:03Z
+**User Input**: "continue to next stage"
+**AI Response**: "Code Generation 리뷰 게이트 승인을 기록하고 Build and Test 단계로 진행한다. 기존 U1 build-and-test 산출물은 멀티모달 슬라이스 기준이라, 현재 U1 Corpus Code Generation 결과에 맞는 build/unit/integration/performance/summary 지침으로 갱신한다."
+**Context**: CONSTRUCTION — U1 Corpus Build and Test.
+
+---
+
+## Build and Test Stage
+**Timestamp**: 2026-06-26T13:35:33Z
+**Build Status**: Success
+**Test Status**: Pass
+**Files Generated**:
+- build-instructions.md
+- unit-test-instructions.md
+- integration-test-instructions.md
+- performance-test-instructions.md
+- build-and-test-summary.md
+**AI Response**: "U1 Corpus Build and Test 지침과 summary를 생성/갱신했다. shared schema drift, ingestion, summarization, frontend targeted, typecheck, whitespace 검증 결과를 반영했다. 리뷰 요청: Request Changes 또는 Approve & Continue 중 하나를 선택해야 Operations placeholder로 진행한다."
+**Context**: CONSTRUCTION — U1 Corpus Build and Test completion prompt logged before asking user.
+
+---
+
+## U1 Corpus Construction — Review Fix 시작
+**Timestamp**: 2026-06-26T13:52:01Z
+**User Input**: "fix the issues"
+**AI Response**: "리뷰 지적 4건을 Code Generation 보정으로 처리한다: configured non-arXiv source wiring, DocModel PDF/GROBID fallback, structured `blockRefs` index contract, temporary GROBID 4xx retriable classification."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation review fix.
+
+---
+
+## U1 Corpus Construction — Review Fix 완료
+**Timestamp**: 2026-06-26T14:11:51Z
+**User Input**: ""
+**AI Response**: "리뷰 지적 4건을 수정했다. `CorpusSourceAdapterSet`을 refresh/pipeline에 주입하고 sourceRecord ingest 경로를 추가했으며, arXiv HTML 미가용 시 PDF/full-text fallback DocModel을 생성한다. `IndexRecord.blockRefs[]`를 구조화 필드로 추가하고 GROBID 429/일시적 4xx를 retriable로 분류했다. 검증: shared drift check 통과, ingestion pytest 129 passed / 1 skipped, ingestion ruff 통과."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation review fix verification.
+
+---
+
+## U1 Corpus Construction — Review Fix 추가 검증
+**Timestamp**: 2026-06-26T14:13:44Z
+**User Input**: ""
+**AI Response**: "shared/ops/discovery/summarization/frontend 소비자 검증을 추가 실행했다. shared pytest 66 passed, ops pytest 42 passed, discovery pytest 53 passed / 3 skipped, summarization pytest 116 passed / 3 skipped, frontend targeted vitest 19 passed, frontend typecheck passed, git diff --check passed."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation review fix cross-package verification.
+
+---
+
+## U1 Corpus Operations — Placeholder 전환
+**Timestamp**: 2026-06-26T14:17:24Z
+**User Input**: "proceed to the operations stage"
+**AI Response**: "Build and Test 리뷰 게이트 승인을 기록하고 Operations placeholder 단계로 전환했다. 현 AI-DLC 룰셋상 Operations는 실행 가능한 배포/운영 워크플로우가 아니므로 새 런타임 코드는 생성하지 않고, `operations/operations-placeholder.md`와 `aidlc-state.md`를 U1 Corpus 최신 상태로 갱신한다."
+**Context**: OPERATIONS — U1 Corpus placeholder acknowledgement.
+
+---
+
+## U1 Corpus PR 생성 요청
+**Timestamp**: 2026-06-26T14:22:18Z
+**User Input**: "add a PR to develop in Korean"
+**AI Response**: "현재 브랜치 `feature/u1-corpus-code-generation`에서 `develop` 대상으로 한국어 PR을 생성한다. 중복 PR 여부를 확인한 뒤 감사 로그를 커밋하고 원격 브랜치를 갱신한다."
+**Context**: PR — U1 Corpus Code Generation and Operations placeholder.
+
+---
+
+## U1 Corpus Construction — Additional Review Feedback Fix
+**Timestamp**: 2026-06-27T00:29:46Z
+**User Input**: "ok, apply the feedback."
+**AI Response**: "팀원 PR 리뷰 후속을 Code Generation 보정으로 처리했다. lazy `BUILD_DOC_MODEL` 경로를 eager ingest와 동일한 PDF/full-text fallback DocModel 정책으로 통일하고, canonical dedup state에 arXiv도 기록하며 source priority(arXiv > Semantic Scholar > OpenAlex)를 적용했다. 하위 priority external source는 PDF/GROBID fetch 전에 duplicate skip하고, 상위 source가 나중에 도착하면 기존 하위 source chunks를 tombstone 처리한다. Semantic Scholar/OpenAlex 실 HTTP provider, legacy reindex의 DocModel chunk 전환, vision-model asset rollout은 Operations/follow-up 경계로 문서화했다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation additional review fix.
+
+---
+
+## U1 Corpus Construction — Additional Review Feedback Validation
+**Timestamp**: 2026-06-27T00:32:31Z
+**User Input**: ""
+**AI Response**: "추가 리뷰 보정 검증을 완료했다. Focused ingestion tests 39 passed, full ingestion pytest 132 passed / 1 skipped, ingestion ruff clean, git diff --check passed."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation additional review fix validation.
+
+---
+
+## U1 Corpus Construction — Additional Re-review Feedback Fix
+**Timestamp**: 2026-06-27T01:40:07Z
+**User Input**: "There's a new review from our team:
+
+U1 Corpus 재검토 — cf923a8 (리뷰 반영 커밋)
+
+8244f25 → cf923a8 변경(주로 application.py +176/tests)을 검토했습니다. 본댓글 지적 중 **②(소스 tier 우선순위)·③(lazy/eager 폴백 불일치)**를 정조준해 고쳤고 테스트도 붙었습니다. 다만 새 replace 로직에 엣지 버그 1건이 들어왔습니다.
+
+✅ 잘 고친 것
+
+② 소스 간 tier 우선순위 — 구현 + 테스트 완료
+
+_source_priority: arXiv(0) < Semantic Scholar(1) < OpenAlex(2). canonical key 충돌 시 _source_can_replace로 더 높은 우선순위만 교체, 교체 시 _remove_canonical_loser가 기존 패자를 인덱스에서 tombstone. 낮은 우선순위는 duplicate.
+tier 문자열 복원(_source_priority_from_tier) 안전 — source_record가 "{SOURCE}_GROBID"(예: SEMANTIC_SCHOLAR_GROBID)로 저장돼 pdf로 오인 매핑되는 함정 회피. 레거시 raw tier→arXiv 매핑 가드도 합리적.
+부수 개선: no-replace 판정이 extract_record_text(PDF fetch/GROBID) 이전으로 이동 → 버릴 중복은 GROBID 안 돌림. (test_source_record_skips_pdf_fetch_when_higher_priority_winner_exists)
+교체 케이스 test_arxiv_replaces_lower_priority_canonical_winner 커버.
+③ lazy/eager 폴백 통일
+
+build_doc_model(lazy 읽기 경로)도 SourceUnavailable 시 fetch_full_text → build_from_text(PDF) 폴백 → eager와 동일 정책. (test_build_doc_model_falls_back_to_text_when_html_unavailable)
+⚠️ 새로 들어온 엣지 버그 (머지 전 검토 요망)
+
+🅐 철회(withdrawn) arXiv 논문이 canonical winner로 기록되고 외부 복본을 삭제함
+
+ingest_one → _index_paper
+  paper.withdrawal_detected → _tombstone() → return CHANGED   ← 철회인데 CHANGED
+복귀: if decision is not STALE:  ← CHANGED 통과
+        _record_canonical_winner(...)            ← 철회 논문을 winner로 기록
+          existing(외부 src-<hash>) paper_id 다름 → _remove_canonical_loser → 외부 복본 tombstone
+결과: arXiv 논문은 철회로 인덱스에서 빠졌는데 같은 canonical key의 정상 외부(SS/OpenAlex) 복본까지 tombstone → 코퍼스에서 통째로 사라지고 dedup 상태는 철회 논문을 winner로 가리킴.
+원인: _tombstone도 정상 인덱싱도 둘 다 CHANGED 반환 → is not STALE로 구분 불가.
+권고: canonical winner 기록을 paper.withdrawal_detected일 때 건너뛰기(또는 _index_paper가 tombstone을 별도 decision으로 신호). 엣지지만 "철회가 멀쩡한 복본을 삭제"는 데이터 손실이라 막는 게 맞습니다.
+🅑 _remove_canonical_loser 정리 비대칭 (사소)
+
+_tombstone은 인덱스 tombstone + doc_model_builder.invalidate + _remove_assets_best_effort까지 하는데, _remove_canonical_loser는 인덱스 tombstone만. 패자의 DocModel S3 산출물·assets·full-text S3가 고아로 남음(비용 누수, 검색 영향 없음).
+발생: arXiv가 외부 복본 교체 시만(실 arxiv id vs 파생 src-<hash> → paper_id 다름). 외부끼리(SS↔OpenAlex)는 파생 paper_id가 같아 같은 id로 재색인 → 고아 없음.
+권고: _remove_canonical_loser에도 docmodel invalidate + asset 제거를 대칭 추가.
+변동 없음 (이 커밋 범위 밖 — 그대로 남음)
+
+① 멀티소스 실 HTTP provider 미구현(여전히 arXiv 단독 실수집)
+④ migrate.py 재처리 경로 아직 legacy chunk(paper)(D6 미적용)
+⑤ local runtime builder 미주입(local≠prod)
+⑥ 그림 비전모델 입력(multimodal flag OFF, arXiv 한정) / ⑦ PDF-fallback 무구조
+⑧ 매핑 정의 중복 / ⑨ lexical 필드 설계 (별도 인덱스 설계 코멘트 참조)
+정리
+
+②③는 정확히, 테스트까지 붙여 해결. 🅐(철회가 외부 복본 삭제) 데이터 손실 엣지는 머지 전 수정 권장, 🅑는 사소하니 같이 묶어 처리. ①④⑤⑥⑦은 페이즈 범위 결정 사항, ⑧⑨는 인덱스 설계 코멘트대로."
+**AI Response**: "팀 재검토 지적 2건을 Code Generation 보정으로 처리한다. withdrawal-detected paper는 tombstone 후 canonical winner 기록을 건너뛰도록 하고, canonical loser 제거를 normal tombstone cleanup과 대칭으로 맞춘다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation re-review fix.
+
+---
+
+## U1 Corpus Construction — Additional Re-review Feedback Validation
+**Timestamp**: 2026-06-27T01:41:39Z
+**User Input**: ""
+**AI Response**: "재검토 보정 검증을 완료했다. Focused ingestion tests 34 passed, full ingestion pytest 133 passed / 1 skipped, ingestion ruff clean, git diff --check passed."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation re-review fix validation.
+
+---
+
+## U1 Corpus Construction — BlockRef Re-review Feedback Fix
+**Timestamp**: 2026-06-27T01:53:15Z
+**User Input**: "here's another review from our team:
+
+리뷰 범위
+
+재리뷰 대상 HEAD: cf923a8 (fix: align U1 corpus review feedback)
+이전 리뷰 대상 HEAD: 8244f2580faf6689db4d3155c23a8387432f2c8f
+현재 브랜치: feature/u1-corpus-code-generation
+리뷰 기준: develop...HEAD (49ef24d8aeb0129f551df7ec25f19f0e7c80e6b3)
+diff 규모: 61개 파일, 3045줄 추가, 274줄 삭제
+untracked 파일: CodeReview.md, u1-corpus-code-generation.md
+판정
+
+변경 요청
+
+수정 커밋으로 canonical dedup/source priority 경로는 상당 부분 보강됐습니다. 다만 DocModel/index anchor 계약은 아직 설계와 맞지 않아 머지 전 수정이 필요합니다.
+
+확인된 개선 사항
+
+lazy BUILD_DOC_MODEL도 HTML 미가용 시 PDF/full-text fallback DocModel을 만들도록 보정됐습니다.
+source_record duplicate는 기존 상위 priority winner가 있으면 PDF/GROBID fetch 전에 종료합니다.
+arXiv 경로도 canonical state를 기록하고, 같은 canonical key에서 상위 priority source가 나중에 오면 기존 하위 source index chunk를 tombstone 처리합니다.
+관련 regression test가 일부 추가됐습니다: duplicate fetch skip, arXiv winner replacement.
+지적 사항
+
+심각도	참조	파일:라인	문제	수정 방향
+blocking	FR-18, QT-9, U1 FD DocModelBlockRef	shared/vector-spec/index-record.schema.json:41, shared/python/src/docsuri_shared/_generated/vector_spec/index_record_schema.py:48, ingestion/src/docsuri_ingestion/processors.py:237	blockRefs가 여전히 list[str]입니다. U1 Functional Design은 DocModelBlockRef를 {paperId, version, sectionId, blockId, blockType} 구조체로 정의하고, 브랜치 메모도 "구조화 blockRefs"를 주장합니다. 현재 index record만으로는 version/section/type lineage를 검증할 수 없습니다.	shared vector schema와 generated model을 구조화된 blockRefs[] 객체로 바꾸세요. Chunk 단계에서 section id와 block type을 유지하고, assembler에서 paper/version/section/block/type을 채우세요.
+blocking	QT-9, U1 NFR §0.7	ingestion/src/docsuri_ingestion/processors.py:134	DocModel 기반 indexing이 abstract chunk를 먼저 만들지만, 그 chunk는 block_refs가 비어 있습니다. QT-9는 누락 DocModel block reference를 cutover blocker로 정의하고, U1 FD는 모든 index record가 존재하는 DocModel block id를 참조해야 한다고 정의합니다.	abstract를 DocModel block으로 모델링해 참조하게 하거나, DocModel 경로에서는 별도 abstract chunk를 만들지 마세요. 모든 DocModel-derived index record가 비어 있지 않은 refs를 갖고 실제 block으로 resolve되는 테스트를 추가하세요.
+should-fix	U1 FD SourceProvenance	ingestion/src/docsuri_ingestion/application.py:251, ingestion/src/docsuri_ingestion/corpus_sources.py:176, shared/vector-spec/index-record.schema.json:41	외부 GROBID record는 SEMANTIC_SCHOLAR_GROBID / OPENALEX_GROBID를 만들지만, DocModel provenance는 SourceTier.pdf로 축약되고 index record에도 설계상 요구된 sourceProvenance가 없습니다. 실제 source lineage가 검색 record에서 사라집니다.	DocModel/source provenance 계약을 확장하거나 설계대로 index sourceProvenance를 추가하세요. generic PDF fallback과 별도로 source name/tier/retrieved URL을 보존하세요.
+should-fix	U1 plan Step 7, SourcePriority	ingestion/src/docsuri_ingestion/application.py:183, ingestion/tests/test_orchestration.py:546	canonical priority 보정은 같은 canonical key일 때만 동작합니다. 그런데 arXiv path는 DOI를 알 수 없어 arxiv:<id> key만 기록하고, 외부 source는 DOI가 있으면 doi:<doi> key를 기록합니다. 테스트도 lower-priority external winner를 arxiv:2401.00001로 수동 seed해서 실제 DOI-only external record와 arXiv metadata 충돌을 검증하지 않습니다.	외부 source가 arXiv id를 제공하지 않는 DOI-only case를 명시적으로 follow-up 범위로 제한하거나, canonical alias/merge table을 추가해 DOI key와 arXiv key를 연결하세요. 최소한 regression test로 현재 한계를 고정하세요.
+nit	repo hygiene	aidlc-docs/construction/u1-ingestion/code/u1-corpus-code-summary.md:3	git diff --check develop...HEAD가 3-4라인 trailing whitespace 때문에 실패합니다. u1-corpus-code-generation.md의 검증 메모에는 git diff --check 통과라고 되어 있어 현재 상태와 맞지 않습니다.	trailing space 2개를 제거하고 검증 메모를 실제 결과와 맞추세요.
+테스트 갭
+
+모든 DocModel-derived index record의 blockRefs가 비어 있지 않고 실제 DocModel block으로 resolve되는지 검증하는 테스트가 없습니다.
+구조화된 DocModelBlockRef schema roundtrip/negative test가 없습니다.
+DOI-only external record가 먼저 들어오고 arXiv metadata가 나중에 들어오는 실제 cross-source duplicate case가 없습니다.
+U1 NFR §0.7의 source-record duplicate/order invariant에 대한 PBT coverage는 아직 부족합니다.
+검증 결과
+
+git diff --check develop...HEAD 실패: u1-corpus-code-summary.md 3-4라인 trailing whitespace.
+.venv\Scripts\python.exe -m ruff check ingestion\src\docsuri_ingestion ingestion\tests\test_orchestration.py ingestion\tests\test_docmodel_build_job.py ingestion\tests\test_canonical_dedup.py 통과.
+Extension Compliance
+
+Security Baseline: 리뷰한 U1 worker 경로에서 신규 injection/authz 문제는 발견하지 못했습니다. SQL 경로는 bound parameter를 사용합니다. 이 worker 경로와 무관한 security rule은 N/A입니다.
+Resiliency Baseline: canonical duplicate fetch-skip은 개선됐습니다. 다만 DOI/arXiv canonical alias 한계는 잔여 risk입니다.
+Property-Based Testing: U1 QT-9/source dedup invariant 기준 non-compliant입니다. blockRef completeness와 cross-source duplicate ordering PBT가 부족합니다."
+**AI Response**: "재검토 blocking 2건과 whitespace nit를 Code Generation 보정으로 처리한다. `IndexRecord.blockRefs[]`를 구조화 객체 배열로 바꾸고, DocModel 기반 indexing에서 unanchored abstract chunk를 제거해 모든 DocModel-derived index record가 실제 DocModel block을 참조하도록 한다. SourceProvenance와 DOI/arXiv alias는 should-fix follow-up 범위로 유지한다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation blockRef re-review fix.
+
+---
+
+## U1 Corpus Construction — BlockRef Re-review Feedback Validation
+**Timestamp**: 2026-06-27T01:55:26Z
+**User Input**: ""
+**AI Response**: "blockRef 재검토 보정 검증을 완료했다. Focused shared vector spec 8 passed, focused ingestion 39 passed, shared generate --check passed, shared pytest 67 passed, shared ruff clean, ingestion pytest 133 passed / 1 skipped, ingestion ruff clean, ops pytest 42 passed, discovery pytest 53 passed / 3 skipped, git diff --check passed."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation blockRef re-review fix validation.
+
+---
+
+## U1 Corpus Construction — Abstract and Mapping Re-review Feedback Fix
+**Timestamp**: 2026-06-27T02:40:24Z
+**User Input**: "A new review from our team:
+
+U1 Corpus 재검토 — fdbc9be + 0ffeee0
+
+직전 재검토(🅐·🅑) 반영 커밋과 blockRefs 구조화 커밋을 검토했습니다. 🅐·🅑는 깔끔히 해결, blockRefs 구조화는 좋은 개선. 다만 그 과정에서 새 우려 3건이 생겼고 ⑧은 여전히 미해결입니다.
+
+✅ 고친 것
+
+🅐 철회가 외부 복본 삭제 — arXiv·source_record 양쪽에 and not paper.withdrawal_detected 가드 추가 → 철회 논문이 winner로 기록되거나 외부 복본을 tombstone하지 않음.
+🅑 loser 정리 비대칭 — _remove_canonical_loser에 doc_model_builder.invalidate + _remove_assets_best_effort 대칭 추가.
+blockRefs 구조화 👍 — list[str] → DocModelBlockRef{paperId, version, sectionId, blockId, blockType}. grounding/QT-9가 섹션·타입까지 알 수 있어 근거 정밀도 향상.
+⚠️ 새로 생긴 우려 (0ffeee0)
+
+🅒 abstract 청킹 제거 → abstract 임베딩(semantic) 손실 — 의도 확인 요망 (가장 중요)
+
+chunk_doc_model에서 del abstract + abstract 청크 생성 블록 삭제. 그런데 파서는 abstract를 meta.abstract에만 넣고 sections 블록엔 안 넣으며, 벡터는 chunk.text로만 임베딩(embed_documents([chunk.text ...])).
+결과: abstract가 어떤 chunk.text에도 안 들어가 abstract 임베딩 벡터가 사라짐. abstract는 BM25(lexicalTerms 패딩)로만 남고 semantic(kNN) 검색에서 빠짐. abstract는 보통 의미밀도가 가장 높아 검색 품질 회귀 우려.
+block refs 커밋에서 함께 빠진 거라 의도 여부 확인 필요 — 의도면 근거를, 아니면 abstract 청크 복원 권장.
+부수: chunk_doc_model(doc_model, abstract=...) 호출은 남아 있는데 내부 del abstract로 무시 → dead param.
+🅓 blockRefs를 OpenSearch nested로 매핑 — provenance엔 과함
+
+스키마 설명은 "not searched or exposed externally"인데 매핑은 nested. nested는 배열 원소마다 숨은 서브도큐먼트를 만들어 인덱스 bloat·복잡도↑(100청크×블록 ref면 양 큼). 검색 안 하는 순수 provenance면 object(또는 enabled: false)가 적절. nested는 nested 쿼리 할 때만 값어치.
+🅔 fullText 폴백 제거 — 엣지 robustness 회귀 (사소)
+
+텍스트 블록이 하나도 없는 DocModel(예: 캡션 없는 figure-only)은 이제 폴백 없이 "doc-model produced no chunks"로 실패. 드문 엣지지만 안전망 제거.
+⑧ 여전히 미해결 — 이번 커밋이 위험을 시연
+
+provision_v2_index.py는 아직 INDEX_BODY 하드코딩(papers_index_body 미import). 이번에 blockRefs를 provision_v2_index.py와 index_spec.py 두 곳에 동일하게 수동 반영 — drift 위험이 그대로 재현됨(한쪽 누락 시 매핑 깨짐). papers_index_body() import로 통일 권장.
+변동 없음
+
+① 멀티소스 실 provider / ④ migrate.py legacy chunk / ⑤ local≠prod / ⑥ 비전모델 / ⑦ PDF무구조 / ⑨ lexical 중복 — 그대로.
+🅐 잔여 (deep edge, 참고)
+
+승자였던 arXiv 논문이 철회되면 canonical 상태가 그대로 그 논문을 winner로 가리켜(상태 미정리), 이후 외부 소스가 같은 key로 와도 우선순위 비교에 막혀 재색인 안 됨. 완전 정리하려면 철회 시 canonical state도 비워야 함.
+정리
+
+🅐·🅑 해결 + blockRefs 구조화는 좋은 개선. 🅒(abstract 임베딩 손실)는 검색 품질 회귀라 의도 확인 후 머지 권장, **🅓(nested)·⑧(매핑 중복)**은 같이 정리 권장. 🅔는 사소."
+**AI Response**: "재검토 피드백 중 🅒, 🅓, ⑧을 Code Generation 보정으로 처리한다. abstract를 실제 DocModel block으로 모델링해 semantic embedding을 복원하고, `chunk_doc_model` dead parameter를 제거하며, `blockRefs` mapping은 non-indexed object로 바꾸고 `provision_v2_index.py`는 shared `papers_index_body()`를 재사용한다. 🅔와 철회 winner canonical state cleanup은 별도 deep-edge follow-up으로 유지한다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation abstract and mapping re-review fix.
+
+---
+
+## U1 Corpus Construction — Abstract and Mapping Re-review Feedback Validation
+**Timestamp**: 2026-06-27T02:42:11Z
+**User Input**: ""
+**AI Response**: "abstract/mapping 재검토 보정 검증을 완료했다. Focused ingestion parser/build/orchestration 54 passed, focused shared vector spec 9 passed, shared generate --check passed, shared pytest 68 passed, shared ruff clean, ingestion pytest 133 passed / 1 skipped, ingestion ruff clean, ops pytest 42 passed, discovery pytest 53 passed / 3 skipped."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation abstract and mapping re-review fix validation.
+
+---
+
+## U1 Corpus Construction — FullText Fallback and Canonical Cleanup Fix
+**Timestamp**: 2026-06-27T02:52:56Z
+**User Input**: "add 🅔 and canonical-state cleanup for withdrawn current winners too"
+**AI Response**: "요청한 🅔와 철회 winner canonical cleanup을 Code Generation 보정으로 처리한다. text-bearing block이 없는 DocModel은 `fullText` fallback chunk를 첫 실제 block ref에 연결하고, successful tombstone은 해당 paperId의 canonical dedup state rows를 삭제한다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation fullText fallback and canonical cleanup fix.
+
+---
+
+## U1 Corpus Construction — FullText Fallback and Canonical Cleanup Validation
+**Timestamp**: 2026-06-27T02:55:11Z
+**User Input**: ""
+**AI Response**: "fullText/canonical cleanup 보정 검증을 완료했다. Focused ingestion tests 39 passed, full ingestion pytest 135 passed / 1 skipped, ingestion ruff clean, shared generate --check passed, git diff --check passed."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation fullText fallback and canonical cleanup validation.
+
+---
+
+## U1 Corpus Construction — Pre-corpus Build Review Fix
+**Timestamp**: 2026-06-27T04:20:39Z
+**User Input**:
+```text
+Read the review from our team and fix every issue from this review.
+
+U1 Corpus — 코퍼스 빌드 전 남은 리뷰 사항
+
+D6 메커니즘(eager DocModel 빌드 · DocModel 블록 인덱싱 · 우선순위 중복제거 · 철회 정리 · abstract 임베딩 · blockRefs 구조화 · 매핑 SSOT 단일화)은 코드상 완성됐습니다. 다만 코퍼스를 실제로 채우기 전에 아직 정리/확정이 필요한 항목들이 남아 있어 정리합니다. (DocModel·임베딩·인덱스는 한 번 채우면 바꿀 때 재빌드/재임베딩이 따라오므로, 채우기 전에 봐야 하는 것들입니다.)
+
+확정이 필요한 계약 (미확정 상태)
+
+DocModel 스키마가 아직 PROVISIONAL — shared/dtos/docmodel.schema.json(STATUS: PROVISIONAL (U1 FD in progress)), construction/shared/docmodel.md(🟡 PROVISIONAL). 인덱싱·임베딩이 DocModel 블록에서 파생되므로, 확정 전 상태로 코퍼스를 채우면 이후 스키마 변경이 재임베딩까지 번집니다. 확정할 때 블록 스코프를 끝까지 못 박아야 합니다 — 특히 파서에 TODO로 남은 각주(footnote) 블록 승격(_inline_text 주석)을 넣을지/말지 지금 결정. (references·page는 이미 "안 함"으로 결론 — 명시만.)
+⑨ lexicalTerms 필드 계약 미정 — _record_from_chunk가 title+abstract+chunk.text를 한 필드에 concat. 검색 단계에서 필드 분리/가중치로 가려면 전량 재색인이 필요하므로, 코퍼스 채우기 전에 U1 write 계약(본문 전용 필드 분리 여부)을 검색측과 합의해 두는 게 좋습니다.
+아직 해결 안 된 문제점
+
+① Semantic Scholar/OpenAlex provider 미구현 — 우선순위·sourceRecord 경로는 있으나 실제 provider 부재 → 현재 실수집은 arXiv 단독. 차터 §3 수집은 3소스를 Phase 1로 명시하므로, 3소스로 채울지 / arXiv-only로 채우고 나머지는 Phase 7로 미룰지 결정이 필요합니다. (구현 또는 재범위화 — 어느 쪽이든 명시 필요.)
+④ migrate.py가 legacy chunk() 사용 — v4 재임베딩 도구가 blockRefs 없는 full-text 청킹으로 재색인 → 실행 시 인덱스가 DocModel 블록 방식과 어긋남. 초기 채우기 경로는 아니지만, 재임베딩 마이그레이션 실행 전 수정(또는 실행 가드)이 필요합니다.
+⑤ local ≠ prod 인덱싱 경로 — build_local_runtime이 doc_model_builder 미주입 → 로컬은 legacy 청킹, prod는 DocModel 블록 청킹. 로컬 테스트가 prod 경로를 검증하지 못합니다(거짓 안심). local runtime에 fake builder를 주입해 경로를 일치시키는 게 좋습니다.
+결정이 필요한 사항 (버그 아님)
+
+⑦ PDF-fallback이 단일 paragraph(무구조) — 의도된 degrade. "arXiv HTML 없는 논문은 단일 paragraph로 둔다"를 승인할지 결정이 필요합니다. (Phase 7 멀티소스는 전부 PDF/GROBID이므로 그때는 실제 구조화가 필요.)
+abstract 이중계상 — HTML 본문에 abstract 섹션이 또 있으면 s0 블록과 중복 임베딩될 수 있어 한 건 확인 권장.
+코퍼스 채울 때 설정 확인
+
+multimodal_assets_enabled ON (비전 사용 결정 — OFF면 그림 픽셀 미저장 → 추후 재추출 백필)
+on_disk 매핑으로 인덱스 생성(bootstrap_papers_index.py/migrate.py; provision_v2_index.py는 on_disk=False)
+DOCSURI_BEDROCK_MODEL_ID_V2 미설정(설정 시 임베딩 이중 비용)
+요약
+
+코퍼스를 실제로 채우기 전에는 위 확정 필요 2건과 미해결 ①④⑤, 결정 ⑦을 처리하는 게 좋겠습니다 — 모두 "안 해도 되는" 항목이 아니라 처리 대상입니다.
+```
+**AI Response**: "코퍼스 빌드 전 리뷰 항목 전부를 Code Generation 보정으로 처리한다. DocModel/lexicalTerms 계약을 확정하고, Semantic Scholar/OpenAlex 실 provider를 GROBID-gated로 배선하며, migrate.py backfill을 DocModel 기반 pipeline으로 통일하고, local runtime도 fake DocModelBuilder를 주입한다. PDF/GROBID 단일 paragraph degrade와 footnote/references/page 제외는 계약에 명시하고, HTML abstract 중복은 parser에서 제거한다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation pre-corpus build review fix.
+
+---
+
+## U1 Corpus Construction — Pre-corpus Build Review Validation
+**Timestamp**: 2026-06-27T04:23:01Z
+**User Input**: ""
+**AI Response**: "코퍼스 빌드 전 리뷰 보정 검증을 완료했다. Focused ingestion tests 58 passed, full ingestion pytest 141 passed / 1 skipped, ingestion ruff clean, shared generate --check passed, shared pytest 68 passed, shared ruff clean, git diff --check passed."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation pre-corpus build review validation.
+
+---
+
+## U1 Corpus Construction — Pre-build Parser Cache and Deployment Guard Review Fix
+**Timestamp**: 2026-06-27T05:17:56Z
+**User Input**:
+```text
+This is the new review from our team.
+
+U1 Corpus — 빌드 전 추가로 볼 사항 2건 + 배포 순서
+
+게이트 항목 대부분(DocModel 확정·멀티소스·migrate·local 등)은 닫혔습니다. 코퍼스를 실제로 채우기 전에 한 번 더 정리하면 좋을 항목 2건과, 롤링 배포라서 챙겨야 할 순서를 추가합니다. 모두 "지금 처리하면 미래 재작업/혼합 데이터를 없애는" 성격입니다.
+
+1. DocModelBuilder 캐시가 parserVersion을 검사하지 않음 — 문서-코드 불일치
+
+docmodel.md는 *"provenance.parserVersion/schemaVersion 변경 시 무효화"*라고 명시.
+그러나 DocModelBuilder.build()는 캐시를 (paperId, version)로만 조회하고, 캐시된 DocModel의 parserVersion을 현재 빌더 버전과 비교하지 않음 → 옛 파서로 만든 DocModel이 S3에 있으면 재빌드 없이 그대로 재사용(stale).
+영향: 이번 빌드에서도 과거 lazy-build로 생성돼 S3 doc-model/에 남은 논문들은 옛 포맷(예: abstract 블록 없는 버전)을 물고 올 수 있음. 또 앞으로 파서를 개선(예: Phase 7 PDF 구조화)할 때마다 자동 무효화가 안 됨.
+제안(코드 수정): build()에서 캐시 히트 시 cached.meta.provenance.parserVersion/schemaVersion이 현재 빌더 버전과 다르면 재빌드. (사실상 캐시 키를 (paperId, version, parserVersion)로) — 문서가 약속한 동작을 코드가 실제로 하게 만드는 것.
+대안(운영): 빌드 전 S3 doc-model/ prefix 비우기. 다만 매번 수동 + 누락 위험이라 코드 수정을 권장.
+2. lexicalTerms — "필드 write 분리"를 v1에 포함할지 재검토
+
+현재 v1 결정 = 단일 lexicalTerms(제목+초록+본문 concat) 유지, 분리는 추후 재색인. 가중치 튜닝을 데이터 생긴 뒤(검색 품질 단계)로 미루는 것은 타당합니다.
+다만 검색 가중치(weight)와 필드 저장(write)은 분리 가능한 결정입니다:
+text 필드는 검색(분석)과 표시(원본 반환)를 한 필드로 겸함 → 제목/초록을 별도 필드로만 두고 lexicalTerms를 본문만으로 줄이면 중복 저장 제거 + 표시도 같은 필드로 처리.
+이렇게 write만 지금 분리해두면, 추후 검색 가중치(multi_match title^bN…)는 재색인 없이 쿼리 변경만으로 적용 가능.
+현재처럼 concat으로 채우면, 추후 분리 시 전량 재색인(벡터 재사용은 가능하나 레코드 전수 재기록; 현 migrate.py 경로는 재임베딩까지 동반)이 강제됩니다.
+제안: v1에서 필드 write 분리만 채택(가중치는 검색 품질 단계로 유지)할지 판단. 미래 재색인을 없애는 쪽이라 빌드 전에 결정하는 게 이득.
+3. 배포 순서 — 롤링 배포라 혼합 포맷 위험 (운영 절차)
+
+ingestion 워커는 ECS 롤링 배포(FargateService 기본 컨트롤러 + DeploymentCircuitBreaker(rollback=True)). 즉 배포 시 옛/새 task가 한동안 동시에 SQS 잡을 소비합니다.
+롤아웃 윈도우 동안 잡이 처리되면: 옛 task는 옛 포맷(full-text 청크·blockRefs/abstract 블록 없음), 새 task는 새 포맷(DocModel 블록)을 써서 인덱스/S3에 혼합 포맷이 섞여 들어감.
+권장 순서:
+새 워커 코드 배포 → 롤아웃 완전 종료까지 대기(모든 task 새 버전)
+새 on_disk 인덱스 provision
+그 다음에 harvest 트리거 (롤아웃 끝난 뒤에만)
+긴 대량 harvest 도중에는 워커 재배포 동결 — 진행 중 롤링이 들어가면 그 윈도우 잡이 옛 코드로 처리될 수 있음.
+참고: 빌드 실행 시 저장 동작
+
+파이프라인 실행 시 DocModel/full-text(+assets)는 S3에, 청크 임베딩은 OpenSearch에 자동 저장.
+OpenSearch: on_disk 매핑은 새 인덱스가 필요(옛 corpus는 lucene) → blue-green(새 인덱스 채움 → alias switch → 옛 인덱스 drop). cutover 동안 옛/새 인덱스 공존 = 일시 2배, 옛 인덱스 drop 시 해소. (이 인덱스 blue-green은 위 3번의 서비스 롤링과 다른 층입니다 — 둘 다 챙겨야 함.)
+S3: {paperId}/v{version} 키 기반 덮어쓰기라 중복 저장(2배) 없음. 단 위 1번(parserVersion stale)으로 옛 DocModel이 재사용될 수 있음.
+
+This time, find and resolve all potential issues.
+```
+**AI Response**: "추가 리뷰 항목을 U1 Corpus Code Generation 보정으로 처리한다. DocModelBuilder 캐시 히트는 provenance parserVersion/schemaVersion이 현재 빌더와 일치할 때만 재사용하고, IndexRecord write 계약은 title/abstract/body lexical 필드로 분리하며 현재 검색 호환용 `lexicalTerms`는 본문 청크 전용으로 유지한다. Production `trigger-full-rebuild`에는 worker rollout 완료 및 harvest freeze 확인 preflight를 추가해 롤링 배포 중 혼합 포맷 수집을 막는다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation parser cache, lexical write split, and deployment guard fix.
+
+---
+
+## U1 Corpus Construction — Pre-build Parser Cache and Deployment Guard Validation
+**Timestamp**: 2026-06-27T05:26:52Z
+**User Input**: ""
+**AI Response**: "추가 리뷰 보정 검증을 완료했다. Focused ingestion DocModel/domain/preflight tests passed, focused discovery OpenSearch adapter tests passed, shared vector spec tests passed, shared generate --check passed. Broader validation: ingestion pytest passed with expected skip, shared pytest 68 passed, discovery pytest passed with expected skips, ops pytest 42 passed. Ruff passed for ingestion/shared/discovery/ops, and git diff --check passed."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation parser cache, lexical write split, and deployment guard validation.
+
+---
+
+## U1 Corpus Construction — Pre-build Documentation Contract Cleanup
+**Timestamp**: 2026-06-27T05:36:25Z
+**User Input**: ""
+**AI Response**: "추가 점검 중 남은 문서-코드 불일치를 정리했다. `construction/shared/vector-spec.md`를 실제 shared 계약(specVersion v2, Cohere Embed v4, assert_same_space 기반 same-space gate, per-record modelVer 없음)에 맞췄고, U1 `business-rules.md`의 오래된 제목+초록 단일 벡터/lexicalTerms 계약을 DocModel 기반 초록+본문 다중 청크 및 본문 전용 lexicalTerms 계약으로 갱신했다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation documentation consistency cleanup.
+
+---
+
+## U1 Corpus Construction — Pre-build Full Rebuild Multi-source Fix
+**Timestamp**: 2026-06-27T05:40:05Z
+**User Input**: ""
+**AI Response**: "추가 실행 경로 점검에서 `trigger_full_rebuild()`가 arXiv seed만 큐잉하고 configured Semantic Scholar/OpenAlex source record를 누락하는 갭을 수정했다. full rebuild는 enabled external source별 watermark를 epoch로 reset하고 `SEED_REBUILD` source-record job을 큐잉한다. 검증: ingestion focused orchestration/cache/lexical/preflight tests 28 passed, ingestion full pytest 147 passed/1 skipped, ingestion ruff clean, shared vector spec 9 passed, discovery OpenSearch adapter 4 passed, shared generate --check passed, git diff --check passed."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation full rebuild multi-source coverage and validation.
+
+---
+
+## U1 Corpus Construction — Phase-1 Corpus Slice Correction
+**Timestamp**: 2026-06-27T05:53:44Z
+**User Input**: "그렇게 해줘. 최근 1년으로 범위를 한정해줘,"
+**AI Response**: "사용자 결정에 따라 phase-1 Corpus 범위를 최근 AI/ML 1년으로 확정했다. `CORPUS_START=2025-01-01`, `CORPUS_END=2026-01-01`로 좁히고, arXiv seed harvest와 Semantic Scholar/OpenAlex full rebuild source-record 큐잉 모두 같은 window를 적용했다. 외부 provider가 범위 밖 record를 반환해도 orchestrator가 큐잉 전에 skip한다. 관련 요구사항/차터/Functional/NFR/Infrastructure 문서의 current contract도 1년 슬라이스로 정리했다. 검증: ingestion targeted orchestration/corpus source tests 34 passed, ingestion full pytest 148 passed/1 skipped, ingestion ruff clean, corpus scope drift search clean, git diff --check passed."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation phase-1 corpus slice correction.
+
+---
+
+## U1 Corpus Construction — DocModel Stale Cache Closure
+**Timestamp**: 2026-06-27T05:58:05Z
+**User Input**:
+```text
+완전히 이 이슈가 종료되도록 조치를 취해야 해.
+```
+**AI Response**: "`DocModelBuilder` cache invalidation에 남아 있던 U7/S3 direct read 우회 경로를 닫았다. shared `docmodel_contract`에 `DOCMODEL_PARSER_VERSION`/`DOCMODEL_SCHEMA_VERSION`을 두고 U1 builder와 U7 `S3DocModelReader`가 같은 값을 사용한다. S3 reader는 JSON payload에서 provenance version을 pydantic schema validation 전에 검사하고 mismatch/missing이면 cache miss로 반환해 endpoint build queue 또는 fallback 경로를 타게 한다. 검증: ingestion docmodel builder 8 passed, summarization docmodel endpoint/build trigger 20 passed, summarization full pytest 118 passed/3 skipped, ingestion full pytest 148 passed/1 skipped, shared pytest 68 passed, targeted ruff clean, shared generate --check passed, git diff --check passed. Summarization 전체 ruff는 기존 unrelated test lint baseline으로 실패했다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation DocModel stale cache closure across builder and S3 reader.
+
+---
+
+## U1 Corpus Construction — LexicalTerms Write Split Closure
+**Timestamp**: 2026-06-27T06:07:34Z
+**User Input**:
+```text
+이 이슈도 완벽하게 종결시켜줘.
+```
+**AI Response**: "`IndexRecord.lexicalTerms`를 본문 청크 전용으로 강제했다. legacy full-text chunk와 DocModel chunk 모두 abstract section record는 `lexicalTerms=\"\"`로 저장하고, 검색용 초록은 별도 analyzed `abstract` 필드에만 남긴다. U2 BM25 reader는 기존대로 `title`, `abstract`, `lexicalTerms` multi-match를 사용해 추후 boost 튜닝을 재색인 없이 query 변경으로 적용할 수 있다. 검증: ingestion full pytest 149 passed/1 skipped, ingestion ruff clean, shared pytest 68 passed, shared vector spec 9 passed, shared generate --check passed, discovery OpenSearch adapter 4 passed, targeted discovery/shared ruff clean, git diff --check passed."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation lexicalTerms write split closure.
+
+---
+## CONSTRUCTION — U1 Corpus Follow-up Closure
+**Timestamp**: 2026-06-27T06:19:24Z
+**User Input**: "후속 이슈들도 지금 반영해줘"
+**AI Response**: "U1 Corpus follow-up으로 남아 있던 SourceProvenance와 DOI/arXiv canonical alias를 Code Generation 보정으로 반영한다. IndexRecord에 내부 source provenance/alias 필드를 추가하고, canonical dedup state를 DOI/arXiv/title alias rows로 묶어 DOI-only external과 arXiv metadata가 교차 매칭되도록 구현한다."
+**Context**: CONSTRUCTION — Code Generation follow-up implementation.
+
+---
+## CONSTRUCTION — U1 Corpus Follow-up Closure Verification
+**Timestamp**: 2026-06-27T06:20:40Z
+**User Input**: "후속 이슈들도 지금 반영해줘"
+**AI Response**: "SourceProvenance와 DOI/arXiv canonical alias follow-up 구현 및 문서 반영을 완료했다. 검증: shared vector spec targeted 11 passed, ingestion targeted 46 passed, ingestion full 152 passed/1 skipped, shared full 70 passed, discovery full 53 passed/3 skipped, ingestion/shared/discovery ruff clean, shared codegen --check clean, git diff --check clean."
+**Context**: CONSTRUCTION — Code Generation follow-up implementation verification.
+
+---

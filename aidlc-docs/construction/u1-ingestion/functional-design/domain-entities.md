@@ -93,7 +93,7 @@
 
 | 엔티티 | 필드(개념) | 비고 |
 |---|---|---|
-| **CategoryFilter** | `categories[]`, `from`/`to`(기간) | **Q1=D: `categories=[cs.LG,cs.AI,cs.CL,cs.CV,stat.ML]`, 최근 5년(수십만 건).** `resolveSliceCategories()` 산출. |
+| **CategoryFilter** | `categories[]`, `from`/`to`(기간) | **Phase-1: `categories=[cs.LG,cs.AI,cs.CL,cs.CV,stat.ML]`, 최근 1년.** 5년 확장은 Phase 7에서 별도 backfill로 수행한다. |
 | **PageCursor** | 불투명 페이지/하베스트 커서 | 대량 시드 하베스트 + 증분 조회 페이지네이션 상태(프로토콜=NFR Q2). |
 | **MetadataPage** | `records[]`(원천 메타), `nextCursor`, `hasMore` | 슬라이스 페이지 단위 조회 결과. |
 | **RawDocument** | `text`(정규화 평문), `sourceMeta`, `oaStatus` | **BR-29**: 취득 = arXiv HTML 우선(평문 변환의 최선 소스) → PDF 폴백. 산출은 **평문 1종**(뷰어·AI 공통). |
@@ -118,7 +118,7 @@
 
 | 엔티티 | 필드(개념) | 비고 |
 |---|---|---|
-| **IndexRecord** | `chunkId`, `paperId`, `version`, `vector`, **카드 필드**(title·authors·year·arxivId·abstractSnippet·arxivUrl) + `categories` + `abstract` + `section` + `lexicalTerms` | **Q4=A·Q2=C: 청크당 1 레코드(논문당 다수).** FR-2 하이브리드(lexical=제목+초록+본문 토큰) + FR-4 카드 + FR-5 해소 가능 ID/링크. |
+| **IndexRecord** | `chunkId`, `paperId`, `version`, `vector`, **카드 필드**(title·authors·year·arxivId·abstractSnippet·arxivUrl) + `categories` + `abstract` + `section` + `lexicalTerms` | **Q4=A·Q2=C: 청크당 1 레코드(논문당 다수).** FR-2 하이브리드 lexical write는 `title`/`abstract`/본문전용 `lexicalTerms`로 분리하고, FR-4 카드 + FR-5 해소 가능 ID/링크를 보존한다. |
 | **IndexRecordBatch** | `records[]`(한 논문의 전 청크), `paperId`, `jobRef?` | `VectorIndexWriter.upsert` 입력 = **논문 단위 원자 커밋 단위**(Q8=A/BR-7). **프로덕션: 논문당 다중 IndexRecord 전부 또는 전무.** PBT P3/P4 대상. |
 | **StoredFullText** | `paperId`, `version`, `objectRef`, `contentType` | **Q2=C·SEC-9 활성**: OA 전문 오브젝트 스토리지 보관(공개 차단). 재구축·재처리 재사용(arXiv 재취득 회피). |
 | **WriteResult** | `written`, `skipped`, `failed[]` | upsert/tombstone 결과. `failed[]`→IngestionResilienceService. |
@@ -175,7 +175,7 @@
 ## 9. 엔티티 관계 (프로덕션)
 
 ```
-CategoryFilter(5cat,5yr) ──(fetchMetadataPage / 대량 하베스트)──▶ MetadataPage{ records[] }
+CategoryFilter(5cat,1yr) ──(fetchMetadataPage / 대량 하베스트)──▶ MetadataPage{ records[] }
    record ──(parse, fetchFullText Q2=C)──▶ ParsedPaper{ paperId, version, abstract, body/sections } ──▶ StoredFullText(ObjectRef, SEC-9)
       │                                                          │ (Q13=B) 철회신호(메타+전문)? ─▶ WithdrawalMarker ─▶ Tombstone(전 청크)
       ├─(fingerprint=paperId+version)─▶ ContentFingerprint ─(isNew)─▶ DedupDecision

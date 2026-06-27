@@ -1,7 +1,7 @@
 # U1 Corpus Application Design Amendment Plan
 
-**Stage**: INCEPTION -> Application Design  
-**Date**: 2026-06-26  
+**Stage**: INCEPTION -> Application Design
+**Date**: 2026-06-26
 **Scope**: Minimal U1-only amendment after Workflow Planning skip review.
 
 ## Decision

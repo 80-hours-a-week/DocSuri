@@ -1,7 +1,7 @@
 # U1 Corpus Units Review Plan
 
-**Stage**: INCEPTION -> Units Generation  
-**Date**: 2026-06-26  
+**Stage**: INCEPTION -> Units Generation
+**Date**: 2026-06-26
 **Scope**: Minimal review of existing unit boundaries for U1 Corpus.
 
 ## Decision

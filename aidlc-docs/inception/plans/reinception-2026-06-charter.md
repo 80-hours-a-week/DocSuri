@@ -90,7 +90,7 @@ OpenAlex          :  PDF (GROBID)               (신규)
   OpenSearch 저장  +  S3 저장
 ```
 **운영**: Scheduler 주기 수집 · Watermark 기반 증분 갱신 · Retry/DLQ · 버전 관리.
-**결과**: 최근 AI/ML 1~2년 Corpus 구축 완료. U2/U7/Agent 데이터 기반 완성.
+**결과**: 최근 AI/ML 1년 Corpus 구축 완료. U2/U7/Agent 데이터 기반 완성.
 
 > **D6 갭 주의 (현재 코드 ≠ 목표)**: 현재 U1 인덱싱은 **full-text 청크 기반**이고 DocModel은
 > **요약 시점 lazy 빌드**(U7 `SqsDocModelBuildQueue` → U1 워커)다. D6은 이를 **수집 시점 eager
@@ -156,7 +156,7 @@ Research Proposal
 
 ### 페이즈 7 — Corpus 대량 구축 (준희)
 ```
-AI/ML 최근 1~2년  -->  최근 5년  -->  전체  -->  타 분야 확장
+AI/ML 최근 1년  -->  최근 5년  -->  전체  -->  타 분야 확장
 (필요 시: DocModel 재생성 / Embedding 재생성 / OpenSearch Reindex)
 ```
 

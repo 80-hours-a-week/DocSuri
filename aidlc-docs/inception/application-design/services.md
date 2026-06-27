@@ -21,7 +21,7 @@
 
 ### RefreshOrchestrationService
 - **책임**: source별 스케줄 갱신, phase-1 seed/backfill, DocModel/index 재생성을 통합 관리한다. **US-I2 최신성 갱신·US-I1 Corpus 빌드·RES-2 재구축 런북의 제어 평면.**
-- **오케스트레이션 (event + schedule)**: `CorpusRefreshScheduler.onSchedule`이 arXiv/Semantic Scholar/OpenAlex source별 IngestionJob을 생성 → 각 source의 `sourceWatermark` 이후 페이지를 열거 → IngestionPipelineService에 분배(배치/동시성은 RES-8 쿼터 준수). `triggerBackfill`은 최근 AI/ML 1~2년 phase-1 Corpus를 비용 상한 안에서 진행하고, `triggerRebuild`는 DocModel/parser/index version 변경 시 재생성한다. 잡 단위 실패율·진행도·watermark 지연을 관측성 노출.
+- **오케스트레이션 (event + schedule)**: `CorpusRefreshScheduler.onSchedule`이 arXiv/Semantic Scholar/OpenAlex source별 IngestionJob을 생성 → 각 source의 `sourceWatermark` 이후 페이지를 열거 → IngestionPipelineService에 분배(배치/동시성은 RES-8 쿼터 준수). `triggerBackfill`은 최근 AI/ML 1년 phase-1 Corpus를 비용 상한 안에서 진행하고, `triggerRebuild`는 DocModel/parser/index version 변경 시 재생성한다. 잡 단위 실패율·진행도·watermark 지연을 관측성 노출.
 - **Trace**: FR-6, FR-18, US-I1, US-I2, RES-2, RES-7, RES-8, QT-9
 
 ### IngestionResilienceService
