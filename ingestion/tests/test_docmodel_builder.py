@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from docsuri_shared.docmodel_contract import DOCMODEL_PARSER_VERSION, DOCMODEL_SCHEMA_VERSION
 from docsuri_shared.dtos import DocModel, DocModelResultDTO, SourceTier, SourceUnavailableDTO
 
 from docsuri_ingestion.adapters.local import sample_metadata
@@ -21,8 +22,8 @@ def _doc(
     paper_id: str = "2401.00001",
     version: int = 1,
     *,
-    parser_version: str = "docmodel-parser@1",
-    schema_version: str = "1.0.0",
+    parser_version: str = DOCMODEL_PARSER_VERSION,
+    schema_version: str = DOCMODEL_SCHEMA_VERSION,
 ) -> DocModel:
     return parse_html_to_docmodel(
         _HTML,
@@ -73,8 +74,8 @@ def _builder(
     source: _FakeSource,
     store: _FakeStore,
     *,
-    parser_version: str = "docmodel-parser@1",
-    schema_version: str = "1.0.0",
+    parser_version: str = DOCMODEL_PARSER_VERSION,
+    schema_version: str = DOCMODEL_SCHEMA_VERSION,
 ) -> DocModelBuilder:
     return DocModelBuilder(
         source=source,
@@ -115,7 +116,7 @@ def test_stale_parser_cache_hit_rebuilds_and_overwrites() -> None:
     assert result.cached is False
     assert source.calls == ["2401.00001v1"]
     assert len(store.put_calls) == 1
-    assert store.put_calls[0].meta.provenance.parserVersion == "docmodel-parser@1"
+    assert store.put_calls[0].meta.provenance.parserVersion == DOCMODEL_PARSER_VERSION
 
 
 def test_stale_schema_cache_hit_rebuilds_text_doc_model() -> None:
@@ -125,7 +126,7 @@ def test_stale_schema_cache_hit_rebuilds_text_doc_model() -> None:
     )
     assert result.cached is False
     assert len(store.put_calls) == 1
-    assert store.put_calls[0].meta.provenance.schemaVersion == "1.0.0"
+    assert store.put_calls[0].meta.provenance.schemaVersion == DOCMODEL_SCHEMA_VERSION
 
 
 def test_stale_source_record_cache_hit_rebuilds_from_paper_text() -> None:

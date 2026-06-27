@@ -62,6 +62,28 @@ def test_in_memory_store_deletes_canonical_state_by_paper_id() -> None:
     assert store.get_canonical_dedup_state("arxiv:2401.00001") is None
 
 
+def test_in_memory_store_lists_canonical_aliases_by_paper_id() -> None:
+    store = InMemoryControlPlaneStore()
+    for key in ("doi:10.1000/x", "arxiv:2401.00001"):
+        store.upsert_canonical_dedup_state(
+            CanonicalDedupState(
+                canonical_key=key,
+                paper_id="p1",
+                winning_source_tier="OPENALEX_GROBID",
+                winning_version=1,
+                fingerprint="fp",
+                seen_sources=(SourceName.OPENALEX,),
+            )
+        )
+
+    aliases = store.list_canonical_dedup_states_for_paper("p1")
+
+    assert {state.canonical_key for state in aliases} == {
+        "doi:10.1000/x",
+        "arxiv:2401.00001",
+    }
+
+
 _TEXT = st.text(
     alphabet=st.characters(blacklist_categories=("Cs",)),
     min_size=1,

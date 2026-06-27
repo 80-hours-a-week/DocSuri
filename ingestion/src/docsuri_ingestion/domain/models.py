@@ -72,10 +72,25 @@ class ParsedPaper:
     license_url: str
     withdrawal_detected: bool = False
     stored_full_text_ref: str | None = None
+    doi: str = ""
+    source_arxiv_id: str = ""
+    source_name: SourceName = SourceName.ARXIV
+    source_id: str = ""
+    source_tier: str = ""
+    source_url: str = ""
+    display_arxiv_id: str = ""
 
     @property
     def arxiv_id(self) -> str:
         return f"{self.paper_id}v{self.version}"
+
+    @property
+    def card_arxiv_id(self) -> str:
+        if self.display_arxiv_id:
+            return self.display_arxiv_id
+        if self.source_arxiv_id:
+            return self.source_arxiv_id
+        return "" if self.paper_id.startswith("src-") else self.arxiv_id
 
     @property
     def fingerprint(self) -> str:

@@ -9,7 +9,7 @@ from docsuri_shared.ids import chunk_id
 from docsuri_shared.vector_spec import EMBEDDING_SPEC, IndexRecord
 
 from .config import OPEN_ACCESS_LICENSE_ALLOWLIST, WITHDRAWAL_MARKERS
-from .domain.enums import DedupDecision
+from .domain.enums import DedupDecision, SourceName
 from .domain.errors import LicenseRejectedError, ValidationViolationError
 from .domain.models import (
     Chunk,
@@ -56,6 +56,12 @@ class FetchParseProcessor:
             full_text=text,
             license_url=metadata.license_url or "",
             withdrawal_detected=withdrawal_detected,
+            source_name=SourceName.ARXIV,
+            source_id=identifier.arxiv_id,
+            source_tier="ARXIV_PDF" if "/pdf/" in raw.source_url else "ARXIV_HTML",
+            source_url=raw.source_url,
+            source_arxiv_id=identifier.arxiv_id,
+            display_arxiv_id=identifier.arxiv_id,
         )
 
     def validate_open_access(self, license_url: str | None) -> None:
@@ -247,7 +253,9 @@ class IndexRecordAssembler:
         chunk: Chunk,
         vector: Sequence[float],
     ) -> IndexRecord:
-        lexical_terms = normalize_text(chunk.text)
+        lexical_terms = ""
+        if normalize_text(chunk.section).lower() != "abstract":
+            lexical_terms = normalize_text(chunk.text)
         return IndexRecord(
             chunkId=chunk.chunk_id,
             paperId=paper.paper_id,
@@ -268,11 +276,21 @@ class IndexRecordAssembler:
             title=paper.title,
             authors=list(paper.authors),
             year=paper.year,
-            arxivId=paper.arxiv_id,
+            arxivId=paper.card_arxiv_id,
             abstract=paper.abstract,
             abstractSnippet=snippet(paper.abstract),
             arxivUrl=paper.arxiv_url,
             categories=list(paper.categories),
+            doi=paper.doi or None,
+            sourceArxivId=paper.source_arxiv_id or None,
+            sourceProvenance={
+                "sourceName": paper.source_name.value,
+                "sourceId": paper.source_id or paper.paper_id,
+                "sourceTier": paper.source_tier or paper.source_name.value,
+                "sourceUrl": paper.source_url or paper.arxiv_url,
+                "doi": paper.doi,
+                "arxivId": paper.source_arxiv_id or paper.card_arxiv_id,
+            },
         )
 
 

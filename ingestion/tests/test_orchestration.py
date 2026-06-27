@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -17,8 +18,10 @@ from docsuri_ingestion.adapters.local import (
     sample_metadata,
 )
 from docsuri_ingestion.application import RefreshOrchestrationService
+from docsuri_ingestion.config import CORPUS_END, CORPUS_START
 from docsuri_ingestion.corpus_sources import CorpusSourceAdapterSet, SourcePaperRecord
 from docsuri_ingestion.docmodel.builder import DocModelBuilder
+from docsuri_ingestion.domain.canonical import canonical_key
 from docsuri_ingestion.domain.enums import DedupDecision, FailureReason, JobKind, SourceName
 from docsuri_ingestion.domain.errors import PermanentIngestionError, RetriableIngestionError
 from docsuri_ingestion.domain.models import CanonicalDedupState, IndexRecordBatch, IngestionJob
@@ -62,9 +65,10 @@ class _ExternalSource:
     def __init__(self, record: SourcePaperRecord) -> None:
         self.record = record
         self.fetched_pdf_for: SourcePaperRecord | None = None
+        self.incremental_calls: list[tuple[datetime, tuple[str, ...], datetime | None]] = []
 
-    def fetch_incremental(self, since, categories):
-        del since, categories
+    def fetch_incremental(self, since, categories, until=None):
+        self.incremental_calls.append((since, tuple(categories), until))
         return (self.record,)
 
     def fetch_pdf(self, record: SourcePaperRecord) -> bytes:
@@ -90,8 +94,8 @@ def _external_record() -> SourcePaperRecord:
         abstract="External abstract",
         authors=("Ada Lovelace",),
         categories=("cs.LG",),
-        updated_at=datetime(2026, 1, 2, tzinfo=UTC),
-        published_at=datetime(2026, 1, 1, tzinfo=UTC),
+        updated_at=datetime(2025, 6, 2, tzinfo=UTC),
+        published_at=datetime(2025, 6, 1, tzinfo=UTC),
         pdf_url="https://example.test/paper.pdf",
         license_url="https://creativecommons.org/licenses/by/4.0/",
         doi="10.1000/external",
@@ -478,6 +482,90 @@ def test_refresh_wires_configured_external_sources_into_queue() -> None:
     assert job.canonical_key == "doi:10.1000/external"
 
 
+def test_full_rebuild_wires_configured_external_sources_as_seed_jobs() -> None:
+    control = InMemoryControlPlaneStore()
+    queue = InMemoryQueue()
+    observability = type(
+        "Obs",
+        (),
+        {
+            "metrics": [],
+            "emit_metric": lambda self, name, value, tags=None: self.metrics.append(
+                (name, value, tags or {})
+            ),
+            "emit_log": lambda self, entry: None,
+            "emit_failure_signal": lambda self, job_id, stage, error: None,
+        },
+    )()
+    record = _external_record()
+    provider = _ExternalSource(record)
+    corpus_sources = CorpusSourceAdapterSet(
+        arxiv=FakeArxivSource([sample_metadata()]),
+        openalex=provider,
+        grobid=_Grobid(),
+    )
+    service = RefreshOrchestrationService(
+        arxiv=FakeArxivSource([sample_metadata()]),
+        control_plane=control,
+        queue=queue,
+        observability=observability,
+        corpus_sources=corpus_sources,
+        enabled_sources=(SourceName.ARXIV, SourceName.OPENALEX),
+    )
+
+    assert service.trigger_full_rebuild(owner="test") == 2
+
+    external_job = next(job for job in queue.jobs if job.source_name is SourceName.OPENALEX)
+    assert external_job.kind is JobKind.SEED_REBUILD
+    assert external_job.source_record == record.to_payload()
+    assert external_job.canonical_key == "doi:10.1000/external"
+    assert CORPUS_END - CORPUS_START <= timedelta(days=366)
+    assert control.get_watermark("openalex").updated_at == CORPUS_START
+    assert provider.incremental_calls[0][0] == CORPUS_START
+    assert provider.incremental_calls[0][2] == CORPUS_END
+
+
+def test_full_rebuild_skips_external_records_outside_corpus_window() -> None:
+    control = InMemoryControlPlaneStore()
+    queue = InMemoryQueue()
+    observability = type(
+        "Obs",
+        (),
+        {
+            "metrics": [],
+            "emit_metric": lambda self, name, value, tags=None: self.metrics.append(
+                (name, value, tags or {})
+            ),
+            "emit_log": lambda self, entry: None,
+            "emit_failure_signal": lambda self, job_id, stage, error: None,
+        },
+    )()
+    provider = _ExternalSource(
+        replace(
+            _external_record(),
+            source_id="oa-late",
+            updated_at=CORPUS_END + timedelta(days=1),
+            doi="10.1000/late",
+        )
+    )
+    corpus_sources = CorpusSourceAdapterSet(
+        arxiv=FakeArxivSource([]),
+        openalex=provider,
+        grobid=_Grobid(),
+    )
+    service = RefreshOrchestrationService(
+        arxiv=FakeArxivSource([]),
+        control_plane=control,
+        queue=queue,
+        observability=observability,
+        corpus_sources=corpus_sources,
+        enabled_sources=(SourceName.OPENALEX,),
+    )
+
+    assert service.trigger_full_rebuild(owner="test") == 0
+    assert queue.jobs == []
+
+
 def test_source_record_ingest_uses_grobid_docmodel_and_source_watermark() -> None:
     record = _external_record()
     provider = _ExternalSource(record)
@@ -515,8 +603,89 @@ def test_source_record_ingest_uses_grobid_docmodel_and_source_watermark() -> Non
         any(ref.blockId == "s1.p1" for ref in record.blockRefs)
         for record in index.records.values()
     )
+    indexed = next(iter(index.records.values()))
+    assert indexed.doi == "10.1000/external"
+    assert indexed.sourceArxivId is None
+    assert indexed.sourceProvenance is not None
+    assert indexed.sourceProvenance.sourceName == "OPENALEX"
+    assert indexed.sourceProvenance.sourceId == "oa-1"
+    assert indexed.sourceProvenance.sourceTier == "OPENALEX_GROBID"
+    assert indexed.sourceProvenance.sourceUrl == "https://example.test/paper.pdf"
     assert control.get_watermark("openalex").updated_at == record.updated_at
     assert control.get_canonical_dedup_state("doi:10.1000/external") is not None
+
+
+def test_arxiv_replaces_doi_only_external_winner_through_title_alias() -> None:
+    published = datetime(2025, 6, 1, tzinfo=UTC)
+    external = replace(
+        _external_record(),
+        title="Shared Canonical Paper",
+        abstract="Shared abstract",
+        authors=("Ada Lovelace",),
+        published_at=published,
+        updated_at=published,
+        arxiv_id=None,
+        doi="10.1000/shared",
+    )
+    arxiv_metadata = replace(
+        sample_metadata("2506.00001v1"),
+        title=external.title,
+        abstract=external.abstract,
+        authors=external.authors,
+        published_at=published,
+        updated_at=published,
+    )
+    provider = _ExternalSource(external)
+    corpus_sources = CorpusSourceAdapterSet(
+        arxiv=FakeArxivSource([arxiv_metadata]),
+        openalex=provider,
+        grobid=_Grobid("External lower-priority text"),
+    )
+    arxiv = FakeArxivSource(
+        [arxiv_metadata],
+        full_text={"2506.00001v1": "INTRODUCTION\nArXiv higher-priority text"},
+    )
+    pipeline, control, index, _, _ = build_test_pipeline(
+        arxiv=arxiv,
+        corpus_sources=corpus_sources,
+    )
+    doi_key = "doi:10.1000/shared"
+    title_key = canonical_key(
+        title=external.title,
+        year=2025,
+        first_author=external.authors[0],
+    )
+
+    assert (
+        pipeline.ingest_one(
+            IngestionJob(
+                job_id="openalex-shared",
+                kind=JobKind.INCREMENTAL,
+                source_name=SourceName.OPENALEX,
+                source_record=external.to_payload(),
+                canonical_key=doi_key,
+            )
+        )
+        is DedupDecision.NEW
+    )
+    old_state = control.get_canonical_dedup_state(doi_key)
+    assert old_state is not None
+    old_paper_id = old_state.paper_id
+    assert control.get_canonical_dedup_state(title_key).paper_id == old_paper_id
+
+    result = pipeline.ingest_one(
+        IngestionJob(job_id="arxiv-shared", kind=JobKind.INCREMENTAL, arxiv_ref="2506.00001v1")
+    )
+
+    assert result is DedupDecision.NEW
+    for key in (doi_key, title_key, "arxiv:2506.00001"):
+        state = control.get_canonical_dedup_state(key)
+        assert state is not None
+        assert state.paper_id == "2506.00001"
+        assert state.winning_source_tier == "ARXIV_HTML"
+    assert all(record.paperId != old_paper_id for record in index.records.values())
+    assert index.tombstones[-1].paper_id == old_paper_id
+    assert index.tombstones[-1].reason == "CANONICAL_SOURCE_REPLACED"
 
 
 def test_source_record_skips_pdf_fetch_when_higher_priority_winner_exists() -> None:

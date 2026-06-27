@@ -27,11 +27,13 @@ class _ExternalSource:
         self.record = record
         self.since = None
         self.categories = None
+        self.until = None
         self.fetched_record: SourcePaperRecord | None = None
 
-    def fetch_incremental(self, since, categories):
+    def fetch_incremental(self, since, categories, until=None):
         self.since = since
         self.categories = tuple(categories)
+        self.until = until
         return (self.record,)
 
     def fetch_pdf(self, record: SourcePaperRecord) -> bytes:
@@ -101,12 +103,14 @@ def test_external_source_incremental_delegates_by_source_name() -> None:
             SourceName.OPENALEX,
             datetime(2025, 1, 1, tzinfo=UTC),
             ("cs.LG",),
+            datetime(2026, 1, 1, tzinfo=UTC),
         )
     )
 
     assert records == (record,)
     assert provider.since == datetime(2025, 1, 1, tzinfo=UTC)
     assert provider.categories == ("cs.LG",)
+    assert provider.until == datetime(2026, 1, 1, tzinfo=UTC)
 
 
 def test_source_paper_record_payload_round_trips_retry_metadata() -> None:

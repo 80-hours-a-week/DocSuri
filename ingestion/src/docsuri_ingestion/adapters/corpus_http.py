@@ -33,7 +33,10 @@ class SemanticScholarCorpusSource:
         self._transport = transport
 
     def fetch_incremental(
-        self, since: datetime, categories: Sequence[str]
+        self,
+        since: datetime,
+        categories: Sequence[str],
+        until: datetime | None = None,
     ) -> list[SourcePaperRecord]:
         records: list[SourcePaperRecord] = []
         token: str | None = None
@@ -69,7 +72,7 @@ class SemanticScholarCorpusSource:
             )
             for item in payload.get("data", []) or []:
                 record = _semantic_record(item)
-                if record and (record.updated_at or record.published_at or since) > since:
+                if record and _in_window(record, since, until):
                     records.append(record)
             token = payload.get("token")
             if not token:
@@ -103,21 +106,25 @@ class OpenAlexCorpusSource:
         self._transport = transport
 
     def fetch_incremental(
-        self, since: datetime, categories: Sequence[str]
+        self,
+        since: datetime,
+        categories: Sequence[str],
+        until: datetime | None = None,
     ) -> list[SourcePaperRecord]:
         records: list[SourcePaperRecord] = []
         cursor = "*"
         while cursor:
+            filters = [
+                f"from_updated_date:{since.date().isoformat()}",
+                "open_access.is_oa:true",
+                "type:article",
+            ]
+            if until is not None:
+                filters.append(f"to_updated_date:{until.date().isoformat()}")
             payload = _get_json(
                 f"{self._base_url}/works",
                 params={
-                    "filter": ",".join(
-                        (
-                            f"from_updated_date:{since.date().isoformat()}",
-                            "open_access.is_oa:true",
-                            "type:article",
-                        )
-                    ),
+                    "filter": ",".join(filters),
                     "search": _query(categories),
                     "per-page": "100",
                     "cursor": cursor,
@@ -144,7 +151,7 @@ class OpenAlexCorpusSource:
             )
             for item in payload.get("results", []) or []:
                 record = _openalex_record(item)
-                if record and (record.updated_at or record.published_at or since) > since:
+                if record and _in_window(record, since, until):
                     records.append(record)
             cursor = (payload.get("meta") or {}).get("next_cursor")
         return records
@@ -326,6 +333,15 @@ def _response_json(response, stage: str) -> dict[str, Any]:
 def _query(categories: Sequence[str]) -> str:
     terms = sorted({_QUERY_TERMS.get(category, category) for category in categories})
     return " ".join(terms) or "machine learning"
+
+
+def _in_window(
+    record: SourcePaperRecord,
+    since: datetime,
+    until: datetime | None,
+) -> bool:
+    timestamp = record.updated_at or record.published_at or since
+    return timestamp > since and (until is None or timestamp <= until)
 
 
 def _first_pdf_url(locations: list[dict[str, Any]]) -> str | None:

@@ -86,6 +86,36 @@ def test_block_refs_mapping_is_non_indexed_provenance():
     assert mapping == {"type": "object", "enabled": False}
 
 
+def test_source_provenance_is_optional_internal_metadata():
+    record = vs.IndexRecord.model_validate(
+        {
+            **valid_index_record_dict(),
+            "doi": "10.1000/example",
+            "sourceArxivId": "2106.01234v1",
+            "sourceProvenance": {
+                "sourceName": "OPENALEX",
+                "sourceId": "oa-1",
+                "sourceTier": "OPENALEX_GROBID",
+                "sourceUrl": "https://example.test/paper.pdf",
+                "doi": "10.1000/example",
+                "arxivId": "2106.01234v1",
+            },
+        }
+    )
+
+    assert record.doi == "10.1000/example"
+    assert record.sourceArxivId == "2106.01234v1"
+    assert record.sourceProvenance is not None
+    assert record.sourceProvenance.sourceName == "OPENALEX"
+
+
+def test_source_alias_mapping_is_keyword_and_provenance_is_non_indexed():
+    properties = papers_index_body()["mappings"]["properties"]
+    assert properties["doi"] == {"type": "keyword"}
+    assert properties["sourceArxivId"] == {"type": "keyword"}
+    assert properties["sourceProvenance"] == {"type": "object", "enabled": False}
+
+
 def test_assert_same_space():
     vs.assert_same_space(vs.EMBEDDING_SPEC, vs.EMBEDDING_SPEC)  # identical → no raise
     # A space-defining field differing must raise — including the silent failure mode

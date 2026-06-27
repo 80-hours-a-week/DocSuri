@@ -13,7 +13,7 @@
 
 ### 0.1 확장성·처리량
 
-- **phase-1 범위**: 최근 AI/ML 1-2년, OA/인덱싱 허용 라이선스, 명시적 build budget 안에서만 eager Corpus를 구축한다. 5년/전체 AI/ML 확장은 별도 backfill phase다.
+- **phase-1 범위**: 최근 AI/ML 1년, OA/인덱싱 허용 라이선스, 명시적 build budget 안에서만 eager Corpus를 구축한다. 5년/전체 AI/ML 확장은 별도 backfill phase다.
 - **source fan-out**: arXiv, Semantic Scholar, OpenAlex를 source별 job과 watermark로 분리한다. 한 source의 장애·쿼터가 다른 source의 watermark를 전진/정체시키면 안 된다.
 - **GROBID 처리량**: Semantic Scholar/OpenAlex PDF는 containerized internal GROBID 처리량을 별도 병목으로 본다. source fetch 동시성, GROBID 동시성, embedding batch 동시성은 각각 독립 quota를 갖는다.
 - **index generation**: DocModel 기반 index generation은 active alias 밖에서 bulk write하고, QT-9와 smoke check 통과 후 alias cutover한다. 기존 active index는 rollback window 동안 유지한다.
@@ -59,7 +59,7 @@
 ---
 
 ## 1. 확장성 (Scalability)
-- **코퍼스 규모**: FR-6 풀 슬라이스 — cs.LG·cs.AI·cs.CL·cs.CV·stat.ML × 최근 5년 = **수십만 건**(Q1=D). 아키텍처는 NFR-S1 저(低)천명대 사용자까지 무재설계 확장.
+- **코퍼스 규모**: phase-1 슬라이스 — cs.LG·cs.AI·cs.CL·cs.CV·stat.ML × 최근 1년. 최근 5년은 Phase 7 backfill 확장 범위다. 아키텍처는 NFR-S1 저(低)천명대 사용자까지 무재설계 확장.
 - **시드 빌드(US-I1)**: OAI-PMH 하베스트(`set=cs`, resumptionToken)로 대량 수집(NFR Q2=B). **시간 단위 소요 허용**(준비 작업, 실시간 아님; Q10).
 - **워커 확장(Q11=B)**: fetch/parse/embed **병렬**, **인덱스 쓰기는 직렬화**(단일 writer 계약·FD BR-13 REBUILD_LOCK 유지). 동시성은 arXiv 쿼터(RES-8) 내 보수적.
 

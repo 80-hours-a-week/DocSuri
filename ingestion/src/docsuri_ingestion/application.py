@@ -9,7 +9,7 @@ from docsuri_shared.dtos import DocModel, DocModelResultDTO, SourceTier, SourceU
 
 from .asset_extraction import AssetExtractor
 from .config import CORPUS_SLICE_CATEGORIES, WITHDRAWAL_MARKERS
-from .corpus_sources import CorpusSourceAdapterSet, SourcePaperRecord
+from .corpus_sources import CorpusSourceAdapterSet, CorpusTextCandidate, SourcePaperRecord
 from .docmodel import DocModelBuilder
 from .domain.canonical import canonical_key
 from .domain.enums import DedupDecision, FailureClass, FailureReason, JobKind, SourceName
@@ -200,13 +200,8 @@ class IngestionPipelineService:
         paper = self._parser.parse(raw_document)
 
         doc_model = self._build_doc_model_before_index(metadata, raw_document.text)
-        key = canonical_key(
-            title=metadata.title,
-            year=paper.year,
-            arxiv_id=metadata.identifier.arxiv_id,
-            first_author=metadata.authors[0] if metadata.authors else None,
-        )
-        existing = self._control_plane.get_canonical_dedup_state(key)
+        keys = self._canonical_keys_for_metadata(metadata, paper.year)
+        existing = self._canonical_state_for_keys(keys)
         decision = self._index_paper(
             job,
             paper,
@@ -216,7 +211,7 @@ class IngestionPipelineService:
         )
         if decision is not DedupDecision.STALE and not paper.withdrawal_detected:
             self._record_canonical_winner(
-                key,
+                keys,
                 paper,
                 "ARXIV_PDF" if "/pdf/" in raw_document.source_url else "ARXIV_HTML",
                 SourceName.ARXIV,
@@ -234,14 +229,14 @@ class IngestionPipelineService:
         record = SourcePaperRecord.from_payload(job.source_record or {})
         self._parser.validate_open_access(record.license_url)
         updated = record.updated_at or record.published_at or self._clock.now()
-        key = job.canonical_key or self._canonical_key_for_record(
-            record, record.year or updated.year
-        )
-        existing = self._control_plane.get_canonical_dedup_state(key)
+        record_keys = self._canonical_keys_for_record(record, record.year or updated.year)
+        key = job.canonical_key or record_keys[0]
+        keys = _dedupe_keys(key, *record_keys)
+        existing = self._canonical_state_for_keys(keys)
         if existing is not None and not _source_can_replace(
             existing.winning_source_tier, record.source_name
         ):
-            self._record_canonical_duplicate(job, existing, record.source_name)
+            self._record_canonical_duplicate(job, existing, record.source_name, keys)
             return DedupDecision.DUPLICATE
 
         candidate = self._resilience.dependency_call(
@@ -249,7 +244,7 @@ class IngestionPipelineService:
             "fetch_full_text",
             lambda: self._corpus_sources.extract_record_text(record),
         )
-        paper = self._paper_from_source_record(record, candidate.text, job)
+        paper = self._paper_from_source_record(record, candidate, job, key)
 
         doc_model = self._build_doc_model_from_paper(paper, SourceTier.pdf)
         decision = self._index_paper(
@@ -261,7 +256,7 @@ class IngestionPipelineService:
         )
         if decision is not DedupDecision.STALE and not paper.withdrawal_detected:
             self._record_canonical_winner(
-                key,
+                keys,
                 paper,
                 candidate.source_tier,
                 record.source_name,
@@ -384,9 +379,13 @@ class IngestionPipelineService:
         return result.decision
 
     def _paper_from_source_record(
-        self, record: SourcePaperRecord, text: str, job: IngestionJob
+        self,
+        record: SourcePaperRecord,
+        candidate: CorpusTextCandidate,
+        job: IngestionJob,
+        key: str,
     ) -> ParsedPaper:
-        normalized_text = normalize_text(text)
+        normalized_text = normalize_text(candidate.text)
         if not normalized_text:
             raise PermanentIngestionError(
                 "full text is empty",
@@ -396,13 +395,13 @@ class IngestionPipelineService:
         timestamp = record.updated_at or record.published_at or self._clock.now()
         published = record.published_at or timestamp
         year = record.year or published.year
-        key = job.canonical_key or self._canonical_key_for_record(record, year)
         paper_id = job.paper_id or _paper_id_from_canonical_key(key)
         abstract = normalize_text(record.abstract or record.title)
         authors = tuple(normalize_text(author) for author in record.authors) or (
             record.source_name.value,
         )
         categories = record.categories or ()
+        source_url = candidate.source_url or record.html_url or record.pdf_url or ""
         return ParsedPaper(
             paper_id=paper_id,
             version=job.version or record.version,
@@ -412,34 +411,95 @@ class IngestionPipelineService:
             categories=categories,
             updated_at=timestamp,
             year=year,
-            arxiv_url=record.html_url or record.pdf_url or "",
+            arxiv_url=record.html_url or record.pdf_url or source_url,
             full_text=normalized_text,
             license_url=record.license_url or "",
             withdrawal_detected=detect_withdrawal_proxy(record.title, abstract, normalized_text),
+            doi=record.doi or "",
+            source_arxiv_id=record.arxiv_id or "",
+            source_name=record.source_name,
+            source_id=record.source_id,
+            source_tier=candidate.source_tier,
+            source_url=source_url,
+            display_arxiv_id=record.arxiv_id or "",
         )
 
     def _canonical_key_for_record(self, record: SourcePaperRecord, year: int) -> str:
-        first_author = record.authors[0] if record.authors else None
-        return canonical_key(
-            title=record.title,
-            year=year,
-            doi=record.doi,
-            arxiv_id=record.arxiv_id,
-            first_author=first_author,
+        return self._canonical_keys_for_record(record, year)[0]
+
+    def _canonical_keys_for_metadata(self, metadata, year: int) -> tuple[str, ...]:
+        first_author = metadata.authors[0] if metadata.authors else None
+        return _dedupe_keys(
+            canonical_key(
+                title=metadata.title,
+                year=year,
+                arxiv_id=metadata.identifier.arxiv_id,
+                first_author=first_author,
+            ),
+            canonical_key(
+                title=metadata.title,
+                year=year,
+                first_author=first_author,
+            ),
         )
+
+    def _canonical_keys_for_record(
+        self, record: SourcePaperRecord, year: int
+    ) -> tuple[str, ...]:
+        first_author = record.authors[0] if record.authors else None
+        return _dedupe_keys(
+            canonical_key(
+                title=record.title,
+                year=year,
+                doi=record.doi,
+                arxiv_id=record.arxiv_id,
+                first_author=first_author,
+            ),
+            (
+                canonical_key(
+                    title=record.title,
+                    year=year,
+                    arxiv_id=record.arxiv_id,
+                    first_author=first_author,
+                )
+                if record.arxiv_id
+                else None
+            ),
+            canonical_key(
+                title=record.title,
+                year=year,
+                first_author=first_author,
+            ),
+        )
+
+    def _canonical_state_for_keys(
+        self, keys: tuple[str, ...]
+    ) -> CanonicalDedupState | None:
+        states = [
+            state
+            for key in keys
+            if (state := self._control_plane.get_canonical_dedup_state(key)) is not None
+        ]
+        if not states:
+            return None
+        return min(states, key=lambda state: _source_priority_from_tier(state.winning_source_tier))
 
     def _record_canonical_duplicate(
         self,
         job: IngestionJob,
         existing: CanonicalDedupState,
         source_name: SourceName,
+        alias_keys: tuple[str, ...],
     ) -> None:
-        self._control_plane.upsert_canonical_dedup_state(
-            replace(
-                existing,
-                seen_sources=_append_source(existing.seen_sources, source_name),
+        seen_sources = _append_source(existing.seen_sources, source_name)
+        for key in alias_keys:
+            self._control_plane.upsert_canonical_dedup_state(
+                replace(
+                    existing,
+                    canonical_key=key,
+                    seen_sources=seen_sources,
+                )
             )
-        )
         self._control_plane.record_job_finished(
             job.job_id, success=True, detail="canonical_duplicate"
         )
@@ -451,26 +511,36 @@ class IngestionPipelineService:
 
     def _record_canonical_winner(
         self,
-        key: str,
+        alias_keys: tuple[str, ...],
         paper: ParsedPaper,
         source_tier: str,
         source_name: SourceName,
         existing: CanonicalDedupState | None,
     ) -> None:
+        old_alias_keys: tuple[str, ...] = ()
         if existing is not None and existing.paper_id != paper.paper_id:
+            old_alias_keys = tuple(
+                state.canonical_key
+                for state in self._control_plane.list_canonical_dedup_states_for_paper(
+                    existing.paper_id
+                )
+            )
             self._remove_canonical_loser(existing)
-        self._control_plane.upsert_canonical_dedup_state(
-            CanonicalDedupState(
-                canonical_key=key,
-                paper_id=paper.paper_id,
-                winning_source_tier=source_tier,
-                winning_version=paper.version,
-                fingerprint=paper.fingerprint,
-                seen_sources=_append_source(
-                    existing.seen_sources if existing is not None else (), source_name
+            self._control_plane.delete_canonical_dedup_state_for_paper(existing.paper_id)
+        seen_sources = _append_source(
+            existing.seen_sources if existing is not None else (), source_name
+        )
+        for key in _dedupe_keys(*alias_keys, *old_alias_keys):
+            self._control_plane.upsert_canonical_dedup_state(
+                CanonicalDedupState(
+                    canonical_key=key,
+                    paper_id=paper.paper_id,
+                    winning_source_tier=source_tier,
+                    winning_version=paper.version,
+                    fingerprint=paper.fingerprint,
+                    seen_sources=seen_sources,
                 ),
             )
-        )
 
     def _remove_canonical_loser(self, existing: CanonicalDedupState) -> None:
         tombstone = Tombstone(
@@ -638,12 +708,10 @@ class RefreshOrchestrationService:
             return 0
         queued = 0
         try:
-            self._control_plane.reset_watermark_for_rebuild(
-                "arxiv", datetime(1970, 1, 1, tzinfo=UTC)
-            )
             from .config import CORPUS_END, CORPUS_START
             from .domain.models import CategoryFilter
 
+            self._control_plane.reset_watermark_for_rebuild("arxiv", CORPUS_START)
             category_filter = CategoryFilter(
                 categories=CORPUS_SLICE_CATEGORIES,
                 updated_after=CORPUS_START,
@@ -658,6 +726,18 @@ class RefreshOrchestrationService:
                     )
                 )
                 queued += 1
+            for source_name in self._enabled_sources:
+                if source_name is SourceName.ARXIV:
+                    continue
+                self._control_plane.reset_watermark_for_rebuild(
+                    source_name.value.lower(), CORPUS_START
+                )
+                queued += self._queue_external_source(
+                    source_name,
+                    since=CORPUS_START,
+                    until=CORPUS_END,
+                    kind=JobKind.SEED_REBUILD,
+                )
             self._observability.emit_metric("ingestion.rebuild.queued", float(queued), {})
             return queued
         finally:
@@ -692,6 +772,26 @@ class RefreshOrchestrationService:
         return queued
 
     def _queue_external_incremental(self, source_name: SourceName) -> int:
+        watermark_name = source_name.value.lower()
+        watermark = self._control_plane.get_watermark(watermark_name)
+        queued = self._queue_external_source(
+            source_name, since=watermark.updated_at, kind=JobKind.INCREMENTAL
+        )
+        self._observability.emit_metric(
+            "ingestion.source.incremental.queued",
+            float(queued),
+            {"source": source_name.value},
+        )
+        return queued
+
+    def _queue_external_source(
+        self,
+        source_name: SourceName,
+        *,
+        since: datetime,
+        kind: JobKind,
+        until: datetime | None = None,
+    ) -> int:
         if self._corpus_sources is None or not self._corpus_sources.is_configured(source_name):
             self._observability.emit_metric(
                 "ingestion.source.unconfigured",
@@ -699,18 +799,18 @@ class RefreshOrchestrationService:
                 {"source": source_name.value},
             )
             return 0
-        watermark_name = source_name.value.lower()
-        watermark = self._control_plane.get_watermark(watermark_name)
         queued = 0
         for record in self._corpus_sources.fetch_incremental(
-            source_name, watermark.updated_at, CORPUS_SLICE_CATEGORIES
+            source_name, since, CORPUS_SLICE_CATEGORIES, until
         ):
             updated = record.updated_at or record.published_at or self._clock.now()
+            if updated <= since or (until is not None and updated > until):
+                continue
             year = record.year or updated.year
             self._queue.send_job(
                 IngestionJob(
-                    job_id=new_job_id("incremental"),
-                    kind=JobKind.INCREMENTAL,
+                    job_id=new_job_id("seed" if kind is JobKind.SEED_REBUILD else "incremental"),
+                    kind=kind,
                     source_name=source_name,
                     source_record=record.to_payload(),
                     canonical_key=canonical_key(
@@ -723,11 +823,6 @@ class RefreshOrchestrationService:
                 )
             )
             queued += 1
-        self._observability.emit_metric(
-            "ingestion.source.incremental.queued",
-            float(queued),
-            {"source": source_name.value},
-        )
         return queued
 
     def on_new_arxiv_event(self, event) -> bool:
@@ -753,6 +848,14 @@ def new_job_id(prefix: str) -> str:
 
 def _paper_id_from_canonical_key(key: str) -> str:
     return "src-" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:24]
+
+
+def _dedupe_keys(*keys: str | None) -> tuple[str, ...]:
+    result: list[str] = []
+    for key in keys:
+        if key and key not in result:
+            result.append(key)
+    return tuple(result)
 
 
 def _append_source(seen_sources: tuple, source_name) -> tuple:

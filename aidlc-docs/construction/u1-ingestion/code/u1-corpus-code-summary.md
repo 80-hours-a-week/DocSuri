@@ -27,6 +27,7 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
   - Semantic Scholar/OpenAlex `sourceRecord` job도 PDF -> GROBID -> FullText -> DocModel -> chunk/embed/index 공통 경로를 탄다.
   - arXiv와 외부 source 모두 canonical dedup state를 갱신하고, source priority(arXiv > Semantic Scholar > OpenAlex)를 적용한다.
   - 이미 상위 priority source가 이긴 canonical key는 PDF/GROBID fetch 전에 duplicate로 종료하고, 상위 source가 나중에 도착하면 기존 하위 source chunk를 tombstone 처리한다.
+  - canonical dedup state는 DOI, arXiv, title/author/year alias row를 같은 winner에 묶는다. DOI-only 외부 record도 title alias로 이후 arXiv ingest와 매칭되며, arXiv가 lower-priority external winner를 대체할 때 기존 DOI alias도 새 arXiv winner로 이동한다.
   - withdrawal-detected paper는 tombstone 후 canonical winner로 기록하지 않아 정상 외부 복본을 삭제하지 않는다.
   - successful tombstone은 해당 `paperId`의 canonical winner rows를 삭제해 철회된 winner가 후속 외부 복본 ingest를 막지 않는다.
   - tombstone 시 DocModel cache invalidation을 수행한다.
@@ -38,6 +39,7 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
   - DocModel 기반 chunking은 DocModel block만 사용하므로 모든 DocModel-derived index record가 실제 DocModel block을 참조한다.
   - text-bearing block이 없는 DocModel은 `fullText`를 첫 실제 block ref에 연결해 fallback chunk를 생성한다.
   - `blockRefs`는 provenance/QT-9 검증용이며 BM25 `lexicalTerms` 검색 토큰에는 섞지 않는다.
+  - `doi`, `sourceArxivId`, `sourceProvenance`를 IndexRecord에 보존한다. 외부 source가 arXiv alias를 제공하면 `paperId`가 `src-*`여도 카드용 `arxivId`는 실제 alias를 사용한다.
 
 - `ingestion/src/docsuri_ingestion/corpus_sources.py`
   - arXiv HTML/PDF 우선순위는 기존 adapter를 재사용한다.
@@ -47,7 +49,7 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
 
 - `ingestion/src/docsuri_ingestion/domain/canonical.py`
   - canonical key 우선순위는 DOI -> arXiv id -> title/author/year hash다.
-  - source별 dedup state 저장 포트를 in-memory/Postgres에 추가했다.
+  - source별 dedup state 저장 포트를 in-memory/Postgres에 추가했고, canonical alias rows를 paperId 기준으로 조회/이동할 수 있게 했다.
 
 - `ingestion/src/docsuri_ingestion/domain/models.py`, `worker.py`, queue adapters
   - retry/DLQ payload에 `sourceName`, `sourceRecord`, `failureStage`, `canonicalKey`, `paperId`, `version`을 포함한다.
@@ -55,7 +57,7 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
 - `ingestion/src/docsuri_ingestion/adapters/aws.py`
   - OpenSearch candidate generation validation과 alias cutover 메서드를 추가했다.
   - validation 실패 시 alias switch를 호출하지 않는 경계를 테스트했다.
-  - OpenSearch mapping은 shared `papers_index_body()`를 SSOT로 사용하며, `blockRefs`는 검색하지 않는 provenance라 non-indexed object로 저장한다.
+  - OpenSearch mapping은 shared `papers_index_body()`를 SSOT로 사용하며, `blockRefs`/`sourceProvenance`는 검색하지 않는 provenance라 non-indexed object로 저장한다. DOI/arXiv source alias는 keyword로 저장한다.
 
 - `ingestion/src/docsuri_ingestion/adapters/grobid.py`, `runtime.py`, `settings.py`
   - GROBID HTTP client와 runtime wiring을 추가했다.
@@ -95,7 +97,7 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
 - `migrate.py backfill`은 legacy `chunk()` 직접 재색인을 제거하고, OAI metadata를 기존 ingestion pipeline에 넣어 DocModel blockRefs 기반으로 재임베딩한다.
 - local runtime에 in-memory DocModelBuilder를 주입해 local/prod indexing path를 맞췄다.
 - HTML 본문에 `meta.abstract`와 동일한 abstract section이 있으면 첫 abstract section을 제거해 semantic embedding 이중계상을 막는다.
-- `DocModelBuilder` cache hit는 cached provenance `parserVersion`/`schemaVersion`이 현재 builder와 일치할 때만 재사용한다. 오래된 lazy-build S3 artifact는 자동으로 재빌드/덮어쓴다.
+- `DocModelBuilder` cache hit는 cached provenance `parserVersion`/`schemaVersion`이 현재 shared doc-model contract와 일치할 때만 재사용한다. U7 `S3DocModelReader`도 같은 contract를 검사하고 mismatch를 cache miss로 처리해 오래된 lazy-build S3 artifact를 노출하지 않는다.
 - `trigger-full-rebuild` preflight가 production corpus build 전에 multimodal assets ON, external source용 GROBID URL, `DOCSURI_BEDROCK_MODEL_ID_V2` unset, worker rollout 완료 및 harvest redeploy freeze 확인(`DOCSURI_CORPUS_BUILD_ROLLOUT_CONFIRMED=true`)을 강제한다.
 
 ## 검증 결과
@@ -152,6 +154,17 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
 - 2026-06-27 pre-corpus-build review follow-up: `uv run --directory shared/python pytest -q` -> 68 passed
 - 2026-06-27 pre-corpus-build review follow-up: `uv run --directory shared/python ruff check .` -> passed
 - 2026-06-27 pre-corpus-build review follow-up: `git diff --check` -> passed
+- 2026-06-27 sourceProvenance/alias follow-up: `uv run --directory shared/python pytest tests/test_vector_spec.py -q` -> 11 passed
+- 2026-06-27 sourceProvenance/alias follow-up: `uv run --directory ingestion pytest tests/test_domain_units.py tests/test_canonical_dedup.py tests/test_orchestration.py -q` -> 46 passed
+- 2026-06-27 sourceProvenance/alias follow-up: `uv run --directory ingestion ruff check src tests/test_domain_units.py tests/test_canonical_dedup.py tests/test_orchestration.py` -> passed
+- 2026-06-27 sourceProvenance/alias follow-up: `uv run --directory shared/python python tools/generate.py --check` -> passed
+- 2026-06-27 sourceProvenance/alias follow-up: `uv run --directory ingestion pytest -q -rA` -> 152 passed, 1 skipped
+- 2026-06-27 sourceProvenance/alias follow-up: `uv run --directory ingestion ruff check .` -> passed
+- 2026-06-27 sourceProvenance/alias follow-up: `uv run --directory shared/python pytest -q` -> 70 passed
+- 2026-06-27 sourceProvenance/alias follow-up: `uv run --directory shared/python ruff check .` -> passed
+- 2026-06-27 sourceProvenance/alias follow-up: `uv run --directory backend/modules/discovery pytest -q` -> 53 passed, 3 skipped
+- 2026-06-27 sourceProvenance/alias follow-up: `uv run --directory backend/modules/discovery ruff check .` -> passed
+- 2026-06-27 sourceProvenance/alias follow-up: `git diff --check` -> passed
 
 ## 추적성
 

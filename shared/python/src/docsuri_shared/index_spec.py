@@ -54,6 +54,9 @@ def papers_index_body(*, on_disk: bool = False) -> dict[str, Any]:
                 "abstractSnippet": {"type": "text"},
                 "arxivUrl": {"type": "keyword"},
                 "categories": {"type": "keyword"},
+                "doi": {"type": "keyword"},
+                "sourceArxivId": {"type": "keyword"},
+                "sourceProvenance": {"type": "object", "enabled": False},
             }
         },
     }

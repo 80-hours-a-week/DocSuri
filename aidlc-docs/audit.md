@@ -2445,3 +2445,63 @@ This time, find and resolve all potential issues.
 **Context**: CONSTRUCTION — U1 Corpus Code Generation parser cache, lexical write split, and deployment guard validation.
 
 ---
+
+## U1 Corpus Construction — Pre-build Documentation Contract Cleanup
+**Timestamp**: 2026-06-27T05:36:25Z
+**User Input**: ""
+**AI Response**: "추가 점검 중 남은 문서-코드 불일치를 정리했다. `construction/shared/vector-spec.md`를 실제 shared 계약(specVersion v2, Cohere Embed v4, assert_same_space 기반 same-space gate, per-record modelVer 없음)에 맞췄고, U1 `business-rules.md`의 오래된 제목+초록 단일 벡터/lexicalTerms 계약을 DocModel 기반 초록+본문 다중 청크 및 본문 전용 lexicalTerms 계약으로 갱신했다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation documentation consistency cleanup.
+
+---
+
+## U1 Corpus Construction — Pre-build Full Rebuild Multi-source Fix
+**Timestamp**: 2026-06-27T05:40:05Z
+**User Input**: ""
+**AI Response**: "추가 실행 경로 점검에서 `trigger_full_rebuild()`가 arXiv seed만 큐잉하고 configured Semantic Scholar/OpenAlex source record를 누락하는 갭을 수정했다. full rebuild는 enabled external source별 watermark를 epoch로 reset하고 `SEED_REBUILD` source-record job을 큐잉한다. 검증: ingestion focused orchestration/cache/lexical/preflight tests 28 passed, ingestion full pytest 147 passed/1 skipped, ingestion ruff clean, shared vector spec 9 passed, discovery OpenSearch adapter 4 passed, shared generate --check passed, git diff --check passed."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation full rebuild multi-source coverage and validation.
+
+---
+
+## U1 Corpus Construction — Phase-1 Corpus Slice Correction
+**Timestamp**: 2026-06-27T05:53:44Z
+**User Input**: "그렇게 해줘. 최근 1년으로 범위를 한정해줘,"
+**AI Response**: "사용자 결정에 따라 phase-1 Corpus 범위를 최근 AI/ML 1년으로 확정했다. `CORPUS_START=2025-01-01`, `CORPUS_END=2026-01-01`로 좁히고, arXiv seed harvest와 Semantic Scholar/OpenAlex full rebuild source-record 큐잉 모두 같은 window를 적용했다. 외부 provider가 범위 밖 record를 반환해도 orchestrator가 큐잉 전에 skip한다. 관련 요구사항/차터/Functional/NFR/Infrastructure 문서의 current contract도 1년 슬라이스로 정리했다. 검증: ingestion targeted orchestration/corpus source tests 34 passed, ingestion full pytest 148 passed/1 skipped, ingestion ruff clean, corpus scope drift search clean, git diff --check passed."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation phase-1 corpus slice correction.
+
+---
+
+## U1 Corpus Construction — DocModel Stale Cache Closure
+**Timestamp**: 2026-06-27T05:58:05Z
+**User Input**:
+```text
+완전히 이 이슈가 종료되도록 조치를 취해야 해.
+```
+**AI Response**: "`DocModelBuilder` cache invalidation에 남아 있던 U7/S3 direct read 우회 경로를 닫았다. shared `docmodel_contract`에 `DOCMODEL_PARSER_VERSION`/`DOCMODEL_SCHEMA_VERSION`을 두고 U1 builder와 U7 `S3DocModelReader`가 같은 값을 사용한다. S3 reader는 JSON payload에서 provenance version을 pydantic schema validation 전에 검사하고 mismatch/missing이면 cache miss로 반환해 endpoint build queue 또는 fallback 경로를 타게 한다. 검증: ingestion docmodel builder 8 passed, summarization docmodel endpoint/build trigger 20 passed, summarization full pytest 118 passed/3 skipped, ingestion full pytest 148 passed/1 skipped, shared pytest 68 passed, targeted ruff clean, shared generate --check passed, git diff --check passed. Summarization 전체 ruff는 기존 unrelated test lint baseline으로 실패했다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation DocModel stale cache closure across builder and S3 reader.
+
+---
+
+## U1 Corpus Construction — LexicalTerms Write Split Closure
+**Timestamp**: 2026-06-27T06:07:34Z
+**User Input**:
+```text
+이 이슈도 완벽하게 종결시켜줘.
+```
+**AI Response**: "`IndexRecord.lexicalTerms`를 본문 청크 전용으로 강제했다. legacy full-text chunk와 DocModel chunk 모두 abstract section record는 `lexicalTerms=\"\"`로 저장하고, 검색용 초록은 별도 analyzed `abstract` 필드에만 남긴다. U2 BM25 reader는 기존대로 `title`, `abstract`, `lexicalTerms` multi-match를 사용해 추후 boost 튜닝을 재색인 없이 query 변경으로 적용할 수 있다. 검증: ingestion full pytest 149 passed/1 skipped, ingestion ruff clean, shared pytest 68 passed, shared vector spec 9 passed, shared generate --check passed, discovery OpenSearch adapter 4 passed, targeted discovery/shared ruff clean, git diff --check passed."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation lexicalTerms write split closure.
+
+---
+## CONSTRUCTION — U1 Corpus Follow-up Closure
+**Timestamp**: 2026-06-27T06:19:24Z
+**User Input**: "후속 이슈들도 지금 반영해줘"
+**AI Response**: "U1 Corpus follow-up으로 남아 있던 SourceProvenance와 DOI/arXiv canonical alias를 Code Generation 보정으로 반영한다. IndexRecord에 내부 source provenance/alias 필드를 추가하고, canonical dedup state를 DOI/arXiv/title alias rows로 묶어 DOI-only external과 arXiv metadata가 교차 매칭되도록 구현한다."
+**Context**: CONSTRUCTION — Code Generation follow-up implementation.
+
+---
+## CONSTRUCTION — U1 Corpus Follow-up Closure Verification
+**Timestamp**: 2026-06-27T06:20:40Z
+**User Input**: "후속 이슈들도 지금 반영해줘"
+**AI Response**: "SourceProvenance와 DOI/arXiv canonical alias follow-up 구현 및 문서 반영을 완료했다. 검증: shared vector spec targeted 11 passed, ingestion targeted 46 passed, ingestion full 152 passed/1 skipped, shared full 70 passed, discovery full 53 passed/3 skipped, ingestion/shared/discovery ruff clean, shared codegen --check clean, git diff --check clean."
+**Context**: CONSTRUCTION — Code Generation follow-up implementation verification.
+
+---

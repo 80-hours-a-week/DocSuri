@@ -180,6 +180,32 @@ class PostgresControlPlaneStore:
             seen_sources=tuple(SourceName(v) for v in (row[5] or [])),
         )
 
+    def list_canonical_dedup_states_for_paper(
+        self, paper_id: str
+    ) -> tuple[CanonicalDedupState, ...]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT canonical_key, paper_id, winning_source_tier, winning_version,
+                       fingerprint, seen_sources
+                  FROM canonical_dedup_state
+                 WHERE paper_id = %s
+                 ORDER BY canonical_key
+                """,
+                (paper_id,),
+            ).fetchall()
+        return tuple(
+            CanonicalDedupState(
+                canonical_key=row[0],
+                paper_id=row[1],
+                winning_source_tier=row[2],
+                winning_version=row[3],
+                fingerprint=row[4],
+                seen_sources=tuple(SourceName(v) for v in (row[5] or [])),
+            )
+            for row in rows
+        )
+
     def upsert_canonical_dedup_state(self, state: CanonicalDedupState) -> None:
         with self._connect() as conn:
             conn.execute(

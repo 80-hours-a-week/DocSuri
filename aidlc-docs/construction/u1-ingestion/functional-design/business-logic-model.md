@@ -180,7 +180,7 @@ ingestOne(record, job):
 ```
 triggerFullRebuild():                                  # US-I1 시드/전체 재구축, RES-2
   acquire REBUILD_LOCK (Q16=A 상호 배제)                 # rebuild 동안 INCREMENTAL/EVENT 보류·거부
-  job ← IngestionJob(SEED_REBUILD, slice=resolveSliceCategories() [5cat,5yr], since=null)
+  job ← IngestionJob(SEED_REBUILD, slice=resolveSliceCategories() [5cat,1yr], since=null)
   reset Watermark (의도적 리셋 — Q17 예외 경로)
   for batch in harvest(대량 시드 하베스트):              # 프로토콜=NFR Q2; 수십만
       for record in batch: IngestionPipelineService.ingestOne(record, job)  # 쿼터 인지 동시성(NFR Q11=B, 쓰기 직렬화)
@@ -218,7 +218,7 @@ handle(error|class, context):
 
 | 컴포넌트 | 핵심 알고리즘(프로덕션) |
 |---|---|
-| **ArxivSourceClient** | `resolveSliceCategories`→ 5 카테고리·최근 5년(Q1=D). `fetchMetadataPage`(증분, updated 기준 Q7=A) + 대량 시드 하베스트(프로토콜 NFR Q2). **`fetchFullText` 활성(Q2=C)** — OA 전문 취득. 레이트/쿼터 보수 준수(RES-8)·타임아웃(RES-9)·fail-closed(SEC-15). |
+| **ArxivSourceClient** | `resolveSliceCategories`→ 5 카테고리·최근 1년 phase-1. `fetchMetadataPage`(증분, updated 기준 Q7=A) + 대량 시드 하베스트(프로토콜 NFR Q2). **`fetchFullText` 활성(Q2=C)** — OA 전문 취득. 레이트/쿼터 보수 준수(RES-8)·타임아웃(RES-9)·fail-closed(SEC-15). |
 | **FetchParseProcessor** | `parse`: 메타+**전문 본문** ParsedPaper(Q2=C). OA 판정(엄격 라이선스 검증, BR-1). `validate`: 필수필드·형식(SEC-5). **(Q13=B) 철회 신호 탐지**(메타 철회 표시 + 전문 withdrawal 공지) → WithdrawalMarker. |
 | **Chunker** | `chunk`: **섹션 인지 다중 청크**(초록·본문 섹션, 오버랩 정책), 추적 메타(paperId·section·position), **결정적·멱등**(PBT-08). `chunkId(paperId, ordinal)` 결정적. 과대/빈/손상 본문 정책(BR-21). |
 | **EmbeddingGatewayAdapter** | `embedBatch`: 다중 청크 배치 벡터화(**공유 VectorSpec, NFR PIN**), 타임아웃·재시도·서킷(RES-9), 비용 텔레메트리(NFR-C1), vector↔chunkId 정렬 보존. `embeddingSchema()`→VectorSpec. fail-closed(SEC-15). |

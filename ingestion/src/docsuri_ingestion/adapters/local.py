@@ -148,6 +148,11 @@ class InMemoryControlPlaneStore:
     def get_canonical_dedup_state(self, canonical_key: str) -> CanonicalDedupState | None:
         return self._canonical.get(canonical_key)
 
+    def list_canonical_dedup_states_for_paper(
+        self, paper_id: str
+    ) -> tuple[CanonicalDedupState, ...]:
+        return tuple(state for state in self._canonical.values() if state.paper_id == paper_id)
+
     def upsert_canonical_dedup_state(self, state: CanonicalDedupState) -> None:
         with self._lock:
             self._canonical[state.canonical_key] = state

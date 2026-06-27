@@ -14,6 +14,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Protocol, runtime_checkable
 
+from docsuri_shared.docmodel_contract import DOCMODEL_PARSER_VERSION, DOCMODEL_SCHEMA_VERSION
 from docsuri_shared.dtos import DocModel, DocModelResultDTO, SourceTier, SourceUnavailableDTO
 
 from docsuri_ingestion.docmodel.parser import parse_html_to_docmodel, parse_text_to_docmodel
@@ -21,9 +22,9 @@ from docsuri_ingestion.domain.models import MetadataRecord
 from docsuri_ingestion.ports import DocModelSourcePort, DocModelStorePort
 
 # Bumping PARSER_VERSION invalidates cached doc-models (provenance.parserVersion, BR-30/TD-16).
-PARSER_VERSION = "docmodel-parser@1"
+PARSER_VERSION = DOCMODEL_PARSER_VERSION
 # Mirrors the doc-model schema contract version (additive evolution; shared/README Versioning).
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = DOCMODEL_SCHEMA_VERSION
 
 _SOURCE_UNAVAILABLE_REASON = (
     "We could not find a rich-renderable source (arXiv HTML) for this paper version."

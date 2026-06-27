@@ -93,7 +93,7 @@
 
 | 엔티티 | 필드(개념) | 비고 |
 |---|---|---|
-| **CategoryFilter** | `categories[]`, `from`/`to`(기간) | **Q1=D: `categories=[cs.LG,cs.AI,cs.CL,cs.CV,stat.ML]`, 최근 5년(수십만 건).** `resolveSliceCategories()` 산출. |
+| **CategoryFilter** | `categories[]`, `from`/`to`(기간) | **Phase-1: `categories=[cs.LG,cs.AI,cs.CL,cs.CV,stat.ML]`, 최근 1년.** 5년 확장은 Phase 7에서 별도 backfill로 수행한다. |
 | **PageCursor** | 불투명 페이지/하베스트 커서 | 대량 시드 하베스트 + 증분 조회 페이지네이션 상태(프로토콜=NFR Q2). |
 | **MetadataPage** | `records[]`(원천 메타), `nextCursor`, `hasMore` | 슬라이스 페이지 단위 조회 결과. |
 | **RawDocument** | `text`(정규화 평문), `sourceMeta`, `oaStatus` | **BR-29**: 취득 = arXiv HTML 우선(평문 변환의 최선 소스) → PDF 폴백. 산출은 **평문 1종**(뷰어·AI 공통). |
@@ -175,7 +175,7 @@
 ## 9. 엔티티 관계 (프로덕션)
 
 ```
-CategoryFilter(5cat,5yr) ──(fetchMetadataPage / 대량 하베스트)──▶ MetadataPage{ records[] }
+CategoryFilter(5cat,1yr) ──(fetchMetadataPage / 대량 하베스트)──▶ MetadataPage{ records[] }
    record ──(parse, fetchFullText Q2=C)──▶ ParsedPaper{ paperId, version, abstract, body/sections } ──▶ StoredFullText(ObjectRef, SEC-9)
       │                                                          │ (Q13=B) 철회신호(메타+전문)? ─▶ WithdrawalMarker ─▶ Tombstone(전 청크)
       ├─(fingerprint=paperId+version)─▶ ContentFingerprint ─(isNew)─▶ DedupDecision

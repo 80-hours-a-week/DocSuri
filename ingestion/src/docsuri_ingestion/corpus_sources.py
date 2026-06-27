@@ -97,7 +97,10 @@ class GrobidPort(Protocol):
 @runtime_checkable
 class ExternalCorpusSourcePort(Protocol):
     def fetch_incremental(
-        self, since: datetime, categories: Sequence[str]
+        self,
+        since: datetime,
+        categories: Sequence[str],
+        until: datetime | None = None,
     ) -> Iterable[SourcePaperRecord]: ...
 
     def fetch_pdf(self, record: SourcePaperRecord) -> bytes: ...
@@ -143,10 +146,14 @@ class CorpusSourceAdapterSet:
         return source_name is SourceName.ARXIV or source_name in self._external
 
     def fetch_incremental(
-        self, source_name: SourceName, since: datetime, categories: Sequence[str]
+        self,
+        source_name: SourceName,
+        since: datetime,
+        categories: Sequence[str],
+        until: datetime | None = None,
     ) -> Iterable[SourcePaperRecord]:
         provider = self._external_provider(source_name)
-        return provider.fetch_incremental(since, categories)
+        return provider.fetch_incremental(since, categories, until)
 
     def extract_record_text(self, record: SourcePaperRecord) -> CorpusTextCandidate:
         provider = self._external_provider(record.source_name)
