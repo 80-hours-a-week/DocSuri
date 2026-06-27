@@ -172,37 +172,7 @@ class IngestionPipelineService:
                 "fetch_metadata",
                 lambda: self._arxiv.fetch_metadata(job.arxiv_ref or ""),
             )
-            raw_document = self._resilience.dependency_call(
-                "arxiv",
-                "fetch_full_text",
-                lambda: self._arxiv.fetch_full_text(metadata),
-            )
-            paper = self._parser.parse(raw_document)
-
-            doc_model = self._build_doc_model_before_index(metadata, raw_document.text)
-            key = canonical_key(
-                title=metadata.title,
-                year=paper.year,
-                arxiv_id=metadata.identifier.arxiv_id,
-                first_author=metadata.authors[0] if metadata.authors else None,
-            )
-            existing = self._control_plane.get_canonical_dedup_state(key)
-            decision = self._index_paper(
-                job,
-                paper,
-                doc_model=doc_model,
-                watermark_name="arxiv",
-                asset_metadata=metadata,
-            )
-            if decision is not DedupDecision.STALE and not paper.withdrawal_detected:
-                self._record_canonical_winner(
-                    key,
-                    paper,
-                    "ARXIV_PDF" if "/pdf/" in raw_document.source_url else "ARXIV_HTML",
-                    SourceName.ARXIV,
-                    existing,
-                )
-            return decision
+            return self.ingest_metadata(job, metadata)
         except IngestionError as exc:
             self._control_plane.record_job_finished(
                 job.job_id, success=False, detail=exc.public_error()
@@ -220,6 +190,39 @@ class IngestionPipelineService:
                         job_id=job.job_id,
                     )
             raise
+
+    def ingest_metadata(self, job: IngestionJob, metadata) -> DedupDecision:
+        raw_document = self._resilience.dependency_call(
+            "arxiv",
+            "fetch_full_text",
+            lambda: self._arxiv.fetch_full_text(metadata),
+        )
+        paper = self._parser.parse(raw_document)
+
+        doc_model = self._build_doc_model_before_index(metadata, raw_document.text)
+        key = canonical_key(
+            title=metadata.title,
+            year=paper.year,
+            arxiv_id=metadata.identifier.arxiv_id,
+            first_author=metadata.authors[0] if metadata.authors else None,
+        )
+        existing = self._control_plane.get_canonical_dedup_state(key)
+        decision = self._index_paper(
+            job,
+            paper,
+            doc_model=doc_model,
+            watermark_name="arxiv",
+            asset_metadata=metadata,
+        )
+        if decision is not DedupDecision.STALE and not paper.withdrawal_detected:
+            self._record_canonical_winner(
+                key,
+                paper,
+                "ARXIV_PDF" if "/pdf/" in raw_document.source_url else "ARXIV_HTML",
+                SourceName.ARXIV,
+                existing,
+            )
+        return decision
 
     def _ingest_source_record(self, job: IngestionJob) -> DedupDecision:
         if self._corpus_sources is None:

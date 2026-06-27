@@ -58,7 +58,7 @@ class IndexRecord(BaseModel):
     )
     lexicalTerms: str = Field(
         ...,
-        description='Analyzed text field over title + abstract + body tokens — the BM25 lexical field for hybrid retrieval (FR-2). INTERNAL — not exposed in external DTOs (SEC-9). Trace: BR-6.',
+        description='Analyzed text field over title + abstract + chunk text — the single BM25 lexical field for hybrid retrieval (FR-2). U1 Corpus v1 intentionally does not split lexical fields or write per-field boosts; changing this field shape requires full reindex. INTERNAL — not exposed in external DTOs (SEC-9). Trace: BR-6.',
     )
     blockRefs: list[DocModelBlockRef] = Field(
         ...,

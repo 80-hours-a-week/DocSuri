@@ -29,7 +29,7 @@ U1이 쓰고 U2가 읽는 인덱스 문서. **논문당 다수 청크 레코드*
 | `modelVer` | string | **런타임 임베딩 모델 버전**(VectorSpec PIN 런타임 태그) | §4 |
 | `vector` | float[1024] | 청크 임베딩(cosine, search_document) | §1 |
 | `section` | string | 청크 출처 섹션(초록/본문 섹션) | BR-5 |
-| `lexicalTerms` | text(분석됨) | 제목+초록+본문 토큰 — **BM25 lexical 필드**(하이브리드 FR-2) | BR-6 |
+| `lexicalTerms` | text(분석됨) | 제목+초록+청크 본문 토큰을 한 필드에 합친 **단일 BM25 lexical 필드**(하이브리드 FR-2). U1 Corpus v1은 필드 분리/가중치 write 계약을 만들지 않는다. 변경 시 전량 재색인 필요 | BR-6 |
 | **카드 필드** (FR-4) | | U2 결과 카드 직접 매핑(→ `ResultCardVM`, dtos.md §1.1) | |
 | · `title` | string | 논문 제목 | FR-4 |
 | · `authors` | string[] | 저자 | FR-4 |
@@ -43,7 +43,7 @@ U1이 쓰고 U2가 읽는 인덱스 문서. **논문당 다수 청크 레코드*
 > **근거화 전제(FR-5)**: 모든 노출 결과는 이 레코드(실재 arXiv ID/링크)에 매핑. U6.GroundingEnforcementHook(ports.md)가 응답 엣지에서 검증.
 
 ## 3. 인덱스/검색 계약 요건 (스토어 = OpenSearch, TD-4)
-- **ANN**: `vector` 1024차원 k-NN(cosine). **Lexical**: `lexicalTerms` BM25. **하이브리드 검색**(FR-2)은 둘을 병합(U2.HybridRetriever).
+- **ANN**: `vector` 1024차원 k-NN(cosine). **Lexical**: `lexicalTerms` 단일 BM25 필드. **하이브리드 검색**(FR-2)은 둘을 병합(U2.HybridRetriever). 제목/초록/본문 field split·boost는 v1 write 계약 밖이다.
 - **per-paperId 멱등 삭제/tombstone**(BR-14): `paperId` 기준 전 청크 삭제 가능해야 함(버전 단조 가드는 제어평면, logical-components §3.3).
 - 인덱스명·샤드·레플리카·구체 매핑 JSON은 **Infra Design**.
 

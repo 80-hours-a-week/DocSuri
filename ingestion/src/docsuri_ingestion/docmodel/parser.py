@@ -102,6 +102,7 @@ def parse_html_to_docmodel(
 
     top_sections = _top_level_sections(root)
     if top_sections:
+        top_sections = _drop_duplicate_abstract_elements(top_sections, abstract)
         sections = [
             _parse_section(el, f"s{i}", doc_ctx) for i, el in enumerate(top_sections, start=1)
         ]
@@ -240,6 +241,21 @@ def _with_abstract_section(sections: list[dict], abstract: str | None) -> list[d
         },
         *sections,
     ]
+
+
+def _drop_duplicate_abstract_elements(sections: list[Tag], abstract: str | None) -> list[Tag]:
+    text = _WS_RE.sub(" ", abstract or "").strip().lower()
+    if not text or not sections:
+        return sections
+    first = sections[0]
+    title = _WS_RE.sub(" ", _section_title(first)).strip().lower()
+    if title != "abstract":
+        return sections
+    body = _WS_RE.sub(
+        " ",
+        " ".join(_inline_text(p) for p in first.find_all("p", class_="ltx_p")),
+    ).strip().lower()
+    return sections[1:] if body == text else sections
 
 
 def _section_title(section_el: Tag) -> str:
@@ -437,9 +453,7 @@ def _inline_text(el: Tag) -> str:
 
     Skips LaTeXML marker tags (``ltx_tag`` — section numbers, list bullets, eq numbers) and
     footnotes/notes (``ltx_note`` — out-of-flow annotations) so neither leaks into body text.
-    A footnote rendered inline (``...heads as A.33In all cases...``) would otherwise corrupt
-    the sentence sent to the LLM and the rich view (footnote data is not preserved — a follow-up
-    may promote it to a dedicated block).
+    U1 Corpus freezes footnotes out of DocModel v1; Citation Graph owns reference structure.
     """
     parts: list[str] = []
     for node in el.children:

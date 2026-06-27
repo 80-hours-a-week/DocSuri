@@ -2345,3 +2345,48 @@ provision_v2_index.py는 아직 INDEX_BODY 하드코딩(papers_index_body 미imp
 **Context**: CONSTRUCTION — U1 Corpus Code Generation fullText fallback and canonical cleanup validation.
 
 ---
+
+## U1 Corpus Construction — Pre-corpus Build Review Fix
+**Timestamp**: 2026-06-27T04:20:39Z
+**User Input**:
+```text
+Read the review from our team and fix every issue from this review.
+
+U1 Corpus — 코퍼스 빌드 전 남은 리뷰 사항
+
+D6 메커니즘(eager DocModel 빌드 · DocModel 블록 인덱싱 · 우선순위 중복제거 · 철회 정리 · abstract 임베딩 · blockRefs 구조화 · 매핑 SSOT 단일화)은 코드상 완성됐습니다. 다만 코퍼스를 실제로 채우기 전에 아직 정리/확정이 필요한 항목들이 남아 있어 정리합니다. (DocModel·임베딩·인덱스는 한 번 채우면 바꿀 때 재빌드/재임베딩이 따라오므로, 채우기 전에 봐야 하는 것들입니다.)
+
+확정이 필요한 계약 (미확정 상태)
+
+DocModel 스키마가 아직 PROVISIONAL — shared/dtos/docmodel.schema.json(STATUS: PROVISIONAL (U1 FD in progress)), construction/shared/docmodel.md(🟡 PROVISIONAL). 인덱싱·임베딩이 DocModel 블록에서 파생되므로, 확정 전 상태로 코퍼스를 채우면 이후 스키마 변경이 재임베딩까지 번집니다. 확정할 때 블록 스코프를 끝까지 못 박아야 합니다 — 특히 파서에 TODO로 남은 각주(footnote) 블록 승격(_inline_text 주석)을 넣을지/말지 지금 결정. (references·page는 이미 "안 함"으로 결론 — 명시만.)
+⑨ lexicalTerms 필드 계약 미정 — _record_from_chunk가 title+abstract+chunk.text를 한 필드에 concat. 검색 단계에서 필드 분리/가중치로 가려면 전량 재색인이 필요하므로, 코퍼스 채우기 전에 U1 write 계약(본문 전용 필드 분리 여부)을 검색측과 합의해 두는 게 좋습니다.
+아직 해결 안 된 문제점
+
+① Semantic Scholar/OpenAlex provider 미구현 — 우선순위·sourceRecord 경로는 있으나 실제 provider 부재 → 현재 실수집은 arXiv 단독. 차터 §3 수집은 3소스를 Phase 1로 명시하므로, 3소스로 채울지 / arXiv-only로 채우고 나머지는 Phase 7로 미룰지 결정이 필요합니다. (구현 또는 재범위화 — 어느 쪽이든 명시 필요.)
+④ migrate.py가 legacy chunk() 사용 — v4 재임베딩 도구가 blockRefs 없는 full-text 청킹으로 재색인 → 실행 시 인덱스가 DocModel 블록 방식과 어긋남. 초기 채우기 경로는 아니지만, 재임베딩 마이그레이션 실행 전 수정(또는 실행 가드)이 필요합니다.
+⑤ local ≠ prod 인덱싱 경로 — build_local_runtime이 doc_model_builder 미주입 → 로컬은 legacy 청킹, prod는 DocModel 블록 청킹. 로컬 테스트가 prod 경로를 검증하지 못합니다(거짓 안심). local runtime에 fake builder를 주입해 경로를 일치시키는 게 좋습니다.
+결정이 필요한 사항 (버그 아님)
+
+⑦ PDF-fallback이 단일 paragraph(무구조) — 의도된 degrade. "arXiv HTML 없는 논문은 단일 paragraph로 둔다"를 승인할지 결정이 필요합니다. (Phase 7 멀티소스는 전부 PDF/GROBID이므로 그때는 실제 구조화가 필요.)
+abstract 이중계상 — HTML 본문에 abstract 섹션이 또 있으면 s0 블록과 중복 임베딩될 수 있어 한 건 확인 권장.
+코퍼스 채울 때 설정 확인
+
+multimodal_assets_enabled ON (비전 사용 결정 — OFF면 그림 픽셀 미저장 → 추후 재추출 백필)
+on_disk 매핑으로 인덱스 생성(bootstrap_papers_index.py/migrate.py; provision_v2_index.py는 on_disk=False)
+DOCSURI_BEDROCK_MODEL_ID_V2 미설정(설정 시 임베딩 이중 비용)
+요약
+
+코퍼스를 실제로 채우기 전에는 위 확정 필요 2건과 미해결 ①④⑤, 결정 ⑦을 처리하는 게 좋겠습니다 — 모두 "안 해도 되는" 항목이 아니라 처리 대상입니다.
+```
+**AI Response**: "코퍼스 빌드 전 리뷰 항목 전부를 Code Generation 보정으로 처리한다. DocModel/lexicalTerms 계약을 확정하고, Semantic Scholar/OpenAlex 실 provider를 GROBID-gated로 배선하며, migrate.py backfill을 DocModel 기반 pipeline으로 통일하고, local runtime도 fake DocModelBuilder를 주입한다. PDF/GROBID 단일 paragraph degrade와 footnote/references/page 제외는 계약에 명시하고, HTML abstract 중복은 parser에서 제거한다."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation pre-corpus build review fix.
+
+---
+
+## U1 Corpus Construction — Pre-corpus Build Review Validation
+**Timestamp**: 2026-06-27T04:23:01Z
+**User Input**: ""
+**AI Response**: "코퍼스 빌드 전 리뷰 보정 검증을 완료했다. Focused ingestion tests 58 passed, full ingestion pytest 141 passed / 1 skipped, ingestion ruff clean, shared generate --check passed, shared pytest 68 passed, shared ruff clean, git diff --check passed."
+**Context**: CONSTRUCTION — U1 Corpus Code Generation pre-corpus build review validation.
+
+---

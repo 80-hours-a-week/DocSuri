@@ -1,11 +1,11 @@
 # shared/ 공용 계약 — doc-model (구조화 문서모델)
 
 **단계**: CONSTRUCTION → 공용 계약 (DocModel 피벗) · **일자**: 2026-06-23
-**상태**: 🟡 **PROVISIONAL** — 소유 유닛 U1 FD 진행 중. 형상은 본 문서가 SSOT, 런타임 스키마는 `shared/dtos/docmodel.schema.json`(파생).
+**상태**: 🔒 **FROZEN** — U1 Corpus build v1 입력·인덱싱·리치뷰 계약. 형상은 본 문서가 SSOT, 런타임 스키마는 `shared/dtos/docmodel.schema.json`(파생).
 **근거(SSOT 게이트)**: `aidlc-docs/construction/plans/docmodel-foundation-pivot-plan.md` (결정 D1·D2·D4·D6·D8 + Q1 커버리지 스파이크 + Q3 이 문서). 원장: `aidlc-docs/aidlc-state.md`.
 **목적**: 요약/번역 입력·자체 리치뷰 렌더·(후속)에이전트 toolschema **세 소비자의 단일 계약**. `fullText`로 전문 텍스트 투영본을 제공하고, `sections[].blocks[]`로 표·수식·그림·코드까지 구조화해 싣는다.
 
-> **상태 범례**: 🔒 FROZEN · 🟡 PROVISIONAL. 본 계약은 U1 FD 확정 시 동기화. 가산적 진화(필드 추가=하위호환; 제거/의미 변경=버전업, `provenance.schemaVersion`).
+> **상태 범례**: 🔒 FROZEN · 🟡 PROVISIONAL. 가산적 진화(필드 추가=하위호환; 제거/의미 변경=버전업, `provenance.schemaVersion`).
 
 ---
 
@@ -57,6 +57,7 @@ DocModel
 | `code` | `text` · `language?` | 알고리즘/코드 verbatim |
 
 > **헤딩은 블록이 아니다** — `Section.title`이 담는다. 소스 헤딩 부재 시 `title`은 빈 문자열(span-only 섹션, BR-S3 폴백과 정합).
+> **v1 제외 확정**: 각주(`ltx_note`)·references 목록 구조화·페이지 번호는 DocModel 블록으로 승격하지 않는다. 본문 인용 마커 텍스트는 보존하지만, 참고문헌/인용 그래프 구조화는 U8 Citation Graph 책임이다. PDF 페이지 딥링크는 소스 간 일관성이 없어 v1 제외이며, 근거 단위는 결정적 Section/Block id가 맡는다.
 
 ---
 
@@ -76,6 +77,7 @@ DocModel
 - **결정성(D1)**: LLM 추출 금지(표 숫자 환각 방지) — 결정적 파서만(BR-30·TD-16: lxml/BeautifulSoup·MathML→LaTeX).
 - **캐시/생성(D6 개정)**: `(paperId, version)` 키. `provenance.parserVersion`/`schemaVersion` 변경 또는 version 변경·철회(tombstone) 시 무효화. Corpus phase-1은 수집 시 eager 생성하며, legacy lazy build는 누락분·재빌드·백필 호환 경로로만 사용한다.
 - **저장**: `doc-model/{paperId}/v{version}.json`(단일 버킷·prefix, SSE-KMS, 공개 차단 — U1 Infra §1.1b). 이미지 바이트 분리: `assets/{paperId}/{version}/{assetId}.webp`(유지) + RDS `paper_asset`(유지) 재사용 — **재추출 0**.
+- **PDF/GROBID 폴백 결정**: rich HTML이 없는 논문은 `sourceTier=pdf` DocModel로 degrade하고, 구조를 추정하지 않은 단일 paragraph block을 만든다. Phase 7에서 PDF/GROBID 구조화 품질을 올리기 전까지 이 downgrade는 승인된 v1 동작이다.
 
 ---
 

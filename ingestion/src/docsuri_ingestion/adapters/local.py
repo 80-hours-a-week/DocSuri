@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+from docsuri_shared.dtos import DocModel
 from docsuri_shared.events import NewArxivEvent
 from docsuri_shared.vector_spec import DIMENSIONS, IndexRecord
 
@@ -54,6 +55,10 @@ class FakeArxivSource:
                 f"INTRODUCTION\n{metadata.abstract}\nMETHOD\nThis is deterministic local full text."
             )
         return RawDocument(metadata=metadata, text=text, source_url=f"local://{metadata.arxiv_ref}")
+
+    def fetch_html_source(self, arxiv_id: str):
+        del arxiv_id
+        return None
 
 
 class InMemoryControlPlaneStore:
@@ -242,6 +247,23 @@ class InMemoryFullTextStore:
         ref = f"memory://full-text/{paper.paper_id}/v{paper.version}.txt"
         self.objects[ref] = paper.full_text
         return ref
+
+
+class InMemoryDocModelStore:
+    def __init__(self) -> None:
+        self.objects: dict[tuple[str, int], DocModel] = {}
+
+    def get(self, paper_id: str, version: int) -> DocModel | None:
+        return self.objects.get((paper_id, version))
+
+    def put(self, doc: DocModel) -> str:
+        key = (doc.meta.paperId, doc.meta.version)
+        self.objects[key] = doc
+        return f"memory://doc-model/{doc.meta.paperId}/v{doc.meta.version}.json"
+
+    def remove(self, paper_id: str) -> None:
+        for key in [key for key in self.objects if key[0] == paper_id]:
+            del self.objects[key]
 
 
 @dataclass(frozen=True, slots=True)

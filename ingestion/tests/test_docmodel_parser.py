@@ -149,6 +149,25 @@ def test_nested_section_tree_and_ids() -> None:
     assert subs[0].title == "Setup"
 
 
+def test_html_abstract_section_does_not_duplicate_meta_abstract_embedding_source() -> None:
+    html = """
+    <html><body><article class="ltx_document">
+     <section class="ltx_section"><h2>Abstract</h2>
+      <div class="ltx_para"><p class="ltx_p">An abstract.</p></div>
+     </section>
+     <section class="ltx_section"><h2>Introduction</h2>
+      <div class="ltx_para"><p class="ltx_p">Body.</p></div>
+     </section>
+    </article></body></html>
+    """
+
+    doc = _parse(html)
+
+    assert [section.id for section in doc.sections] == ["s0", "s1"]
+    assert [section.title for section in doc.sections] == ["Abstract", "Introduction"]
+    assert doc.fullText.split("\n\n") == ["Abstract", "An abstract.", "Introduction", "Body."]
+
+
 def test_paragraph_blocks_with_inline_math() -> None:
     doc = _parse()
     paras = [b for b in _blocks(_body_sections(doc)[0]) if isinstance(b, ParagraphBlock)]

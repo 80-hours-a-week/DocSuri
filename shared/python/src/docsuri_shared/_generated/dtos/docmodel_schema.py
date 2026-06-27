@@ -412,7 +412,7 @@ class DocModelResponse(
         DocModelResultDTO | BuildingDTO | LicenseUnavailableDTO | SourceUnavailableDTO
     ) = Field(
         ...,
-        description='doc-model contract (DocModel pivot — SSOT spec: aidlc-docs/construction/shared/docmodel.md; gate: construction/plans/docmodel-foundation-pivot-plan.md, D1/D2/D4/D6/D8). The ROOT schema is DocModelResponse — the union (oneOf) returned by getDocModel and branched by U5 ApiClient to surface status (ok | building | license_unavailable | source_unavailable). The bare DocModel artifact (the JSON stored at doc-model/{paperId}/v{version}.json and consumed as the U7 summary input) is defined at #/$defs/DocModel. STATUS: PROVISIONAL (owning unit U1 FD in progress). Trace: FR-12, FR-17, BR-30, BR-S2.',
+        description='doc-model contract (DocModel pivot — SSOT spec: aidlc-docs/construction/shared/docmodel.md; gate: construction/plans/docmodel-foundation-pivot-plan.md, D1/D2/D4/D6/D8). The ROOT schema is DocModelResponse — the union (oneOf) returned by getDocModel and branched by U5 ApiClient to surface status (ok | building | license_unavailable | source_unavailable). The bare DocModel artifact (the JSON stored at doc-model/{paperId}/v{version}.json and consumed as the U7 summary input) is defined at #/$defs/DocModel. STATUS: FROZEN for U1 Corpus build v1. Footnotes/references/page numbers are intentionally out of scope; Citation Graph owns structured references and DocModel block ids replace page anchors. Trace: FR-12, FR-17, BR-30, BR-S2.',
         title='DocModelResponse',
     )
 

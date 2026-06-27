@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import httpx
 import pytest
 
+from docsuri_ingestion.adapters.corpus_http import OpenAlexCorpusSource, SemanticScholarCorpusSource
 from docsuri_ingestion.adapters.local import FakeArxivSource, sample_metadata
 from docsuri_ingestion.corpus_sources import CorpusSourceAdapterSet, SourcePaperRecord
 from docsuri_ingestion.domain.enums import SourceName
@@ -147,3 +149,86 @@ def test_external_record_text_fetches_pdf_then_grobid() -> None:
     assert provider.fetched_record == record
     assert grobid.seen_pdf == b"%PDF"
     assert candidate.source_tier == "OPENALEX_GROBID"
+
+
+def test_semantic_scholar_provider_fetches_oa_pdf_records() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url).endswith("paper.pdf"):
+            return httpx.Response(200, content=b"%PDF")
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "paperId": "s2-1",
+                        "title": "Paper",
+                        "abstract": "Abstract",
+                        "authors": [{"name": "Ada"}],
+                        "year": 2025,
+                        "publicationDate": "2025-01-01",
+                        "updated": "2026-01-02T00:00:00Z",
+                        "isOpenAccess": True,
+                        "externalIds": {"DOI": "10.1000/x", "ArXiv": "2401.00001"},
+                        "openAccessPdf": {
+                            "url": "https://example.test/paper.pdf",
+                            "license": "CC-BY",
+                        },
+                    }
+                ]
+            },
+        )
+
+    source = SemanticScholarCorpusSource(
+        base_url="https://example.test",
+        transport=httpx.MockTransport(handler),
+    )
+    records = source.fetch_incremental(datetime(2026, 1, 1, tzinfo=UTC), ("cs.LG",))
+
+    assert len(records) == 1
+    assert records[0].source_name is SourceName.SEMANTIC_SCHOLAR
+    assert records[0].pdf_url == "https://example.test/paper.pdf"
+    assert records[0].license_url == "https://creativecommons.org/licenses/by/4.0/"
+    assert source.fetch_pdf(records[0]) == b"%PDF"
+
+
+def test_openalex_provider_reconstructs_abstract_and_pdf_record() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url).endswith("paper.pdf"):
+            return httpx.Response(200, content=b"%PDF")
+        return httpx.Response(
+            200,
+            json={
+                "meta": {"next_cursor": None},
+                "results": [
+                    {
+                        "id": "https://openalex.org/W1",
+                        "ids": {"arxiv": "https://arxiv.org/abs/2401.00001"},
+                        "doi": "https://doi.org/10.1000/x",
+                        "display_name": "Paper",
+                        "abstract_inverted_index": {"hello": [0], "world": [1]},
+                        "authorships": [{"author": {"display_name": "Ada"}}],
+                        "publication_year": 2025,
+                        "publication_date": "2025-01-01",
+                        "updated_date": "2026-01-02T00:00:00Z",
+                        "primary_location": {
+                            "pdf_url": "https://example.test/paper.pdf",
+                            "landing_page_url": "https://example.test/paper",
+                            "license": "cc-by",
+                        },
+                        "locations": [],
+                    }
+                ],
+            },
+        )
+
+    source = OpenAlexCorpusSource(
+        base_url="https://example.test",
+        transport=httpx.MockTransport(handler),
+    )
+    records = source.fetch_incremental(datetime(2026, 1, 1, tzinfo=UTC), ("cs.LG",))
+
+    assert len(records) == 1
+    assert records[0].source_name is SourceName.OPENALEX
+    assert records[0].abstract == "hello world"
+    assert records[0].arxiv_id == "2401.00001"
+    assert source.fetch_pdf(records[0]) == b"%PDF"

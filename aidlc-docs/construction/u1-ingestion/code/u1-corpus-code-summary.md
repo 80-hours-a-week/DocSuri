@@ -79,11 +79,23 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
 - `ingestion/src/docsuri_ingestion/corpus_sources.py`
 - `ingestion/src/docsuri_ingestion/domain/canonical.py`
 - `ingestion/src/docsuri_ingestion/adapters/grobid.py`
+- `ingestion/src/docsuri_ingestion/adapters/corpus_http.py`
 - `ingestion/migrations/postgres/003_corpus_control_plane.sql`
 - `ingestion/tests/test_canonical_dedup.py`
 - `ingestion/tests/test_corpus_sources.py`
 - `ingestion/tests/test_grobid_adapter.py`
+- `ingestion/tests/test_runtime.py`
 - `aidlc-docs/construction/u1-ingestion/code/u1-corpus-code-summary.md`
+
+## 2026-06-27 코퍼스 빌드 전 리뷰 보정
+
+- DocModel 계약을 FROZEN으로 전환하고, footnote/references/page 제외 및 PDF/GROBID 단일 paragraph degrade를 명시했다.
+- `lexicalTerms`는 title+abstract+chunk text 단일 BM25 필드로 확정했다. field split/boost는 v1 write 계약 밖이며 변경 시 전량 재색인이다.
+- Semantic Scholar/OpenAlex 실 HTTP provider를 추가했다. production runtime은 GROBID 설정이 있을 때만 외부 provider를 배선해 PDF fetch 후 기존 GROBID/DocModel/index 경로로 보낸다.
+- `migrate.py backfill`은 legacy `chunk()` 직접 재색인을 제거하고, OAI metadata를 기존 ingestion pipeline에 넣어 DocModel blockRefs 기반으로 재임베딩한다.
+- local runtime에 in-memory DocModelBuilder를 주입해 local/prod indexing path를 맞췄다.
+- HTML 본문에 `meta.abstract`와 동일한 abstract section이 있으면 첫 abstract section을 제거해 semantic embedding 이중계상을 막는다.
+- `trigger-full-rebuild` preflight가 production corpus build 전에 multimodal assets ON, external source용 GROBID URL, `DOCSURI_BEDROCK_MODEL_ID_V2` unset을 강제한다.
 
 ## 검증 결과
 
@@ -131,6 +143,14 @@ U1 Corpus 구축 파이프라인의 코드 생성 범위를 구현했다. 핵심
 - 2026-06-27 fullText/canonical cleanup follow-up: `uv run --directory ingestion ruff check .` -> passed
 - 2026-06-27 fullText/canonical cleanup follow-up: `uv run --directory shared/python python tools/generate.py --check` -> passed
 - 2026-06-27 fullText/canonical cleanup follow-up: `git diff --check` -> passed
+- 2026-06-27 pre-corpus-build review follow-up: `uv run --directory ingestion pytest tests/test_grobid_adapter.py tests/test_corpus_sources.py tests/test_docmodel_parser.py tests/test_runtime.py tests/test_orchestration.py tests/test_migrate_dispatch.py -q` -> 58 passed
+- 2026-06-27 pre-corpus-build review follow-up: `uv run --directory ingestion ruff check src tests/test_grobid_adapter.py tests/test_corpus_sources.py tests/test_docmodel_parser.py tests/test_runtime.py tests/test_orchestration.py tests/test_migrate_dispatch.py` -> passed
+- 2026-06-27 pre-corpus-build review follow-up: `uv run --directory shared/python python tools/generate.py --check` -> passed
+- 2026-06-27 pre-corpus-build review follow-up: `uv run --directory ingestion pytest -q -rA` -> 141 passed, 1 skipped
+- 2026-06-27 pre-corpus-build review follow-up: `uv run --directory ingestion ruff check .` -> passed
+- 2026-06-27 pre-corpus-build review follow-up: `uv run --directory shared/python pytest -q` -> 68 passed
+- 2026-06-27 pre-corpus-build review follow-up: `uv run --directory shared/python ruff check .` -> passed
+- 2026-06-27 pre-corpus-build review follow-up: `git diff --check` -> passed
 
 ## 추적성
 

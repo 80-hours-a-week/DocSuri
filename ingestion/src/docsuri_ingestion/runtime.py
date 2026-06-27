@@ -14,6 +14,7 @@ from .adapters.local import (
     FakeArxivSource,
     FakeEmbeddingPort,
     InMemoryControlPlaneStore,
+    InMemoryDocModelStore,
     InMemoryFullTextStore,
     InMemoryQueue,
     InMemoryVectorIndex,
@@ -45,6 +46,9 @@ def build_local_runtime() -> RuntimeServices:
     observability = CapturingObservabilityHub()
     resilience = IngestionResilienceService(observability, timeout_seconds=2.0)
     failure_handler = IngestFailureHandler(queue, observability)
+    from .docmodel import DocModelBuilder
+
+    doc_model_builder = DocModelBuilder(source=arxiv, store=InMemoryDocModelStore())
     pipeline = IngestionPipelineService(
         arxiv=arxiv,
         full_text_store=InMemoryFullTextStore(),
@@ -54,6 +58,7 @@ def build_local_runtime() -> RuntimeServices:
         observability=observability,
         resilience=resilience,
         failure_handler=failure_handler,
+        doc_model_builder=doc_model_builder,
     )
     refresh = RefreshOrchestrationService(
         arxiv=arxiv,
@@ -81,8 +86,24 @@ def build_production_runtime(settings: IngestionSettings) -> RuntimeServices:
             base_url=settings.grobid_url,
             timeout_seconds=settings.request_timeout_seconds,
         )
-    corpus_sources = CorpusSourceAdapterSet(arxiv=arxiv, grobid=grobid)
     enabled_sources = _enabled_sources(settings.corpus_sources)
+    semantic_scholar = openalex = None
+    if grobid is not None:
+        from .adapters.corpus_http import OpenAlexCorpusSource, SemanticScholarCorpusSource
+
+        if SourceName.SEMANTIC_SCHOLAR in enabled_sources:
+            semantic_scholar = SemanticScholarCorpusSource(
+                api_key=settings.semantic_scholar_api_key,
+                timeout_seconds=settings.request_timeout_seconds,
+            )
+        if SourceName.OPENALEX in enabled_sources:
+            openalex = OpenAlexCorpusSource(timeout_seconds=settings.request_timeout_seconds)
+    corpus_sources = CorpusSourceAdapterSet(
+        arxiv=arxiv,
+        grobid=grobid,
+        semantic_scholar=semantic_scholar,
+        openalex=openalex,
+    )
     control = PostgresControlPlaneStore(settings.control_plane_dsn or "")
     queue = SqsQueue(
         queue_url=settings.sqs_queue_url or "",
