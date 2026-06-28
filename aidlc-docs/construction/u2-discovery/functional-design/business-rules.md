@@ -15,7 +15,7 @@
 | **BR-2 (질의 정규화·결정성)** | `normalize` = 트림 + 공백 collapse + **유니코드 NFC**. 결정적·멱등(PBT-02). **한국어 포함 다국어 허용**(스크립트 allowlist 금지 — cross-lingual 보호). | FR-1, PBT-02, Q7=A, TD-3 |
 | **BR-3 (질의 확장)** | `expand` = 질의 임베딩(**공유 VectorSpec, reader=`search_query`**, cross-lingual KR↔EN) + lexical 텀(토큰화). **동의어/LLM 재작성 없음**(결정성·NFR-C1). `llmEnabled=false`→임베딩 생략·lexical-only. | FR-2, NFR-C1, Q1=A, TD-3 |
 | **BR-4 (하이브리드 병합·디덥)** | 벡터 ANN + lexical BM25 후보를 **RRF 병합**; **PaperId 단위 디덥**(같은 논문 복수 청크→최상위 1건). 멱등·결과셋 보존(PBT-07). | FR-2, PBT-07, Q2=A |
-| **BR-5 (랭킹·상위 N)** | 병합 점수에 U9 `PersonalizationDecision`의 부스트(가산적, 최대 총합 0.2 한도 내)를 적용하여 내림차순 정렬 · **상위 N=20** 절단(N 미만=가용분만, 패딩/오류 없음). **LLM 리랭킹 없음(baseline)**. 순서 안정성(PBT-03). | FR-3, QT-2, Q3=A, Q10=A, NFR-P5 |
+| **BR-5 (랭킹·상위 N)** | 병합 점수에 U9 `PersonalizationDecision`의 부스트(가산적, 최대 총합 0.2 한도 내)를 적용하여 내림차순 정렬 · **상위 N=20** 절단(N 미만=가용분만, 패딩/오류 없음). **LLM 리랭킹 없음(baseline)**. 순서 안정성(PBT-03). | FR-3, QT-2, Q3=A, Q10=A, FR-20 |
 | **BR-6 (relevance 표시값)** | 카드 `relevance`=**순위 파생 비-raw 표시 신호**. **내부 raw/RRF 점수·디버그 비노출(SEC-9)**. 구체 표시 형태는 U5 UI 연동. | FR-3/4, SEC-9, Q3=A |
 | **BR-7 (근거화 단일 권위 — INV-1)** | U2는 `enforce`를 **호출하지 않는다**. 유일 invocation = U6 게이트웨이 post-handler. U2는 `toGroundingInput`(정형)·`mapDecision`(verdict 매핑)만 — 독자 차단·인시던트 발행 없음. | FR-5, US-D5, INV-1 |
 | **BR-8 (verdict 매핑)** | `verdict=pass`→GroundedResults; `verdict=abstain\|block`→AbstainResult(날조 0건). 내부 위반 상세 비노출. | FR-5, US-D5/D6, Q4=A |
