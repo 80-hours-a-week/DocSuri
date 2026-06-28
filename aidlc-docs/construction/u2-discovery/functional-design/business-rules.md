@@ -97,6 +97,6 @@
 ## 6. 공유 계약 정합 주석
 
 - **VectorSpec(reader)**: U2.QueryUnderstandingExpander(`expand`, **reader=`search_query`**)는 U1.EmbeddingGatewayAdapter(writer=`search_document`)와 **동일 임베딩 공간**(Cohere Embed Multilingual v3·1024·코사인·specVersion 일치). cross-lingual(KR↔EN). 변경=전체 재임베딩(단방향).
-- **VectorSpec 런타임 검증(Reader 측)**: 혼합 임베딩 공간으로 인한 시맨틱 오염을 방지하기 위해 `HybridRetriever.retrieve()`는 반환된 레코드의 `modelVer` 메타데이터를 확인한다. 컴파일된 `specVersion`과 불일치할 경우 런타임 호환성 에러로 간주하여 어휘(Lexical) 기반 검색 모드로 저하(fallback) 처리하고 모니터링 시스템에 경보를 전송한다.
+- **VectorSpec 런타임 검증(Reader 측)**: 혼합 임베딩 공간으로 인한 시맨틱 오염을 방지하기 위해 `HybridRetriever`는 **인덱스 open(리트리버 초기화) 시점에 활성 인덱스 manifest의 `specVersion`을 컴파일된 reader `specVersion`과 1회 검증**한다. 불일치 시 런타임 호환성 에러로 간주하여 어휘(Lexical) 기반 검색 모드로 저하(fallback) 처리하고 모니터링 시스템에 경보를 전송한다. per-record `modelVer` 재검사는 사용하지 않는다 — alias는 candidate index가 `assert_same_space()`(specVersion·model·dimensions·distanceMetric·normalize)를 통과한 뒤에만 전환되므로 활성 인덱스는 항상 동일-공간이고, `modelVer` 단일 필드는 dim/metric/normalize 변경을 못 잡는 부분 가드라 cutover 불변식과 중복이다. (N1 결정 2026-06-28, @kyjness; `shared/vector-spec.md §4` FROZEN 불변 · 근거=`operations/code-reviews/2026-06-28/designreview-audit.md`.)
 - **search DTO 생산 / SearchExecutedEvent 생산 / ports 의존**: 형상·시그니처는 `shared/` SSOT 정합. 가산적 진화만(필드 추가=하위호환). 단일 권위(근거화·비용=U6)·재구현 금지.
 - **단일 reader 경계**: U2.HybridRetriever만 공유 벡터 인덱스를 읽는다(U1=단일 writer).
