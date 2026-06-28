@@ -53,5 +53,4 @@ U1이 쓰고 U2가 읽는 인덱스 문서. **논문당 다수 청크 레코드*
 ## 4. 동일-공간 불변식 (writer ↔ reader) 및 런타임 호환성 게이트
 - U1.EmbeddingGatewayAdapter(`embedBatch`, search_document)와 U2.QueryUnderstandingExpander(`expand`, search_query)는 **동일 `specVersion`·`model`·`dimensions`·`distanceMetric`·`normalize`** 사용.
 - **PIN 소유권과 런타임 검증**: VectorSpec의 초기 PIN은 U1(빌드 #1)이 설정하지만, 이후 계약은 **공유 임베딩 게이트웨이 레이어**가 소유한다. 공유 Python 계약의 `assert_same_space()`는 `specVersion`뿐 아니라 `model`·`dimensions`·`distanceMetric`·`normalize`까지 비교한다. U1/U2 배포와 candidate index 검증은 이 동일-공간 검사를 통과해야 하며, per-record `modelVer` 필드는 현 FROZEN IndexRecord 계약에 포함하지 않는다.
-  - > ⚠️ **알려진 불일치(2026-06-28 감사)**: `u2-discovery/functional-design/business-rules.md` §6은 `HybridRetriever.retrieve()`가 per-record `modelVer`를 질의 시점에 확인한다고 기술 — 본 계약(modelVer 미포함)과 상충. 해소 방향(IndexRecord에 `modelVer` 추가 vs U2 질의시점 검사 제거+cutover 동일-공간 게이트 의존)은 설계 권위 결정. 상세=`operations/code-reviews/2026-06-28/designreview-audit.md` (N1).
 - `specVersion` 불일치 또는 model/dim 변경 → **인덱스 비정합**(검색 무효) → **전체 재임베딩 필수**. 이 경우 `RefreshScheduler.triggerFullRebuild`를 통해 새로운 빈 candidate index로 재구축하고 검증 후 alias를 전환한다.

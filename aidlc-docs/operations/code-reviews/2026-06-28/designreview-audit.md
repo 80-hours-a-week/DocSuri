@@ -70,7 +70,7 @@ from the scan, and populate `technical-environment.md`.
 
 | # | Finding | Severity | Evidence |
 |---|---------|----------|----------|
-| **N1** | **`modelVer` contract contradiction** | **MED-HIGH** | `shared/vector-spec.md` (per-record modelVer clause): per-record `modelVer` is **NOT** in the FROZEN IndexRecord contract — vs `u2-discovery/.../business-rules.md` §6: `HybridRetriever.retrieve()` **must validate `modelVer` per record at query time**. U2 relies on a field the contract excludes. **Resolution is a design-authority call** (add to IndexRecord, or drop the U2 query-time check and rely on the cutover same-space gate) — flagged in-place, not decided here. |
+| **N1** | **`modelVer` contract contradiction** | **MED-HIGH → ✅ RESOLVED** | `shared/vector-spec.md` (per-record modelVer clause): per-record `modelVer` is **NOT** in the FROZEN IndexRecord contract — vs `u2-discovery/.../business-rules.md` §6: `HybridRetriever.retrieve()` **must validate `modelVer` per record at query time**. U2 relied on a field the contract excludes. **RESOLVED (2026-06-28, @kyjness — option b refined):** U2 §6 revised to a **one-time `specVersion` check at index-open** (manifest vs compiled reader spec); per-record `modelVer` dropped (redundant with the cutover `assert_same_space()` invariant — alias only swaps after a candidate index passes the full same-space gate — and `modelVer` alone is a partial guard missing dim/metric/normalize). `vector-spec.md §4` FROZEN unchanged; §6 lexical-fallback+alert safety net retained. |
 | **N2** | **`requestId` omitted in the live U2 functional design** | **MED** | `u2-discovery/.../business-logic-model.md` L42 & L51 call `publishSearchExecuted(userId, query, timestamp, resultCount)` — no `requestId` — contradicting FROZEN `shared/events.md §2` `(userId, requestId, query, timestamp, resultCount)`. Dedup key `BR-L7 sha256(owner_id\|requestId\|query)` depends on it. **Fixed in this PR** (doc-to-SoT alignment). |
 | **N3** | SocialIdentity `PENDING_CONFIRMATION` has no timeout/cleanup | LOW | `u3 BR-A9` says "미승격(만료) 연결은 폐기" but `domain-entities §4.2` defines no expiry field/duration/sweeper. |
 | **N4** | Email-change duplicate check scope undefined | LOW | `u3 §7.2` / `domain-entities §4.3` reject if `newEmail` "기존 사용 중" but don't say whether *pending* `EmailChangeRequest`s count → two users can request the same new email. |
@@ -90,8 +90,8 @@ from the scan, and populate `technical-environment.md`.
 ## 5. Action list (the real work)
 
 1. **U4 stub** (H4): add a startup assertion rejecting `StubSearchGateway` when `ENV=PROD`.
-2. **N1 modelVer**: team decides — add `modelVer` to the FROZEN IndexRecord, or strike
-   the U2 query-time check and rely on the cutover same-space gate.
+2. ~~**N1 modelVer**: team decides~~ ✅ **RESOLVED (@kyjness)**: U2 §6 → one-time index-open
+   `specVersion` check; per-record check dropped; FROZEN `vector-spec.md §4` unchanged.
 3. **U3 cascade** (H6): finalize the SLA, retry/DLQ algorithm, undeployed-subscriber terminal state.
 4. **U9 boosts** (Medium): add a server-side clamp in U2; don't trust U9.
 5. **Minor**: U8↔CostGuard link; U3 PENDING-cleanup scheduler; N3–N6 spec gaps; delete/scope
@@ -100,7 +100,8 @@ from the scan, and populate `technical-environment.md`.
 ## Changes applied in this PR
 - **N2 fixed**: `requestId` added to both `publishSearchExecuted(...)` call sites in
   `u2-discovery/.../business-logic-model.md` (aligned to FROZEN `events.md §2`).
-- **N1 flagged in-place**: `> ⚠️` cross-reference notes added at the two contradiction
-  sites (`shared/vector-spec.md`, `u2-discovery/.../business-rules.md`).
+- **N1 RESOLVED**: U2 `business-rules.md §6` revised (per-record `modelVer` → one-time
+  index-open `specVersion` check); ⚠️ flags removed from both sites; `vector-spec.md §4`
+  FROZEN unchanged. Decision by @kyjness (option b refined).
 - **Regenerated** `tools/aidlc-designreview/review.{md,html}` (this run).
 - Everything else documented here for the owners; FROZEN-contract resolutions deferred.
