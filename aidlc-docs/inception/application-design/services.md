@@ -61,7 +61,7 @@
 
 ### AccountDeletionService (비동기 상태 전이 및 캐스케이드 추적)
 - **책임**: 계정 파기 요청 처리 및 GDPR 완전 삭제 캐스케이드(Defense-in-Depth). 사용자의 삭제 요청 시 계정을 소프트 비활성화하고 비동기 워커로 실제 삭제와 연계 시스템 데이터 삭제 보장을 오케스트레이션.
-- **오케스트레이션**: AccountController(sync) → `requestDeletion` (status=DEACTIVATED 설정 후 `purgeJob` 백그라운드 큐). 비동기 워커가 `purgeJob` 실행: U3 DB 레코드 물리 삭제 → `AccountDeleted` 이벤트 발행 → 구독자(U2, U4, U11)의 `AccountPurged` 완료 이벤트 수신 대기 및 추적. SLA 초과 시 `CascadeOverdue` 경보 트리거(GDPR 보장).
+- **오케스트레이션**: AccountController(sync) → `requestDeletion` (status=DEACTIVATED 설정 후 `purgeJob` 백그라운드 큐). 비동기 워커가 `purgeJob` 실행: U3 DB 레코드 물리 삭제 → `AccountDeleted` 이벤트 발행 → 구독자(U2, U4)의 `AccountPurged` 완료 이벤트 수신 대기 및 추적. SLA 초과 시 `CascadeOverdue` 경보 트리거(GDPR 보장).
 - **Trace**: FR-28, US-A6, SEC-8, GDPR
 
 ### PasswordResetService (동기 흐름 위임)

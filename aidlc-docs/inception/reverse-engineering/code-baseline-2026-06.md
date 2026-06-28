@@ -46,24 +46,26 @@
 
 ---
 
-## 2. 페이즈별 코드 현황 (8 로드맵 대응)
+## 2. 페이즈별 코드 현황 (7 로드맵 대응)
+
+> **페이즈 번호 갱신(2026-06-28)**: 기존 페이즈 3(요약/번역)·4(Grounding)를 **하나로 병합**(함께 진행)하고,
+> 이후 번호를 한 칸씩 당겼다. 차터 §3 로드맵과 일치. 
 
 | 페이즈 | 영역 | 코드에 있는 것 | 없는 것(=신규) |
 |---|---|---|---|
 | **1** U1 Corpus | `ingestion/` | arXiv 어댑터(**HTML 우선 → PDF 폴백**, SourceTier ar5iv/native_html)·**단일소스 watermark**(`postgres.py` `watermark` 테이블·`get/advance/reset_watermark`)·`docmodel/`(builder·parser·mathml)·`full_text_extraction`·`asset_extraction`·dedup 테스트·`migrate`·resilience·observability | **Semantic Scholar·OpenAlex 어댑터·GROBID 연동·cross-source watermark·DLQ/scheduler 운영 표면** |
-| **2** U2 검색 | `discovery/` | domain(retriever·ranker·assembler·validator·expander·grounding_adapter)·adapters(bedrock_embedding·opensearch·event_publisher)·ports/search_ports·mocks·real_wiring | 페이즈 8 개선 항목(reranker·LTR·click log 등) |
-| **3** U7 요약/번역 | `summarization/` | domain(refiner·grounding·map_reduce·structured_translator·glossary·source_selector·length_router·cache_key)·adapters(bedrock_llm·s3_docmodel·s3_full_text·s3_redis_store·rds_*·sqs_*)·worker | (요약/번역은 상당 구현됨 — 페이즈 3은 정합·개선 성격) |
-| **4** Grounding | `shared/ports`·`discovery/domain/grounding_adapter`·`summarization/domain/grounding` | **단일 프레임워크 통합**: enforce 단일권위(현재 U6) ↔ 도메인별 Validator(Search/Summary/**Agent**) 레지스트리 재조정 |
-| **5** 문헌탐색 Agent | — | **전부 그린필드** (`research_agent` 모듈 부재) |
-| **6** 연구아이디어 Agent | — | **전부 그린필드** |
-| **7** Corpus 대량 | `ingestion/migrate`·재처리 경로 | 대량 스케일 운영(Reindex·재생성 파이프라인 운영 표면) |
-| **8** 검색 품질 | `discovery/domain/ranker`·`expander` | reranker·LTR·query expansion 고도화·feedback/click log |
+| **2** U2 검색 | `discovery/` | domain(retriever·ranker·assembler·validator·expander·grounding_adapter)·adapters(bedrock_embedding·opensearch·event_publisher)·ports/search_ports·mocks·real_wiring | 페이즈 7 개선 항목(reranker·LTR·click log 등) |
+| **3** U7 요약/번역 + Grounding 통합 | `summarization/`·`shared/ports`·`discovery/domain/grounding_adapter`·`summarization/domain/grounding` | 요약: domain(refiner·grounding·map_reduce·structured_translator·glossary·source_selector·length_router·cache_key)·adapters(bedrock_llm·s3_docmodel·s3_full_text·s3_redis_store·rds_*·sqs_*)·worker. Grounding: `shared/ports`·도메인 grounding_adapter/grounding 존재 | 요약/번역은 상당 구현됨(정합·개선 성격). **단일 Grounding 프레임워크 통합**: enforce 단일권위(현재 U6) ↔ 도메인별 Validator(Search/Summary/**Agent**) 레지스트리 재조정 |
+| **4** 문헌탐색·근거형성 Agent | — | **전부 그린필드** (`research_agent` 모듈 부재) — 구체 파이프라인/방식은 인셉션 질문지로 결정 |
+| **5** 연구아이디어 Agent | — | **전부 그린필드** |
+| **6** Corpus 대량 | `ingestion/migrate`·재처리 경로 | 대량 스케일 운영(Reindex·재생성 파이프라인 운영 표면) |
+| **7** 검색 품질 | `discovery/domain/ranker`·`expander` | reranker·LTR·query expansion 고도화·feedback/click log |
 
 ---
 
 ## 3. 에이전트가 소비할 계약 인벤토리 (D5 병렬의 출발점)
 
-페이즈 5·6 에이전트는 Search·DocModel·Summary·Citation을 **Tool**로 소비한다. 그 계약은 이미 코드에 존재:
+페이즈 4·5 에이전트는 Search·DocModel·Summary·Citation을 **Tool**로 소비한다. 그 계약은 이미 코드에 존재:
 
 | 계약 | 루트 타입 | 핵심 구조 | SSOT |
 |---|---|---|---|
@@ -96,13 +98,14 @@
 
 1. **D3 grounding 통합 ↔ 현 "단일권위 enforce" 긴장**
    현재 계약은 `GroundingEnforcementHook.enforce`를 **U6 단일권위**로 못박고 U2는 어댑팅만 한다.
-   페이즈 4의 "도메인별 Validator(Search/Summary/Agent)"는 이 단일권위 모델과 **재조정**이 필요하다.
+   페이즈 3(요약/번역 + Grounding 통합)의 "도메인별 Validator(Search/Summary/Agent)"는 이 단일권위 모델과 **재조정**이 필요하다.
    선택지: (a) U6가 도메인별 Validator를 내부 보유하고 enforce가 디스패치, (b) 각 도메인이 shared 추상
    인터페이스를 구현하되 enforce 호출 지점은 게이트웨이 단일 유지. → application-design에서 확정.
 
-2. **D5 에이전트 포트 = 기존 `shared/ports` 패턴 그대로 적용 가능**
-   문헌탐색 유닛이 추상 포트를 `shared/ports`에 선언(impl=문헌탐색 유닛), 연구아이디어 유닛이 소비.
-   FROZEN 동결·사인오프 정책이 이미 있으므로 **D5 "계약 선행 동결"의 제도적 틀이 코드에 존재**.
+2. **D5 에이전트 포트 = 기존 `shared/ports` 패턴 그대로 적용 가능 (의존 채택 시)**
+   연구아이디어 유닛이 문헌탐색 유닛을 의존하기로 하면, 추상 포트를 `shared/ports`에 선언(impl=문헌탐색 유닛)·
+   연구아이디어 유닛이 소비하는 구조다. FROZEN 동결·사인오프 정책이 이미 있어 **D5 "계약 선행 동결"의
+   제도적 틀이 코드에 존재**. *(단 5→4 의존 자체는 기본 제안·requirements 질문지에서 확정 — 차터 §4.)*
 
 3. **요약/번역(페이즈 3)은 그린필드가 아니라 정합 작업** — domain·adapters·worker가 상당 구현됨.
    페이즈 3의 실체는 "신규 구축"보다 **DocModel 완성형·grounding 통합 반영한 정합·개선**.
