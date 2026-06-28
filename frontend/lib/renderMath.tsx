@@ -57,17 +57,24 @@ const ERROR_COLOR = '#6b7280';
 // space is bounded by the paper's distinct expressions.
 //
 // The cache is per macro map: a given expression renders differently under different macros,
-// and KaTeX *mutates* the `macros` object it is given (it caches expansions there). So per
-// distinct `meta.macros` object we keep one mutable working copy (KaTeX may write to it,
+// and KaTeX *mutates* the `macros` object it is given (it writes `\gdef`-defined globals and
+// caches expansions there).
+//
+// Per distinct `meta.macros` object we keep one mutable working copy (KaTeX may write to it,
 // leaving the immutable doc-model object untouched) plus its own render cache, keyed off the
-// object identity via a WeakMap. Calls without macros share one default cache.
-// The default working copy seeds DEFAULT_MACROS (KaTeX mutates the macro object it is given,
-// so we never hand it the shared constant directly).
-const _defaultEntry = { working: { ...DEFAULT_MACROS }, cache: new Map<string, string>() };
+// object identity via a WeakMap. Mutation persisting across a paper's own expressions is correct
+// — `\gdef` is document-global, and these all belong to one paper.
+//
+// Calls WITHOUT macros (every abstract, plus formulas with no preamble) must NOT share one
+// mutable working object: they come from different papers, so a `\gdef` in one render would leak
+// into every later default render. We therefore hand KaTeX a FRESH `DEFAULT_MACROS` copy per
+// default-path call (isolating the mutation) while still sharing one render cache — the cache is
+// keyed by the expression string, so identical expressions are never re-rendered.
+const _defaultCache = new Map<string, string>();
 const _byMacros = new WeakMap<MathMacros, { working: MathMacros; cache: Map<string, string> }>();
 
 function entryFor(macros?: MathMacros): { working: MathMacros; cache: Map<string, string> } {
-  if (!macros) return _defaultEntry;
+  if (!macros) return { working: { ...DEFAULT_MACROS }, cache: _defaultCache };
   let entry = _byMacros.get(macros);
   if (!entry) {
     // Author macros win over the fallbacks (merge order).

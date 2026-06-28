@@ -83,4 +83,14 @@ describe('renderInlineMath', () => {
     expect(c.querySelector('.katex')).not.toBeNull();
     expect(c.textContent).not.toContain('\\R');
   });
+
+  it('does not leak a \\gdef across macro-less renders (isolated default macros)', () => {
+    // KaTeX mutates the macro object it is given — a \gdef writes a global into it. The default
+    // (no meta.macros) path is shared by every abstract; a single mutable object would carry one
+    // paper's \gdef into every later render. Each default-path render gets a fresh copy instead.
+    html(<MathDisplay latex={'\\gdef\\leaktest{LEAKED}'} />);
+    const after = html(<MathDisplay latex={'\\leaktest'} />);
+    expect(after.textContent).not.toContain('LEAKED'); // definition must not have leaked
+    expect(after.textContent).toContain('\\leaktest'); // shows the raw, undefined command
+  });
 });
