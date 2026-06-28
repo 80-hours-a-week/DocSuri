@@ -94,8 +94,14 @@ def parse_html_to_docmodel(
     parser_version: str,
     schema_version: str,
     generated_at: datetime,
+    macros: dict[str, str] | None = None,
 ) -> DocModel:
-    """Parse LaTeXML HTML into a validated ``DocModel`` (pure given its inputs)."""
+    """Parse LaTeXML HTML into a validated ``DocModel`` (pure given its inputs).
+
+    ``macros`` is an optional KaTeX macro map from the e-print preamble (see
+    ``docmodel.macros``); it is carried on ``meta.macros`` so the renderer can resolve
+    author-defined commands that LaTeXML left verbatim in the formula LaTeX.
+    """
     soup = BeautifulSoup(html or "", "lxml")
     root = soup.find(class_="ltx_document") or soup.body or soup
     doc_ctx = _DocCtx(paper_id=paper_id, version=version)
@@ -118,6 +124,7 @@ def parse_html_to_docmodel(
             "version": version,
             "title": title,
             **({"abstract": abstract} if abstract else {}),
+            **({"macros": macros} if macros else {}),
             "provenance": {
                 "sourceTier": source_tier.value,
                 "parserVersion": parser_version,

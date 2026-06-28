@@ -14,8 +14,10 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { AnchorVM, AssetRef, DocBlock, DocModel, DocSection } from '@/types/generated';
 import { useDocModel } from '@/lib/useDocModel';
 import { useAssets } from '@/lib/useAssets';
-import { MathDisplay, renderInlineMath } from '@/lib/renderMath';
+import { createPortal } from 'react-dom';
+import { MathDisplay, renderInlineMath, type MathMacros } from '@/lib/renderMath';
 import { StateView } from './StateView';
+import { ScrollToTopButton } from './ScrollToTopButton';
 import styles from './DocModelViewer.module.css';
 
 interface DocModelViewerProps {
@@ -124,8 +126,11 @@ export function DocModelBody({
   anchor?: AnchorVM | null;
 }) {
   // Tap-to-enlarge: figures/tables/formulas are shown fit-to-width inline and open a
-  // full-screen, scaled-to-fit overlay on tap (no scrollbars).
+  // scaled-to-fit overlay centred in the viewport (no scrollbars).
   const [zoom, setZoom] = useState<React.ReactNode | null>(null);
+  // Author macros from the e-print preamble (meta.macros) — handed to every KaTeX render so
+  // custom commands resolve instead of showing as red unsupported-command errors.
+  const macros = docModel.meta.macros;
   return (
     <div className={styles.root} data-testid="docmodel-viewer">
       <DocTOC sections={docModel.sections} />
@@ -138,9 +143,11 @@ export function DocModelBody({
             assetsById={assetsById}
             anchor={anchor}
             onZoom={setZoom}
+            macros={macros}
           />
         ))}
       </article>
+      <ScrollToTopButton />
       {zoom ? <BlockZoomOverlay onClose={() => setZoom(null)}>{zoom}</BlockZoomOverlay> : null}
     </div>
   );
@@ -213,9 +220,14 @@ function ZoomTrigger({
   );
 }
 
-// Full-screen overlay that scales the content to FIT the available area (enlarging small
-// content, shrinking large) so the whole thing is visible with no scrollbars. Transform is
+// Overlay that enlarges the tapped block, centred in the VIEWPORT, scaled to fit (enlarging
+// small content up to a cap, shrinking large). It is portalled to document.body so its
+// `position: fixed` resolves against the real viewport — NOT the phone-mockup frame, whose
+// `contain: layout` would otherwise become the containing block and pin the overlay to the
+// frame's box (which made a block tapped low on a desktop page pop up at the top). Transform is
 // visual only, so the measured natural size is stable. Tap the backdrop / ✕ / Esc to close.
+const _ZOOM_MAX_SCALE = 3;
+
 function BlockZoomOverlay({
   children,
   onClose,
@@ -232,25 +244,18 @@ function BlockZoomOverlay({
     const overlay = overlayRef.current;
     if (!content || !overlay) return;
     const measure = () => {
-      // Available area = the overlay's OWN box, not the window. The overlay is
-      // `position: fixed; inset: 0`, but on desktop the phone mockup frame (`contain: layout`)
-      // is the containing block, so the overlay is confined to that frame — not the desktop
-      // window. Measuring against `window.innerWidth/Height` would over-scale the content and
-      // clip it inside the frame; the overlay's own size is correct in both cases (it spans
-      // the full viewport full-bleed on phones).
+      // Available area = the overlay's own box (the viewport, since it is portalled to body).
       const availW = overlay.clientWidth * 0.94;
-      const availH = overlay.clientHeight * 0.84;
+      const availH = overlay.clientHeight * 0.9;
       const w = content.scrollWidth || 1;
       const h = content.scrollHeight || 1;
-      setScale(Math.min(availW / w, availH / h));
+      setScale(Math.min(availW / w, availH / h, _ZOOM_MAX_SCALE));
     };
     measure();
     // The content's natural size settles after the first paint — a KaTeX formula reflows once
-    // its web fonts load (until then glyphs use narrow fallback metrics and measure too
-    // small), and a figure resizes when its <img> loads — and the overlay box itself can
-    // change (orientation / frame resize). A ResizeObserver on both re-measures on any such
-    // change. The scale is applied as a transform (visual only), so it never changes either
-    // measured box and can't drive an observer loop.
+    // its web fonts load, and a figure resizes when its <img> loads — and the viewport can
+    // change (orientation / resize). A ResizeObserver on both re-measures on any such change.
+    // The scale is a transform (visual only), so it never changes either measured box.
     const ro = new ResizeObserver(measure);
     ro.observe(content);
     ro.observe(overlay);
@@ -265,7 +270,10 @@ function BlockZoomOverlay({
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  return (
+  // Portalled to body: the backdrop covers the whole viewport and the content centres on the
+  // user's screen wherever they have scrolled to.
+  if (typeof document === 'undefined') return null;
+  return createPortal(
     <div
       ref={overlayRef}
       className={styles.zoomOverlay}
@@ -286,7 +294,8 @@ function BlockZoomOverlay({
       >
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -298,12 +307,14 @@ function SectionView({
   assetsById,
   anchor,
   onZoom,
+  macros,
 }: {
   section: DocSection;
   depth: number;
   assetsById: Map<string, AssetRef>;
   anchor?: AnchorVM | null;
   onZoom: (node: React.ReactNode) => void;
+  macros?: MathMacros;
 }) {
   const Heading = `h${Math.min(depth + 1, 6)}` as keyof React.JSX.IntrinsicElements;
   return (
@@ -316,6 +327,7 @@ function SectionView({
           assetsById={assetsById}
           active={isActive(b, anchor)}
           onZoom={onZoom}
+          macros={macros}
         />
       ))}
       {(section.sections ?? []).map((s) => (
@@ -326,6 +338,7 @@ function SectionView({
           assetsById={assetsById}
           anchor={anchor}
           onZoom={onZoom}
+          macros={macros}
         />
       ))}
     </section>
@@ -337,22 +350,24 @@ function BlockView({
   assetsById,
   active,
   onZoom,
+  macros,
 }: {
   block: DocBlock;
   assetsById: Map<string, AssetRef>;
   active: boolean;
   onZoom: (node: React.ReactNode) => void;
+  macros?: MathMacros;
 }) {
   const cls = active ? `${styles.block} ${styles.active}` : styles.block;
   switch (block.type) {
     case 'paragraph':
       return (
         <p className={cls} data-block={block.id}>
-          {renderInlineMath(block.text)}
+          {renderInlineMath(block.text, macros)}
         </p>
       );
     case 'formula': {
-      const math = <MathDisplay latex={block.latex} />;
+      const math = <MathDisplay latex={block.latex} macros={macros} />;
       return (
         <div className={`${cls} ${styles.formula}`} data-block={block.id}>
           <ZoomTrigger className={styles.formulaInner} onZoom={() => onZoom(math)}>
@@ -371,11 +386,11 @@ function BlockView({
                 {row.cells.map((cell, ci) =>
                   cell.isHeader ? (
                     <th key={ci} colSpan={cell.colspan} rowSpan={cell.rowspan}>
-                      {renderInlineMath(cell.text)}
+                      {renderInlineMath(cell.text, macros)}
                     </th>
                   ) : (
                     <td key={ci} colSpan={cell.colspan} rowSpan={cell.rowspan}>
-                      {renderInlineMath(cell.text)}
+                      {renderInlineMath(cell.text, macros)}
                     </td>
                   ),
                 )}
@@ -389,7 +404,7 @@ function BlockView({
           <ZoomTrigger className={styles.tableWrap} onZoom={() => onZoom(table)}>
             {table}
           </ZoomTrigger>
-          {caption(block.anchorLabel, block.caption)}
+          {caption(block.anchorLabel, block.caption, macros)}
         </figure>
       );
     }
@@ -409,7 +424,7 @@ function BlockView({
               <img src={asset.url} alt={alt} loading="lazy" />
             </ZoomTrigger>
           ) : null}
-          {caption(block.anchorLabel, block.caption)}
+          {caption(block.anchorLabel, block.caption, macros)}
         </figure>
       );
     }
@@ -417,13 +432,13 @@ function BlockView({
       return block.ordered ? (
         <ol className={cls} data-block={block.id}>
           {block.items.map((it, i) => (
-            <li key={i}>{renderInlineMath(it.text)}</li>
+            <li key={i}>{renderInlineMath(it.text, macros)}</li>
           ))}
         </ol>
       ) : (
         <ul className={cls} data-block={block.id}>
           {block.items.map((it, i) => (
-            <li key={i}>{renderInlineMath(it.text)}</li>
+            <li key={i}>{renderInlineMath(it.text, macros)}</li>
           ))}
         </ul>
       );
@@ -436,13 +451,13 @@ function BlockView({
   }
 }
 
-function caption(label?: string, text?: string) {
+function caption(label?: string, text?: string, macros?: MathMacros) {
   if (!label && !text) return null;
   return (
     <figcaption className={styles.caption}>
       {label ? <strong>{label}</strong> : null}
       {label && text ? ' ' : null}
-      {text ? renderInlineMath(text) : null}
+      {text ? renderInlineMath(text, macros) : null}
     </figcaption>
   );
 }

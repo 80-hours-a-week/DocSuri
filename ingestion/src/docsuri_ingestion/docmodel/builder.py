@@ -17,9 +17,10 @@ from typing import Protocol, runtime_checkable
 from docsuri_shared.docmodel_contract import DOCMODEL_PARSER_VERSION, DOCMODEL_SCHEMA_VERSION
 from docsuri_shared.dtos import DocModel, DocModelResultDTO, SourceTier, SourceUnavailableDTO
 
+from docsuri_ingestion.docmodel.macros import extract_macros
 from docsuri_ingestion.docmodel.parser import parse_html_to_docmodel, parse_text_to_docmodel
 from docsuri_ingestion.domain.models import MetadataRecord
-from docsuri_ingestion.ports import DocModelSourcePort, DocModelStorePort
+from docsuri_ingestion.ports import DocModelSourcePort, DocModelStorePort, EprintSourcePort
 
 # Bumping PARSER_VERSION invalidates cached doc-models (provenance.parserVersion, BR-30/TD-16).
 PARSER_VERSION = DOCMODEL_PARSER_VERSION
@@ -36,6 +37,11 @@ class ClockPort(Protocol):
     def now(self) -> datetime: ...
 
 
+@runtime_checkable
+class MetricSink(Protocol):
+    def emit_metric(self, name: str, value: float, tags: object = None) -> None: ...
+
+
 class _SystemClock:
     def now(self) -> datetime:
         return datetime.now(UTC)
@@ -49,12 +55,16 @@ class DocModelBuilder:
         *,
         source: DocModelSourcePort,
         store: DocModelStorePort,
+        eprint_source: EprintSourcePort | None = None,
+        observability: MetricSink | None = None,
         clock: ClockPort | None = None,
         parser_version: str = PARSER_VERSION,
         schema_version: str = SCHEMA_VERSION,
     ) -> None:
         self._source = source
         self._store = store
+        self._eprint_source = eprint_source
+        self._observability = observability
         self._clock = clock or _SystemClock()
         self._parser_version = parser_version
         self._schema_version = schema_version
@@ -85,9 +95,30 @@ class DocModelBuilder:
             parser_version=self._parser_version,
             schema_version=self._schema_version,
             generated_at=self._clock.now(),
+            macros=self._extract_macros(metadata),
         )
         self._store.put(doc)
         return DocModelResultDTO(status="ok", cached=False, docModel=doc)
+
+    def _extract_macros(self, metadata: MetadataRecord) -> dict[str, str]:
+        """Best-effort KaTeX macro map from the e-print preamble (never blocks the build).
+
+        Emits a count metric (and a failure counter) so a regression that drops macros entirely
+        — a broken e-print source, a tokenizer fault — is visible instead of silently swallowed.
+        """
+        if self._eprint_source is None:
+            return {}
+        try:
+            macros = extract_macros(self._eprint_source.fetch_eprint(metadata))
+            self._emit("ingestion.docmodel.macros", float(len(macros)))
+            return macros
+        except Exception:  # noqa: BLE001 - macros are a display refinement, never blocking
+            self._emit("ingestion.docmodel.macros_failed", 1.0)
+            return {}
+
+    def _emit(self, name: str, value: float) -> None:
+        if self._observability is not None:
+            self._observability.emit_metric(name, value, {})
 
     def build_from_text(
         self,

@@ -149,6 +149,10 @@ def build_production_runtime(settings: IngestionSettings) -> RuntimeServices:
             bucket=settings.s3_bucket or "",
             kms_key_id=settings.asset_kms_key_id,
         ),
+        # Reuse the asset e-print source (when assets are enabled) to read the author's LaTeX
+        # preamble for KaTeX macros — best-effort, so None (assets off) just omits macros.
+        eprint_source=asset_source,
+        observability=observability,
     )
     pipeline = IngestionPipelineService(
         arxiv=arxiv,

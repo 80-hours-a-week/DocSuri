@@ -146,7 +146,7 @@
   cursor: zoom-in;
 }
 
-/* ---- zoom overlay (full-screen, scaled-to-fit, no scrollbars) ---- */
+/* ---- zoom overlay (portalled to body; covers the viewport, content centred, no scrollbars) ---- */
 .zoomOverlay {
   position: fixed;
   inset: 0;
@@ -184,6 +184,7 @@
   background: var(--color-bg);
   border-radius: 0.5rem;
   padding: 0.75rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
 }
 
 .zoomContent table {

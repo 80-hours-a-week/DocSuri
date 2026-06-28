@@ -296,6 +296,10 @@ class DocModelMeta(BaseModel):
         None,
         description='Optional abstract plain text (translate task uses the abstract directly; rich view shows it). Trace: BR-S2.',
     )
+    macros: dict[str, str] | None = Field(
+        None,
+        description='Optional KaTeX macro map ("\\\\name" -> expansion) extracted from the e-print LaTeX preamble (\\newcommand / \\providecommand / \\DeclareMathOperator / \\def). The renderer passes it to KaTeX so author-defined commands in formula LaTeX resolve instead of rendering as red unsupported-command errors. Additive/optional — absent when no e-print preamble was available; consumers ignore it if unset. Trace: BR-30, TD-16.',
+    )
     provenance: Provenance
 
 

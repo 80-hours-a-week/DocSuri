@@ -110,6 +110,9 @@ export interface DocModelMeta {
   version: number;
   title: string;
   abstract?: string;
+  /** KaTeX macro map (`\name` -> expansion) from the e-print preamble, passed to the renderer
+   *  so author-defined commands resolve instead of rendering as unsupported-command errors. */
+  macros?: Record<string, string>;
   provenance: DocProvenance;
 }
 

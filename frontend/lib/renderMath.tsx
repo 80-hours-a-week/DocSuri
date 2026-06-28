@@ -13,24 +13,52 @@ import 'katex/dist/katex.min.css';
 import { Fragment } from 'react';
 import katex from 'katex';
 
+// A KaTeX macro map (`\name` -> expansion) from the doc-model's e-print preamble
+// (`meta.macros`), so author-defined commands resolve instead of rendering as red
+// unsupported-command errors.
+export type MathMacros = Record<string, string>;
+
 // Memoize rendered LaTeX — katex.renderToString is a synchronous parse and the same
 // expression re-renders on every parent re-render (e.g. when figure assets resolve, or a
 // results table with many math cells re-renders). Keyed by (displayMode, latex); the input
 // space is bounded by the paper's distinct expressions.
-const _cache = new Map<string, string>();
+//
+// The cache is per macro map: a given expression renders differently under different macros,
+// and KaTeX *mutates* the `macros` object it is given (it caches expansions there). So per
+// distinct `meta.macros` object we keep one mutable working copy (KaTeX may write to it,
+// leaving the immutable doc-model object untouched) plus its own render cache, keyed off the
+// object identity via a WeakMap. Calls without macros share one default cache.
+const _defaultCache = new Map<string, string>();
+const _byMacros = new WeakMap<MathMacros, { working: MathMacros; cache: Map<string, string> }>();
 
-function toHtml(latex: string, displayMode: boolean): string {
+function entryFor(macros?: MathMacros): { working?: MathMacros; cache: Map<string, string> } {
+  if (!macros) return { cache: _defaultCache };
+  let entry = _byMacros.get(macros);
+  if (!entry) {
+    entry = { working: { ...macros }, cache: new Map() };
+    _byMacros.set(macros, entry);
+  }
+  return entry;
+}
+
+function toHtml(latex: string, displayMode: boolean, macros?: MathMacros): string {
+  const { working, cache } = entryFor(macros);
   const cacheKey = `${displayMode ? 'd' : 'i'}:${latex}`;
-  const hit = _cache.get(cacheKey);
+  const hit = cache.get(cacheKey);
   if (hit !== undefined) return hit;
-  const html = katex.renderToString(latex, { displayMode, throwOnError: false, output: 'html' });
-  _cache.set(cacheKey, html);
+  const html = katex.renderToString(latex, {
+    displayMode,
+    throwOnError: false,
+    output: 'html',
+    ...(working ? { macros: working } : {}),
+  });
+  cache.set(cacheKey, html);
   return html;
 }
 
 /** A display (block-level) equation. */
-export function MathDisplay({ latex }: { latex: string }) {
-  return <span dangerouslySetInnerHTML={{ __html: toHtml(latex, true) }} />;
+export function MathDisplay({ latex, macros }: { latex: string; macros?: MathMacros }) {
+  return <span dangerouslySetInnerHTML={{ __html: toHtml(latex, true, macros) }} />;
 }
 
 // Math delimiters, in match-priority order: display `$$…$$` / `\[…\]`, then inline `\(…\)`
@@ -43,7 +71,7 @@ const MATH =
 
 /** Render text that may contain inline/display math (`$…$`, `$$…$$`, `\(…\)`, `\[…\]`) into
  * React nodes. Prose segments stay React-escaped; only the math segments become KaTeX markup. */
-export function renderInlineMath(text: string): React.ReactNode {
+export function renderInlineMath(text: string, macros?: MathMacros): React.ReactNode {
   if (!text.includes('$') && !text.includes('\\(') && !text.includes('\\[')) return text;
   const nodes: React.ReactNode[] = [];
   let last = 0;
@@ -53,7 +81,9 @@ export function renderInlineMath(text: string): React.ReactNode {
     if (idx > last) nodes.push(<Fragment key={key++}>{text.slice(last, idx)}</Fragment>);
     const display = m[1] !== undefined || m[2] !== undefined;
     const latex = m[1] ?? m[2] ?? m[3] ?? m[4] ?? '';
-    nodes.push(<span key={key++} dangerouslySetInnerHTML={{ __html: toHtml(latex, display) }} />);
+    nodes.push(
+      <span key={key++} dangerouslySetInnerHTML={{ __html: toHtml(latex, display, macros) }} />,
+    );
     last = idx + m[0].length;
   }
   if (last === 0) return text; // no delimiter actually matched (e.g. a lone `$`)
