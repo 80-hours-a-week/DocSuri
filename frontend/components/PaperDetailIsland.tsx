@@ -135,9 +135,9 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
 
       {/* Body access — below the metadata. Both navigate in-app to a full-screen route (each
           with its own ← back): 본문 = the doc-model rich view, 본문 번역 = the full-text translation. */}
-      <div className={styles.bodyActions} role="group" aria-label="본문">
+      <div className={styles.bodyActions} role="group" aria-label="전문">
         <Link className={styles.action} href={bodyHref} data-testid="open-doc-model">
-          본문
+          전문
         </Link>
         <Link className={styles.action} href={translateHref} data-testid="open-full-translation">
           본문 번역

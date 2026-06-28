@@ -19,6 +19,16 @@
   color: var(--color-accent);
 }
 
+/* Paper title atop the full-text (전문) view — the rich view shows the whole paper. */
+.paperTitle {
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
 /* Table of contents (not boxed) — sized like body text for readability. */
 .toc {
   padding: 0;

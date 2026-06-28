@@ -59,7 +59,7 @@ export function DocModelViewer({ paperId, version, anchor, arxivUrl }: DocModelV
   }, [docModel, anchor]);
 
   if (state.status === 'idle' || state.status === 'loading') {
-    return <StateView kind="loading" title="본문 불러오는 중…" message="본문을 가져오고 있어요." />;
+    return <StateView kind="loading" title="전문 불러오는 중…" message="전문을 가져오고 있어요." />;
   }
 
   const { outcome } = state;
@@ -74,8 +74,8 @@ export function DocModelViewer({ paperId, version, anchor, arxivUrl }: DocModelV
       return (
         <StateView
           kind="loading"
-          title="본문 준비 중…"
-          message="처음 여는 논문이라 본문을 만들고 있어요. 잠시만 기다려 주세요."
+          title="전문 준비 중…"
+          message="처음 여는 논문이라 전문을 만들고 있어요. 잠시만 기다려 주세요."
         />
       );
     case 'licenseUnavailable':
@@ -107,6 +107,11 @@ export function DocModelViewer({ paperId, version, anchor, arxivUrl }: DocModelV
     case 'page':
       return (
         <div ref={containerRef}>
+          {outcome.docModel.meta.title ? (
+            <h1 className={styles.paperTitle} data-testid="docmodel-title">
+              {renderInlineMath(outcome.docModel.meta.title)}
+            </h1>
+          ) : null}
           <DocModelBody docModel={outcome.docModel} assetsById={assetsById} anchor={anchor} />
         </div>
       );
@@ -367,11 +372,24 @@ function BlockView({
         </p>
       );
     case 'formula': {
-      const math = <MathDisplay latex={block.latex} macros={macros} />;
+      // LaTeX is the preferred render source; when absent (PDF/GROBID path) the equation
+      // degrades to a page-crop image referenced by assetRef (display-only).
+      const asset = block.assetRef ? assetsById.get(block.assetRef.assetId) : undefined;
+      let inner: React.ReactNode = null;
+      if (block.latex) {
+        inner = <MathDisplay latex={block.latex} macros={macros} />;
+      } else if (asset?.url) {
+        const alt = block.anchorLabel ?? '수식';
+        inner = (
+          // eslint-disable-next-line @next/next/no-img-element -- signed S3 url, not a static asset
+          <img src={asset.url} alt={alt} loading="lazy" />
+        );
+      }
+      if (inner === null) return null;
       return (
         <div className={`${cls} ${styles.formula}`} data-block={block.id}>
-          <ZoomTrigger className={styles.formulaInner} onZoom={() => onZoom(math)}>
-            {math}
+          <ZoomTrigger className={styles.formulaInner} onZoom={() => onZoom(inner)}>
+            {inner}
           </ZoomTrigger>
           {block.anchorLabel ? <span className={styles.eqno}>{block.anchorLabel}</span> : null}
         </div>
