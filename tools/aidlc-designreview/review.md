@@ -15,11 +15,11 @@
 
 | Field | Value |
 |-------|-------|
-| **Timestamp** | 2026-06-26T11:23:36.044666 |
+| **Timestamp** | 2026-06-28T19:57:02.356236 |
 | **Tool Version** | 0.1.0 |
 | **Project** | aidlc-docs |
 | **Project Path** | /Users/revenantonthemission/Projects/DocSuri/aidlc-docs |
-| **Review Duration** | 279.5s |
+| **Review Duration** | 254.6s |
 | **Model (critique)** | claude-sonnet-4-6 |
 | **Model (alternatives)** | claude-sonnet-4-6 |
 | **Model (gap)** | claude-sonnet-4-6 |
@@ -29,25 +29,25 @@
 | Severity | Count |
 |----------|-------|
 | Critical | 0 |
-| High | 4 |
-| Medium | 30 |
+| High | 6 |
+| Medium | 24 |
 | Low | 0 |
 
 ### Agent Execution Times
 
 | Agent | Time (s) |
 |-------|----------|
-| critique | 86.5 |
-| alternatives | 111.4 |
-| gap | 174.2 |
+| critique | 116.1 |
+| alternatives | 114.1 |
+| gap | 120.5 |
 
 ### Token Usage
 
 | Agent | Input Tokens | Output Tokens |
 |-------|-------------|--------------|
-| critique | 241665 | 3753 |
-| alternatives | 244525 | 4773 |
-| gap | 241721 | 8039 |
+| critique | 270433 | 5454 |
+| alternatives | 274661 | 4726 |
+| gap | 270489 | 5333 |
 
 ### Configuration
 
@@ -61,24 +61,24 @@
 
 ## Executive Summary
 
-**Overall Quality: Poor** (Score: 72)
+**Overall Quality: Poor** (Score: 66)
 
 ### Top Findings
 
-1. **[HIGH]** AccountDeleted Event Cascade Lacks Verified Completion Guarantee Within GDPR Timeframe
-   - The AccountDeleted event (events.md §1b) relies on at-least-once delivery to U4/U2/U11 for GDPR-compliant data erasure. While the design acknowledges DLQ and completion verification, the 'maximum allowed delay' SLA for cascade completion is deferred to Infra Design. If a subscriber is permanently down or DLQ accumulates silently, personal data may persist indefinitely past the purge window. The 30-day grace period design is sound, but the operational runbook for verifying cascade completion across all subscribers before the legal erasure deadline is not defined at the design level.
+1. **[HIGH]** REDACTED_SECRET placeholders indicate incomplete/censored design document
+   - Multiple fields across the design document contain '***REDACTED_SECRET***' placeholders (e.g., in component-dependency.md U1 IngestionPipelineService orchestration, U4 UserDataRepository sub-repositories, U6 ObservabilityService emit methods, U1 business-logic-model DocModel block types). These redactions obscure critical design details that are necessary for complete architectural review. The censored content includes method names, component types, and data structures that could hide design flaws, security vulnerabilities, or missing functionality.
    - Source: critique
-2. **[HIGH]** SearchGatewayPort Stub Creates Untested Rerun Path Until U6 Integration
-   - U4's rerun functionality (SavedSearchService.rerun, SearchHistoryService.rerun) is wired through SearchGatewayPort with a StubSearchGateway providing deterministic placeholder results. The invariant INV-L2 correctly prohibits direct U2 calls. However, until U6/Infra binds the real gateway, all integration tests pass against a stub that bypasses the GroundingEnforcementHook, CostGuardCircuitBreaker, and RateLimiter. If the real gateway binding is delayed or misconfigured, reruns in production could silently bypass the cost/grounding hooks that are core security and quality guarantees.
+2. **[HIGH]** U6 ApiGatewayMiddleware creates a synchronous bottleneck for all user-facing requests
+   - The design routes ALL synchronous user-facing REST requests through a single U6 ApiGatewayMiddleware chain: SecurityHeaders → InputValidation → AuthN/AuthZ (delegating to U3) → RateLimit → CostGuard → DomainHandler → GroundingEnforcement (U2 routes) → Observability. This creates a deep, sequential processing pipeline for every request. The AuthN step requires a synchronous call to U3.SessionVerifier which calls SessionManager which calls SessionStore - adding multiple synchronous hops. The GroundingEnforcementHook for U2 routes adds another LLM-adjacent synchronous call post-handler. With NFR-P1 requiring P50 &lt; 3s, this pipeline depth risks latency budget exhaustion before the actual domain logic even runs. Additionally, this single middleware becomes a single point of failure for all functionality.
    - Source: critique
-3. **[HIGH]** VectorSpec Contract Enforcement Is Declarative Only — No Runtime Compatibility Gate
-   - The design repeatedly references the shared VectorSpec (dimensions, modelRef, distanceMetric) as a binding invariant between U1 (writer) and U2 (reader). Both units declare they consume the same spec, but the enforcement mechanism is entirely static (shared contract in shared/vector-spec) with no runtime validation. If U1 is redeployed with a new embedding model version (modelVer bump) before U2 is updated, the vector index will contain mixed-space embeddings. Queries will return semantically incorrect but syntactically valid results with no error signal. The design mentions 'full re-embedding required' on change but provides no gate to prevent partial migration.
+3. **[HIGH]** Single writer/single reader constraint for Corpus Index creates scaling bottleneck and availability risk
+   - The design explicitly mandates a single writer (U1.CorpusIndexWriter) and single reader (U2.HybridRetriever) for the shared Corpus Index. While this simplifies consistency, it creates significant operational risks: (1) Any U1 ingestion failure or rebuild (SEED_REBUILD with REBUILD_LOCK) blocks incremental updates AND event-driven ingestion simultaneously, potentially leaving the corpus stale for extended periods. (2) The alias cutover mechanism for index generation transitions creates a window where the index is in an intermediate state. (3) The single reader constraint means U2 cannot be scaled independently of the index read path without architectural changes. (4) If OpenSearch/VectorStore experiences degradation, both ingestion writes and search reads are simultaneously affected with no fallback path for reads.
    - Source: critique
-4. **[HIGH]** GroundingEnforcementHook Single-Invocation Site Creates High-Impact Single Point of Failure
-   - The design correctly enforces that GroundingEnforcementHook.enforce() has exactly one invocation site (U6.GatewayPipelineService post-handler). This is architecturally clean but means any bug, misconfiguration, or exception in that single code path bypasses grounding for all U2 search responses. The design states fail-closed behavior (SEC-15) but the specific failure mode—what happens if enforce() throws an unhandled exception in the post-handler—is not specified. If the hook throws and the gateway's error handler returns the pre-hook response, grounding is silently bypassed.
+4. **[HIGH]** U4 rerun path via SearchGatewayPort has stub-in-production risk
+   - The design acknowledges that U4 ships with a StubSearchGateway as the default implementation and explicitly states 'StubSearchGateway는 프로덕션 환경(ENV=PROD) 구성에서 절대 사용될 수 없다'. The design relies on a runtime environment check to prevent stub usage in production. However, the enforcement mechanism for this constraint is unclear - there is no described mechanism to prevent accidental deployment with the stub, and the contract test described (ContractTestHarness) is a CI gate but not a runtime guard. If the production binding is not correctly wired, rerun operations would return deterministic fixture data silently, potentially allowing users to think they are getting real search results when they are not.
    - Source: critique
-5. **[MEDIUM]** U7 Grounding Validator Is Semantically Different from U6 GroundingEnforcementHook but Shares No Common Abstraction
-   - The design correctly argues that U7's GroundingValidator (document fidelity for summarization) is a different concern from U6's GroundingEnforcementHook (search result grounding). However, both implement anchor-based provenance checking with similar abstractions (AnchorVerdict vs GroundingDecision). The design explicitly states 'U7 고유 결정적 게이트' as justification for not reusing U6's hook. This creates two parallel implementations of anchor validation logic with diverging SOFT/HARD check semantics (U7 BR-S7) that could drift. The QT-5 evaluation for U7 grounding is also separate from QT-1.
+5. **[HIGH]** VectorSpec same-space enforcement relies on comparison but lacks atomic validation during index generation cutover
+   - The design mandates that U1 (writer) and U2 (reader) use the same VectorSpec (dimensions, model, distance metric) for embedding space compatibility. The enforcement mechanism is a runtime assert_same_space() check and per-record modelVer validation in HybridRetriever. However, during index generation cutover (U1 CorpusIndexWriter.switchAlias), there is a window where the alias points to new generation records that may have been created with a different VectorSpec than what U2's reader was compiled against. The design notes 'candidate index 검증과 alias cutover는 이 동일-공간 검사를 통과해야' but this check happens before cutover, not atomically with it. If U2 instances are mid-request during cutover, they could be reading from the old index with the old spec while new records are being written with a potentially different spec.
    - Source: critique
 
 ### Recommended Actions
@@ -92,177 +92,192 @@
 | Severity | Count |
 |----------|-------|
 | Critical | 0 |
-| High | 4 |
-| Medium | 30 |
+| High | 6 |
+| Medium | 24 |
 | Low | 0 |
 
 ---
 
 ## Design Critique
 
-### High Findings (4)
+### High Findings (6)
 
-#### AccountDeleted Event Cascade Lacks Verified Completion Guarantee Within GDPR Timeframe
-
-- **Severity**: High
-- **Location**: shared/events.md §1b AccountDeleted, U3 business-logic-model.md §8, business-rules.md BR-A11
-- **Description**: The AccountDeleted event (events.md §1b) relies on at-least-once delivery to U4/U2/U11 for GDPR-compliant data erasure. While the design acknowledges DLQ and completion verification, the 'maximum allowed delay' SLA for cascade completion is deferred to Infra Design. If a subscriber is permanently down or DLQ accumulates silently, personal data may persist indefinitely past the purge window. The 30-day grace period design is sound, but the operational runbook for verifying cascade completion across all subscribers before the legal erasure deadline is not defined at the design level.
-- **Recommendation**: Define a maximum cascade completion SLA (e.g., 24 hours after purge_after expiry) at the requirements/design level, not deferred entirely to Infra. Add a compensating saga: U3.AccountDeletionService.purgeJob should track which subscribers have confirmed completion (AccountPurged signal) and escalate to a dead-letter runbook if any subscriber exceeds the SLA. Consider a design-level invariant that purge is not marked PURGED in U3 until all mandatory subscribers confirm, or accept eventual consistency with explicit monitoring thresholds.
-
-#### SearchGatewayPort Stub Creates Untested Rerun Path Until U6 Integration
+#### REDACTED_SECRET placeholders indicate incomplete/censored design document
 
 - **Severity**: High
-- **Location**: U4 business-logic-model.md §5, business-rules.md BR-L9, INV-L2, component-dependency.md §4
-- **Description**: U4's rerun functionality (SavedSearchService.rerun, SearchHistoryService.rerun) is wired through SearchGatewayPort with a StubSearchGateway providing deterministic placeholder results. The invariant INV-L2 correctly prohibits direct U2 calls. However, until U6/Infra binds the real gateway, all integration tests pass against a stub that bypasses the GroundingEnforcementHook, CostGuardCircuitBreaker, and RateLimiter. If the real gateway binding is delayed or misconfigured, reruns in production could silently bypass the cost/grounding hooks that are core security and quality guarantees.
-- **Recommendation**: Add a design-level contract test that the real SearchGatewayPort implementation must pass before production deployment: verify that a rerun request triggers at least one call to CostGuardCircuitBreaker.getBudgetState() and that the response path traverses GroundingEnforcementHook.enforce(). This should be a blocking integration test, not just a unit test against the stub. Document that StubSearchGateway must never be used in production environment configuration.
+- **Location**: Multiple units: U1 IngestionPipelineService (services.md), U4 UserDataRepository (components.md), U6 ObservabilityService (services.md), U1 DocModel block types (business-rules.md BR-C7)
+- **Description**: Multiple fields across the design document contain '***REDACTED_SECRET***' placeholders (e.g., in component-dependency.md U1 IngestionPipelineService orchestration, U4 UserDataRepository sub-repositories, U6 ObservabilityService emit methods, U1 business-logic-model DocModel block types). These redactions obscure critical design details that are necessary for complete architectural review. The censored content includes method names, component types, and data structures that could hide design flaws, security vulnerabilities, or missing functionality.
+- **Recommendation**: Restore the redacted content before proceeding with architectural review and implementation. If content must be redacted for security reasons (e.g., credentials), use proper secret management rather than embedding secrets in design documents at all. Design documents should never contain actual secrets.
 
-#### VectorSpec Contract Enforcement Is Declarative Only — No Runtime Compatibility Gate
-
-- **Severity**: High
-- **Location**: U1 business-rules.md §6, U2 business-rules.md §6, shared/ports.md §3, component-dependency.md VectorSpec shared contract edges
-- **Description**: The design repeatedly references the shared VectorSpec (dimensions, modelRef, distanceMetric) as a binding invariant between U1 (writer) and U2 (reader). Both units declare they consume the same spec, but the enforcement mechanism is entirely static (shared contract in shared/vector-spec) with no runtime validation. If U1 is redeployed with a new embedding model version (modelVer bump) before U2 is updated, the vector index will contain mixed-space embeddings. Queries will return semantically incorrect but syntactically valid results with no error signal. The design mentions 'full re-embedding required' on change but provides no gate to prevent partial migration.
-- **Recommendation**: Add a runtime compatibility check: U2.HybridRetriever should read the VectorSpec from a shared capability (e.g., a metadata record written by U1 alongside the index) and compare against its compiled-in specVersion at startup and periodically. If versions diverge, U2 should degrade to lexical-only mode (already defined) and emit an alert rather than silently returning semantically invalid results. This is a design-level requirement, not just an operational concern.
-
-#### GroundingEnforcementHook Single-Invocation Site Creates High-Impact Single Point of Failure
+#### U6 ApiGatewayMiddleware creates a synchronous bottleneck for all user-facing requests
 
 - **Severity**: High
-- **Location**: U6 components.md ApiGatewayMiddleware/GroundingEnforcementHook, services.md GatewayPipelineService, application-design.md §3
-- **Description**: The design correctly enforces that GroundingEnforcementHook.enforce() has exactly one invocation site (U6.GatewayPipelineService post-handler). This is architecturally clean but means any bug, misconfiguration, or exception in that single code path bypasses grounding for all U2 search responses. The design states fail-closed behavior (SEC-15) but the specific failure mode—what happens if enforce() throws an unhandled exception in the post-handler—is not specified. If the hook throws and the gateway's error handler returns the pre-hook response, grounding is silently bypassed.
-- **Recommendation**: Explicitly specify in the design that if GroundingEnforcementHook.enforce() throws any exception, the gateway MUST return AbstainDTO (not the candidate response and not a generic 500 error). This fail-closed behavior for the hook itself should be a named invariant (e.g., INV-G1). Add a property-based test: for any exception thrown by enforce(), the response observable to the client must be AbstainDTO or a generic error DTO, never SearchResultPageDTO.
+- **Location**: U6 ApiGatewayMiddleware (components.md, services.md GatewayPipelineService, component-dependency.md §6)
+- **Description**: The design routes ALL synchronous user-facing REST requests through a single U6 ApiGatewayMiddleware chain: SecurityHeaders → InputValidation → AuthN/AuthZ (delegating to U3) → RateLimit → CostGuard → DomainHandler → GroundingEnforcement (U2 routes) → Observability. This creates a deep, sequential processing pipeline for every request. The AuthN step requires a synchronous call to U3.SessionVerifier which calls SessionManager which calls SessionStore - adding multiple synchronous hops. The GroundingEnforcementHook for U2 routes adds another LLM-adjacent synchronous call post-handler. With NFR-P1 requiring P50 &lt; 3s, this pipeline depth risks latency budget exhaustion before the actual domain logic even runs. Additionally, this single middleware becomes a single point of failure for all functionality.
+- **Recommendation**: 1) Profile the expected latency of each middleware step and establish per-step budgets that sum to well under 3s. 2) Consider parallelizing independent middleware steps (e.g., rate-limiting and session verification can potentially overlap). 3) Cache session verification results with short TTLs to avoid repeated SessionStore lookups per request. 4) Implement circuit breakers within the middleware chain so failures in one step (e.g., SessionStore) degrade gracefully rather than blocking all requests. 5) Consider async/non-blocking implementations for observability emission within the hot path.
+
+#### Single writer/single reader constraint for Corpus Index creates scaling bottleneck and availability risk
+
+- **Severity**: High
+- **Location**: U1 CorpusIndexWriter, U2 HybridRetriever, component-dependency.md §1/§2, business-logic-model.md §0.5
+- **Description**: The design explicitly mandates a single writer (U1.CorpusIndexWriter) and single reader (U2.HybridRetriever) for the shared Corpus Index. While this simplifies consistency, it creates significant operational risks: (1) Any U1 ingestion failure or rebuild (SEED_REBUILD with REBUILD_LOCK) blocks incremental updates AND event-driven ingestion simultaneously, potentially leaving the corpus stale for extended periods. (2) The alias cutover mechanism for index generation transitions creates a window where the index is in an intermediate state. (3) The single reader constraint means U2 cannot be scaled independently of the index read path without architectural changes. (4) If OpenSearch/VectorStore experiences degradation, both ingestion writes and search reads are simultaneously affected with no fallback path for reads.
+- **Recommendation**: 1) Implement read replicas for the vector/lexical index to separate read scaling from write operations. 2) Add a 'last known good' snapshot capability so U2 can serve stale-but-available results during index rebuilds rather than failing. 3) Consider blue/green deployment for index generations more explicitly - ensure U2 can point to the previous generation during cutover. 4) Define explicit SLAs for REBUILD_LOCK duration and ensure U6 HealthCheckService monitors and alerts on lock duration exceeding thresholds. 5) Add degradation modes where U2 falls back to lexical-only search if vector store is unavailable.
+
+#### U4 rerun path via SearchGatewayPort has stub-in-production risk
+
+- **Severity**: High
+- **Location**: U4 SavedSearchService.rerun, SearchHistoryService.rerun, business-logic-model.md §5, business-rules.md BR-L9
+- **Description**: The design acknowledges that U4 ships with a StubSearchGateway as the default implementation and explicitly states 'StubSearchGateway는 프로덕션 환경(ENV=PROD) 구성에서 절대 사용될 수 없다'. The design relies on a runtime environment check to prevent stub usage in production. However, the enforcement mechanism for this constraint is unclear - there is no described mechanism to prevent accidental deployment with the stub, and the contract test described (ContractTestHarness) is a CI gate but not a runtime guard. If the production binding is not correctly wired, rerun operations would return deterministic fixture data silently, potentially allowing users to think they are getting real search results when they are not.
+- **Recommendation**: 1) Add a startup-time assertion that verifies SearchGatewayPort implementation is not StubSearchGateway in non-test environments. 2) Make StubSearchGateway return obviously fake data (e.g., single result with title 'STUB RESULT - DO NOT USE IN PRODUCTION') to make misconfiguration immediately visible. 3) Add an integration test that verifies the production wiring before deployment. 4) Consider making the port implementation required at injection time with no default, forcing explicit configuration. 5) Add monitoring/alerting for rerun operations returning suspiciously uniform result patterns.
+
+#### VectorSpec same-space enforcement relies on comparison but lacks atomic validation during index generation cutover
+
+- **Severity**: High
+- **Location**: U1 CorpusIndexWriter (business-rules.md §6, business-logic-model.md §0.5), U2 HybridRetriever (business-rules.md §6), shared VectorSpec
+- **Description**: The design mandates that U1 (writer) and U2 (reader) use the same VectorSpec (dimensions, model, distance metric) for embedding space compatibility. The enforcement mechanism is a runtime assert_same_space() check and per-record modelVer validation in HybridRetriever. However, during index generation cutover (U1 CorpusIndexWriter.switchAlias), there is a window where the alias points to new generation records that may have been created with a different VectorSpec than what U2's reader was compiled against. The design notes 'candidate index 검증과 alias cutover는 이 동일-공간 검사를 통과해야' but this check happens before cutover, not atomically with it. If U2 instances are mid-request during cutover, they could be reading from the old index with the old spec while new records are being written with a potentially different spec.
+- **Recommendation**: 1) Implement a versioned VectorSpec check at query time where each IndexRecord carries its specVersion and U2 validates compatibility before using the vector for ANN search. 2) Ensure index alias cutover is atomic and that there is no mixed-generation serving window. 3) Add a health check that continuously validates VectorSpec consistency between U2's compiled spec and the active index generation's spec. 4) Consider rejecting reindex operations if the VectorSpec has changed without an explicit migration plan. 5) Implement graceful degradation to lexical-only search if VectorSpec mismatch is detected at runtime.
+
+#### U3 AccountDeletionService cascade completion tracking has no defined timeout enforcement mechanism
+
+- **Severity**: High
+- **Location**: U3 AccountDeletionService (business-logic-model.md §8, business-rules.md BR-A11), shared/events.md AccountDeleted §1b
+- **Description**: The design specifies that AccountDeletionService tracks AccountPurged events from subscribers (U4, U2, U11) and triggers a CascadeOverdue alert if confirmations are not received within a maximum delay (e.g., 7 days). However, the design does not specify: (1) What happens after CascadeOverdue is triggered - is the account considered purged anyway? (2) Who is responsible for retrying failed cascade operations. (3) How GDPR compliance is certified if cascade completion cannot be confirmed. (4) The DLQ mechanism for failed subscriber parges is mentioned but the retry policy and escalation path for permanently failed subscribers is unspecified. This creates a GDPR compliance gap where account data may persist indefinitely in some units despite the user's deletion request.
+- **Recommendation**: 1) Define explicit SLA for cascade completion (e.g., 7 days) and a clear escalation path when exceeded. 2) Implement idempotent retry logic for AccountDeleted event consumption with exponential backoff. 3) Add a dead letter queue specifically for failed account purge operations with automatic alerting and manual intervention workflow. 4) Consider whether partial cascade success is acceptable for GDPR compliance - document the legal analysis. 5) Implement a reconciliation job that periodically audits AccountDeletion records against confirmed AccountPurged receipts and flags overdue cases. 6) Add explicit handling for the case where a subscriber unit (e.g., U11) is not deployed - define whether its absence blocks purge certification.
 
 ### Medium Findings (6)
 
-#### U7 Grounding Validator Is Semantically Different from U6 GroundingEnforcementHook but Shares No Common Abstraction
+#### SearchExecutedEvent deduplication key vulnerability: requestId dependency creates ordering fragility
 
 - **Severity**: Medium
-- **Location**: U7 business-rules.md BR-S7, U7 domain-entities.md §6, shared/ports.md §2, application-design.md §3
-- **Description**: The design correctly argues that U7's GroundingValidator (document fidelity for summarization) is a different concern from U6's GroundingEnforcementHook (search result grounding). However, both implement anchor-based provenance checking with similar abstractions (AnchorVerdict vs GroundingDecision). The design explicitly states 'U7 고유 결정적 게이트' as justification for not reusing U6's hook. This creates two parallel implementations of anchor validation logic with diverging SOFT/HARD check semantics (U7 BR-S7) that could drift. The QT-5 evaluation for U7 grounding is also separate from QT-1.
-- **Recommendation**: While the current design justification is sound, document explicitly at the shared contract level that AnchorVerdict (U7) and GroundingDecision (U6) are intentionally parallel with different semantics, and add a design note explaining what conditions would warrant unification (e.g., if a third consumer needs anchor validation). Consider extracting the common anchor-existence check into a shared utility (not a hook) to prevent duplicate logic for the 'does this anchor target exist in the source?' check, while keeping enforcement policy separate.
+- **Location**: U2 SearchOrchestrationService.publishSearchExecuted, U4 SearchHistoryService.recordSearch, shared/events.md §2, U4 business-logic-model.md §6
+- **Description**: The SearchExecutedEvent deduplication key is defined as sha256(owner_id \| requestId \| query) in U4, where requestId was added to handle the case where a user intentionally repeats the same query in quick succession (to avoid timestamp-based hash collisions). However, the SearchExecutedEvent schema shows requestId is a field but the original component-methods.md signature publishSearchExecuted(userId, query, timestamp, resultCount) does not include requestId. The events.md SearchExecutedEvent definition adds requestId but notes it as the 'unique event identifier'. If U2 publishes an event without a stable requestId (e.g., if it's missing or generated non-deterministically on retry), U4's deduplication breaks down: at-least-once delivery could produce duplicate history entries.
+- **Recommendation**: 1) Make requestId a mandatory field in SearchExecutedEvent and enforce it at the event schema level (additionalProperties: false already exists). 2) Ensure requestId is generated once per search request at the gateway/controller level (U6 ApiGatewayMiddleware already generates requestId) and threaded through to event publication. 3) Add schema validation on the consumer side (U4) to reject events missing requestId rather than silently using a fallback dedup strategy. 4) Document the exact dedup key formula in both the producer (U2) and consumer (U4) contracts to prevent drift.
 
-#### SearchHistoryService Dedupe Key Has Collision Risk for Rapid Re-queries
-
-- **Severity**: Medium
-- **Location**: U4 business-logic-model.md §6.1, business-rules.md BR-L7, shared/events.md §2
-- **Description**: The deduplication key for SearchHistoryService is defined as sha256(owner_id \| executed_at.isoformat() \| query) (U4 business-logic-model.md §6.1). If a user submits the same query twice within the same second (timestamp resolution), and both SearchExecutedEvents are delivered (at-least-once), the second event will be deduplicated. This is the intended behavior. However, if a user intentionally runs the same query twice (e.g., to check if results changed after index update), the second genuine query will be silently dropped from history. The design treats this as acceptable but it is not documented as a known limitation.
-- **Recommendation**: Document this as an explicit design decision and known limitation in the business rules. Consider whether the deduplication window should be time-bounded (e.g., dedupe only within a 5-second window using a rounded timestamp) rather than exact-timestamp-based, to distinguish retry-induced duplicates from legitimate repeat queries. Alternatively, include a nonce or request-id in the dedupe key sourced from the original SearchRequest, which would allow legitimate repeat queries to create separate history entries.
-
-#### U7 Map-Reduce Summary Grounding Uses Full RefinedSource but Partial Chunks Were Generated From
+#### U7 GroundingValidator operates independently of U6 GroundingEnforcementHook creating dual grounding authorities
 
 - **Severity**: Medium
-- **Location**: U7 business-logic-model.md §3.6, §3.8, business-rules.md BR-S6, BR-S7
-- **Description**: In U7's map-reduce path (BR-S6, LengthRouter), the document is split into chunks, each generating a partial summary (map phase), then combined (reduce phase). The GroundingValidator is specified to validate against 'the full RefinedSource' (business-logic-model.md §3.8: '근거화는 전체 RefinedSource 기준 검증'). However, each map-phase partial summary was generated with only its chunk as context, meaning anchors may reference sections outside the generating chunk. The reduce-phase LLM combines partial summaries and may synthesize claims that span chunks, creating anchors that technically exist in RefinedSource but were never the actual evidence for the synthesized claim.
-- **Recommendation**: Add a design constraint: in map-reduce mode, the reduce-phase prompt must be instructed that all anchors in the final output must reference sections that were actually present in the partial summary input that contributed the corresponding claim. Alternatively, accept that grounding validation in map-reduce mode is necessarily weaker and document this explicitly with a quality caveat in the UX (e.g., a different confidence indicator for map-reduce summaries). The current design implies full grounding strength for map-reduce which may be misleading.
+- **Location**: U7 GroundingValidator (business-logic-model.md, business-rules.md BR-S7), U6 GroundingEnforcementHook (shared/ports.md §2), U11 AgentGroundingAdapter
+- **Description**: The design explicitly states that the single grounding authority is U6.GroundingEnforcementHook for search results. However, U7 introduces its own GroundingValidator with a distinct AnchorVerdict mechanism for summarization output. While the design justifies this as 'document-fidelity' vs 'search grounding', this creates two separate grounding implementations that must be maintained in parallel. The design acknowledges this in ports.md: 'U6의 GroundingDecision과 U7의 AnchorVerdict는 근거 기반의 출처 확인이라는 개념적 공통점이 있으나, 의도적으로 병렬 설계되었다.' If the two implementations drift, users may receive inconsistent grounding guarantees. Additionally, U11 Research Agent's grounding is described as using 'U6 문서충실도 근거화 공유 계약' - suggesting a third variant.
+- **Recommendation**: 1) Define a formal taxonomy of grounding types (search-result grounding vs. document-fidelity grounding) in shared/ports.md with clear invariants for each. 2) Extract common anchor validation logic into a shared utility that both U6 and U7 use, even if the enforcement policies differ. 3) Establish a joint evaluation framework (QT-1 for search, QT-5 for summarization) that can compare grounding quality across modes. 4) Define U11's grounding contract explicitly before implementation to prevent a third ad-hoc implementation. 5) Create a shared 'GroundingContract' interface that all grounding implementations must satisfy.
 
-#### CostGuardCircuitBreaker State Is Read Synchronously But Written Asynchronously Creating Stale Budget State Risk
-
-- **Severity**: Medium
-- **Location**: U6 component-methods.md CostGuardCircuitBreaker, services.md CostGuardService, shared/ports.md §3
-- **Description**: U2 and U7 call CostGuardCircuitBreaker.getBudgetState() synchronously to gate LLM calls. CostGuardCircuitBreaker.recordSpend() is called after LLM usage and CostGuardCircuitBreaker.evaluateCircuit() updates the threshold state. Under high concurrency, multiple requests can pass getBudgetState() (returning NORMAL) before any recordSpend() calls update the state, allowing significantly more LLM spend than the circuit threshold before the OPEN state propagates. This is a classic TOCTOU issue in rate/budget enforcement.
-- **Recommendation**: Document the acceptable overshoot window explicitly (e.g., 'up to N concurrent requests may proceed past the threshold before circuit opens'). Consider whether the budget threshold should include a safety margin (e.g., circuit triggers at 85% rather than 100%) to account for concurrent overshoot. Specify in the NFR that CostGuardCircuitBreaker state updates must use atomic operations or a compare-and-swap pattern to minimize the overshoot window. This is a known tradeoff in distributed rate limiting and should be explicitly acknowledged.
-
-#### LibraryItemMeta Snapshot Does Not Version-Track Source Data
+#### U9 Personalization boost bounds enforcement relies on trust, lacks server-side validation
 
 - **Severity**: Medium
-- **Location**: U4 business-rules.md BR-L5, domain-entities.md §2.1, U1 business-rules.md BR-14, shared/events.md
-- **Description**: LibraryItemMeta stores a snapshot of ResultCardVM fields at add-time and intentionally never refreshes from the live index (availability isolation, BR-L5). This is a sound design for availability. However, if a paper is retracted (U1 tombstone), the library item will continue to display the pre-retraction metadata including title and arxivUrl. Users navigating to the stored arxivUrl may find a retracted or withdrawn paper without any indication in their library. The design has no mechanism to propagate retraction signals to U4 library items.
-- **Recommendation**: Add a retraction propagation event: when U1 generates a tombstone for a paperId, publish a PaperRetractedEvent to the event backbone. U4.LibraryService should subscribe and mark affected LibraryItems with a 'retracted' flag (not delete, to preserve user data). U5.ResultCard should display a retraction notice when rendering a retracted library item. This preserves the availability isolation design while preventing users from unknowingly sharing or citing retracted work.
+- **Location**: U2 RelevanceRanker (business-logic-model.md §3.5), U9 PersonalizationDecision (domain-entities.md), business-rules.md BR-P8
+- **Description**: The design specifies that U9's PersonalizationDecision.searchBoosts must satisfy [-0.1, +0.1] per boost and max 0.2 total. The business rule BR-P8 states this as a constraint on what U9 produces. However, U2's RelevanceRanker is described as 'trusting' the boost values from U9 (business-logic-model.md: 'U9가 강제하는 boost magnitude bounds(최대 총합 0.2 등)를 신뢰하여'). This means if U9 produces out-of-bounds boosts (due to a bug, data corruption, or malicious input), U2 will apply them uncritically. A boost total of 1.0 instead of 0.2 could dramatically reorder search results, undermining the fundamental search quality guarantees.
+- **Recommendation**: 1) Add server-side validation in U2.RelevanceRanker that clamps boost values to [-0.1, +0.1] per boost and caps total boost at 0.2, regardless of what U9 provides. 2) Add a schema-level constraint on PersonalizationDecision that rejects out-of-bounds boost values before they reach U2. 3) Add monitoring for cases where boosts cause ranking inversions beyond a threshold (e.g., top result drops more than 5 positions). 4) Consider applying boosts only within a confidence band - if boost would cause a result to jump more than N positions, cap the effect. 5) Log boost distributions to detect anomalies in U9 output.
 
-#### U9 PersonalizationDecision searchBoosts Lack Explicit Magnitude Bound in Design
+#### U1 DocModel eager generation creates ingestion pipeline performance risk for phase-1 build
 
 - **Severity**: Medium
-- **Location**: U9 business-rules.md BR-P7, BR-P8, domain-entities.md PersonalizationDecision, UserInterestProfile
-- **Description**: U9 provides 'small category/keyword bounded boost' (BR-P8) to U2's ranking. The design correctly states that U9 does not determine final ranking and provides only bounded boosts. However, neither the business rules nor domain entities define what 'bounded' means quantitatively at the design level (only that weights are in a 'bounded range'). If the boost magnitude is not bounded at design time, the implementation could produce boosts that effectively override the relevance ranking, violating the design intent that personalization is a minor adjustment.
-- **Recommendation**: Define the boost magnitude contract at the design level: e.g., 'searchBoosts values must be in range [-0.1, +0.1] relative to the base relevance score' or 'applying all boosts must not change the relative order of more than 30% of results'. This constraint should be part of the PersonalizationDecision contract, not just an NFR. U2 should also define how it applies the boost (additive to score, multiplicative, rerank window) as a design-level invariant, not deferred to Construction.
+- **Location**: U1 business-logic-model.md §0.3, business-rules.md BR-C6, BR-C13
+- **Description**: The U1 Corpus design requires eager DocModel generation for all phase-1 papers at ingestion time (BR-C6). The DocModel build pipeline includes: GROBID processing for PDF fallback (~9% of papers), MathML→LaTeX conversion, section/block parsing, table extraction, and S3 storage. This is significantly more expensive per-paper than the previous approach of storing plain text. Combined with the requirement to process arXiv + Semantic Scholar + OpenAlex sources with deduplication, and the constraint that index generation cutover requires QT-9 invariants to pass, the phase-1 build could take substantially longer than expected. The business-logic-model notes 'CorpusArtifactStore.putGenerationManifest' and validation requirements - if any of these fail, the entire paper must be retried rather than just the indexing step.
+- **Recommendation**: 1) Implement DocModel generation as a parallelizable step with independent error handling from vector indexing. 2) Define explicit SLAs and capacity estimates for the phase-1 build timeline before starting. 3) Consider a two-phase approach: first build the lexical+vector index (faster), then backfill DocModels asynchronously to avoid blocking search availability. 4) Add circuit breakers on GROBID calls with fallback to source_unavailable status rather than full pipeline failure. 5) Implement partial-success tracking so that papers with DocModel failures can still be indexed with plain-text content while DocModel generation retries asynchronously.
+
+#### U8 Citation Graph has no explicit rate limit coordination with U6's rate limiting infrastructure
+
+- **Severity**: Medium
+- **Location**: U8 CitationGraphService, business-rules.md BR-CG10, BR-CG14, domain-entities.md CitationSnapshot
+- **Description**: U8 CitationGraph calls external citation APIs (Semantic Scholar prioritized) and has its own rate limiting awareness (BR-CG10: 'Provider 429/quota → RateLimited'). However, the design does not specify how U8 coordinates with U6's existing rate limiting infrastructure. If multiple users simultaneously request citation graphs for the same paper, U8 may issue redundant external API calls that collectively trigger provider rate limits. The snapshot caching mechanism (CitationSnapshot with TTL) partially addresses this, but there's no explicit deduplication of in-flight requests for the same rootPaperId. Additionally, the provider rate limit signals are described as being emitted to U6 observability, but it's unclear whether U6 can proactively gate U8 requests when approaching external quotas.
+- **Recommendation**: 1) Implement request coalescing (singleflight pattern) for concurrent requests for the same rootPaperId to avoid duplicate external API calls. 2) Integrate U8's provider quota state with U6's CostGuardCircuitBreaker or create a parallel circuit breaker specifically for external citation APIs. 3) Add proactive rate limit management - if U8 approaches provider quota (e.g., 80% consumed), switch to cache-only mode temporarily. 4) Define explicit retry policies for 429 responses from citation providers with exponential backoff. 5) Consider pre-warming citation graph cache for recently popular papers detected via U2 search analytics.
+
+#### Missing explicit data consistency guarantees between U4 LibraryItem retracted flag and U1 tombstone events
+
+- **Severity**: Medium
+- **Location**: U4 business-rules.md BR-L5, U1 business-rules.md BR-C13, shared/events.md §1c PaperRetractedEvent
+- **Description**: The design includes a PaperRetractedEvent flow where U1 publishes a retraction event and U4.LibraryService subscribes to mark LibraryItem.retracted=true. However, the consistency guarantees are weak: (1) The event is described as 'at-least-once' but U4's handling of the PaperRetractedEvent is not explicitly described in the U4 business-logic-model.md or business-rules.md - it appears only in business-rules.md BR-L5 as a note. (2) There is no described mechanism for U4 to handle papers that were already in users' libraries when they were retracted if the U4 subscriber was down when the event fired. (3) The LibraryItemMeta snapshots captured at add-time may contain stale data about papers that were subsequently retracted, but only the retracted flag is updated. (4) The interaction between AccountDeleted events and PaperRetractedEvent ordering is unspecified.
+- **Recommendation**: 1) Explicitly document U4's PaperRetractedEvent handler in U4's business-logic-model.md and business-rules.md with idempotency guarantees. 2) Add a reconciliation mechanism: U4 should periodically query U1 for retraction status of papers in user libraries, or U4 should validate LibraryItem paper status on read (lazy check). 3) Define what users see when they view a retracted LibraryItem - should the full metadata still show, or should it be replaced with a 'retracted' notice? 4) Add DLQ handling for failed PaperRetractedEvent processing with alerting. 5) Ensure U4's PaperRetractedEvent consumer is idempotent (same paperId retracted twice = same result).
 
 
 ---
 
 ## Alternative Approaches
 
-### Alternative 1: Current Approach — Modular Monolith with U6 Centralized Cross-Cutting Gateway
+### Alternative 1: Current Approach — Modular Monolith with Centralized Middleware and Eager DocModel Pipeline
 
-The current design implements a modular monolith (DQ1) where U2–U4 are in-process domain modules sharing a single deployment unit, while U1 and U6's ops worker run as separate workers. All user-facing synchronous REST traffic flows through U6's ApiGatewayMiddleware, which enforces a strict sequential pipeline: security headers → input validation → authn/authz (delegating to U3.AuthorizationGuard) → rate limiting → cost state → domain handler → grounding enforcement (post-handler, U2 routes only) → observability → fail-closed error. Cross-cutting concerns like grounding, cost gating, and observability are owned by U6 as single authorities, with U2/U7 consuming them via shared/ports interfaces to avoid sync circular dependencies. The design achieves strong separation of concerns but creates a critical single-invocation-site for grounding enforcement and a synchronous budget state read that is subject to TOCTOU races under concurrency.
+The current design implements a modular monolith (DQ1) with six core units (U1–U6) plus expanding specialist units (U7–U11). All synchronous user-facing requests funnel through U6's ApiGatewayMiddleware, which enforces a sequential chain of security headers, input validation, authn/authz (delegating to U3), rate limiting, cost guard, domain handler, grounding enforcement (for U2 routes), and observability. U1 performs eager DocModel generation at ingestion time for all phase-1 corpus papers, with a single-writer/single-reader constraint on the OpenSearch corpus index. Grounding authority is split between U6 (search) and U7's GroundingValidator (summarization), with U11 adding a third variant. The rerun path in U4 relies on a SearchGatewayPort with a StubSearchGateway default that must be replaced in production via DI.
 
-**What Changes**: N/A — this is the baseline design.
+**What Changes**: This is the baseline — no changes. The architecture as described in all design documents applies.
 
-**Implementation Complexity**: High — The design is already built and documented at FD level across 10+ units with intricate cross-cutting invariants, shared contract versioning, and a layered security model. Maintaining internal consistency across this surface area is inherently high complexity.
+**Implementation Complexity**: High — Already implemented at high complexity — the design spans 11 units with intricate inter-unit contracts, event sourcing for history, REBUILD_LOCK coordination, alias cutover, and a multi-layer middleware chain with delegated authority patterns.
 **Advantages**:
-- Single deployment unit for U2–U4 simplifies operational complexity, reduces network latency between domain modules, and avoids distributed transaction overhead for in-process calls
-- Single-authority pattern for grounding (U6.GroundingEnforcementHook) and cost (U6.CostGuardCircuitBreaker) prevents duplication and drift across units, enforced via shared/ports dependency inversion
-- Event backbone decoupling of ingestion, history writing, and incident detection from the synchronous read path directly satisfies NFR-P1 (P50&lt;3s) without complex distributed saga coordination
-- Modular monolith boundary discipline (lib/sync/event kind tagging in component-dependency.md) provides a clear upgrade path to microservices if a specific module needs independent scaling
+- Strong single-authority patterns for security-critical concerns (U3 for authz, U6 for grounding in search) reduce the risk of inconsistent enforcement across entry points
+- Modular monolith with shared middleware simplifies deployment (single API binary) and ensures cross-cutting concerns like observability and cost guard are uniformly applied
+- Eager DocModel generation at ingestion time means first-user latency for summarization/rich-view is near-zero (cache hit path), paying the cost upfront during ingestion
+- Event-driven ingestion and history recording (SearchExecutedEvent) decouple the write-heavy paths from the NFR-P1 synchronous read path, protecting P50&lt;3s SLA
 
 **Disadvantages**:
-- GroundingEnforcementHook single invocation site is a high-impact single point of failure: if enforce() throws an unhandled exception in the post-handler and the gateway error handler returns the pre-hook response, grounding is silently bypassed with no observable signal (finding f511c8edb8814846 adjacent risk)
-- CostGuardCircuitBreaker.getBudgetState() read is synchronous but spend recording is async, creating a TOCTOU window under high concurrency where multiple requests pass the budget gate before the circuit state updates (finding c84e644eefef48e1)
-- SearchGatewayPort StubSearchGateway means all U4 rerun integration tests pass against a stub that bypasses GroundingEnforcementHook and CostGuardCircuitBreaker until U6/Infra binding is complete, with no automated gate to detect misconfiguration (finding 2e6c4ef7d938441b)
-- VectorSpec contract enforcement is purely declarative with no runtime compatibility gate, so a U1 redeployment with a new embedding model before U2 update produces mixed-space vectors returning semantically incorrect results with no error signal (finding 9759f887337641d5)
+- The deep sequential ApiGatewayMiddleware chain (7+ synchronous hops before domain logic) creates compounding latency risk that could exhaust the P50&lt;3s budget before U2's actual search pipeline begins, especially when SessionStore lookups add I/O under load
+- Single-writer/single-reader constraint on the corpus index means SEED_REBUILD with REBUILD_LOCK simultaneously blocks incremental and event-driven ingestion — a lengthy rebuild (potentially hours for phase-1 AI/ML slice) leaves the corpus stale with no fallback read path
+- Dual grounding implementations (U6 GroundingEnforcementHook for search + U7 GroundingValidator for summarization + U11 AgentGroundingAdapter variant) contradict the single-authority principle and will drift over time without a unifying contract
+- StubSearchGateway default in U4 with only a CI contract test and ENV=PROD documentation as guards creates real risk of silent fixture-data returns in production if the DI wiring is missed during deployment
+- U9 boost bounds enforcement relies entirely on U9 producing correct values — U2 RelevanceRanker applies them without server-side validation, meaning a U9 bug producing out-of-range boosts would silently corrupt search ranking
 
 
 
 ---
 
-### Alternative 2: Defense-in-Depth Grounding with Dual-Layer Enforcement and Runtime VectorSpec Gate
+### Alternative 2: Sidecar Authentication Cache + Parallel Middleware Fan-Out to Reduce Gateway Latency
 
-This alternative keeps the modular monolith structure intact but hardens three specific structural weaknesses identified in the critique: (1) the single-point-of-failure grounding invocation site, (2) the declarative-only VectorSpec compatibility check, and (3) the TOCTOU budget state race. Rather than restructuring the architecture, it adds defense-in-depth layers at the identified failure boundaries. Grounding gains a secondary fail-closed guard at the ResultAssembler level (a lightweight structural check, not a full enforce() re-invocation) so that if the post-handler hook is skipped or throws, a secondary gate prevents ungrounded responses from reaching serialization. VectorSpec gains a startup compatibility assertion and a write-path version tag on IndexRecords. CostGuardCircuitBreaker switches to a token-bucket model with atomic counters, trading exact budget tracking for concurrency-safe approximate enforcement.
+Rather than a sequential 7-step middleware chain for every request, this alternative restructures the ApiGatewayMiddleware into two parallel tracks: a fast-path sidecar that handles authentication via a local session cache (Redis-backed, populated by U3 on session issue), and a non-blocking fan-out for observability and rate-limit accounting. Only the domain-specific checks (grounding enforcement for U2, cost guard state) remain in the critical synchronous path post-handler. This approach preserves the single-authority principle (U3 still owns session semantics, U6 still owns grounding enforcement) while eliminating the sequential I/O hops that threaten the P50&lt;3s SLA budget. The StubSearchGateway risk in U4 is addressed by replacing the ENV check with a startup-time binding validation that panics hard if the port is not bound to a real implementation in non-test environments.
 
-**What Changes**: U2.ResultAssembler gains a GroundingStructuralGuard that checks that every ResultCardVM has a non-null arxivUrl resolvable to a known IndexRecord paperId — a cheap structural check requiring no U6 port call, acting as a secondary fail-closed gate. U6.ApiGatewayMiddleware.handle() explicitly catches all exceptions from GroundingEnforcementHook.enforce() and routes them to toProductionError() with a specific 'grounding_hook_error' code, ensuring enforce() exceptions never return pre-hook responses. U1.VectorIndexWriter.upsert() stamps each IndexRecord with the modelVer from EmbeddingGatewayAdapter.embeddingSchema() as a metadata field. U2.HybridRetriever.retrieve() reads modelVer from retrieved records and emits a metric to ObservabilityHub when modelVer mismatches the current QueryPlan VectorSpec; queries are rejected with a degraded fallback signal rather than returning mixed-space results. U6.CostGuardCircuitBreaker.recordSpend() is refactored to use an atomic in-memory counter (or Redis INCRBY if distributed) for the hot path getBudgetState() check, with the full evaluateCircuit() running asynchronously on a short interval — this removes the TOCTOU window for the common case while accepting that the budget can be slightly exceeded during a single evaluation interval.
+**What Changes**: ApiGatewayMiddleware is refactored: SecurityHeaders and InputValidation remain sequential (pure CPU, negligible). Authentication is served from a local Redis session cache populated by U3.SessionManager on issue/refresh — U6 reads the cache directly without synchronous U3.SessionVerifier calls on the hot path; cache miss triggers async U3 revalidation with a grace window. RateLimiter and CostGuard getBudgetState move to pre-computed state read from shared counters (already atomic per the design) rather than inline evaluation. Observability emit moves fully async (fire-and-forget). GroundingEnforcementHook remains post-handler synchronous (required for correctness). U4 SearchGatewayPort gets a PortBindingValidator component that runs at application startup, fails fast with a fatal error if StubSearchGateway is detected outside test profiles, eliminating the ENV=PROD documentation-only guard. U2 RelevanceRanker adds a clamp function that enforces [-0.1, +0.1] per-boost and 0.2 total-boost bounds before applying U9's PersonalizationDecision, regardless of what U9 produces.
 
-**Implementation Complexity**: Medium — Changes are surgical additions to existing components rather than architectural restructuring. The atomic counter refactor and IndexRecord version tagging are straightforward engineering tasks; the secondary structural guard requires careful definition of its semantics relative to the primary hook to avoid divergence.
+**Implementation Complexity**: Medium — The core logic changes are targeted — Redis session cache wiring, startup validator, and boost clamping — but the session cache consistency semantics require careful specification and the middleware refactor touches the most security-critical code path in the system.
 **Advantages**:
-- Eliminates the silent grounding bypass failure mode without restructuring the single-invocation-site architecture — the secondary structural guard at ResultAssembler is cheap and can catch both hook exceptions and misconfiguration without adding a full LLM-based judge
-- Runtime VectorSpec version tagging on IndexRecords converts the declarative-only contract into an observable runtime signal, enabling automatic degradation and alerting during mixed-space migration windows rather than silent semantic corruption
-- Atomic counter approach for CostGuard eliminates the TOCTOU race for the synchronous getBudgetState() read path while preserving the existing synchronous API contract consumed by U2 and U7 — no changes to shared/ports required
-- All changes are additive to the existing design — no unit boundaries, event contracts, or FD documents need restructuring, minimizing regression risk
+- Removes 2–3 synchronous I/O hops (SessionStore lookup chain) from the P50&lt;3s critical path by serving auth from a local cache, dramatically reducing middleware overhead for authenticated hot-path requests
+- Startup-time PortBindingValidator for SearchGatewayPort eliminates the silent stub-in-production failure mode — the application will not start rather than serve fixture data
+- Server-side boost clamping in U2 RelevanceRanker provides defense-in-depth against U9 producing out-of-bounds values, protecting search ranking correctness without requiring changes to U9
+- Async fan-out for observability emit reduces tail latency from slow logging backends without losing any telemetry data
 
 **Disadvantages**:
-- The secondary structural guard at ResultAssembler creates a second enforcement layer with slightly different semantics than U6.GroundingEnforcementHook, which could diverge over time and create confusion about which layer is authoritative — the design already documents the single-authority principle which this partially violates
-- Atomic counter for CostGuard means budget can be exceeded by up to one evaluation interval's worth of spend under burst traffic — acceptable for a soft budget but requires explicit documentation of the deliberate 'approximate' semantics
-- VectorSpec version tagging in IndexRecords adds a migration complexity: existing records without the modelVer tag need a backfill strategy or the retriever needs to handle the absence gracefully during the transition window
+- Session cache introduces eventual consistency: a revoked session could remain valid until TTL expiry (typically seconds to low minutes), which is a meaningful weakening of the 'immediate invalidation' guarantee described in U3.BR-A11 and US-A2
+- Dual-layer session state (U3 SessionStore as source of truth + Redis cache in U6) increases operational complexity — cache poisoning or desync during Redis restart requires a defined invalidation protocol that the current design does not have
+- Refactoring the middleware into parallel tracks increases implementation complexity of U6 and requires careful ordering guarantees to ensure observability data is never lost even when the async path is under backpressure
 
 
 
 ---
 
-### Alternative 3: Event-Sourced Budget and Grounding Audit Trail with Async Cascade Verification
+### Alternative 3: Unified Grounding Contract with Read Replica Index Sharding to Address Dual-Authority and Scaling Constraints
 
-This alternative addresses the two most consequential data-integrity weaknesses in the current design: the GDPR AccountDeleted cascade completion gap and the CostGuardCircuitBreaker TOCTOU problem, using a unified event-sourcing pattern for both. Rather than relying on at-least-once delivery with deferred SLA definition, AccountDeletion becomes a tracked saga with explicit subscriber acknowledgment events and a saga coordinator that drives the cascade to verified completion within a configurable window. Simultaneously, CostGuardCircuitBreaker is refactored to emit a spend event on every LLM call, with the budget state derived by consuming the event stream — this eliminates the async write / sync read race by making all state changes explicit events. The SearchGatewayPort binding gap is also addressed by introducing a contract test that runs in CI against a lightweight integration harness, ensuring the real gateway binding is validated before production deployment.
+This alternative tackles two high-severity architectural issues simultaneously: the proliferation of grounding implementations (U6 search, U7 summarization, U11 agent — each with distinct contracts that will drift) and the single-reader/single-writer corpus index bottleneck. For grounding, a shared GroundingContract interface in shared/ports is extended to cover both the 'candidate-response-to-retrieved-records' pattern (search, U6) and the 'generated-text-to-source-document' pattern (summarization U7, agent U11), with each consumer providing a domain-specific adapter that maps to the unified contract rather than implementing independent validation logic. For the index, the design adopts an explicit read-replica pattern: U1 writes to a primary index shard, and read replicas are asynchronously synchronized; U2 reads from replicas, meaning SEED_REBUILD on the primary does not block U2 read traffic. The REBUILD_LOCK constraint is retained for primary write coordination but no longer propagates to block reads.
 
-**What Changes**: AccountDeletion gains a DeletionSaga entity in U3 with states (DEACTIVATION_REQUESTED → PURGE_INITIATED → CASCADE_IN_PROGRESS → CASCADE_VERIFIED → PURGED). U3.AccountDeletionService.purgeJob() publishes AccountDeleted as before, but each subscriber (U4, U2, U11) is required to publish an AccountPurged{accountId, unit, purgedAt} event upon completion. A new U3.DeletionSagaCoordinator (lightweight async component, runs in the Ops worker DQ1) subscribes to AccountPurged events and updates the saga state. If all expected subscribers have not published AccountPurged within the configured maximum cascade window (e.g., 7 days &lt; 30-day GDPR deadline), the coordinator emits a CascadeOverdue alert to IncidentEventPublisher. This replaces the 'SLA deferred to Infra Design' with a design-level mechanism. CostGuardCircuitBreaker is split into a SpendEventEmitter (synchronous, fires-and-forgets a SpendEvent on every LLM call) and a BudgetStateProjector (async, maintains a projected BudgetState by consuming SpendEvents with a short lag). getBudgetState() reads from the projected state; because the projection is eventually consistent with bounded lag (configurable, e.g., 500ms), the TOCTOU window is bounded rather than unbounded. SearchGatewayPort gains a ContractTestHarness that runs in CI: it boots the modular monolith with the real U6 gateway binding and exercises rerun paths through at least one SearchExecutedEvent, GroundingEnforcementHook invocation, and CostGuard gate check, failing the build if any hook is bypassed.
+**What Changes**: shared/ports.md gains a unified GroundingContract with two strategy interfaces: RetrievalGroundingStrategy (current U6 enforce semantics: candidate vs retrieved records) and DocumentFidelityGroundingStrategy (U7/U11 semantics: generated claims vs source document anchors). U6 GroundingEnforcementHook implements RetrievalGroundingStrategy; U7 GroundingValidator and U11 AgentGroundingAdapter both implement DocumentFidelityGroundingStrategy with a shared base implementation in shared/. This eliminates the three independent implementations and ensures future drift is caught at the contract boundary. For the corpus index: OpenSearch is configured with a primary index and 1–2 read replicas (native OpenSearch capability). U1 CorpusIndexWriter targets the primary; aliases point U2 to a replica. During SEED_REBUILD, the primary alias is rebuilt while existing replicas continue serving U2 read traffic. Cutover switches the primary alias after QT-9 passes, then replicas sync asynchronously. The VectorSpec same-space check is moved to an alias-level metadata assertion validated before cutover, not per-request. U4 business-logic-model §5.2 adds an explicit runtime guard: if SearchGatewayPort.search returns a response that matches the StubSearchGateway fixture signature (deterministic test payload), the service logs a FATAL error and returns an error response rather than surfacing fixture data.
 
-**Implementation Complexity**: High — The DeletionSaga coordinator is a new stateful distributed component requiring its own persistence, replay, and alerting logic. The SpendEvent/BudgetStateProjector split requires careful latency budgeting and documentation of the soft-cap semantics. The ContractTestHarness requires non-trivial CI infrastructure work. However, none of these require restructuring existing unit boundaries or FD contracts.
+**Implementation Complexity**: High — Read replica configuration for OpenSearch is an infrastructure-level change that requires NFR Design involvement. The unified grounding contract requires coordinated refactoring of U6, U7, and U11 — three units with separate ownership tracks — and the shared base implementation must be validated against both validation paradigms before any of the three units can adopt it.
 **Advantages**:
-- DeletionSaga with explicit AccountPurged acknowledgment events provides a design-level GDPR cascade completion guarantee with observable state — the 'SLA deferred to Infra Design' gap (finding f511c8edb8814846) is closed at the architecture level with a configurable but bounded cascade window
-- Event-sourced budget state eliminates the TOCTOU race by construction: SpendEvents are emitted synchronously (fire-and-forget, non-blocking to the LLM call path), and BudgetStateProjector maintains a lag-bounded projection — the maximum over-budget window is the projection lag, not the full async cycle
-- SearchGatewayPort ContractTestHarness closes the gap where stub-passing tests do not validate real gateway hook binding (finding 2e6c4ef7d938441b), converting the integration risk from a runtime production discovery to a CI-blocking failure
-- DeletionSaga pattern is reusable: when U11 Research Agent sessions and U9 personalization data need cascade deletion, they follow the same AccountPurged acknowledgment contract without new coordination infrastructure
+- Unifying grounding under a shared contract eliminates the three-way implementation drift between U6, U7, and U11, making grounding guarantees consistent and auditable across all AI output surfaces — critical for FR-5 compliance
+- Read replica pattern for the corpus index means SEED_REBUILD no longer causes a read outage for U2 search, eliminating the most severe availability risk described in constraint 9cc30571b08641d9
+- VectorSpec validation moved to alias-level metadata check (pre-cutover, not per-request) removes the race condition during generation transition described in constraint 91156e760f0a404b, and eliminates per-request modelVer overhead in HybridRetriever
+- Stub detection at runtime (fixture signature comparison) provides a defense-in-depth safety net even if the startup PortBindingValidator from Alternative 2 is not adopted
 
 **Disadvantages**:
-- DeletionSaga coordinator adds a new stateful component to the Ops worker that must itself be resilient to restarts and replay — if the saga state store is lost, in-progress cascades need recovery procedures, adding operational surface area
-- BudgetStateProjector introduces eventual consistency into budget enforcement: during the lag window, concurrent requests can collectively exceed the budget by more than one request's worth (though bounded by lag × request rate), requiring the team to accept and document that the budget is a soft cap with a defined over-spend envelope rather than a hard limit
-- ContractTestHarness requires the CI environment to be able to boot a partial version of the modular monolith with real (or realistic mock) U6 gateway and U2 handler — this is more infrastructure than unit tests and may slow CI pipelines if not carefully scoped
+- OpenSearch read replicas add replication lag — U2 may read slightly stale index data (seconds) after U1 completes an upsert; for a discovery system this is generally acceptable but the design's current 'single reader sees all writes immediately' assumption would need to be explicitly relaxed in NFR documentation
+- Unified GroundingContract design requires coordinated changes across U6, U7, and U11 functional designs — this is a cross-unit refactor that risks introducing regressions if not carefully sequenced, and requires all three units to agree on the shared base implementation
+- The DocumentFidelityGroundingStrategy base implementation must abstract over both anchor-based (U7) and claim-table-based (U11) validation patterns, which are structurally different — if the abstraction is leaky, it may force artificial conformance at the cost of validation quality
 
 
 
 ---
 
-### Alternative 4: Simplified Synchronous Grounding Co-location with U2 and Explicit VectorSpec Migration Protocol
+### Alternative 4: Lazy DocModel with On-Demand Index Backfill and Event-Sourced Cascade Deletion
 
-This alternative takes a fundamentally different architectural stance on the grounding single-invocation-site problem and the VectorSpec contract enforcement gap by making grounding a first-class synchronous step within U2's SearchOrchestrationService pipeline rather than a post-handler hook in U6, and by formalizing VectorSpec changes as versioned migration events with a blue-green index handoff protocol. The motivation is that the current design's 'single invocation site in U6 post-handler' creates fragility precisely because grounding is architecturally distant from the data it validates — moving it closer to where ranked results are assembled eliminates the bypass failure mode by construction. The U6 single-authority principle is preserved by having U2 call a dedicated GroundingDecisionPort (still U6-implemented) synchronously within the pipeline, replacing the post-handler pattern.
+This alternative challenges two costly design commitments: eager DocModel generation at ingestion time for all phase-1 papers (creating a multi-hour phase-1 build with complex failure modes) and the underdefined GDPR cascade deletion mechanism. Rather than generating full DocModels eagerly during ingestion, this approach returns to a lazy generation model for DocModel but inverts the trigger: instead of U7/U5 triggering builds on first view, U1 enqueues DocModel generation jobs as a background post-ingestion step with dedicated priority queues, decoupled from the main indexing pipeline. This means phase-1 indexing (chunk+embed) can complete quickly, unblocking search, while DocModel builds catch up asynchronously without holding up index generation cutover. For cascade deletion, the design adds a CascadeCoordinator service (within U3 or as a shared utility) that acts as a saga coordinator: it tracks AccountDeleted subscriber acknowledgments with explicit timeouts, compensating actions for permanently failed subscribers, and a deterministic PURGE_CONFIRMED or PURGE_FAILED terminal state — closing the GDPR compliance gap described in constraint 103a73ca8c6946b0.
 
-**What Changes**: U6.GatewayPipelineService no longer owns a post-handler grounding invocation. Instead, U2.SearchOrchestrationService calls GroundingDecisionPort.decide(GroundingInput) as an explicit synchronous step between RelevanceRanker.rank() and ResultAssembler.assemble() — this is still U6-implemented via shared/ports, so the single-authority invariant is preserved, but the invocation site moves into the domain pipeline where exceptions are handled by U2's existing fail-closed error handling. The GroundingDecisionPort interface replaces GroundingEnforcementHook in shared/ports; it has the same enforce() semantics but is explicitly typed as a synchronous domain pipeline step rather than a middleware hook, making the call site semantics unambiguous. For VectorSpec: U1 publishes a VectorSpecChanged event when EmbeddingGatewayAdapter.embeddingSchema() detects a modelVer bump. U1.VectorIndexWriter uses a blue-green index pattern: writes during migration go to a new index (index-v2) while the old index (index-v1) remains live. U2.HybridRetriever reads from a configurable active index name; a new U6.IndexMigrationCoordinator (lightweight Ops component) monitors both indexes for docCount parity and flips the active index atomically, then publishes IndexMigrationComplete. This replaces the declarative-only VectorSpec contract with an operational migration protocol.
+**What Changes**: U1 IngestionPipelineService decouples DocModel generation from the main ingest pipeline: after CorpusIndexWriter.upsert succeeds (chunk+embed, QT-9 compliant), the pipeline enqueues a DocModelBuildJob into a separate lower-priority queue rather than blocking ingest commit on DocModel completion. DocModelBuildCoordinator runs as a background worker consuming this queue. Index generation cutover is gated on chunk/embed invariants (QT-9 P-C1 through P-C6) but NOT on DocModel completion, allowing phase-1 search to go live faster. BR-C6 is revised: phase-1 Corpus has 'best-effort eager DocModel with async catch-up' rather than 'synchronous eager at ingest time'. A new CascadeCoordinator component is added to U3 (or shared/): it manages a CascadeSaga entity with fields {accountId, purgeAfter, subscriberStates: Map&lt;UnitId, {status, lastAttempt, attempts}&gt;, terminalState}. CascadeCoordinator subscribes to AccountPurged events and updates subscriber states. A scheduled job runs every N hours checking for sagas where all required subscribers have confirmed (→ PURGE_CONFIRMED, U3 credential deletion) or where maximum delay has elapsed (→ CascadeOverdue alert with specific missing subscriber list, followed by manual intervention workflow). AccountDeletion entity gains a purgeCoordinated flag. The DLQ for AccountDeleted subscriber failures feeds back into CascadeCoordinator retry tracking rather than being a silent dead-end.
 
-**Implementation Complexity**: High — Changing the grounding invocation site requires updating the single-authority contract across multiple FD documents, redesigning the shared/ports GroundingEnforcementHook interface, and validating that the U2 pipeline error handling correctly fails closed. The blue-green index protocol requires new infrastructure components and operational runbooks. Together these represent substantial cross-cutting changes even if individual components are straightforward.
+**Implementation Complexity**: Medium — The DocModel queue decoupling is a targeted change within U1 with clear boundaries. The CascadeCoordinator is a new component but implements a standard saga pattern with well-defined inputs (AccountDeleted, AccountPurged) and outputs (PURGE_CONFIRMED/CascadeOverdue). Neither change requires cross-unit API contract revisions, making the implementation scope contained despite the conceptual complexity.
 **Advantages**:
-- Moving grounding into the U2 pipeline eliminates the post-handler bypass failure mode by construction — if GroundingDecisionPort.decide() throws, U2's existing SearchOrchestrationService error handling applies the same fail-closed path as any other pipeline step, with no special gateway exception routing needed
-- Blue-green index migration protocol converts the VectorSpec TOCTOU problem from a silent semantic corruption risk into an observable operational event with a defined completion gate — mixed-space queries are impossible because the index flip is atomic and only happens after docCount parity is verified
-- The single-authority principle for grounding is preserved (U6 still implements GroundingDecisionPort) while the invocation site moves to where the data context is richest — U2 has ranked results, the full query plan, and retrieval metadata in scope, enabling richer grounding input without extra data marshaling across the post-handler boundary
-- Removing the post-handler grounding step from GatewayPipelineService simplifies the gateway's responsibility to pure cross-cutting concerns (authn, authz, rate limiting, observability) without domain-level result validation logic
+- Decoupling DocModel generation from index generation cutover allows phase-1 search to go live as soon as chunk/embed invariants pass — potentially days earlier than waiting for full DocModel builds across the entire AI/ML corpus, which is critical for project demo timelines
+- CascadeCoordinator with explicit saga state closes the GDPR compliance gap: there is now a deterministic answer for whether an account has been fully purged, with specific attribution of which subscriber failed, enabling both automated alerts and manual remediation workflows
+- Reduced phase-1 ingest failure blast radius: DocModel build failures (GROBID errors, MathML conversion failures, schema validation failures) no longer force a full paper retry in the main pipeline — the paper is indexed for search, and the DocModel build retries independently with its own DLQ
+- Saga-based cascade deletion provides a clear audit trail for GDPR data subject requests, which is a compliance requirement that the event-log-only approach in the current design cannot satisfy
 
 **Disadvantages**:
-- Moving grounding into U2 creates a tighter coupling between U2 and the GroundingDecisionPort interface — if U7 or U11 also need grounding with the same hook, each must independently call the port rather than receiving it 'for free' via the gateway post-handler, potentially leading to duplicated integration points across units
-- Blue-green index migration adds operational complexity and storage cost: during migration, two full indexes must be maintained simultaneously, and the IndexMigrationCoordinator must handle rollback if the new index has lower recall than the old one — this requires additional NFR work to define rollback criteria
-- This is a significant restructuring of the grounding invocation contract documented across application-design.md, services.md, component-dependency.md, and shared/ports.md — the ripple of documentation changes is large even if the code change is localized
+- Lazy DocModel catch-up means some papers will be available in search results but not yet have rich-view or summarization capability — U5/U7 must gracefully handle the 'building' state for a potentially large fraction of the corpus during the catch-up window, which requires UI state management the current design partially addresses but does not fully specify
+- CascadeCoordinator introduces a new stateful coordination component with its own persistence requirements, failure modes, and consistency semantics — the saga pattern is well-understood but adds operational overhead and must itself be reliable enough to serve as the GDPR compliance mechanism
+- Separating DocModel build from ingest creates two watermarks per paper (index watermark + docmodel watermark) that must be independently tracked and reconciled in U1, increasing the complexity of BR-C11 (source-per-watermark monotonicity) and the US-I2 staleness alerting logic
 
 
 
@@ -270,180 +285,144 @@ This alternative takes a fundamentally different architectural stance on the gro
 
 ### Recommendation
 
-Alternative 2 (Defense-in-Depth Grounding with Dual-Layer Enforcement and Runtime VectorSpec Gate) is the best fit for this project at its current stage. The project has completed Functional Design across all units and is moving into Construction; this is not the right moment for the architectural restructuring that Alternative 4 requires or the new stateful saga coordinator that Alternative 3 introduces. Alternative 2 is specifically designed to close the four highest-severity findings (f511c8edb8814846 is partially addressed via the telemetry path already designed; 2e6c4ef7d938441b via the ContractTestHarness concept, which can be borrowed from Alternative 3 as a low-cost addition; 9759f887337641d5 via runtime VectorSpec version tagging; 4a9c6efb907d4441 via explicit exception handling on the enforce() call and the secondary structural guard) through additive, non-restructuring changes that respect existing FD boundaries. The atomic counter refactor for CostGuard (closing finding c84e644eefef48e1) is a focused implementation change that does not alter the shared/ports API contract consumed by U2 and U7. The one element worth borrowing from Alternative 3 is the AccountPurged acknowledgment pattern from the DeletionSaga (closing finding f511c8edb8814846 properly at the design level) — this can be added to U3's business-logic-model.md as a lightweight tracking addition without the full saga coordinator infrastructure, deferring the coordinator to when U11 and additional subscribers make the complexity worthwhile. Alternative 1 (current design) should not be left as-is given the identified high-severity silent failure modes, particularly the grounding bypass risk (finding 4a9c6efb907d4441) and the mixed-space vector corruption risk (finding 9759f887337641d5), both of which can produce incorrect results with no observable error signal in production.
+For this project, a pragmatic hybrid of Alternative 2 and Alternative 4 is the strongest path forward, with elements of Alternative 3 phased in as a follow-on. The most acute risks in the current design are (a) the gateway latency threat to NFR-P1, (b) the StubSearchGateway silent failure mode, (c) the GDPR cascade completion gap, and (d) the phase-1 eager DocModel build blocking search go-live — all of which are addressed by combining Alternatives 2 and 4 without requiring the full cross-unit grounding refactor of Alternative 3.
+
+Specifically: adopt Alternative 2's session cache, PortBindingValidator startup guard, and U2-side boost clamping immediately — these are low-risk, targeted changes that close high-severity vulnerabilities (constraints 5cfaa87b, 8f75195c, 579590f7) without touching cross-unit contracts. Simultaneously adopt Alternative 4's DocModel-decoupled ingest pipeline and CascadeCoordinator saga — these close the GDPR compliance gap (constraint 103a73ca8c6946b0) and remove the phase-1 build bottleneck (constraint 9742e29a) with contained changes within U1 and U3.
+
+Alternative 3's unified grounding contract is architecturally correct and important for long-term maintainability (constraint 5573159e), but it requires coordinated changes across U6, U7, and U11 with separate ownership tracks. This is best scheduled as a dedicated refactor sprint after the immediate risk mitigations from Alternatives 2 and 4 are stable in production. The Alternative 3 read-replica index change should be evaluated alongside that sprint, as it resolves the single-writer/reader scaling risk (constraint 9cc30571b) with native OpenSearch capabilities.
+
+Alternative 1 (current approach) should not be shipped as-is: the combination of silent StubSearchGateway production risk, unvalidated U9 boost values entering the search ranking path, the GDPR cascade completion gap, and the sequential middleware chain threatening P50&lt;3s constitute a set of risks that are each independently addressable without major rearchitecting.
 
 ---
 
 ## Gap Analysis
 
-### Medium Gaps (24)
+### Medium Gaps (18)
 
-#### AccountDeletionService and purgeJob Not Listed as Components
+#### U10 Mypage Unit Incompletely Defined
+
+- **Severity**: Medium
+- **Category**: underspecified
+- **Description**: U10 Mypage is referenced throughout the documents as 'being implemented by another team member' and its number is reserved, but no Functional Design documents exist for it. Components listed (MypageController, UserPreferencesService, DataExportService) have minimal specification compared to other units. The boundary between U10 and U3 for settings UI is stated as 'Q2=A' but the actual boundary rules are not elaborated.
+- **Recommendation**: 
+
+#### U11 Research Agent GroundingEnforcementHook Integration Unresolved
+
+- **Severity**: Medium
+- **Category**: underspecified
+- **Description**: U11 business-rules (INV-U11-2) states that '근거화 단일 권위 = U6 (정책 불변)' and references 'U6 근거화 공유 계약 확정 시 동기화' and 'Q7 통일'. The ports.md design note acknowledges U6 GroundingDecision and U7 AnchorVerdict are 'intentionally parallel' but suggests a future shared utility. U11 uses 'AgentGroundingAdapter' with 'U6 문서충실도 근거화 공유 계약(검색 enforce와 통일된 계약)' that does not yet exist as a concrete shared contract.
+- **Recommendation**: 
+
+#### SearchExecutedEvent Missing requestId Field in Some References
+
+- **Severity**: Medium
+- **Category**: underspecified
+- **Description**: The events.md §2 SearchExecutedEvent FROZEN schema includes a 'requestId' field described as 'event unique identifier'. However, the component-methods.md publishSearchExecuted signature is listed as 'publishSearchExecuted(userId, query, timestamp, resultCount) -&gt; void' — missing requestId. U4 business-rules BR-L7 uses 'sha256(owner_id \| requestId \| query)' as dedupe_key, depending on requestId being present in the event.
+- **Recommendation**: 
+
+#### AccountDeleted Cascade Completion SLA and CascadeOverdue Alert Not Operationalized
+
+- **Severity**: Medium
+- **Category**: underspecified
+- **Description**: events.md §1b specifies that U3 must track AccountPurged confirmations from U4/U2/U11 and trigger CascadeOverdue alert if not received within maximum allowed delay (e.g., 7 days). However, there is no specification of: what happens after CascadeOverdue fires (retry vs. manual intervention), whether U3 can force-purge if a subscriber is permanently down, or how to handle the case where U11 (which may not exist yet for a given user) needs to respond.
+- **Recommendation**: 
+
+#### VectorSpec Runtime same-space Gate Implementation Not Specified
+
+- **Severity**: Medium
+- **Category**: underspecified
+- **Description**: U1 business-rules §6 mentions 'VectorSpec same-space gate' with assert_same_space() comparing specVersion/model/dimensions/distanceMetric/normalize between writer and reader. U2 business-rules §6 mentions HybridRetriever checks modelVer metadata on returned records. However, there is no shared/vector-spec.md document visible in the design, and the actual VectorSpec contract fields, versioning scheme, and where assert_same_space() is invoked (index generation cutover? per-query?) are not defined.
+- **Recommendation**: 
+
+#### U7 MapReduceSummarizer Grounding Contract for Reduce Phase Not Fully Specified
+
+- **Severity**: Medium
+- **Category**: underspecified
+- **Description**: BR-S6 and BLM §3.6 describe the Map-Reduce Grounding Contract requiring that reduce-phase prompts ensure anchors don't exceed their source chunk's context. However, the actual mechanism for tracking which anchor belongs to which chunk during reduction is not specified. How does the GroundingValidator validate anchors against the full RefinedSource when the LLM has only seen partial chunks during map phase?
+- **Recommendation**: 
+
+#### OpsDashboard Authentication and Access Control Not Specified
+
+- **Severity**: Medium
+- **Category**: underspecified
+- **Description**: OpsDashboardService exposes GET /ops/dashboard and GET /ops/incidents requiring 'admin authorization SEC-8/MFA SEC-12'. U3 business-rules BR-A7 states admin accounts are created via DB seeding/scripts only. However, there is no specification of: how many admin accounts exist, whether there is a separate admin UI or it uses the same U5 frontend, what the MFA enrollment process is, or how admin sessions differ from user sessions.
+- **Recommendation**: 
+
+#### CorpusIndexWriter Blue/Green Generation Alias Cutover Runbook Missing
 
 - **Severity**: Medium
 - **Category**: missing_component
-- **Description**: The events.md contract defines AccountDeleted as being produced by 'U3.AccountDeletionService.purgeJob', but AccountDeletionService is not listed in components.md or services.md for U3. The business-logic-model.md for U3 describes the deletion logic but no corresponding component definition exists in the architecture documents.
+- **Description**: U1 business-rules BR-C10 and BLM §0.5 define the index generation cutover process requiring QT-9 invariants and smoke checks to pass before alias switching. However, there is no specification of: who/what initiates the cutover, whether it's automated or manual, what the rollback procedure is if post-cutover smoke fails, or how long the old generation is retained for rollback.
 - **Recommendation**: 
 
-#### PasswordResetService and EmailVerificationService Not Listed as Components
+#### U9 Personalization Event Recording Timing Race Condition Unaddressed
+
+- **Severity**: Medium
+- **Category**: unaddressed_scenario
+- **Description**: U9 BR-P3 states 'record after success' — behavior events are recorded after domain action success. For library_removed specifically, 'removed paper id captured before delete, owner verification and delete success then record'. However, if the event recording fails after the delete succeeds, the library_removed signal is lost permanently. Additionally, for search_executed and paper_opened, these are high-frequency events that may cause write amplification.
+- **Recommendation**: 
+
+#### U4 StubSearchGateway to RealSearchGatewayAdapter Transition Governance Incomplete
+
+- **Severity**: Medium
+- **Category**: underspecified
+- **Description**: U4 BLM §5.2 specifies that StubSearchGateway must never be used in production (ENV=PROD) and requires a ContractTestHarness integration test before deployment. However, there is no specification of: when this transition happens relative to U6 completion, who triggers it, how ENV=PROD is enforced at the DI layer, or what happens to rerun functionality during the period when U6 gateway exists but the contract test hasn't run yet.
+- **Recommendation**: 
+
+#### U7 Async Job Queue for Long Summarization Not Fully Specified
+
+- **Severity**: Medium
+- **Category**: underspecified
+- **Description**: BR-S12 states that long-input summarization uses async jobs with a DOCSURI_SUMMARY_JOB_QUEUE_URL gate. The polling contract in domain-entities specifies retryAfterMs and a GET /api/summarization/jobs/{jobId} endpoint. However: the job queue technology, job deduplication mechanism (BR-S12 mentions 'in-process dedup'), job timeout/max-age, and what happens when a worker crashes mid-job are not specified.
+- **Recommendation**: 
+
+#### GROBID Runtime Dependency Availability and Fallback Not Specified
+
+- **Severity**: Medium
+- **Category**: unaddressed_scenario
+- **Description**: U1 components.md and component-dependency.md reference 'GROBID Runtime (shared capability)' for PDF processing of Semantic Scholar and OpenAlex papers. However, GROBID is listed as a 'shared capability' without specification of: its deployment model (sidecar, separate service, external API), its availability SLA, retry behavior when GROBID is unavailable, and whether it's part of the health check.
+- **Recommendation**: 
+
+#### U8 Citation Provider API Selection and Rate Limit Budget Not Specified
 
 - **Severity**: Medium
 - **Category**: missing_component
-- **Description**: U3 business-logic-model.md and business-rules.md define PasswordResetService (FR-26/BR-A8) and email verification flows (BR-A5) with detailed algorithms, but these are not listed as named components in components.md or services.md. The email delivery dependency (Resend) is mentioned in unit-of-work-story-map.md but has no adapter component defined.
+- **Description**: U8 business-rules reference 'Semantic Scholar' as the primary citation provider, but the actual provider API (Semantic Scholar Graph API, OpenCitations, CrossRef), API key management, rate limit budgets, and how these interact with U6 CostGuard are not specified. The unit-of-work.md notes 'U8 외부 citation API 쿼터 카운터' as a shared capability but provides no details.
 - **Recommendation**: 
 
-#### SocialLoginService (OIDC) Component Not Defined
+#### U3 PENDING Account Cleanup Batch Job Not Specified
 
 - **Severity**: Medium
 - **Category**: missing_component
-- **Description**: U3 business-logic-model.md describes SocialLoginService with start/callback methods and BR-A9 defines OIDC rules including CSRF state/nonce, pre-hijacking defense, and PENDING_CONFIRMATION flows. However, SocialLoginService is not listed in components.md, services.md, or component-dependency.md. The external Google OIDC dependency has no adapter component.
+- **Description**: U3 BR-A5 states 'accounts in PENDING state for 24 hours are automatically cleaned up by batch job'. However, there is no specification of this batch job: who runs it, how often, what infrastructure hosts it, and whether it uses the same purgeJob mechanism as AccountDeletionService or a separate lightweight cleanup.
 - **Recommendation**: 
 
-#### U11 Research Agent Has No Functional Design Documents
+#### FullText S3 Storage and DocModel Storage Security Boundaries Unclear
 
 - **Severity**: Medium
 - **Category**: underspecified
-- **Description**: unit-of-work.md and unit-of-work-story-map.md define U11 Research Agent with US-RA1–RA8, but there are no corresponding business-logic-model.md, business-rules.md, or domain-entities.md files for U11. The requirement-verification-questions-research-agent.md establishes Q18=A meaning only Requirements registration was completed, but US-RA1–RA8 are listed as Owner=U11 in the story map implying construction intent.
+- **Description**: U1 BR-20 specifies 'public access blocked (SEC-9)' for stored full texts. U1 domain-entities describe 'doc-model/{paperId}/v{version}.json' storage. However, the shared/docmodel.md says 'SSE-KMS, public access blocked'. It's unclear whether FullText (.txt) and DocModel (.json) are in the same S3 bucket, different buckets with different policies, and who has IAM access to these objects (U7, U11 need to read them).
 - **Recommendation**: 
 
-#### SearchGatewayPort Real Binding Mechanism Unspecified
+#### U9 Boost Magnitude Contract Enforcement Point Not Specified
 
 - **Severity**: Medium
 - **Category**: underspecified
-- **Description**: U4 business-logic-model.md and business-rules.md (BR-L9/INV-L2) require all rerun operations to go through SearchGatewayPort rather than calling U2 directly. The design states 'StubSearchGateway' is used by default and 'real binding is injected by U6/Infra when available'. However, no component, service, or infra document specifies how the real gateway binding is wired, what the concrete implementation looks like, or when/how the transition from stub to real occurs.
+- **Description**: U9 BR-P8 and domain-entities define a Boost Magnitude Contract: individual boost values must be in [-0.1, +0.1] and total sum must not exceed 0.2. U2 business-rules BR-5 states it 'trusts' U9's boost magnitude bounds. However, there is no specification of where this contract is validated — whether U9 validates before returning, U2 validates on receipt, or it's a test-only invariant.
 - **Recommendation**: 
 
-#### U10 Mypage Unit Entirely Undefined
+#### Email Sending Infrastructure Not Specified
 
 - **Severity**: Medium
 - **Category**: missing_component
-- **Description**: unit-of-work.md reserves U10 for a Mypage feature being implemented by another team member, but provides no definition of its responsibilities, component boundaries, or interfaces. Several other units (U3 US-A5/account settings, U9 US-P6/personalization controls) reference UI owned by U10. The unit-of-work-dependency.md matrix omits U10 entirely.
+- **Description**: U3 AccountDeletionService, PasswordResetService, EmailVerificationService, and SocialLoginService all reference sending emails via 'Resend' (mentioned in unit-of-work-story-map.md for US-A3). However, there is no specification of the email sending capability: Resend API integration, email templates, rate limits for email sending, bounce/unsubscribe handling, or what happens if email delivery fails.
 - **Recommendation**: 
 
-#### GroundingEnforcementHook Reuse for U7 Not Formally Validated
+#### U11 Research Agent Novelty Mode B External API Cache Pattern Undefined
 
 - **Severity**: Medium
 - **Category**: underspecified
-- **Description**: U7 business-rules.md BR-S7 states 'U7 고유 결정적 게이트(검색용 U6 enforce와 형상 다름 — 단일 논문 충실도 검증)' and notes the grounding check is different from U6's enforce. However, ports.md declares GroundingEnforcementHook as the single authority gate and U7 FD states it uses a separate GroundingValidator component. The relationship between U7's GroundingValidator and U6's GroundingEnforcementHook is explicitly unresolved in summarization-translation-pipeline.md §12 ('U6 grounding 재사용 검증 필요').
-- **Recommendation**: 
-
-#### VectorSpec PIN Process and Ownership Transfer Underspecified
-
-- **Severity**: Medium
-- **Category**: underspecified
-- **Description**: Multiple documents state that VectorSpec (dimensions, model, distance metric) is 'pinned by U1 (build #1) but owned by the shared embedding gateway layer' and that 'subsequent units cannot re-decide'. The concrete mechanism by which U1 sets the PIN, how the shared contract is updated, and what happens if the embedding model changes (full re-ingestion required) is not specified.
-- **Recommendation**: 
-
-#### Event Consumer Failure and DLQ Handling for AccountDeleted Not Fully Specified
-
-- **Severity**: Medium
-- **Category**: unaddressed_scenario
-- **Description**: events.md §1b defines AccountDeleted with DLQ and completion verification requirements, noting 'U3/Ops must alert on incomplete cascade (max allowed delay exceeded / DLQ backlog)'. However, no component is specified to perform this monitoring, no alert threshold is defined, and no runbook exists for manually reconciling a permanently-down subscriber. The 'maximum allowed delay' is explicitly deferred to Infra Design.
-- **Recommendation**: 
-
-#### PendingDTO Polling Contract for U7 Async Jobs Underspecified
-
-- **Severity**: Medium
-- **Category**: underspecified
-- **Description**: U7 BR-S12 and domain-entities.md define PendingDTO with a retryAfterMs hint for async map-reduce/map-only jobs, but no API endpoint is specified for polling. The client-side polling mechanism, maximum poll duration, what happens when polling times out, and how the job ID is correlated between the initial enqueue response and subsequent polls are not defined.
-- **Recommendation**: 
-
-#### doc-model Lazy Build Trigger Queue Endpoint Not Defined
-
-- **Severity**: Medium
-- **Category**: missing_component
-- **Description**: shared/docmodel.md and U1 business-logic-model.md §7.2 specify that doc-model is built lazily via a BUILD_DOC_MODEL queue job enqueued by the consumer (U7). The document states 'reading side enqueues only, builder creation is U1 worker'. However, no API endpoint or event contract is defined for how U7 triggers the enqueue, what queue/topic is used, or how U7 knows the job completed (other than polling getDocModel).
-- **Recommendation**: 
-
-#### U9 Personalization Read Port Interface Not Formally Defined in shared/ports
-
-- **Severity**: Medium
-- **Category**: missing_component
-- **Description**: unit-of-work-dependency.md shows U2 and U7 consuming U9 via sync reads for search boost and summary defaults. U9 business-logic-model.md defines PersonalizationReadPort as a component. However, shared/ports.md only defines GroundingEnforcementHook, CostGuardCircuitBreaker, and ObservabilityHub. The PersonalizationReadPort interface is not in shared/ports, meaning U2 and U7 have no stable contract to depend on.
-- **Recommendation**: 
-
-#### U8 CitationProviderPort Concrete Provider and Fallback Not Specified
-
-- **Severity**: Medium
-- **Category**: underspecified
-- **Description**: U8 business-logic-model.md references CitationProviderPort for backward references and mentions 'Semantic Scholar' in unit-of-work.md notes, but no adapter component is defined, no API rate limit policy is specified beyond 'NFR', and no cache TTL value is given for CitationSnapshot. The fallback chain when Semantic Scholar is unavailable or returns a 429 is described at the state machine level but not as a concrete component.
-- **Recommendation**: 
-
-#### Incremental Ingestion Watermark Behavior During Concurrent Events Not Specified
-
-- **Severity**: Medium
-- **Category**: unaddressed_scenario
-- **Description**: U1 business-logic-model.md defines REBUILD_LOCK mutual exclusion (Q16=A, BR-13) to prevent concurrent rebuild and incremental operations. However, when multiple NewArxivEvents arrive concurrently (Q12=B active), the interaction between parallel fetch/embed operations and the single VectorIndexWriter is described as 'write serialized' but the concrete serialization mechanism is not specified. The advanceWatermark max-clamp (BR-11/Q17) with concurrent jobs could result in watermark regression if out-of-order jobs complete.
-- **Recommendation**: 
-
-#### U5 LibraryHistoryScreens Rerun Flow Integration with U4 Not Specified
-
-- **Severity**: Medium
-- **Category**: underspecified
-- **Description**: U5 components.md shows LibraryHistoryScreens.rerun() delegates to SearchScreen search flow, but U4 SavedSearchService.rerun() and SearchHistoryService.rerun() go through SearchGatewayPort (U6→U2). The frontend flow for rerun appears to bypass the backend rerun and re-trigger a frontend search. It is unclear whether the frontend rerun calls U4's rerun endpoint (which uses the gateway) or directly calls U2 search via ApiClient.search(), which would be the equivalent of the 'backdoor' that INV-L2 prohibits at the backend level.
-- **Recommendation**: 
-
-#### SEC-9 Compliance for ObservabilityHub Structured Logs Not Enforced by Contract
-
-- **Severity**: Medium
-- **Category**: unaddressed_scenario
-- **Description**: U6 ObservabilityHub requires PII/secret exclusion from all logs (SEC-3/SEC-9). The StructuredLogEntry type in shared/ports.md is defined as '(requestId correlated structured fields — PII/secrets excluded)' but there is no enforcement mechanism, schema validation, or field allowlist defined. Any unit can call emitLog() with arbitrary content.
-- **Recommendation**: 
-
-#### Glossary Version Conflict Between Users Sharing Cache Key Not Resolved
-
-- **Severity**: Medium
-- **Category**: unaddressed_scenario
-- **Description**: U7 business-rules.md BR-S1 and domain-entities.md §2 note that baseline translations (glossaryVer=0, no personal terms) are shared across users, but personalized translations (glossaryVer&gt;0) include ownerId in the cache key to prevent cross-user contamination. However, the mechanism by which glossaryVer is determined for a given user at request time, how the ownerId is included in the S3 object path without exposing it in URLs, and how glossaryVer increments are serialized are not specified.
-- **Recommendation**: 
-
-#### U2 SearchOrchestrationService NoMatchResult Path Not Wired Through GroundingAdapter
-
-- **Severity**: Medium
-- **Category**: unaddressed_scenario
-- **Description**: U2 business-logic-model.md §1.1 step 4 states 'candidates 0 → NoMatchResult → terminal (explicit empty page resultCount=0 — not abstain)'. The flow diagram shows this terminates before the GroundingAdapter.toGroundingInput step. However, the component-dependency.md flow diagram shows GroundingAdapter.toGroundingInput as a step in the pipeline without a bypass branch for the zero-candidate case.
-- **Recommendation**: 
-
-#### Rate Limiting Scope and Per-Endpoint Configuration Not Specified
-
-- **Severity**: Medium
-- **Category**: underspecified
-- **Description**: U6 RateLimiter is responsible for SEC-11 rate limiting across search, signup, and other endpoints. The component defines checkLimit(scope: LimitScope, key: ClientKey) but no concrete LimitScope values, rate limit thresholds, window sizes, or per-endpoint configurations are specified in any design document. BR-A4 defines CAPTCHA after 10 login failures but this is a different mechanism from the RateLimiter.
-- **Recommendation**: 
-
-#### U4 Library and U2 Search History Cascade on AccountDeleted Not Implemented in FD
-
-- **Severity**: Medium
-- **Category**: unaddressed_scenario
-- **Description**: events.md §1b and U3 BR-A11 specify that U4 and U2 subscribe to AccountDeleted and purge owner-scoped data. U4 business-logic-model.md and business-rules.md have no mention of AccountDeleted event handling or a data purge use case. U2 FD documents similarly have no AccountDeleted handler. The event is defined but no consuming component is specified in the FD documents of U4 or U2.
-- **Recommendation**: 
-
-#### Translation Output Migration from koreanText to docModel TranslationDraft Not Backward Compatible
-
-- **Severity**: Medium
-- **Category**: unaddressed_scenario
-- **Description**: U7 BR-S18 (PR-2) changes TranslationDraft from a flat koreanText string to a structured docModel. This is a breaking change to the SummarizeOutcome DTO. The cache key design (BR-S1) uses promptVer to differentiate, meaning existing cached translations (koreanText format) will not be served to clients expecting docModel format. The migration path for existing cache entries is not specified.
-- **Recommendation**: 
-
-#### U9 Behavior Event Retention Policy Conflicts with U3 AccountDeleted Cascade
-
-- **Severity**: Medium
-- **Category**: unaddressed_scenario
-- **Description**: U9 BR-P12 specifies a default 90-day retention for raw behavior events. U3 BR-A11 specifies that AccountDeleted triggers cascade data purge in U4, U2, and U11, but does not mention U9. Events.md §1b lists U4, U2, and U11 as AccountDeleted consumers but does not list U9. U9 business-logic-model.md Use Case 'Delete Behavior Events' describes user-initiated deletion but not system-triggered deletion on account purge.
-- **Recommendation**: 
-
-#### U7 Full Text Translation Grounding Policy Inconsistent with GroundingAdapter Pattern
-
-- **Severity**: Medium
-- **Category**: underspecified
-- **Description**: U7 BR-S18 states 'translation is grounding-free (BR-S7 not applied)' because translation is a faithfulness task. However, the GroundingEnforcementHook.enforce in U6 is applied at the response edge for all U2 routes and potentially for U7 routes. If U7 translation responses pass through the U6 gateway post-handler, it is unclear whether GroundingEnforcementHook.enforce is called on translation responses and how a pass-through verdict is achieved.
-- **Recommendation**: 
-
-#### U5 Frontend Transport Seam Real Implementation Binding Not Specified
-
-- **Severity**: Medium
-- **Category**: underspecified
-- **Description**: U5 business-logic-model.md §3 and frontend-components.md §2.9 define a MockTransport/HttpTransport seam for ApiClient. The design states 'real transition is a transport swap' but does not specify: the gateway base URL configuration mechanism, how session cookies are forwarded in SSR context vs client context, or how the transport is configured in different environments (development, staging, production).
+- **Description**: U11 business-rules BR-RA-17 states 'v1 does not build Mode B, domain/port seam only (external API/coverage expansion, next cycle)'. However, unit-of-work.md US-RA8 Owner=U11 is listed with 'next cycle' note, and the dependency on U8's 'external academic API cache pattern' for Mode B is referenced. No specification exists for what this seam looks like or what interface U11 would expose.
 - **Recommendation**: 
 
 
@@ -455,18 +434,18 @@ Alternative 2 (Defense-in-Depth Grounding with Dual-Layer Enforcement and Runtim
 
 | Agent | Status | Findings | Execution Time |
 |-------|--------|----------|---------------|
-| critique | Completed | 10 | 86.5s |
-| alternatives | Completed | 4 | 111.4s |
-| gap | Completed | 24 | 174.2s |
+| critique | Completed | 12 | 116.1s |
+| alternatives | Completed | 4 | 114.1s |
+| gap | Completed | 18 | 120.5s |
 
 
 ### Token Usage
 
 | Agent | Input Tokens | Output Tokens |
 |-------|-------------|--------------|
-| critique | 241665 | 3753 |
-| alternatives | 244525 | 4773 |
-| gap | 241721 | 8039 |
+| critique | 270433 | 5454 |
+| alternatives | 274661 | 4726 |
+| gap | 270489 | 5333 |
 
 ---
 
