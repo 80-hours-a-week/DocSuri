@@ -1,7 +1,7 @@
 # 사용자·계정(U3 Accounts) 프로덕션화 — 요구사항 명확화 질문
 
 **단계**: INCEPTION → Requirements Analysis 재진입 (기존 유닛 **U3 Accounts** 확장) · **일자**: 2026-06-24
-**대상 기능**: 현재 **FR-7**(공개 셀프 가입·로그인·로그아웃·인증 세션)만 정의된 사용자·계정 기능을 **프로덕션급**으로 확장. **다음 FR 번호**: FR-26~ (최신=FR-25 Research Agent) · **다음 BR 번호**: BR-A8~ (기존 BR-A1~A7)
+**대상 기능**: 현재 **FR-7**(공개 셀프 가입·로그인·로그아웃·인증 세션)만 정의된 사용자·계정 기능을 **프로덕션급**으로 확장. **다음 FR 번호**: FR-26~ (작성 당시 최신=FR-25 Research Agent; **FR-22~25는 PR #232에서 폐기 — FR-21→FR-26 번호 공백 유지**) · **다음 BR 번호**: BR-A8~ (기존 BR-A1~A7)
 **유닛 경계**: 본 작업의 1차 소속은 **U3**(인증·계정 보안). 단, **U10 마이페이지(타 팀원 구현 중·미커밋)** 와 책임이 맞닿으므로 Q2에서 경계 확정.
 **근거 SSOT**: `requirements.md` **FR-7**·**SEC-3/8/9/11/12**·**NFR-C1**·**RES-***; U3 Functional Design `business-rules.md` **BR-A1~A7**(비번 ≥10자+블랙리스트·Argon2id·Sliding 2h/Abs 30d 세션·지수 백오프+10회 CAPTCHA·이메일 링크 PENDING/ACTIVE·Stateless 인가·시딩 ADMIN+TOTP MFA).
 **현황(코드 검증, 2026-06-24)**:
