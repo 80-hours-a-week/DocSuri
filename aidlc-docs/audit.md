@@ -2505,3 +2505,68 @@ This time, find and resolve all potential issues.
 **Context**: CONSTRUCTION — Code Generation follow-up implementation verification.
 
 ---
+## U11 Novelty Agent Requirements Questionnaire Request
+**Timestamp**: 2026-06-28T06:15:17Z
+**User Input**: "차별화 (novelty) 형성 에이전트를 구현하고 싶습니다.
+유닛 번호는 U11, U11에는 `문헌탐색&근거형성 에이전트`와 `차별화 (novelty) 에이전트`가 할당됩니다.
+작동 과정은 대략적으로
+
+```text
+1. 유저가 자신이 작성한 논문을 업로드 하거나, \"~~~를 연구하고 싶다\"를 입력
+2. 먼저 `문헌DB탐색 & 주장근거 형성 에이전트`가 작동 (논문을 업로드 했을 경우) (단순 원샷 검색시 생략)
+3-1. `문헌DB탐색 & 주장근거 형성 에이전트`의 결과물을 내부 corpus retrieval에서 논문 검색
+3-2. 유저의 원샷 검색을 내부 corpus retrieval에서 논문 검색
+4. `GitHub 검색`, `최신 뉴스 검색`, `관련 데이터셋 검색` -> `Agent-Browser` 이용 검색
+5. 기존 한계 분석
+6. 실험 아이디어 생성
+7. 실험 계획 작성
+8. Notion 저장 (Notion MCP 이용)
+```
+입니다.
+aidlc 개발 과정을 적용하여 개발하려고 합니다. 질문지를 형성해 주세요."
+**AI Response**: "AI-DLC Requirements Analysis 재진입으로 판단하고, 공통 규칙·질문 형식·기존 research-agent 요구사항 문서를 확인한 뒤 U11 전용 요구사항 검증 질문지를 생성한다."
+**Context**: INCEPTION / Requirements Analysis — U11 novelty agent questionnaire.
+
+---
+## U11 Novelty Agent Requirements Questionnaire Complete
+**Timestamp**: 2026-06-28T06:18:56Z
+**User Input**: ""
+**AI Response**: "U11 문헌탐색·근거형성 / 차별화(novelty) 에이전트 요구사항 검증 질문지를 aidlc-docs/inception/requirements/requirement-verification-questions-u11-novelty-agent.md에 생성했다. 질문 26개와 [Answer] 태그 26개를 확인했다."
+**Context**: INCEPTION / Requirements Analysis — U11 novelty agent questionnaire complete.
+
+---
+## U11 Novelty Agent Questionnaire Scope Correction Request
+**Timestamp**: 2026-06-28T06:26:15Z
+**User Input**: "잠깐만요!! `문헌탐색 & 근거형성 에이전트`는 개발 목표가 아닙니다. U11 안에 두 에이전트를 병렬로 둔다는 의미이고, 현재 과정은 두 에이전트 중 `차별화 (novelty) 에이전트`를 개발하는 과정입니다. `문헌탐색 & 근거형성 에이전트`는 타 과정에서 개발중이니 신경쓰지 말고, 공통협약 구조에만 집중해 주세요. 그러므로, aidlc-docs\\inception\\requirements\\requirement-verification-questions-u11-novelty-agent.md 내용을 다시 수정해 주세요."
+**AI Response**: "U11 질문지의 개발 대상을 차별화(novelty) 에이전트로 한정하고, 문헌탐색 & 근거형성 에이전트는 병렬 upstream producer로 취급해 공통 협약/계약 질문만 남기도록 수정한다."
+**Context**: INCEPTION / Requirements Analysis — U11 novelty agent questionnaire scope correction.
+
+---
+## U11 Novelty Agent Questionnaire Scope Correction Complete
+**Timestamp**: 2026-06-28T06:27:50Z
+**User Input**: ""
+**AI Response**: "requirement-verification-questions-u11-novelty-agent.md를 novelty 에이전트 개발 전용 질문지로 다시 작성했다. 문헌탐색 & 근거형성 에이전트 구현 질문은 제거하고, U11 공통 계약/EvidenceBundle/source reference/프라이버시/실행 방식/품질 게이트 중심으로 정리했다. 질문 26개와 [Answer] 태그 26개를 확인했다."
+**Context**: INCEPTION / Requirements Analysis — U11 novelty agent questionnaire scope correction complete.
+
+---
+## PR Document Creation Request
+**Timestamp**: 2026-06-28T06:52:12Z
+**User Input**: ".github\\PULL_REQUEST_TEMPLATE.md 을 기반으로 202606291600_1_PR.md를 작성해 주세요."
+**AI Response**: ".github/PULL_REQUEST_TEMPLATE.md 구조를 확인하고, 최신 U11 novelty questionnaire 변경 내용을 기반으로 202606291600_1_PR.md를 작성했다."
+**Context**: Documentation — PR description generation.
+
+---
+## U11 Novelty Questionnaire Cross Review Revision Request
+**Timestamp**: 2026-06-28T08:12:26Z
+**User Input**: "Cross-Review.md 를 참고하여 aidlc-docs\\inception\\requirements\\requirement-verification-questions-u11-novelty-agent.md 질문지를 다시 수정해 주세요."
+**AI Response**: "Cross-Review.md를 읽고 U11 novelty 질문지를 기존 U11 산출물 재스코핑/개정 질문지로 다시 작성한다."
+**Context**: INCEPTION / Requirements Analysis — U11 novelty questionnaire cross-review revision.
+
+---
+## U11 Novelty Questionnaire Cross Review Revision Complete
+**Timestamp**: 2026-06-28T08:16:00Z
+**User Input**: ""
+**AI Response**: "Cross-Review.md 지적을 반영해 requirement-verification-questions-u11-novelty-agent.md를 기존 U11 산출물 개정/재스코핑 질문지로 교체하고, 질문/답변 태그 수와 diff whitespace를 확인했다."
+**Context**: INCEPTION / Requirements Analysis — U11 novelty questionnaire cross-review revision complete.
+
+---
