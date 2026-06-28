@@ -161,3 +161,62 @@ def test_invalidate_drops_cached_versions() -> None:
     store = _FakeStore()
     _builder(_FakeSource(None), store).invalidate("2401.00001")
     assert store.removed == ["2401.00001"]
+
+
+class _FakeEprintSource:
+    def __init__(self, eprint: bytes | None, *, raises: bool = False) -> None:
+        self._eprint = eprint
+        self._raises = raises
+        self.calls: list[str] = []
+
+    def fetch_eprint(self, metadata) -> bytes | None:
+        self.calls.append(metadata.paper_id)
+        if self._raises:
+            raise RuntimeError("network down")
+        return self._eprint
+
+
+def _eprint_tar(tex: str) -> bytes:
+    import io
+    import tarfile
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        data = tex.encode("utf-8")
+        info = tarfile.TarInfo("main.tex")
+        info.size = len(data)
+        tar.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+def test_build_attaches_eprint_macros_to_meta() -> None:
+    store = _FakeStore(cached=None)
+    source = _FakeSource((_HTML, SourceTier.native_html))
+    eprint = _FakeEprintSource(_eprint_tar(r"\newcommand{\R}{\mathbb{R}}"))
+    builder = DocModelBuilder(
+        source=source, store=store, eprint_source=eprint, clock=_FixedClock()
+    )
+    result = builder.build(sample_metadata("2401.00001v1"))
+    assert isinstance(result, DocModelResultDTO)
+    assert result.docModel.meta.macros == {"\\R": "\\mathbb{R}"}
+    assert eprint.calls == ["2401.00001"]
+
+
+def test_build_without_eprint_source_omits_macros() -> None:
+    store = _FakeStore(cached=None)
+    source = _FakeSource((_HTML, SourceTier.native_html))
+    result = _builder(source, store).build(sample_metadata("2401.00001v1"))
+    assert isinstance(result, DocModelResultDTO)
+    assert result.docModel.meta.macros is None  # optional field omitted
+
+
+def test_build_survives_eprint_fetch_failure() -> None:
+    store = _FakeStore(cached=None)
+    source = _FakeSource((_HTML, SourceTier.native_html))
+    eprint = _FakeEprintSource(None, raises=True)
+    builder = DocModelBuilder(
+        source=source, store=store, eprint_source=eprint, clock=_FixedClock()
+    )
+    result = builder.build(sample_metadata("2401.00001v1"))
+    assert isinstance(result, DocModelResultDTO)  # build still succeeds
+    assert result.docModel.meta.macros is None

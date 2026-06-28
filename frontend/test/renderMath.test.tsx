@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
-import { renderInlineMath } from '@/lib/renderMath';
+import { MathDisplay, renderInlineMath } from '@/lib/renderMath';
 
 // renderInlineMath turns TeX delimiters in plain text into KaTeX markup. The arXiv abstract
 // convention is `$…$` (inline) / `$$…$$` (display); the doc-model also uses `\(…\)`.
@@ -41,5 +41,25 @@ describe('renderInlineMath', () => {
 
   it('returns plain text when there is no math', () => {
     expect(renderInlineMath('no math here')).toBe('no math here');
+  });
+
+  it('resolves a custom macro from meta.macros instead of showing the raw command', () => {
+    // KaTeX (throwOnError:false) renders an undefined command as its red source text. The
+    // e-print macro map expands it instead, so the literal `\myvec` no longer appears.
+    const without = html(renderInlineMath('a \\(\\myvec\\) b'));
+    expect(without.textContent).toContain('\\myvec');
+
+    const withMacros = html(renderInlineMath('a \\(\\myvec\\) b', { '\\myvec': '\\vec{x}' }));
+    expect(withMacros.querySelector('.katex')).not.toBeNull();
+    expect(withMacros.textContent).not.toContain('\\myvec');
+  });
+
+  it('passes macros through MathDisplay (block formulas)', () => {
+    const without = html(<MathDisplay latex={'\\myop'} />);
+    expect(without.textContent).toContain('\\myop');
+
+    const c = html(<MathDisplay latex={'\\myop'} macros={{ '\\myop': '\\oplus' }} />);
+    expect(c.querySelector('.katex')).not.toBeNull();
+    expect(c.textContent).not.toContain('\\myop');
   });
 });

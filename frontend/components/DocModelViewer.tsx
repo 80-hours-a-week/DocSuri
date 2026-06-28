@@ -14,7 +14,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { AnchorVM, AssetRef, DocBlock, DocModel, DocSection } from '@/types/generated';
 import { useDocModel } from '@/lib/useDocModel';
 import { useAssets } from '@/lib/useAssets';
-import { MathDisplay, renderInlineMath } from '@/lib/renderMath';
+import { MathDisplay, renderInlineMath, type MathMacros } from '@/lib/renderMath';
 import { StateView } from './StateView';
 import styles from './DocModelViewer.module.css';
 
@@ -126,6 +126,9 @@ export function DocModelBody({
   // Tap-to-enlarge: figures/tables/formulas are shown fit-to-width inline and open a
   // full-screen, scaled-to-fit overlay on tap (no scrollbars).
   const [zoom, setZoom] = useState<React.ReactNode | null>(null);
+  // Author macros from the e-print preamble (meta.macros) — handed to every KaTeX render so
+  // custom commands resolve instead of showing as red unsupported-command errors.
+  const macros = docModel.meta.macros;
   return (
     <div className={styles.root} data-testid="docmodel-viewer">
       <DocTOC sections={docModel.sections} />
@@ -138,6 +141,7 @@ export function DocModelBody({
             assetsById={assetsById}
             anchor={anchor}
             onZoom={setZoom}
+            macros={macros}
           />
         ))}
       </article>
@@ -298,12 +302,14 @@ function SectionView({
   assetsById,
   anchor,
   onZoom,
+  macros,
 }: {
   section: DocSection;
   depth: number;
   assetsById: Map<string, AssetRef>;
   anchor?: AnchorVM | null;
   onZoom: (node: React.ReactNode) => void;
+  macros?: MathMacros;
 }) {
   const Heading = `h${Math.min(depth + 1, 6)}` as keyof React.JSX.IntrinsicElements;
   return (
@@ -316,6 +322,7 @@ function SectionView({
           assetsById={assetsById}
           active={isActive(b, anchor)}
           onZoom={onZoom}
+          macros={macros}
         />
       ))}
       {(section.sections ?? []).map((s) => (
@@ -326,6 +333,7 @@ function SectionView({
           assetsById={assetsById}
           anchor={anchor}
           onZoom={onZoom}
+          macros={macros}
         />
       ))}
     </section>
@@ -337,22 +345,24 @@ function BlockView({
   assetsById,
   active,
   onZoom,
+  macros,
 }: {
   block: DocBlock;
   assetsById: Map<string, AssetRef>;
   active: boolean;
   onZoom: (node: React.ReactNode) => void;
+  macros?: MathMacros;
 }) {
   const cls = active ? `${styles.block} ${styles.active}` : styles.block;
   switch (block.type) {
     case 'paragraph':
       return (
         <p className={cls} data-block={block.id}>
-          {renderInlineMath(block.text)}
+          {renderInlineMath(block.text, macros)}
         </p>
       );
     case 'formula': {
-      const math = <MathDisplay latex={block.latex} />;
+      const math = <MathDisplay latex={block.latex} macros={macros} />;
       return (
         <div className={`${cls} ${styles.formula}`} data-block={block.id}>
           <ZoomTrigger className={styles.formulaInner} onZoom={() => onZoom(math)}>
@@ -371,11 +381,11 @@ function BlockView({
                 {row.cells.map((cell, ci) =>
                   cell.isHeader ? (
                     <th key={ci} colSpan={cell.colspan} rowSpan={cell.rowspan}>
-                      {renderInlineMath(cell.text)}
+                      {renderInlineMath(cell.text, macros)}
                     </th>
                   ) : (
                     <td key={ci} colSpan={cell.colspan} rowSpan={cell.rowspan}>
-                      {renderInlineMath(cell.text)}
+                      {renderInlineMath(cell.text, macros)}
                     </td>
                   ),
                 )}
@@ -389,7 +399,7 @@ function BlockView({
           <ZoomTrigger className={styles.tableWrap} onZoom={() => onZoom(table)}>
             {table}
           </ZoomTrigger>
-          {caption(block.anchorLabel, block.caption)}
+          {caption(block.anchorLabel, block.caption, macros)}
         </figure>
       );
     }
@@ -409,7 +419,7 @@ function BlockView({
               <img src={asset.url} alt={alt} loading="lazy" />
             </ZoomTrigger>
           ) : null}
-          {caption(block.anchorLabel, block.caption)}
+          {caption(block.anchorLabel, block.caption, macros)}
         </figure>
       );
     }
@@ -417,13 +427,13 @@ function BlockView({
       return block.ordered ? (
         <ol className={cls} data-block={block.id}>
           {block.items.map((it, i) => (
-            <li key={i}>{renderInlineMath(it.text)}</li>
+            <li key={i}>{renderInlineMath(it.text, macros)}</li>
           ))}
         </ol>
       ) : (
         <ul className={cls} data-block={block.id}>
           {block.items.map((it, i) => (
-            <li key={i}>{renderInlineMath(it.text)}</li>
+            <li key={i}>{renderInlineMath(it.text, macros)}</li>
           ))}
         </ul>
       );
@@ -436,13 +446,13 @@ function BlockView({
   }
 }
 
-function caption(label?: string, text?: string) {
+function caption(label?: string, text?: string, macros?: MathMacros) {
   if (!label && !text) return null;
   return (
     <figcaption className={styles.caption}>
       {label ? <strong>{label}</strong> : null}
       {label && text ? ' ' : null}
-      {text ? renderInlineMath(text) : null}
+      {text ? renderInlineMath(text, macros) : null}
     </figcaption>
   );
 }
