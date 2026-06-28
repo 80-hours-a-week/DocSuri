@@ -31,14 +31,22 @@ describe('DocModelViewer', () => {
     expect(document.querySelector('.katex')).toBeTruthy();
   });
 
-  it('offers a "맨 위로" button, hidden until scrolled', async () => {
+  it('reveals the "맨 위로" button once the reading surface scrolls past the threshold', async () => {
     render(<DocModelViewer paperId="2401.00001" version={1} anchor={null} />);
     await screen.findByRole('heading', { name: 'Model Architecture' });
     const toTop = document.querySelector('button[aria-label="맨 위로"]');
     expect(toTop).toBeTruthy();
-    // Inert until the reader scrolls down (no scroll in jsdom → stays hidden/inert).
+    // Inert until the reader scrolls down.
     expect(toTop).toHaveAttribute('aria-hidden', 'true');
     expect(toTop).toHaveAttribute('tabindex', '-1');
+
+    // A scroll on any container (captured at document) past the threshold reveals it. This is
+    // detection-agnostic — it works whichever element actually scrolls (.page / frame / window).
+    const scroller = screen.getByTestId('docmodel-viewer');
+    Object.defineProperty(scroller, 'scrollTop', { value: 400, configurable: true });
+    fireEvent.scroll(scroller);
+    expect(toTop).toHaveAttribute('aria-hidden', 'false');
+    expect(toTop).toHaveAttribute('tabindex', '0');
   });
 
   it('opens the block-zoom overlay over a tapped block', async () => {

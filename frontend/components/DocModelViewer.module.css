@@ -146,11 +146,15 @@
   cursor: zoom-in;
 }
 
-/* ---- zoom overlay (scaled-to-fit, anchored over the tapped block, no scrollbars) ---- */
+/* ---- zoom overlay (portalled to body; covers the viewport, content centred, no scrollbars) ---- */
 .zoomOverlay {
   position: fixed;
   inset: 0;
   z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
   background: rgba(0, 0, 0, 0.82);
   overflow: hidden;
 }
@@ -173,9 +177,7 @@
 }
 
 .zoomContent {
-  position: absolute;
-  top: 0;
-  left: 0;
+  flex: 0 0 auto;
   width: max-content;
   max-width: none;
   transform-origin: center center;
