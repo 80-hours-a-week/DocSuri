@@ -68,6 +68,7 @@ class _DocCtx:
     version: int
     figure_ordinal: int = 0
     table_ordinal: int = 0
+    formula_ordinal: int = 0
 
 
 @dataclass

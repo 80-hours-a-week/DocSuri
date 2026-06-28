@@ -86,6 +86,31 @@ def _builder(
     )
 
 
+_TEI = (
+    '<TEI xmlns="http://www.tei-c.org/ns/1.0"><text><body>'
+    "<div><head>Method</head><p>Body text.</p></div>"
+    "</body></text></TEI>"
+)
+
+
+def test_build_from_tei_produces_structured_sections() -> None:
+    store = _FakeStore()
+    builder = _builder(_FakeSource(None), store)
+    result = builder.build_from_tei("src-1", 1, "Title", "Abs", _TEI, "fallback text")
+    assert result.cached is False
+    titles = [s.title for s in result.docModel.sections]
+    assert "Method" in titles
+    assert store.put_calls  # cached for reuse
+
+
+def test_build_from_tei_falls_back_to_flat_text_on_bad_tei() -> None:
+    store = _FakeStore()
+    builder = _builder(_FakeSource(None), store)
+    result = builder.build_from_tei("src-2", 1, "Title", "Abs", "<TEI", "flat fallback body")
+    # malformed TEI -> flat-text doc-model carrying the fallback text as a single paragraph
+    assert "flat fallback body" in result.docModel.fullText
+
+
 def test_cache_hit_returns_cached_without_fetching() -> None:
     store = _FakeStore(cached=_doc())
     source = _FakeSource((_HTML, SourceTier.native_html))
