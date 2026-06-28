@@ -44,9 +44,14 @@ class RdsS3AssetReader:
         return self._s3
 
     def list_assets(self, paper_id: str, version: int) -> Sequence[StoredAsset]:
+        # Restrict to the summary asset gallery's kinds (AssetView = figure | table). U1 also
+        # writes type="formula" page-crop rows for the doc-model viewer's image-fallback equations
+        # (display-only); those must not surface here or they break GET /assets validation and
+        # pollute the U5 figure gallery. The literal IN list mirrors the AssetView enum.
         sql = (
             "SELECT asset_id, type, ordinal, caption, source_mode, object_ref, page_ref, bbox "
-            "FROM paper_asset WHERE paper_id = %s AND version = %s ORDER BY type, ordinal"
+            "FROM paper_asset WHERE paper_id = %s AND version = %s "
+            "AND type IN ('figure', 'table') ORDER BY type, ordinal"
         )
         # U1 writes the manifest under the bare paper_id (version is a separate column); strip
         # the version suffix the app carries so the lookup matches (else no figures/tables).
