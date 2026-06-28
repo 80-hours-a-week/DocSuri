@@ -84,6 +84,11 @@
           "minLength": 1,
           "maxLength": 500
         },
+        "scope": {
+          "type": "string",
+          "enum": ["lite", "full"],
+          "description": "Retrieval breadth. \"lite\" (default): BM25 over title+abstract only, no k-NN — the low-latency human search box (P50<3s). \"full\": hybrid (title+abstract+full-body chunks + k-NN) for deep recall — the literature/evidence agent and the opt-in \"본문까지 검색\" toggle. Absent ⇒ lite. Trace: FR-2."
+        },
         "options": {
           "description": "PROVISIONAL — optional search options. Type name is provisional; SSOT (dtos.md §1) records only the field `options?` (shape refined when the type is finalized in U2 FD). Trace: dtos.md §1."
         }
