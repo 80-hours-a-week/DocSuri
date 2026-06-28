@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
+from .adapters.grobid import _tei_to_text
 from .domain.enums import FailureReason, SourceName
 from .domain.errors import PermanentIngestionError
 from .domain.models import MetadataRecord
@@ -87,11 +88,14 @@ class CorpusTextCandidate:
     payload_kind: str
     text: str
     source_url: str
+    # Raw GROBID TEI (non-arXiv PDF path) for the structured doc-model parser; None when the
+    # source is arXiv (HTML/PDF text path) or GROBID is not in play.
+    tei: str | None = None
 
 
 @runtime_checkable
 class GrobidPort(Protocol):
-    def extract_text(self, pdf: bytes) -> str: ...
+    def extract_tei(self, pdf: bytes) -> str: ...
 
 
 @runtime_checkable
@@ -173,7 +177,10 @@ class CorpusSourceAdapterSet:
                 reason=FailureReason.DEPENDENCY_UNAVAILABLE,
                 stage="grobid",
             )
-        text = self._grobid.extract_text(pdf).strip()
+        # One GROBID call yields the structured TEI; the flat text projection is derived from it
+        # (the doc-model parser consumes the TEI, withdrawal/scan paths consume the text).
+        tei = self._grobid.extract_tei(pdf)
+        text = _tei_to_text(tei).strip()
         if not text:
             raise PermanentIngestionError(
                 "GROBID returned empty text",
@@ -187,6 +194,7 @@ class CorpusSourceAdapterSet:
             payload_kind="PDF",
             text=text,
             source_url=record.pdf_url or "",
+            tei=tei,
         )
 
     def _external_provider(self, source_name: SourceName) -> ExternalCorpusSourcePort:

@@ -81,9 +81,9 @@ class _Grobid:
         self.text = text
         self.seen_pdf: bytes | None = None
 
-    def extract_text(self, pdf: bytes) -> str:
+    def extract_tei(self, pdf: bytes) -> str:
         self.seen_pdf = pdf
-        return self.text
+        return f"<TEI><text><body><div><p>{self.text}</p></div></body></text></TEI>"
 
 
 def _external_record() -> SourcePaperRecord:

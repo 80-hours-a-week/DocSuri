@@ -246,7 +246,7 @@ class IngestionPipelineService:
         )
         paper = self._paper_from_source_record(record, candidate, job, key)
 
-        doc_model = self._build_doc_model_from_paper(paper, SourceTier.pdf)
+        doc_model = self._build_doc_model_from_record(paper, candidate)
         decision = self._index_paper(
             job,
             paper,
@@ -661,23 +661,30 @@ class IngestionPipelineService:
         )
         return result.docModel
 
-    def _build_doc_model_from_paper(
-        self, paper: ParsedPaper, source_tier: SourceTier
+    def _build_doc_model_from_record(
+        self, paper: ParsedPaper, candidate: CorpusTextCandidate
     ) -> DocModel | None:
+        """Structured doc-model for a non-arXiv source record from its GROBID TEI.
+
+        ``build_from_tei`` parses the TEI (sections/tables/figures/formulas) and degrades to the
+        flat-text doc-model when the TEI is absent/unparseable — so a GROBID quirk never blocks
+        the index path."""
         if self._doc_model_builder is None:
             return None
-        result = self._doc_model_builder.build_from_paper(
+        result = self._doc_model_builder.build_from_tei(
             paper.paper_id,
             paper.version,
             paper.title,
             paper.abstract,
+            candidate.tei or "",
             paper.full_text,
-            source_tier=source_tier,
+            source_tier=SourceTier.pdf,
         )
         self._observability.emit_metric(
             "ingestion.docmodel.eager_build",
             1.0,
-            {"status": "pdf_fallback", "cached": str(result.cached).lower()},
+            {"status": "tei" if candidate.tei else "pdf_fallback",
+             "cached": str(result.cached).lower()},
         )
         return result.docModel
 
