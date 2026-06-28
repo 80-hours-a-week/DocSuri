@@ -7,9 +7,10 @@ from uuid import uuid4
 
 from docsuri_shared.dtos import DocModel, DocModelResultDTO, SourceTier, SourceUnavailableDTO
 
-from .asset_extraction import AssetExtractor
+from .asset_extraction import AssetExtractor, crop_assets_from_specs
 from .config import CORPUS_SLICE_CATEGORIES, WITHDRAWAL_MARKERS
 from .corpus_sources import CorpusSourceAdapterSet, CorpusTextCandidate, SourcePaperRecord
+from .docmodel.tei import tei_crop_specs
 from .docmodel import DocModelBuilder
 from .domain.canonical import canonical_key
 from .domain.enums import DedupDecision, FailureClass, FailureReason, JobKind, SourceName
@@ -253,6 +254,7 @@ class IngestionPipelineService:
             doc_model=doc_model,
             watermark_name=record.source_name.value.lower(),
             asset_metadata=None,
+            record_asset_ctx=(record, candidate),
         )
         if decision is not DedupDecision.STALE and not paper.withdrawal_detected:
             self._record_canonical_winner(
@@ -272,6 +274,7 @@ class IngestionPipelineService:
         doc_model: DocModel | None,
         watermark_name: str,
         asset_metadata,
+        record_asset_ctx: tuple[SourcePaperRecord, CorpusTextCandidate] | None = None,
     ) -> DedupDecision:
         if paper.withdrawal_detected:
             return self._tombstone(job, paper, watermark_name=watermark_name)
@@ -370,6 +373,8 @@ class IngestionPipelineService:
         # FR-17 assets: best-effort, AFTER the index commit so it can never block (BR-27).
         if asset_metadata is not None:
             self._store_assets_best_effort(paper, asset_metadata)
+        elif record_asset_ctx is not None:
+            self._store_record_assets_best_effort(paper, *record_asset_ctx)
         self._control_plane.record_job_finished(job.job_id, success=True)
         self._observability.emit_metric(
             "ingestion.paper.indexed",
@@ -615,6 +620,44 @@ class IngestionPipelineService:
             pdf = self._asset_source.fetch_pdf(metadata)
             extracted = self._asset_extractor.extract(
                 paper_id=paper.paper_id, version=paper.version, pdf=pdf, eprint=eprint
+            )
+            reason = FailureReason.ASSET_STORE_FAILURE
+            if extracted:
+                self._asset_store.store_assets(paper.paper_id, paper.version, extracted)
+            self._observability.emit_metric(
+                "ingestion.assets.stored", float(len(extracted)), {"paperId": paper.paper_id}
+            )
+        except Exception as exc:  # noqa: BLE001 - best-effort: never block indexing (BR-27)
+            self._observability.emit_log(
+                {
+                    "type": "asset_pipeline_failure",
+                    "reason": reason.value,
+                    "paperId": paper.paper_id,
+                    "error": str(exc),
+                }
+            )
+            self._observability.emit_metric("ingestion.assets.failed", 1.0, {})
+
+    def _store_record_assets_best_effort(
+        self, paper, record: SourcePaperRecord, candidate: CorpusTextCandidate
+    ) -> None:
+        """Coordinate page-crop figure/formula assets for a non-arXiv (TEI) paper (FR-17).
+
+        Re-fetches the source PDF and renders the TEI crop specs — whose assetIds match the
+        doc-model blocks — to WebP. Gated on the asset store being wired (multimodal enabled);
+        best-effort and never raises (BR-27). The re-fetch only happens for this gated path."""
+        if self._asset_store is None or self._corpus_sources is None or not candidate.tei:
+            return
+        reason = FailureReason.ASSET_EXTRACT_FAILURE
+        try:
+            specs = tei_crop_specs(
+                candidate.tei, paper_id=paper.paper_id, version=paper.version
+            )
+            if not specs:
+                return
+            pdf = self._corpus_sources.fetch_record_pdf(record)
+            extracted = crop_assets_from_specs(
+                pdf, specs, paper_id=paper.paper_id, version=paper.version
             )
             reason = FailureReason.ASSET_STORE_FAILURE
             if extracted:

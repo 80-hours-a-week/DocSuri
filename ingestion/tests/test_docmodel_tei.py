@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from docsuri_ingestion.docmodel.tei import parse_tei_to_docmodel
+from docsuri_ingestion.docmodel.tei import parse_tei_to_docmodel, tei_crop_specs
 from docsuri_shared.dtos import SourceTier
 
 _NS = 'xmlns="http://www.tei-c.org/ns/1.0"'
@@ -110,3 +110,53 @@ def test_malformed_tei_raises() -> None:
 
     with pytest.raises(ET.ParseError):
         _parse("<TEI>")
+
+
+# --- coordinate crop specs (#4/#5): ordinal alignment with the doc-model blocks ---
+
+
+def _block_asset_ids(doc) -> set[str]:
+    ids: set[str] = set()
+    for section in doc.sections:
+        for block in section.blocks:
+            ref = getattr(block.root, "assetRef", None)
+            if ref is not None:
+                ids.add(ref.assetId)
+    return ids
+
+
+def test_crop_specs_asset_ids_align_with_doc_model_blocks() -> None:
+    # The alignment guarantee: every crop spec targets an assetId that a doc-model block
+    # references, because both are minted in the same TEI walk.
+    doc = _parse(_TEI)
+    specs = tei_crop_specs(_TEI, paper_id="src-abc", version=1)
+    assert specs  # the figure has coords
+    for spec in specs:
+        assert spec.asset_id in _block_asset_ids(doc)
+
+
+def test_crop_spec_parses_page_and_bbox_from_coords() -> None:
+    specs = tei_crop_specs(_TEI, paper_id="src-abc", version=1)
+    figure = next(s for s in specs if s.type.value == "figure")
+    assert figure.asset_id == "src-abc:v1:figure:0"
+    assert figure.page == 2
+    assert figure.bbox == (10.0, 40.0, 110.0, 90.0)
+    # the table is DATA (no crop) and the figure here is the only coord-bearing figure
+    assert all(s.type.value != "table" for s in specs)
+
+
+def test_crop_spec_for_formula_with_coords() -> None:
+    tei = (
+        f"<TEI {_NS}><text><body><div><head>M</head>"
+        '<formula coords="1,5,6,30,12"><label>(2)</label>x=y</formula>'
+        "</div></body></text></TEI>"
+    )
+    specs = tei_crop_specs(tei, paper_id="p", version=2)
+    assert len(specs) == 1
+    assert specs[0].type.value == "formula"
+    assert specs[0].asset_id == "p:v2:formula:0"
+    assert specs[0].page == 1
+
+
+def test_crop_specs_empty_on_malformed_tei() -> None:
+    assert tei_crop_specs("<TEI", paper_id="p", version=1) == []

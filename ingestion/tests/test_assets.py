@@ -9,10 +9,16 @@ from hypothesis import strategies as st
 from docsuri_ingestion.asset_extraction import (
     ImageNormalizer,
     caption_kind,
+    crop_assets_from_specs,
     finalize_assets,
 )
 from docsuri_ingestion.domain.assets import RawAssetCandidate, asset_id
 from docsuri_ingestion.domain.enums import AssetSourceMode, AssetType
+
+
+def test_crop_assets_from_specs_empty_is_noop_without_pdfium() -> None:
+    # No specs -> short-circuit before importing the (env-gated) render backend.
+    assert crop_assets_from_specs(b"%PDF", [], paper_id="p", version=1) == ()
 
 # ---------------------------------------------------------------- caption_kind
 

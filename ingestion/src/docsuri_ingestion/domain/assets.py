@@ -36,6 +36,24 @@ class RawAssetCandidate:
 
 
 @dataclass(frozen=True, slots=True)
+class AssetCropSpec:
+    """A coordinate page-crop request emitted by the TEI parser (PDF/GROBID path).
+
+    Carries the SAME ``asset_id``/``ordinal`` the doc-model block references, so the rendered
+    image lands on the exact FormulaBlock/FigureBlock that points at it (ordinal alignment is
+    guaranteed because spec and block are minted in one TEI walk). ``page`` is 1-based (GROBID);
+    ``bbox`` is (x0, y0, x1, y1) in PDF points, top-left origin.
+    """
+
+    asset_id: str
+    type: AssetType
+    ordinal: int
+    page: int
+    bbox: tuple[float, float, float, float]
+    caption: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class FigureTableAsset:
     """Persisted asset metadata (manifest row). ``object_ref`` is set after S3 put."""
 

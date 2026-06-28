@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import re
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import UTC, datetime
 
 from docsuri_shared.dtos import DocModel, SourceTier
 
@@ -39,7 +39,7 @@ from docsuri_ingestion.docmodel.parser import (
     _project_full_text,
     _with_abstract_section,
 )
-from docsuri_ingestion.domain.assets import asset_id
+from docsuri_ingestion.domain.assets import AssetCropSpec, asset_id
 from docsuri_ingestion.domain.enums import AssetType
 
 _WS_RE = re.compile(r"\s+")
@@ -61,15 +61,19 @@ def parse_tei_to_docmodel(
     parser_version: str,
     schema_version: str,
     generated_at: datetime,
+    crops: list[AssetCropSpec] | None = None,
 ) -> DocModel:
     """Parse GROBID TEI into a validated structured ``DocModel`` (pure given its inputs).
+
+    When ``crops`` is supplied, figure/formula page-crop specs (with their block assetIds) are
+    appended to it during the walk — used by the asset pipeline to render aligned images.
 
     Raises ``ET.ParseError`` on malformed TEI — the builder catches it and falls back to the
     flat-text doc-model so a parser hiccup never blocks ingestion.
     """
     root = ET.fromstring(tei)
     body = _find_descendant(root, "body")
-    doc_ctx = _DocCtx(paper_id=paper_id, version=version)
+    doc_ctx = _DocCtx(paper_id=paper_id, version=version, crops=crops)
 
     sections: list[dict] = []
     trailing_figures: list[ET.Element] = []
@@ -169,12 +173,13 @@ def _formula_block(formula: ET.Element, sec_ctx: _SectionCtx, doc_ctx: _DocCtx) 
     """
     ordinal = doc_ctx.formula_ordinal
     doc_ctx.formula_ordinal += 1
+    aid = asset_id(doc_ctx.paper_id, doc_ctx.version, AssetType.FORMULA, ordinal)
     block: dict = {
         "id": sec_ctx.next_id("formula"),
         "type": "formula",
         "display": True,
         "assetRef": {
-            "assetId": asset_id(doc_ctx.paper_id, doc_ctx.version, AssetType.FORMULA, ordinal),
+            "assetId": aid,
             "type": "formula",
             "ordinal": ordinal,
             "sourceMode": "page-crop",
@@ -183,6 +188,7 @@ def _formula_block(formula: ET.Element, sec_ctx: _SectionCtx, doc_ctx: _DocCtx) 
     label = _child_text(formula, "label")
     if label:
         block["anchorLabel"] = label
+    _record_crop(doc_ctx, formula, aid, AssetType.FORMULA, ordinal, "")
     return block
 
 
@@ -225,8 +231,9 @@ def _figure_block(figure_el: ET.Element, sec_ctx: _SectionCtx, doc_ctx: _DocCtx)
     ordinal = doc_ctx.figure_ordinal
     doc_ctx.figure_ordinal += 1
     label, caption = _figure_label_caption(figure_el)
+    aid = asset_id(doc_ctx.paper_id, doc_ctx.version, AssetType.FIGURE, ordinal)
     asset_ref: dict = {
-        "assetId": asset_id(doc_ctx.paper_id, doc_ctx.version, AssetType.FIGURE, ordinal),
+        "assetId": aid,
         "type": "figure",
         "ordinal": ordinal,
         "sourceMode": "page-crop",
@@ -238,6 +245,7 @@ def _figure_block(figure_el: ET.Element, sec_ctx: _SectionCtx, doc_ctx: _DocCtx)
         block["caption"] = caption
     if label:
         block["anchorLabel"] = label
+    _record_crop(doc_ctx, figure_el, aid, AssetType.FIGURE, ordinal, caption)
     return block
 
 
@@ -261,6 +269,84 @@ def _figure_label_caption(figure_el: ET.Element) -> tuple[str, str]:
     label = _child_text(figure_el, "head") or _child_text(figure_el, "label")
     caption = _child_text(figure_el, "figDesc")
     return label, caption
+
+
+def _record_crop(
+    doc_ctx: _DocCtx,
+    el: ET.Element,
+    aid: str,
+    asset_type: AssetType,
+    ordinal: int,
+    caption: str,
+) -> None:
+    """Append a page-crop spec for ``el`` to the collector, if one is active and coords exist."""
+    if doc_ctx.crops is None:
+        return
+    parsed = _parse_coords(el)
+    if parsed is None:
+        return  # no coordinates -> no crop possible (the block still renders its caption)
+    page, bbox = parsed
+    doc_ctx.crops.append(
+        AssetCropSpec(
+            asset_id=aid, type=asset_type, ordinal=ordinal, page=page, bbox=bbox, caption=caption
+        )
+    )
+
+
+def _parse_coords(el: ET.Element) -> tuple[int, tuple[float, float, float, float]] | None:
+    """GROBID ``coords`` ("page,x,y,w,h;..." possibly multi-region) -> (page, bbox) bounding box.
+
+    Multiple regions (a figure spanning columns) are unioned into one bbox on the first page."""
+    coords = el.get("coords")
+    if not coords:
+        return None
+    page: int | None = None
+    x0 = y0 = float("inf")
+    x1 = y1 = float("-inf")
+    for region in coords.split(";"):
+        parts = region.split(",")
+        if len(parts) < 5:
+            continue
+        try:
+            pg = int(float(parts[0]))
+            x, y, w, h = (float(parts[1]), float(parts[2]), float(parts[3]), float(parts[4]))
+        except ValueError:
+            continue
+        if page is None:
+            page = pg
+        elif pg != page:
+            continue  # keep the bbox on the first region's page (deterministic)
+        x0, y0 = min(x0, x), min(y0, y)
+        x1, y1 = max(x1, x + w), max(y1, y + h)
+    if page is None or x1 <= x0 or y1 <= y0:
+        return None
+    return page, (x0, y0, x1, y1)
+
+
+def tei_crop_specs(tei: str, *, paper_id: str, version: int) -> list[AssetCropSpec]:
+    """Figure/formula page-crop specs for a TEI document (PDF/GROBID asset path).
+
+    Runs the SAME walk as ``parse_tei_to_docmodel`` (the doc-model is built and discarded), so
+    every spec's ``asset_id`` matches the block that references it — there is no second, possibly
+    divergent traversal. Returns ``[]`` on malformed TEI (assets are best-effort, never block).
+    """
+    crops: list[AssetCropSpec] = []
+    try:
+        parse_tei_to_docmodel(
+            tei,
+            paper_id=paper_id,
+            version=version,
+            title="",
+            abstract=None,
+            source_tier=SourceTier.pdf,
+            parser_version="",
+            schema_version="",
+            generated_at=datetime.fromtimestamp(0, tz=UTC),
+            crops=crops,
+        )
+    except ET.ParseError:
+        return []
+    return crops
 
 
 def _coord_sort_key(figure_el: ET.Element) -> tuple[float, float]:

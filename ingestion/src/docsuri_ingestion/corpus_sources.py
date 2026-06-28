@@ -164,6 +164,13 @@ class CorpusSourceAdapterSet:
         pdf = provider.fetch_pdf(record)
         return self.extract_pdf_text(record, pdf)
 
+    def fetch_record_pdf(self, record: SourcePaperRecord) -> bytes:
+        """Re-fetch the source PDF bytes for the (gated, best-effort) asset crop path.
+
+        Kept separate from ``extract_record_text`` so the text/doc-model contract never carries
+        raw PDF bytes; the bytes are consumed in-memory by the crop renderer and never stored."""
+        return self._external_provider(record.source_name).fetch_pdf(record)
+
     def extract_pdf_text(self, record: SourcePaperRecord, pdf: bytes) -> CorpusTextCandidate:
         if record.source_name not in {SourceName.SEMANTIC_SCHOLAR, SourceName.OPENALEX}:
             raise PermanentIngestionError(

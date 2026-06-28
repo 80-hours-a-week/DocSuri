@@ -69,6 +69,10 @@ class _DocCtx:
     figure_ordinal: int = 0
     table_ordinal: int = 0
     formula_ordinal: int = 0
+    # Optional collector for coordinate crop specs (TEI/PDF path). When a list is supplied, the
+    # TEI figure/formula builders append the page-crop request they mint alongside the block, so
+    # the rendered image's asset_id matches the block's assetRef exactly (ordinal alignment).
+    crops: list | None = None
 
 
 @dataclass
