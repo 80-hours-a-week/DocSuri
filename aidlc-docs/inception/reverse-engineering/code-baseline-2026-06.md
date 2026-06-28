@@ -1,6 +1,6 @@
 # 코드 베이스라인 (Reverse-Engineering Baseline) — 2026-06
 
-**단계**: INCEPTION 재진입 · 리버스 엔지니어링 · **작성일**: 2026-06-26 · **상태**: 초안(1차 패스)
+**단계**: INCEPTION 재진입 · 리버스 엔지니어링 · **작성일**: 2026-06-26 · **상태**: 초안(1차 패스) · **back-sync**: 2026-06-29(Phase 1 — GROBID TEI·S2/OpenAlex·소스별 watermark·DLQ/scheduler·DocModel eager 인덱싱 반영)
 **상위 문서**: `aidlc-docs/inception/plans/reinception-2026-06-charter.md` (재인셉션 차터, SSOT 앵커)
 
 > **목적**: 재인셉션(D1)의 사실 기준을 stale 문서가 아니라 **실제 코드**에서 확립한다
@@ -53,7 +53,7 @@
 
 | 페이즈 | 영역 | 코드에 있는 것 | 없는 것(=신규) |
 |---|---|---|---|
-| **1** U1 Corpus | `ingestion/` | arXiv 어댑터(**HTML 우선 → PDF 폴백**, SourceTier ar5iv/native_html)·**단일소스 watermark**(`postgres.py` `watermark` 테이블·`get/advance/reset_watermark`)·`docmodel/`(builder·parser·mathml)·`full_text_extraction`·`asset_extraction`·dedup 테스트·`migrate`·resilience·observability | **Semantic Scholar·OpenAlex 어댑터·GROBID 연동·cross-source watermark·DLQ/scheduler 운영 표면** |
+| **1** U1 Corpus | `ingestion/` | arXiv 어댑터(**HTML 우선 → PDF 폴백**, SourceTier ar5iv/native_html)·**소스별 watermark**(`postgres.py` `watermark` 테이블·`get/advance/reset_watermark`, `watermark_name=source` cross-source)·`docmodel/`(builder·parser·mathml·**tei**)·**GROBID TEI 구조화 파서 + 좌표 page-crop(FR-17)**·**Semantic Scholar·OpenAlex 어댑터**(`adapters/corpus_http.py`)·**DLQ**(`failure_handler.send_to_dlq`)·**scheduler**(`on_schedule_tick`)·`full_text_extraction`·`asset_extraction`·dedup 테스트·`migrate`·resilience·observability | (back-sync 후) **실외부호출 라이브 검증 미실행**(테스트는 fake/mock 기준)·**전량 리빌드 운영 게이트**(`validate_corpus_build_settings`로 의도적 동결)·페이즈 6 대량 스케일 운영 표면 |
 | **2** U2 검색 | `discovery/` | domain(retriever·ranker·assembler·validator·expander·grounding_adapter)·adapters(bedrock_embedding·opensearch·event_publisher)·ports/search_ports·mocks·real_wiring | 페이즈 7 개선 항목(reranker·LTR·click log 등) |
 | **3** U7 요약/번역 + Grounding 통합 | `summarization/`·`shared/ports`·`discovery/domain/grounding_adapter`·`summarization/domain/grounding` | 요약: domain(refiner·grounding·map_reduce·structured_translator·glossary·source_selector·length_router·cache_key)·adapters(bedrock_llm·s3_docmodel·s3_full_text·s3_redis_store·rds_*·sqs_*)·worker. Grounding: `shared/ports`·도메인 grounding_adapter/grounding 존재 | 요약/번역은 상당 구현됨(정합·개선 성격). **단일 Grounding 프레임워크 통합**: enforce 단일권위(현재 U6) ↔ 도메인별 Validator(Search/Summary/**Agent**) 레지스트리 재조정 |
 | **4** 문헌탐색·근거형성 Agent | — | **전부 그린필드** (`research_agent` 모듈 부재) — 구체 파이프라인/방식은 인셉션 질문지로 결정 |
@@ -112,14 +112,17 @@
 
 4. **citation_graph·ops 모듈이 얇음** — 각 `controller.py`만 관찰. 실제 책임 분포 **추가 확인 필요**.
 
-5. **DocModel 빌드/인덱싱 위치 — D6 핵심 갭 (코드 실측)**
-   - 현재 **인덱싱은 full-text 청크 기반**: `ingestion/processors.py::Chunker`가 `ParsedPaper` 본문을
-     섹션 분할(추상 청크 + 본문 청크)해 임베딩→OpenSearch. **DocModel은 인덱싱에 미사용.**
-   - 현재 **DocModel은 요약 시점 lazy 빌드**: `summarization/adapters/sqs_docmodel_build.py::SqsDocModelBuildQueue.enqueue_build`
-     가 U1 워커 형식의 `BUILD_DOC_MODEL` 잡을 적재(dedup TTL 120s) → `ingestion/runtime.py`의
-     `DocModelBuilder`가 빌드해 S3 `doc-model/` 저장. 주석: "Drives BUILD_DOC_MODEL jobs only — the index [is separate]".
-   - **D6 목표**: 빌드를 **수집 시점 eager**로 당기고 **인덱싱 소스를 DocModel(Block)로 전환**.
-     → 청킹 전략 변경·코퍼스 전량 빌드 비용·lazy 큐 역할 재정의가 페이즈 1 requirements 대상.
+5. **DocModel 빌드/인덱싱 위치 — D6 핵심 갭 → (back-sync 2026-06-29) 대체로 해소**
+   - **현재 빌드는 수집 시점 eager**: `application.py::IngestionPipelineService._build_doc_model_before_index`
+     (arXiv 경로)·`_build_doc_model_from_record`(비arXiv GROBID TEI 경로)가 인덱스 노출 전에 doc-model을
+     빌드/캐시한다.
+   - **인덱싱 소스가 DocModel(Block)로 전환됨**: `_index_paper`가 `doc_model`이 있으면
+     `Chunker.chunk_doc_model(doc_model)`로 청킹→임베딩→OpenSearch. full-text 청크(`chunk(paper)`)는
+     doc-model 부재 시 폴백 경로로만 남는다. (D6 목표였던 "eager 전환 + Block 인덱싱" 달성.)
+   - **lazy `BUILD_DOC_MODEL` 잡은 역할 재정의됨**: 캐시 미스/백필 전용으로 잔존
+     (`build_doc_model` docstring "misses/backfills"). 요약 시점 최초 빌드를 더는 전제하지 않는다.
+   - **잔여**: 코퍼스 전량 eager 빌드 비용은 전량 리빌드(`validate_corpus_build_settings` 게이트) 의사결정
+     사안으로 남는다. 실라이브 검증(Bedrock/OpenSearch/GROBID/S3 실호출)은 단건 스모크부터.
 
 ---
 
@@ -130,3 +133,5 @@
 - [ ] `backend/modules/ops` vs top-level `ops/` 책임 중복 실측.
 - [ ] DocModel "완성형 v1" 정의를 `construction/shared/docmodel.md`와 대조(번역 계약 정합).
 - [ ] discovery/summarization 런타임 거동(grounding 호출 지점) 실측 — D3 재조정 입력.
+- [ ] **(Phase 1 closeout 선행)** 단건 `ingest-one` 라이브 스모크 — S3 `full-text/`·`doc-model/`·`assets/`
+      생성·OpenSearch 청크 업서트·TEI 그림/수식 crop을 실호출로 1회 확인(테스트는 fake/mock 기준).
