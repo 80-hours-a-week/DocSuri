@@ -62,4 +62,25 @@ describe('renderInlineMath', () => {
     expect(c.querySelector('.katex')).not.toBeNull();
     expect(c.textContent).not.toContain('\\myop');
   });
+
+  it('resolves common blackboard-bold fallbacks (\\R) without any meta.macros', () => {
+    // \R is not a KaTeX builtin; without the fallback map it would render as red source text.
+    const c = html(<MathDisplay latex={'x \\in \\R'} />);
+    expect(c.querySelector('.katex')).not.toBeNull();
+    expect(c.textContent).not.toContain('\\R');
+    expect(c.querySelector('.katex-error')).toBeNull();
+  });
+
+  it('swallows non-math layout macros (\\centering) instead of red-flagging them', () => {
+    const c = html(<MathDisplay latex={'\\centering x^2'} />);
+    expect(c.querySelector('.katex')).not.toBeNull();
+    expect(c.textContent).not.toContain('\\centering');
+    expect(c.querySelector('.katex-error')).toBeNull();
+  });
+
+  it('lets a paper macro override a fallback default', () => {
+    const c = html(<MathDisplay latex={'\\R'} macros={{ '\\R': '\\mathbb{Q}' }} />);
+    expect(c.querySelector('.katex')).not.toBeNull();
+    expect(c.textContent).not.toContain('\\R');
+  });
 });

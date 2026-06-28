@@ -18,6 +18,39 @@ import katex from 'katex';
 // unsupported-command errors.
 export type MathMacros = Record<string, string>;
 
+// Always-on fallback macros, merged UNDER any per-paper `meta.macros` (author defs win).
+// Two classes of recurring breakage they fix:
+//   1. Common blackboard-bold sets papers usually `\newcommand` but that can be missing from
+//      the e-print preamble (a `.sty` LaTeXML did not bundle) — KaTeX has no default for these.
+//   2. Non-math layout/formatting macros that ride into the alttext source (and into abstracts,
+//      which carry no `meta.macros`) — defined as no-ops so KaTeX does not red-flag them.
+// Author macros override these via the merge order, so a paper that redefines `\R` still wins.
+const DEFAULT_MACROS: MathMacros = {
+  '\\R': '\\mathbb{R}',
+  '\\N': '\\mathbb{N}',
+  '\\Z': '\\mathbb{Z}',
+  '\\Q': '\\mathbb{Q}',
+  '\\C': '\\mathbb{C}',
+  // Layout/spacing no-ops (carry no math meaning).
+  '\\centering': '',
+  '\\raggedright': '',
+  '\\raggedleft': '',
+  '\\noindent': '',
+  '\\par': '',
+  '\\hfill': '',
+  '\\vfill': '',
+  '\\medskip': '',
+  '\\smallskip': '',
+  '\\bigskip': '',
+  '\\newline': '',
+  '\\protect': '',
+  '\\xspace': '',
+};
+
+// Unsupported-but-harmless tokens degrade to their source in this muted tone (not alarming
+// red). Surrounding valid math still renders normally; only the unresolved span is tinted.
+const ERROR_COLOR = '#6b7280';
+
 // Memoize rendered LaTeX — katex.renderToString is a synchronous parse and the same
 // expression re-renders on every parent re-render (e.g. when figure assets resolve, or a
 // results table with many math cells re-renders). Keyed by (displayMode, latex); the input
@@ -28,14 +61,17 @@ export type MathMacros = Record<string, string>;
 // distinct `meta.macros` object we keep one mutable working copy (KaTeX may write to it,
 // leaving the immutable doc-model object untouched) plus its own render cache, keyed off the
 // object identity via a WeakMap. Calls without macros share one default cache.
-const _defaultCache = new Map<string, string>();
+// The default working copy seeds DEFAULT_MACROS (KaTeX mutates the macro object it is given,
+// so we never hand it the shared constant directly).
+const _defaultEntry = { working: { ...DEFAULT_MACROS }, cache: new Map<string, string>() };
 const _byMacros = new WeakMap<MathMacros, { working: MathMacros; cache: Map<string, string> }>();
 
-function entryFor(macros?: MathMacros): { working?: MathMacros; cache: Map<string, string> } {
-  if (!macros) return { cache: _defaultCache };
+function entryFor(macros?: MathMacros): { working: MathMacros; cache: Map<string, string> } {
+  if (!macros) return _defaultEntry;
   let entry = _byMacros.get(macros);
   if (!entry) {
-    entry = { working: { ...macros }, cache: new Map() };
+    // Author macros win over the fallbacks (merge order).
+    entry = { working: { ...DEFAULT_MACROS, ...macros }, cache: new Map() };
     _byMacros.set(macros, entry);
   }
   return entry;
@@ -49,8 +85,10 @@ function toHtml(latex: string, displayMode: boolean, macros?: MathMacros): strin
   const html = katex.renderToString(latex, {
     displayMode,
     throwOnError: false,
+    errorColor: ERROR_COLOR,
+    strict: false,
     output: 'html',
-    ...(working ? { macros: working } : {}),
+    macros: working,
   });
   cache.set(cacheKey, html);
   return html;

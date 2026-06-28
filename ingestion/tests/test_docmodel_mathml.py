@@ -55,6 +55,13 @@ def test_layout_macros_are_stripped_from_alttext() -> None:
     assert mathml_to_latex(_math(f'<math alttext="{alt}">x</math>')) == "Attention(Q,K,V) = V"
 
 
+def test_textmode_noop_macros_are_stripped() -> None:
+    # \protect / \xspace / \unskip are text-mode no-ops that ride into alttext and would
+    # render as red error tokens; they carry no math meaning, so they are removed.
+    alt = r"\protect x + y\xspace \unskip"
+    assert mathml_to_latex(_math(f'<math alttext="{alt}">z</math>')) == "x + y"
+
+
 def test_image_placeholder_is_stripped() -> None:
     assert mathml_to_latex(_math('<math alttext="a + [Image #1] b">x</math>')) == "a + b"
 
