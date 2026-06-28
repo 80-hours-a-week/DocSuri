@@ -653,10 +653,11 @@ class IngestionPipelineService:
 
         Renders the TEI crop specs — whose assetIds match the doc-model blocks — to WebP. Reuses
         the crop specs gathered during the doc-model build (``crops``) instead of re-parsing the
-        TEI; falls back to parsing it here only when they are unavailable (e.g. a doc-model cache
-        hit). The source PDF is re-fetched for the render (the candidate intentionally does not
-        carry the bytes). Gated on the asset store being wired (multimodal enabled); best-effort
-        and never raises (BR-27)."""
+        TEI, and the PDF bytes already fetched for GROBID (``candidate.pdf``) instead of
+        re-fetching — the latter also keeps the crop aligned to the exact bytes the TEI
+        coordinates came from. Falls back to re-parsing / re-fetching only when those are
+        unavailable. Gated on the asset store being wired (multimodal enabled); best-effort and
+        never raises (BR-27)."""
         if self._asset_store is None or self._corpus_sources is None or not candidate.tei:
             return
         reason = FailureReason.ASSET_EXTRACT_FAILURE
@@ -670,7 +671,11 @@ class IngestionPipelineService:
             )
             if not specs:
                 return
-            pdf = self._corpus_sources.fetch_record_pdf(record)
+            pdf = (
+                candidate.pdf
+                if candidate.pdf is not None
+                else self._corpus_sources.fetch_record_pdf(record)
+            )
             extracted = crop_assets_from_specs(
                 pdf, specs, paper_id=paper.paper_id, version=paper.version
             )

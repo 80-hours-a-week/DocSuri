@@ -91,6 +91,12 @@ class CorpusTextCandidate:
     # Raw GROBID TEI (non-arXiv PDF path) for the structured doc-model parser; None when the
     # source is arXiv (HTML/PDF text path) or GROBID is not in play.
     tei: str | None = None
+    # The source PDF bytes already fetched for the GROBID call, retained in-memory so the
+    # (gated, best-effort) figure/formula crop step reuses them instead of re-fetching — which
+    # also guarantees the crop renders against the SAME bytes the TEI coordinates were computed
+    # from. None when not from the PDF/GROBID path. In-memory only: the candidate is never
+    # serialized (the queue job carries the SourcePaperRecord, not this candidate).
+    pdf: bytes | None = None
 
 
 @runtime_checkable
@@ -202,6 +208,7 @@ class CorpusSourceAdapterSet:
             text=text,
             source_url=record.pdf_url or "",
             tei=tei,
+            pdf=pdf,
         )
 
     def _external_provider(self, source_name: SourceName) -> ExternalCorpusSourcePort:

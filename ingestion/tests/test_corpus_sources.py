@@ -53,7 +53,7 @@ def test_arxiv_source_reuses_existing_html_first_adapter() -> None:
     assert "deterministic ingestion" in candidate.text.lower()
 
 
-def test_external_pdf_source_uses_grobid_without_returning_pdf_bytes() -> None:
+def test_external_pdf_source_retains_pdf_bytes_for_crop_reuse() -> None:
     grobid = _Grobid()
     adapters = CorpusSourceAdapterSet(arxiv=FakeArxivSource([sample_metadata()]), grobid=grobid)
     record = SourcePaperRecord(
@@ -69,7 +69,10 @@ def test_external_pdf_source_uses_grobid_without_returning_pdf_bytes() -> None:
     assert candidate.source_tier == "SEMANTIC_SCHOLAR_GROBID"
     assert candidate.payload_kind == "PDF"
     assert candidate.text == "structured full text"
-    assert not hasattr(candidate, "pdf")
+    # The PDF bytes are kept on the candidate (in-memory only) so the figure/formula crop step
+    # reuses them instead of re-fetching — and crops against the same bytes the TEI coords came
+    # from. The candidate is never serialized (the queue job carries the SourcePaperRecord).
+    assert candidate.pdf == b"%PDF"
 
 
 def test_external_pdf_source_requires_grobid() -> None:
