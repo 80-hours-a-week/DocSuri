@@ -35,8 +35,8 @@ from docsuri_shared.dtos import DocModel, SourceTier
 
 from docsuri_ingestion.docmodel.parser import (
     _DocCtx,
-    _SectionCtx,
     _project_full_text,
+    _SectionCtx,
     _with_abstract_section,
 )
 from docsuri_ingestion.domain.assets import AssetCropSpec, asset_id
@@ -265,7 +265,7 @@ def _child_text(el: ET.Element, local_name: str) -> str:
 
 
 def _figure_label_caption(figure_el: ET.Element) -> tuple[str, str]:
-    """``(anchorLabel, caption)`` — label from ``<head>``/``<label>``, caption from ``<figDesc>``."""
+    """Return (anchorLabel, caption): label from head/label, caption from figDesc."""
     label = _child_text(figure_el, "head") or _child_text(figure_el, "label")
     caption = _child_text(figure_el, "figDesc")
     return label, caption

@@ -65,7 +65,7 @@ class VectorStoreAdapter(Protocol):
         self, vector: Sequence[float], top_k: int, abstract_only: bool = False
     ) -> list[ScoredRecord]:
         """Return up to ``top_k`` records in similarity order. ``abstract_only`` restricts the
-        search to abstract chunks (lite scope: one vector per paper). Raises ``IndexUnavailable``."""
+        search to abstract chunks (lite scope: 1 vector/paper). Raises ``IndexUnavailable``."""
         ...
 
 

@@ -5,9 +5,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
+from docsuri_shared.dtos import SourceTier
 
 from docsuri_ingestion.docmodel.tei import parse_tei_to_docmodel, tei_crop_specs
-from docsuri_shared.dtos import SourceTier
 
 _NS = 'xmlns="http://www.tei-c.org/ns/1.0"'
 

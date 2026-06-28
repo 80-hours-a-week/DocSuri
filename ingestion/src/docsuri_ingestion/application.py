@@ -10,8 +10,8 @@ from docsuri_shared.dtos import DocModel, DocModelResultDTO, SourceTier, SourceU
 from .asset_extraction import AssetExtractor, crop_assets_from_specs
 from .config import CORPUS_SLICE_CATEGORIES, WITHDRAWAL_MARKERS
 from .corpus_sources import CorpusSourceAdapterSet, CorpusTextCandidate, SourcePaperRecord
-from .docmodel.tei import tei_crop_specs
 from .docmodel import DocModelBuilder
+from .docmodel.tei import tei_crop_specs
 from .domain.canonical import canonical_key
 from .domain.enums import DedupDecision, FailureClass, FailureReason, JobKind, SourceName
 from .domain.errors import IngestionError, PermanentIngestionError
