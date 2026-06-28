@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { DocModelViewer } from '@/components/DocModelViewer';
 
 // Uses the mock transport (NEXT_PUBLIC_DOCSURI_REAL_API unset) → docModelResponse +
@@ -29,5 +29,25 @@ describe('DocModelViewer', () => {
 
     // Display formula rendered by KaTeX (emits .katex markup).
     expect(document.querySelector('.katex')).toBeTruthy();
+  });
+
+  it('offers a "맨 위로" button, hidden until scrolled', async () => {
+    render(<DocModelViewer paperId="2401.00001" version={1} anchor={null} />);
+    await screen.findByRole('heading', { name: 'Model Architecture' });
+    const toTop = document.querySelector('button[aria-label="맨 위로"]');
+    expect(toTop).toBeTruthy();
+    // Inert until the reader scrolls down (no scroll in jsdom → stays hidden/inert).
+    expect(toTop).toHaveAttribute('aria-hidden', 'true');
+    expect(toTop).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('opens the block-zoom overlay over a tapped block', async () => {
+    render(<DocModelViewer paperId="2401.00001" version={1} anchor={null} />);
+    await screen.findByRole('heading', { name: 'Model Architecture' });
+    expect(screen.queryByTestId('block-zoom')).toBeNull();
+    // Each figure/table/formula is wrapped in a "크게 보기" zoom trigger.
+    const triggers = screen.getAllByRole('button', { name: '크게 보기' });
+    fireEvent.click(triggers[0]);
+    expect(screen.getByTestId('block-zoom')).toBeTruthy();
   });
 });

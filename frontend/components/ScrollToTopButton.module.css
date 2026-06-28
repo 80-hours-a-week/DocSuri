@@ -1,0 +1,43 @@
+/* Floating "back to top" control for the long reading surfaces (본문 / 본문 번역).
+   Fixed to the bottom-right; on desktop `contain: layout` on the phone frame confines it to
+   the mockup, on mobile it pins to the viewport bottom-right (above the safe-area inset). */
+.btn {
+  position: fixed;
+  right: 16px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 900; /* below the zoom overlay (1000) so it hides while a block is enlarged */
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.375rem;
+  line-height: 1;
+  color: var(--color-accent-contrast);
+  background: var(--color-accent);
+  border: none;
+  border-radius: 999px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+  /* Hidden until the reader scrolls down; fade + slide in. */
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(8px);
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease,
+    visibility 0.18s ease;
+}
+
+.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn {
+    transition: opacity 0.18s ease, visibility 0.18s ease;
+    transform: none;
+  }
+}

@@ -146,15 +146,11 @@
   cursor: zoom-in;
 }
 
-/* ---- zoom overlay (full-screen, scaled-to-fit, no scrollbars) ---- */
+/* ---- zoom overlay (scaled-to-fit, anchored over the tapped block, no scrollbars) ---- */
 .zoomOverlay {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
   background: rgba(0, 0, 0, 0.82);
   overflow: hidden;
 }
@@ -177,13 +173,16 @@
 }
 
 .zoomContent {
-  flex: 0 0 auto;
+  position: absolute;
+  top: 0;
+  left: 0;
   width: max-content;
   max-width: none;
   transform-origin: center center;
   background: var(--color-bg);
   border-radius: 0.5rem;
   padding: 0.75rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
 }
 
 .zoomContent table {

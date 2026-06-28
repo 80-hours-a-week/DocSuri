@@ -16,7 +16,20 @@ import { useDocModel } from '@/lib/useDocModel';
 import { useAssets } from '@/lib/useAssets';
 import { MathDisplay, renderInlineMath, type MathMacros } from '@/lib/renderMath';
 import { StateView } from './StateView';
+import { ScrollToTopButton } from './ScrollToTopButton';
 import styles from './DocModelViewer.module.css';
+
+/** Where a zoom was opened from: the on-screen centre of the tapped block (viewport coords),
+ *  so the enlarged view pops up over that block instead of the middle of the frame. */
+interface ZoomState {
+  node: React.ReactNode;
+  origin: { x: number; y: number };
+}
+
+// Centre of an element in viewport coordinates — the anchor a zoom pops up over.
+function rectCenter(rect: DOMRect): { x: number; y: number } {
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+}
 
 interface DocModelViewerProps {
   paperId: string;
@@ -124,8 +137,10 @@ export function DocModelBody({
   anchor?: AnchorVM | null;
 }) {
   // Tap-to-enlarge: figures/tables/formulas are shown fit-to-width inline and open a
-  // full-screen, scaled-to-fit overlay on tap (no scrollbars).
-  const [zoom, setZoom] = useState<React.ReactNode | null>(null);
+  // scaled-to-fit overlay anchored over the tapped block (no scrollbars).
+  const [zoom, setZoom] = useState<ZoomState | null>(null);
+  const openZoom = (node: React.ReactNode, rect: DOMRect) =>
+    setZoom({ node, origin: rectCenter(rect) });
   // Author macros from the e-print preamble (meta.macros) — handed to every KaTeX render so
   // custom commands resolve instead of showing as red unsupported-command errors.
   const macros = docModel.meta.macros;
@@ -140,12 +155,17 @@ export function DocModelBody({
             depth={1}
             assetsById={assetsById}
             anchor={anchor}
-            onZoom={setZoom}
+            onZoom={openZoom}
             macros={macros}
           />
         ))}
       </article>
-      {zoom ? <BlockZoomOverlay onClose={() => setZoom(null)}>{zoom}</BlockZoomOverlay> : null}
+      <ScrollToTopButton />
+      {zoom ? (
+        <BlockZoomOverlay origin={zoom.origin} onClose={() => setZoom(null)}>
+          {zoom.node}
+        </BlockZoomOverlay>
+      ) : null}
     </div>
   );
 }
@@ -194,7 +214,7 @@ function ZoomTrigger({
   className,
 }: {
   children: React.ReactNode;
-  onZoom: () => void;
+  onZoom: (rect: DOMRect) => void;
   className?: string;
 }) {
   return (
@@ -202,11 +222,11 @@ function ZoomTrigger({
       role="button"
       tabIndex={0}
       className={className ? `${styles.zoomTrigger} ${className}` : styles.zoomTrigger}
-      onClick={onZoom}
+      onClick={(e) => onZoom(e.currentTarget.getBoundingClientRect())}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          onZoom();
+          onZoom(e.currentTarget.getBoundingClientRect());
         }
       }}
       title="탭하면 크게 볼 수 있어요"
@@ -217,19 +237,33 @@ function ZoomTrigger({
   );
 }
 
-// Full-screen overlay that scales the content to FIT the available area (enlarging small
-// content, shrinking large) so the whole thing is visible with no scrollbars. Transform is
-// visual only, so the measured natural size is stable. Tap the backdrop / ✕ / Esc to close.
+// Overlay that enlarges the tapped block and pops it up OVER where it was tapped (not the
+// middle of the frame). The content is scaled to fit the available area (enlarging small
+// content up to a cap, shrinking large), then positioned so its centre sits on the tap origin,
+// clamped to stay fully on-screen. Transform is visual only, so the measured natural size is
+// stable. Tap the backdrop / ✕ / Esc to close.
+const _ZOOM_MAX_SCALE = 3;
+const _ZOOM_PAD = 12;
+
+function clamp(value: number, lo: number, hi: number): number {
+  if (lo > hi) return (lo + hi) / 2; // content fills the area: centre it
+  return Math.min(Math.max(value, lo), hi);
+}
+
 function BlockZoomOverlay({
   children,
+  origin,
   onClose,
 }: {
   children: React.ReactNode;
+  origin: { x: number; y: number };
   onClose: () => void;
 }) {
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
-  const [scale, setScale] = useState(1);
+  // Layout box position (pre-transform) + scale. transform-origin is the box centre, so the
+  // visual centre lands on (left + w/2, top + h/2).
+  const [box, setBox] = useState({ scale: 1, left: 0, top: 0 });
 
   useLayoutEffect(() => {
     const content = contentRef.current;
@@ -239,14 +273,21 @@ function BlockZoomOverlay({
       // Available area = the overlay's OWN box, not the window. The overlay is
       // `position: fixed; inset: 0`, but on desktop the phone mockup frame (`contain: layout`)
       // is the containing block, so the overlay is confined to that frame — not the desktop
-      // window. Measuring against `window.innerWidth/Height` would over-scale the content and
-      // clip it inside the frame; the overlay's own size is correct in both cases (it spans
-      // the full viewport full-bleed on phones).
-      const availW = overlay.clientWidth * 0.94;
-      const availH = overlay.clientHeight * 0.84;
+      // window; its own size is correct in both cases.
+      const oRect = overlay.getBoundingClientRect();
+      const availW = overlay.clientWidth - 2 * _ZOOM_PAD;
+      const availH = overlay.clientHeight - 2 * _ZOOM_PAD;
       const w = content.scrollWidth || 1;
       const h = content.scrollHeight || 1;
-      setScale(Math.min(availW / w, availH / h));
+      const scale = Math.min(availW / w, availH / h, _ZOOM_MAX_SCALE);
+      const halfW = (w * scale) / 2;
+      const halfH = (h * scale) / 2;
+      // Tap origin is in viewport coords; the overlay box may be offset (desktop frame).
+      const localX = origin.x - oRect.left;
+      const localY = origin.y - oRect.top;
+      const cx = clamp(localX, _ZOOM_PAD + halfW, overlay.clientWidth - _ZOOM_PAD - halfW);
+      const cy = clamp(localY, _ZOOM_PAD + halfH, overlay.clientHeight - _ZOOM_PAD - halfH);
+      setBox({ scale, left: cx - w / 2, top: cy - h / 2 });
     };
     measure();
     // The content's natural size settles after the first paint — a KaTeX formula reflows once
@@ -259,7 +300,7 @@ function BlockZoomOverlay({
     ro.observe(content);
     ro.observe(overlay);
     return () => ro.disconnect();
-  }, [children]);
+  }, [children, origin]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -285,7 +326,7 @@ function BlockZoomOverlay({
       <div
         ref={contentRef}
         className={styles.zoomContent}
-        style={{ transform: `scale(${scale})` }}
+        style={{ left: box.left, top: box.top, transform: `scale(${box.scale})` }}
         onClick={(e) => e.stopPropagation()}
       >
         {children}
@@ -308,7 +349,7 @@ function SectionView({
   depth: number;
   assetsById: Map<string, AssetRef>;
   anchor?: AnchorVM | null;
-  onZoom: (node: React.ReactNode) => void;
+  onZoom: (node: React.ReactNode, rect: DOMRect) => void;
   macros?: MathMacros;
 }) {
   const Heading = `h${Math.min(depth + 1, 6)}` as keyof React.JSX.IntrinsicElements;
@@ -350,7 +391,7 @@ function BlockView({
   block: DocBlock;
   assetsById: Map<string, AssetRef>;
   active: boolean;
-  onZoom: (node: React.ReactNode) => void;
+  onZoom: (node: React.ReactNode, rect: DOMRect) => void;
   macros?: MathMacros;
 }) {
   const cls = active ? `${styles.block} ${styles.active}` : styles.block;
@@ -365,7 +406,7 @@ function BlockView({
       const math = <MathDisplay latex={block.latex} macros={macros} />;
       return (
         <div className={`${cls} ${styles.formula}`} data-block={block.id}>
-          <ZoomTrigger className={styles.formulaInner} onZoom={() => onZoom(math)}>
+          <ZoomTrigger className={styles.formulaInner} onZoom={(rect) => onZoom(math, rect)}>
             {math}
           </ZoomTrigger>
           {block.anchorLabel ? <span className={styles.eqno}>{block.anchorLabel}</span> : null}
@@ -396,7 +437,7 @@ function BlockView({
       );
       return (
         <figure className={cls} data-block={block.id}>
-          <ZoomTrigger className={styles.tableWrap} onZoom={() => onZoom(table)}>
+          <ZoomTrigger className={styles.tableWrap} onZoom={(rect) => onZoom(table, rect)}>
             {table}
           </ZoomTrigger>
           {caption(block.anchorLabel, block.caption, macros)}
@@ -410,9 +451,9 @@ function BlockView({
         <figure className={`${cls} ${styles.figure}`} data-block={block.id}>
           {asset?.url ? (
             <ZoomTrigger
-              onZoom={() =>
+              onZoom={(rect) =>
                 // eslint-disable-next-line @next/next/no-img-element -- signed S3 url
-                onZoom(<img src={asset.url} alt={alt} className={styles.zoomImg} />)
+                onZoom(<img src={asset.url} alt={alt} className={styles.zoomImg} />, rect)
               }
             >
               {/* eslint-disable-next-line @next/next/no-img-element -- signed S3 url, not a static asset */}
