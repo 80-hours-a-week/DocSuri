@@ -147,11 +147,20 @@ def _accent_command(over: Tag | NavigableString | None) -> str | None:
 
 
 def _table_to_latex(node: Tag) -> str:
-    """Render an ``mtable`` (or a stray ``mtr``/``mtd``) as a KaTeX ``matrix`` environment."""
-    rows = node.find_all("mtr") if (node.name or "").lower() == "mtable" else [node]
+    """Render an ``mtable`` (or a stray ``mtr``/``mtd``) as a KaTeX ``matrix`` environment.
+
+    Rows/cells are read non-recursively so a nested ``mtable`` (a block matrix) keeps its inner
+    rows to itself instead of being flattened into the outer matrix.
+    """
+    is_table = (node.name or "").lower() == "mtable"
+    rows = node.find_all("mtr", recursive=False) if is_table else [node]
     lines: list[str] = []
     for row in rows:
-        cells = row.find_all("mtd") if (row.name or "").lower() in {"mtr", "mtable"} else [row]
+        cells = (
+            row.find_all("mtd", recursive=False)
+            if (row.name or "").lower() in {"mtr", "mtable"}
+            else [row]
+        )
         targets = cells or [row]
         lines.append(" & ".join("".join(
             _node_to_latex(c) for c in _children(cell)) for cell in targets))

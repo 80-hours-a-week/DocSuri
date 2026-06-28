@@ -37,6 +37,11 @@ class ClockPort(Protocol):
     def now(self) -> datetime: ...
 
 
+@runtime_checkable
+class MetricSink(Protocol):
+    def emit_metric(self, name: str, value: float, tags: object = None) -> None: ...
+
+
 class _SystemClock:
     def now(self) -> datetime:
         return datetime.now(UTC)
@@ -51,6 +56,7 @@ class DocModelBuilder:
         source: DocModelSourcePort,
         store: DocModelStorePort,
         eprint_source: EprintSourcePort | None = None,
+        observability: MetricSink | None = None,
         clock: ClockPort | None = None,
         parser_version: str = PARSER_VERSION,
         schema_version: str = SCHEMA_VERSION,
@@ -58,6 +64,7 @@ class DocModelBuilder:
         self._source = source
         self._store = store
         self._eprint_source = eprint_source
+        self._observability = observability
         self._clock = clock or _SystemClock()
         self._parser_version = parser_version
         self._schema_version = schema_version
@@ -94,13 +101,24 @@ class DocModelBuilder:
         return DocModelResultDTO(status="ok", cached=False, docModel=doc)
 
     def _extract_macros(self, metadata: MetadataRecord) -> dict[str, str]:
-        """Best-effort KaTeX macro map from the e-print preamble (never blocks the build)."""
+        """Best-effort KaTeX macro map from the e-print preamble (never blocks the build).
+
+        Emits a count metric (and a failure counter) so a regression that drops macros entirely
+        — a broken e-print source, a tokenizer fault — is visible instead of silently swallowed.
+        """
         if self._eprint_source is None:
             return {}
         try:
-            return extract_macros(self._eprint_source.fetch_eprint(metadata))
+            macros = extract_macros(self._eprint_source.fetch_eprint(metadata))
+            self._emit("ingestion.docmodel.macros", float(len(macros)))
+            return macros
         except Exception:  # noqa: BLE001 - macros are a display refinement, never blocking
+            self._emit("ingestion.docmodel.macros_failed", 1.0)
             return {}
+
+    def _emit(self, name: str, value: float) -> None:
+        if self._observability is not None:
+            self._observability.emit_metric(name, value, {})
 
     def build_from_text(
         self,

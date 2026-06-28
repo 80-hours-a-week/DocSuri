@@ -84,6 +84,20 @@ def test_fallback_renders_matrix() -> None:
     assert latex == r"\begin{matrix} 1 & 2 \\ 3 & 4 \end{matrix}"
 
 
+def test_fallback_nested_matrix_is_not_flattened() -> None:
+    # A block matrix (mtable inside an mtd) keeps its inner row to itself — the outer matrix
+    # must not pull the nested rows/cells up (recursive find would flatten them).
+    latex = mathml_to_latex(
+        _math(
+            "<math><mtable><mtr>"
+            "<mtd><mn>1</mn></mtd>"
+            "<mtd><mtable><mtr><mtd><mn>2</mn></mtd><mtd><mn>3</mn></mtd></mtr></mtable></mtd>"
+            "</mtr></mtable></math>"
+        )
+    )
+    assert latex == r"\begin{matrix} 1 & \begin{matrix} 2 & 3 \end{matrix} \end{matrix}"
+
+
 def test_fallback_renders_accent() -> None:
     latex = mathml_to_latex(
         _math('<math><mover accent="true"><mi>x</mi><mo>^</mo></mover></math>')

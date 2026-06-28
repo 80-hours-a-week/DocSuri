@@ -220,3 +220,38 @@ def test_build_survives_eprint_fetch_failure() -> None:
     result = builder.build(sample_metadata("2401.00001v1"))
     assert isinstance(result, DocModelResultDTO)  # build still succeeds
     assert result.docModel.meta.macros is None
+
+
+class _CapturingMetrics:
+    def __init__(self) -> None:
+        self.metrics: list[tuple[str, float]] = []
+
+    def emit_metric(self, name: str, value: float, tags: object = None) -> None:
+        self.metrics.append((name, value))
+
+
+def test_build_emits_macro_count_metric() -> None:
+    obs = _CapturingMetrics()
+    eprint = _FakeEprintSource(_eprint_tar(r"\newcommand{\R}{\mathbb{R}}"))
+    builder = DocModelBuilder(
+        source=_FakeSource((_HTML, SourceTier.native_html)),
+        store=_FakeStore(cached=None),
+        eprint_source=eprint,
+        observability=obs,
+        clock=_FixedClock(),
+    )
+    builder.build(sample_metadata("2401.00001v1"))
+    assert ("ingestion.docmodel.macros", 1.0) in obs.metrics
+
+
+def test_build_emits_failure_metric_on_eprint_error() -> None:
+    obs = _CapturingMetrics()
+    builder = DocModelBuilder(
+        source=_FakeSource((_HTML, SourceTier.native_html)),
+        store=_FakeStore(cached=None),
+        eprint_source=_FakeEprintSource(None, raises=True),
+        observability=obs,
+        clock=_FixedClock(),
+    )
+    builder.build(sample_metadata("2401.00001v1"))
+    assert ("ingestion.docmodel.macros_failed", 1.0) in obs.metrics
