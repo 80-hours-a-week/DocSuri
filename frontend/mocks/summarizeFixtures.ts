@@ -287,6 +287,15 @@ export const docModelResponse: DocModelOkDTO = {
             anchorLabel: '(1)',
           },
           {
+            // Image-fallback equation whose page-crop asset is unavailable (crops env-gated /
+            // still building): neither latex nor a joinable assetRef. Must degrade to a numbered
+            // placeholder, not vanish.
+            id: 's3.eq2',
+            type: 'formula',
+            display: true,
+            anchorLabel: '(2)',
+          },
+          {
             id: 's3.fig1',
             type: 'figure',
             assetRef: { assetId: '2401.00001:v1:figure:0', type: 'figure', ordinal: 0 },

@@ -118,6 +118,14 @@
   font-size: 0.8125rem;
 }
 
+/* Fallback when a formula has neither LaTeX nor a loadable crop image — keep the numbered slot
+   (and anchor target) rather than dropping the equation. */
+.formulaPlaceholder {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-style: italic;
+}
+
 /* Structured table (DATA, not a crop — D8). Fits the width by wrapping cells (no horizontal
    scrollbar); tap to enlarge for the full layout. */
 .table {

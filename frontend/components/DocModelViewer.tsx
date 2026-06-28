@@ -385,7 +385,20 @@ function BlockView({
           <img src={asset.url} alt={alt} loading="lazy" />
         );
       }
-      if (inner === null) return null;
+      if (inner === null) {
+        // Neither LaTeX nor a loadable crop image (crops are env-gated/best-effort, or the asset
+        // is still building). Keep the numbered slot + anchor target instead of dropping the whole
+        // block, so the equation number still lines up with in-text references and the anchor
+        // still resolves — only the render source is missing, not the equation.
+        return (
+          <div className={`${cls} ${styles.formula}`} data-block={block.id}>
+            <span className={styles.formulaPlaceholder} aria-label="수식을 표시할 수 없습니다">
+              [수식]
+            </span>
+            {block.anchorLabel ? <span className={styles.eqno}>{block.anchorLabel}</span> : null}
+          </div>
+        );
+      }
       return (
         <div className={`${cls} ${styles.formula}`} data-block={block.id}>
           <ZoomTrigger className={styles.formulaInner} onZoom={() => onZoom(inner)}>
