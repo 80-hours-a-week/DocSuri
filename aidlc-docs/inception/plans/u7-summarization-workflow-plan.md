@@ -134,8 +134,9 @@ flowchart TD
 - [~] QT-1 충실도 평가셋 + `run_eval_set` - IN PROGRESS (하니스 스캐폴딩).
   - **Rationale**: 수치 임계 재보정의 데이터 기반·할루시네이션 운영 인수. 소유 OP/팀.
   - **진행(2026-06-29)**: ✅ **하니스 + 시드 스캐폴딩** — `summarization/eval/grounding_eval.py`(`run_grounding_eval`: 라벨 케이스를 `GroundingValidator`에 돌려 `false_pass`[날조 누출]/`false_abstain`[과민 기권] 분류·집계, 요약 도메인용 `run_eval_set` 대응물)·`eval/seed_cases.py`(faithful/fabricated **confident 4** + **임계 probe 1**, 라벨은 리뷰 보류)·`tests/test_grounding_eval.py`(하니스 math 잠금 + confident 케이스 날조누출·과민기권 0 + probe 현 동작 기록=현 임계서 false_pass). **수치 임계 재보정·matcher 정밀화는 미실시**(held-out 라벨 코퍼스 선행 — OP/팀). 🔒 남음: 코퍼스 확장(소유 OP/팀)·임계 strict 재보정·matcher 정밀화.
-- [ ] Infrastructure Design - MINOR.
+- [x] Infrastructure Design - COMPLETED (MINOR).
   - **Rationale**: 신규 인프라 없음(LLM/S3/Redis/RDS 기존); 평가셋 저장/실행 정도.
+  - **진행(2026-06-29, 코드 검증)**: 신규 인프라 0 재확인 — QT-1 하니스=순수 Python 단위 CI 레인(증분 0)·lazy 큐 deprecate. 비용 임계 정합: CDK `CfnBudget amount=1600·threshold=80%`(=$1,280)=`cost_guard.warning_ratio 0.80` 미러 명시. §2.2 Redis TTL 필수·§7 증분표에 QT-1 하니스(0) 행 추가.
 - [ ] Code Generation - EXECUTE.
   - **Rationale**: Validator 레지스트리·matcher 정밀화·임계값·deprecate·제거. FROZEN 계약 무변경.
 - [ ] Build and Test - EXECUTE.
