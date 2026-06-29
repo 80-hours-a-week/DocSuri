@@ -22,17 +22,20 @@
 
 ## 에픽 1 — 디스커버리(히어로 여정)
 
+> **페이즈 2 개정(2026-06-29)**: 재인셉션 페이즈 2(U2 검색) 반영 — 멀티소스(arXiv·Semantic Scholar·OpenAlex)·DocModel(Block) 인덱스 소비, 검색 lite/full scope(#236), 소스 중립 카드·근거 링크(Q2), Grounding(Search) U6 단일권위 유지·Block 앵커 외부노출 페이즈 3·4 이월(Q3·Q4). 상세 = `../requirements/requirement-verification-questions-u2-discovery.md`.
+
 ### US-D1 — 자연어 질의 입력
 **As** 연구자(P1/P2), **I want** 자유 텍스트 연구 의도를 입력하기를, **so that** 불리언 키워드 질의를 짤 필요가 없다.
 - **Given** 검색 화면, **When** 자연어 500자 이내를 입력하면, **Then** 질의가 허용·검증된다.
 - **Given** 길이 초과 또는 빈 질의, **When** 제출하면, **Then** 인라인 검증 메시지가 뜨고 요청은 전송되지 않는다.
 - **Traces**: FR-1, SEC-5, NFR-U1
 
-### US-D2 — 공유 AI/ML Corpus 인덱스에 대한 시맨틱 검색
+### US-D2 — 공유 AI/ML Corpus 인덱스에 대한 시맨틱 검색 *(2026-06-29 개정 — 페이즈 2: 멀티소스·scope)*
 **As** 연구자(P1), **I want** 시스템이 의미로 논문을 검색하기를, **so that** 정확한 키워드 없이도 관련 연구를 찾는다.
-- **Given** 유효한 질의, **When** 검색하면, **Then** 공유 AI/ML Corpus 벡터 인덱스에서 후보를 검색한다(시맨틱, 선택적으로 lexical 하이브리드).
+- **Given** 유효한 질의, **When** 검색하면, **Then** 공유 AI/ML **멀티소스(arXiv·Semantic Scholar·OpenAlex) DocModel(Block) 기반** 벡터 인덱스에서 후보를 검색한다(시맨틱, 선택적으로 lexical 하이브리드).
 - **Given** 도메인 특화 표현, **When** 검색되면, **Then** 정확 용어 매치뿐 아니라 의미적으로 관련된 논문도 포함된다.
-- **Traces**: FR-2
+- **Given** 사람 검색창(기본), **When** 검색하면, **Then** `lite` scope(제목+초록 BM25 + 초록 chunk k-NN)로 저지연(NFR-P1) 처리되고, 에이전트 심층 검색은 `full` scope(본문 chunk·고recall·비-SLA)로 분기된다.
+- **Traces**: FR-2, NFR-P1
 
 ### US-D3 — 관련도순 상위 N건
 **As** 연구자(P1), **I want** 관련도순 정렬 결과를, **so that** 가장 좋은 논문이 상단에 온다.
@@ -43,15 +46,16 @@
 
 ### US-D4 — 폰 최적화 결과 카드
 **As** 폰을 쓰는 연구자(P1), **I want** 간결·가독성 높은 결과 카드를, **so that** 한 손으로 결과를 훑을 수 있다.
-- **Given** 360–430px 뷰포트의 결과 목록, **When** 카드를 보면, **Then** 제목·저자·연도·arXiv ID·초록 스니펫·관련도 신호·arXiv 링크가 가로 스크롤 없이 표시된다.
+- **Given** 360–430px 뷰포트의 결과 목록, **When** 카드를 보면, **Then** 제목·저자·연도·식별자·초록 스니펫·관련도 신호·**소스 표기(sourceName)·소스 중립 링크**(arXiv=arXiv 링크, 비-arXiv=sourceUrl/DOI)가 가로 스크롤 없이 표시된다. *(2026-06-29 개정 — 페이즈 2/Q2)*
 - **Given** 데스크톱 브라우저, **When** 앱을 열면, **Then** 폰 목업 프레임 안 중앙에 렌더링된다(데스크톱 리플로우 아님).
 - **Traces**: FR-4, NFR-U1, NFR-U2, SEC-4
 
 ### US-D5 — 엄격히 근거화된 결과
 **As** 연구자(P1), **I want** 노출되는 모든 논문과 AI 생성 설명이 실재하고 출처에서 도출되기를, **so that** 내가 인용할 것을 신뢰할 수 있다.
-- **Given** 임의의 결과, **When** 표시되면, **Then** 해소 가능한 ID/링크를 가진 실재 arXiv 인덱스 레코드에 매핑된다.
+- **Given** 임의의 결과, **When** 표시되면, **Then** 해소 가능한 ID/링크를 가진 **실재 인덱스 레코드(소스 중립 — arXiv/비-arXiv)** 에 매핑된다. *(2026-06-29 개정 — 페이즈 2/Q2)*
 - **Given** AI 생성 관련도 설명/요약, **When** 표시되면, **Then** 그 내용은 검색된 논문에서만 도출된다(저자/게재처/사실 날조 없음).
-- **Traces**: FR-5, QT-1
+- **Given** 근거화 판정, **When** 결과가 확정되면, **Then** enforce는 **U6 단일권위**로 수행되고(U2는 seam 어댑팅), DocModel Block 앵커는 근거 매칭에 내부 활용하되 외부 노출하지 않는다(페이즈 3·4 이월; Q3·Q4).
+- **Traces**: FR-5, QT-1, D3
 
 ### US-D6 — 날조 대신 기권
 **As** 연구자(P1), **I want** 관련 결과가 없을 때 앱이 그것을 인정하기를, **so that** 논문을 절대 지어내지 않는다.
