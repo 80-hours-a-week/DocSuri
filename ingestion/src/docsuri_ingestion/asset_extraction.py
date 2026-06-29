@@ -37,6 +37,11 @@ _LABEL_NUM_RE = re.compile(r"(\d+)")
 
 _ASSETS_EXTRA_MISSING = "multimodal assets extra not installed (pip install .[assets])"
 
+# Decompression-bomb guards for e-print image members (TD-15): cap per-image and per-tarball
+# decoded bytes so a hostile tar member can't inflate unbounded before the pixel guard runs.
+_MAX_IMAGE_BYTES = 20_000_000
+_MAX_EPRINT_IMAGE_TOTAL = 200_000_000
+
 
 def _member_stem(name: str) -> str:
     """Lowercased basename without its extension ('a/b/Fig1.PNG' -> 'fig1'), for figure matching.
@@ -264,6 +269,7 @@ class AssetExtractor:
         try:
             with tarfile.open(fileobj=io.BytesIO(eprint), mode="r:*") as tar:
                 files = [m for m in tar.getmembers() if m.isfile()]
+                budget = _MAX_EPRINT_IMAGE_TOTAL  # per-tarball decode budget (TD-15)
                 if figure_specs is not None:
                     members_by_stem: dict[str, Any] = {}
                     for member in sorted(files, key=lambda m: m.name):
@@ -272,9 +278,12 @@ class AssetExtractor:
                         member = members_by_stem.get(_member_stem(spec.src))
                         if member is None:
                             continue  # unmatched figure → page-crop fill by caption number
+                        if budget <= 0:
+                            break  # per-tarball decode budget spent (TD-15)
                         image = self._read_and_normalize(tar, member)
                         if image is None:
                             continue
+                        budget -= member.size
                         out.append(
                             RawAssetCandidate(
                                 type=AssetType.FIGURE,
@@ -288,9 +297,12 @@ class AssetExtractor:
                 for member in sorted(files, key=lambda m: m.name):
                     if not member.name.lower().endswith((".png", ".jpg", ".jpeg")):
                         continue
+                    if budget <= 0:
+                        break  # per-tarball decode budget spent (TD-15)
                     image = self._read_and_normalize(tar, member)
                     if image is None:
                         continue
+                    budget -= member.size
                     out.append(
                         RawAssetCandidate(
                             type=AssetType.FIGURE,
@@ -304,10 +316,17 @@ class AssetExtractor:
         return out
 
     def _read_and_normalize(self, tar: Any, member: Any) -> bytes | None:
+        # Per-image decompression-bomb cap (TD-15): reject an oversized declared size, and bound the
+        # read so a lying tar header can't OOM us past the cap before the pixel guard runs.
+        if member.size > _MAX_IMAGE_BYTES:
+            return None
         fh = tar.extractfile(member)
         if fh is None:
             return None
-        return self._normalizer.normalize(fh.read())
+        raw = fh.read(_MAX_IMAGE_BYTES + 1)
+        if len(raw) > _MAX_IMAGE_BYTES:
+            return None
+        return self._normalizer.normalize(raw)
 
     def _scan_caption_crops(
         self, pdf: bytes, *, figures: bool, tables: bool

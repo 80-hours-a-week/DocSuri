@@ -214,3 +214,14 @@ def test_eprint_figures_preferred_pdf_tables_when_both_present() -> None:
     tables = [a for a in assets if a.meta.type is AssetType.TABLE]
     assert figures and all(a.meta.source_mode is AssetSourceMode.STRUCTURED for a in figures)
     assert tables and all(a.meta.source_mode is AssetSourceMode.PAGE_CROP for a in tables)
+
+
+# --------------------------------------------------------- decompression-bomb guard (TD-15)
+def test_structured_figure_over_cap_is_skipped(monkeypatch) -> None:
+    """An e-print image member larger than the per-image cap is dropped, never decoded — the
+    ported #237 zip-bomb guard. Removing the cap re-emits it and fails this test."""
+    import docsuri_ingestion.asset_extraction as ae
+
+    monkeypatch.setattr(ae, "_MAX_IMAGE_BYTES", 50)  # any real PNG exceeds this
+    tar = _eprint_tar([("figures/big.png", _img_bytes("PNG"))])
+    assert AssetExtractor().extract(paper_id="p", version=1, pdf=None, eprint=tar) == ()
