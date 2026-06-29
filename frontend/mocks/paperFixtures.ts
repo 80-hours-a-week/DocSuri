@@ -53,6 +53,8 @@ const META: Record<string, PaperMetaVM> = {
     abstract:
       'Recent work has demonstrated substantial gains on many NLP tasks and benchmarks by pre-training on a large corpus of text followed by fine-tuning on a specific task. We show that scaling up language models greatly improves task-agnostic, few-shot performance, sometimes even reaching competitiveness with prior state-of-the-art fine-tuning approaches.',
     arxivUrl: 'https://arxiv.org/abs/2005.14165',
+    sourceName: 'Semantic Scholar',
+    sourceUrl: 'https://www.semanticscholar.org/paper/6b85b63579a916f705a8e10a49bd8d849d91b1fc',
   },
   '2006.11239v2': {
     arxivId: '2006.11239v2',
@@ -62,6 +64,8 @@ const META: Record<string, PaperMetaVM> = {
     abstract:
       'We present high quality image synthesis results using diffusion probabilistic models, a class of latent variable models inspired by considerations from nonequilibrium thermodynamics. Our best results are obtained by training on a weighted variational bound designed according to a novel connection between diffusion probabilistic models and denoising score matching with Langevin dynamics.',
     arxivUrl: 'https://arxiv.org/abs/2006.11239',
+    sourceName: 'OpenAlex',
+    sourceUrl: 'https://openalex.org/W3030163527',
   },
 };
 

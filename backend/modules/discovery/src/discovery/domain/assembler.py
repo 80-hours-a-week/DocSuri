@@ -19,32 +19,9 @@ from docsuri_shared.dtos import (
     SearchResponse,
     SearchResultPageDTO,
 )
-from docsuri_shared.vector_spec import IndexRecord
 
 from .models import AbstainResult, Candidate, DegradeMode, GroundedResults, NoMatchResult
-
-
-def _source_ref(r: IndexRecord) -> tuple[str, str]:
-    """Source-neutral (name, url) projection for the multi-source corpus (Phase 2 / Q2).
-
-    arXiv path keeps ``arxivUrl``; a non-arXiv record (Semantic Scholar / OpenAlex) uses its
-    ``sourceProvenance.sourceUrl`` (or a DOI link), falling back to ``arxivUrl`` if neither is
-    set. Legacy/arXiv-only records (no provenance) default to "arXiv" + arxivUrl. Only these two
-    derived fields are exposed — the full ``sourceProvenance`` stays internal (SEC-9 / Q3)."""
-    prov = r.sourceProvenance
-    if prov is None or not prov.sourceName:
-        return "arXiv", r.arxivUrl
-    if prov.sourceName.lower() == "arxiv":
-        return prov.sourceName, r.arxivUrl
-    url = prov.sourceUrl or (f"https://doi.org/{prov.doi}" if prov.doi else r.arxivUrl)
-    return prov.sourceName, url
-
-
-def _record_has_link(record: IndexRecord) -> bool:
-    """A record is structurally grounded only if its source-neutral projection yields a
-    resolvable http(s) link (FR-5). Scheme check is case-insensitive."""
-    _, url = _source_ref(record)
-    return url.lower().startswith(("http://", "https://"))
+from .source_ref import record_has_link, source_ref
 
 
 def _card(candidate: Candidate, rank: int) -> ResultCardVM:
@@ -52,7 +29,7 @@ def _card(candidate: Candidate, rank: int) -> ResultCardVM:
     rank (display-only; raw retrieval_score is NOT exposed). Phase 2 (Q2): adds source-neutral
     ``sourceName``/``sourceUrl`` so non-arXiv results carry a real link (FR-5)."""
     r = candidate.record
-    source_name, source_url = _source_ref(r)
+    source_name, source_url = source_ref(r)
     return ResultCardVM(
         title=r.title,
         authors=list(r.authors),
@@ -86,7 +63,7 @@ class ResultAssembler:
         # — it must not sink the whole page. If every candidate is dropped (or there were none),
         # terminate as an explicit empty page (resultCount=0), NOT an abstain (BR-9 / U5 B3-a:
         # 기권 ≠ 빈 결과; 근거화 통과 후 전량 필터 → 빈 페이지).
-        grounded = [c for c in result.items if _record_has_link(c.record)]
+        grounded = [c for c in result.items if record_has_link(c.record)]
         if not grounded:
             return self._empty_page()
 
