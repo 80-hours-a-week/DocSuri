@@ -40,7 +40,7 @@
       ▼
 8. assemble+write     ResultAssembler → SummaryStoreAdapter write-through(영구+핫) → emitTelemetry(비차단)
       ▼ 스트리밍
-[ 클라이언트: 점진 렌더 + "출처 보기"(앵커) + 뷰 프리셋(재생성 0) ]
+[ 클라이언트(U5): 점진 렌더 + "출처 보기"(앵커) + 표시 슬라이싱(클라이언트 렌더·재생성 0) ]
 ```
 
 ---
@@ -57,6 +57,7 @@
 
 ### 3.3 `SourceSelector` (Q1)
 - `summary` → `FullTextSourceAdapter`로 **doc-model read**(전문; cache miss 시 U1 doc-model lazy 생성 트리거 — BR-30/U1 §7). `translate` → 초록(보유). 전문 부재/라이선스X → 초록 폴백 + `fallbackReason`(NFR-R2), 둘 다 부재 → `SourceUnavailableDTO`.
+  - **lazy 빌드 트리거 = deprecate(D6/Q5 — 레거시 백필 전용)**: 목표는 U1 수집시점 **eager** doc-model 빌드(실패 시 flat-text degrade·None 미발생 → "인덱스 ⊆ doc-model" 성립)라 신규 수집분은 read miss가 안 나야 한다. lazy 트리거는 eager 빌드 이전 수집분 백필용으로 **한시 유지**(`DocModelBuildQueuePort` deprecated)·백필 완료 후 제거 대상. 신규 의존 금지.
 - **(D2)** 입력 소스만 `.txt`→doc-model 교체 — 선택·폴백·DTO 로직 불변.
 
 ### 3.4 `InputRefiner` (Q2=B / Q6=A)

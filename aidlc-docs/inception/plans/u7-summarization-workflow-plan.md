@@ -124,7 +124,7 @@ flowchart TD
 ### CONSTRUCTION
 - [~] Functional Design (amend) - IN PROGRESS.
   - **Rationale**: GroundingValidator 레지스트리 등재·matcher 정밀화·전문번역 DocModel 정합·lazy 큐 deprecate·뷰프리셋/P3 제거.
-  - **진행(2026-06-29)**: ✅ **레지스트리 등재** — `real_wiring.build_grounding_registry`가 U7 validator를 `summary`/`advisory`로 등재(`SummarizationBundle.grounding_registry` 노출), 호출 경로(오케스트레이터 seam) 불변. 계약 테스트(`test_grounding_registry.py`)로 경계 잠금(summary≠enforcement 가드). FD `business-logic-model §3.8`·`business-rules BR-S7` 정합. ⏳ 남음: lazy 큐 deprecate·뷰프리셋/P3 제거(무위험 정합, 다음). 🔒 matcher 정밀화·수치 임계(0.5) 재보정 = **QT-1 평가셋 의존(데이터 게이트)** — 평가셋 선행 전 미착수(과민기권 회귀 방지).
+  - **진행(2026-06-29)**: ✅ **레지스트리 등재** — `real_wiring.build_grounding_registry`가 U7 validator를 `summary`/`advisory`로 등재(`SummarizationBundle.grounding_registry` 노출), 호출 경로(오케스트레이터 seam) 불변. 계약 테스트(`test_grounding_registry.py`)로 경계 잠금(summary≠enforcement 가드). FD `business-logic-model §3.8`·`business-rules BR-S7` 정합. ✅ **뷰프리셋 폐기 정합** — 코드 검증: `SummaryRequest`에 `view` 필드 부재 확인(잔존 docstring 언급 제거)·`domain-entities`/`BR-S10`/클라이언트 다이어그램 stale 정리(표시 슬라이싱=U5 렌더). P3 커뮤니티 용어집은 U7 코드·FD에 이미 부재(§12 제외, requirements에만 잔존). ✅ **lazy 큐 deprecate** — `DocModelBuildQueuePort` docstring + FD `SourceSelector`에 "레거시 백필 전용·eager 빌드(D6)로 대체·백필 후 제거" 명문화(동작 불변, 신규 의존 금지). 🔒 남음: matcher 정밀화·수치 임계(0.5) 재보정 = **QT-1 평가셋 의존(데이터 게이트)** — 평가셋 선행 전 미착수(과민기권 회귀 방지).
 - [ ] NFR Requirements (amend) - EXECUTE.
   - **Rationale**: 온디맨드 NFR-P2·비용 게이트 ratio 0.80·영구저장·임계 재보정 목표.
 - [ ] NFR Design (amend) - EXECUTE.
