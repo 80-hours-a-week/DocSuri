@@ -56,8 +56,8 @@ flowchart TD
         RE["Reverse Engineering Baseline<br/><b>COMPLETED</b>"]
         RA["Requirements Analysis<br/><b>COMPLETED</b>"]
         US["User Stories<br/><b>COMPLETED</b>"]
-        WP["Workflow Planning<br/><b>EXECUTE</b>"]
-        AD["Application Design (shared/ports amend + U6 사인오프)<br/><b>REVIEW</b>"]
+        WP["Workflow Planning<br/><b>COMPLETED</b>"]
+        AD["Application Design (shared/ports registry 등재 · U6 사인오프 대기)<br/><b>COMPLETED</b>"]
         UG["Units Generation<br/><b>REVIEW</b>"]
     end
 
@@ -82,8 +82,8 @@ flowchart TD
     style RE fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
     style RA fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
     style US fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
-    style WP fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
-    style AD fill:#90CAF9,stroke:#0D47A1,stroke-width:2px,color:#000
+    style WP fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
+    style AD fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
     style UG fill:#90CAF9,stroke:#0D47A1,stroke-width:2px,color:#000
     style FD fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
     style NFRA fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
@@ -113,9 +113,11 @@ flowchart TD
 - [x] Reverse Engineering Baseline - COMPLETED (공유 베이스라인 §2 페이즈 3·§4-1·§4-5).
 - [x] Requirements Analysis - COMPLETED (FR-5/12/13/14·NFR-C1[U7]·QT-5 개정·추적성).
 - [x] User Stories - COMPLETED (US-S1~S6·US-P5 개정).
-- [ ] Workflow Planning - EXECUTE (본 문서).
-- [ ] Application Design - REVIEW.
-  - **Rationale**: U7는 `unit-of-work.md`에 이미 존재. `shared/ports` Validator 추상+레지스트리(D3) 추가·U6 사인오프(FROZEN 시그니처 무변경)만 점검; 신규 유닛 없음.
+- [x] Workflow Planning - COMPLETED (본 문서).
+- [x] Application Design - COMPLETED (코드+계약 등재; U6 사인오프 대기).
+  - **Rationale**: U7는 `unit-of-work.md`에 이미 존재. 신규 유닛 없음.
+  - **산출물(2026-06-29)**: `shared/ports.py`에 `GroundingValidatorRegistry`+`ValidatorRegistration`+`GroundingDomain`/`GroundingAuthority` **가산 추가**(레지스트리 카탈로그 방식 — 검색/요약 시그니처 비통합, `validator: object`로 유닛 구상 타입 비import). `register()` 가드로 **enforcement 권위=`search` 단독** 런타임 강제(단일 근거화 권위=U6). `enforce`/`get_budget_state` 🔒 FROZEN·유일 invocation site 무변경. `ports.md` §2.1 신설(타입 카드·**U6 사인오프 포인트 3개**)·§5 정합. 검증: 스모크·기존 shared 테스트 green·ruff clean.
+  - **남은 게이트**: U6 사인오프(사람) — ① "단일권위=검색 한정" 명문화 ② FROZEN 무변경 ③ U6 hook은 search 슬롯에 enforcement로만 등재. 실제 레지스트리 와이어링은 CONSTRUCTION(U7 FD amendment·`real_wiring`).
 - [ ] Units Generation - REVIEW.
   - **Rationale**: U7 소유 유지. 신규 유닛 부여 없음.
 

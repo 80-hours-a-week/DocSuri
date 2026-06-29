@@ -63,6 +63,34 @@
 
 ---
 
+## 2.1 GroundingValidatorRegistry (도메인-중립 Validator 카탈로그) 🟡 PROVISIONAL
+
+**상태**: 🟡 PROVISIONAL (D3 — 재인셉션 페이즈 3에서 신설; `shared/ports.py` 코드 추가됨, U6 사인오프 대기)
+**근거**: 재인셉션 차터 D3(grounding은 `shared/ports` 확장·유닛 신설 금지), 페이즈 3 U7 워크플로 플랜 §모듈 업데이트 순서 1, §2 설계 주석(병렬 설계·policy 분리 유지)
+**불변식**: **enforcement 권위 = `search` 도메인 단독**("단일 근거화 권위 = U6 검색 게이트"). `summary`/`agent`는 **advisory**(verdict는 표시/주석용 — 시스템 근거화 게이트로 작동하지 않음).
+
+§2 설계 주석을 정식 계약으로 승격한 것이다. 검색 grounding(`enforce(candidate, retrieved) → GroundingDecision`)과 요약 grounding(U7 `validate(GroundingInput) → AnchorVerdict`)은 **시그니처·검증 종류가 다른 별개 체크**(검색=후보↔레코드 집합 매핑 / 요약=단일 논문 정제본 대비 문서 충실도)다. 레지스트리는 이 둘을 **공통 호출 시그니처로 강제 통합하지 않고** 도메인별로 카탈로그화하며, **누가 enforce할 수 있는가의 경계만** 계약으로 못박는다.
+
+| 메서드 | 시그니처 | 의미 |
+|---|---|---|
+| `register` 🟡 | `register(registration: ValidatorRegistration) -> None` | 도메인의 validator 등재(교체). `authority == enforcement` 인데 `domain != search` 이면 `ValueError`(U6 사인오프 경계). |
+| `get` 🟡 | `get(domain: GroundingDomain) -> ValidatorRegistration` | 도메인의 등재 조회(미등재 시 `KeyError`). |
+| `domains` 🟡 | `domains() -> Sequence[GroundingDomain]` | 등재된 도메인 목록(내성). |
+
+**타입 카드**:
+
+| 타입 | 필드 | 의미 |
+|---|---|---|
+| `GroundingDomain` | `search \| summary \| agent` | 근거화 도메인 식별 |
+| `GroundingAuthority` | `enforcement \| advisory` | 권위 등급(enforcement는 search 단독) |
+| `ValidatorRegistration` | `domain`, `authority`, `owner_unit`, `validator: object` | 도메인 validator 등재 레코드. `validator`는 의도적 `object` — 검색 슬롯=U6 `GroundingEnforcementHook`, 요약 슬롯=U7 anchor validator로 **형상이 실제로 다르며 통합하지 않음**. `shared/ports`는 유닛 구상 타입을 import하지 않는다. |
+
+> **가산성·FROZEN 무변경**: 레지스트리는 가산적 이음새다 — `enforce`/`validate` 시그니처도, 유일 invocation site(§2 게이트웨이 post-handler)도 변경하지 않는다. 컨슈머는 도메인으로 조회해 자신이 소유한 구상 형상으로 호출한다. 실제 등재(U6 hook·U7 validator 와이어링)는 CONSTRUCTION(U7 FD amendment·`real_wiring`)에서 수행하며 `shared/ports`는 추상/레지스트리만 보유한다.
+
+> **U6 사인오프 포인트**: ① "단일 근거화 권위 = 검색 한정" 명문화(enforcement=search 단독, register 가드로 강제) ② FROZEN `enforce`/`get_budget_state` 시그니처 무변경 ③ U6 GroundingEnforcementHook은 `search` 슬롯에 advisory가 아닌 enforcement 권위로만 등재.
+
+---
+
 ## 3. CostGuardCircuitBreaker (비용 저하 상태 조회)
 
 **상태**: `getBudgetState` 🔒 FROZEN (component-methods.md 잠금)
@@ -111,7 +139,8 @@
 
 ## 5. 단일 권위·재구현 금지 (요약)
 
-- **근거화**: 단일 권위 = U6.`GroundingEnforcementHook`. U2는 `GroundingAdapter`(정형화/매핑)만 — **enforce 재구현 금지**, 유일 invocation site = U6 게이트웨이 post-handler.
+- **근거화(검색)**: 단일 권위 = U6.`GroundingEnforcementHook`. U2는 `GroundingAdapter`(정형화/매핑)만 — **enforce 재구현 금지**, 유일 invocation site = U6 게이트웨이 post-handler.
+- **근거화(도메인 카탈로그, §2.1)**: `GroundingValidatorRegistry`가 검색/요약/(예정)에이전트 validator를 도메인별 등재. **enforcement 권위는 `search` 단독**(register 가드); 요약(U7 `validate`)·에이전트는 advisory. 공통 시그니처로 통합하지 않으며 가산적(FROZEN 무변경).
 - **비용**: 단일 권위 = U6.`CostGuardCircuitBreaker`. U2는 `getBudgetState` 조회·분기만 — **누적/임계/서킷 판정 재구현 금지**.
 - **관측성**: 단일 수집 = U6.`ObservabilityHub`. 전 유닛은 `emit*`/`auditAppend` 제출만.
 - **버전 정책**(00-overview §4): Ports 인터페이스 변경은 공용 PR + 영향 유닛(U2/U1/U6) 합의. U6 FD 확정 시 PROVISIONAL 항목 동기화.
