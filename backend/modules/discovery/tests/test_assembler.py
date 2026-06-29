@@ -112,3 +112,14 @@ def test_non_arxiv_card_falls_back_to_arxiv_url_when_no_link() -> None:
     record = RECORDS[0].model_copy(update={"sourceProvenance": prov})
     card = _first_card(record)
     assert card.sourceUrl == record.arxivUrl
+
+
+def test_structural_guard_abstains_on_card_with_no_resolvable_link() -> None:
+    # Defense-in-depth (FR-5, business-logic-model §3.7): a record with NO link anywhere
+    # (empty arxivUrl + non-arXiv provenance with no sourceUrl/doi) is a structural grounding
+    # failure → fail-closed AbstainDTO rather than shipping an ungrounded card.
+    prov = _provenance(source_name="OpenAlex", source_url="", doi="")
+    record = RECORDS[0].model_copy(update={"arxivUrl": "", "sourceProvenance": prov})
+    items = (Candidate(record=record, retrieval_score=1.0),)
+    response = _assembler.assemble(GroundedResults(items=items), DegradeMode.NORMAL)
+    assert isinstance(response.root, AbstainDTO)

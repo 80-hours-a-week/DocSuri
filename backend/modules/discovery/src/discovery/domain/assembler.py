@@ -40,6 +40,16 @@ def _source_ref(r: IndexRecord) -> tuple[str, str]:
     return prov.sourceName, url
 
 
+# Internal abstain reason (non-technical; not exposed verbatim, SEC-9).
+_STRUCTURAL_GUARD_REASON = "ungrounded_card_link"
+
+
+def _has_resolvable_link(card: ResultCardVM) -> bool:
+    """A card is grounded only if it carries a resolvable http(s) link (FR-5)."""
+    url = card.sourceUrl or card.arxivUrl
+    return bool(url) and url.startswith(("http://", "https://"))
+
+
 def _card(candidate: Candidate, rank: int) -> ResultCardVM:
     """Project a real IndexRecord to the exposed card fields (SEC-9). ``relevance`` = 1-based
     rank (display-only; raw retrieval_score is NOT exposed). Phase 2 (Q2): adds source-neutral
@@ -79,6 +89,13 @@ class ResultAssembler:
             return SearchResponse(SearchResultPageDTO(cards=[], meta=meta))
 
         cards = [_card(c, rank=i + 1) for i, c in enumerate(result.items)]
+        # GroundingStructuralGuard (defense-in-depth, FR-5; business-logic-model §3.7): every
+        # exposed card MUST carry a resolvable real link. A record with no link at all is a
+        # structural grounding failure → fail-closed to abstain rather than ship an ungrounded
+        # card. In practice _source_ref always falls back to arxivUrl, so this only trips on a
+        # malformed record (e.g. a non-arXiv record with empty sourceUrl/doi AND empty arxivUrl).
+        if any(not _has_resolvable_link(card) for card in cards):
+            return SearchResponse(AbstainDTO(reason=_STRUCTURAL_GUARD_REASON))
         if degrade_mode is DegradeMode.NORMAL:
             meta = ResultMeta(resultCount=len(cards), degraded=False, degradationMode=None)
             return SearchResponse(SearchResultPageDTO(cards=cards, meta=meta))
