@@ -59,12 +59,12 @@ describe('ApiClient retry policy', () => {
   it('dedups concurrent identical idempotent requests', async () => {
     const t = transportOf(async () => {
       await new Promise((r) => setTimeout(r, 20));
-      return { status: 200, body: pageResponse };
+      return { status: 200, body: { userId: 'u', expiresAt: 'x' } };
     });
     const client = new ApiClient(t, fast);
-    const [a, b] = await Promise.all([client.search('같은질의'), client.search('같은질의')]);
-    expect(a.kind).toBe('page');
-    expect(b.kind).toBe('page');
+    const [a, b] = await Promise.all([client.currentSession(), client.currentSession()]);
+    expect(a).toEqual({ userId: 'u', expiresAt: 'x' });
+    expect(b).toEqual({ userId: 'u', expiresAt: 'x' });
     expect(t.calls).toBe(1);
   });
 });

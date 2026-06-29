@@ -15,13 +15,11 @@ from functools import partial
 from typing import TYPE_CHECKING
 
 from docsuri_shared.dtos import (
-    AbstainDTO,
     DegradedResultDTO,
     ResultMeta,
     SearchRequest,
     SearchResultPageDTO,
     SearchResultSetDTO,
-    ValidationErrorDTO,
 )
 
 from backend.modules.accounts.models import Principal
@@ -86,7 +84,7 @@ class DiscoverySearchGateway:
             return SearchResultSetDTO(root)
 
         if isinstance(root, DegradedResultDTO):
-            # Degrade gracefully: surface the cards as a regular page (degraded=true is kept via meta)
+            # Degrade gracefully: expose cards as a page (meta.degraded=true preserved)
             return SearchResultSetDTO(SearchResultPageDTO(cards=root.cards, meta=root.meta))
 
         # AbstainDTO or ValidationErrorDTO → empty page
