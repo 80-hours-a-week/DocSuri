@@ -10,15 +10,18 @@ import { StateView } from './StateView';
 // preserved. Backend 401/403 remains authoritative.
 
 export function RouteGuard({ redirectTo, children }: { redirectTo: string; children: React.ReactNode }) {
-  const { status } = useSession();
+  const { status, signingOut } = useSession();
   const router = useRouter();
 
   useEffect(() => {
-    if (status === 'anonymous') {
+    if (status === 'anonymous' && !signingOut) {
       router.replace(`/login?redirect=${encodeURIComponent(redirectTo)}`);
     }
-  }, [status, redirectTo, router]);
+  }, [status, signingOut, redirectTo, router]);
 
   if (status === 'authenticated') return <>{children}</>;
+  if (signingOut) {
+    return <StateView kind="loading" title="로그아웃 중…" message="잠시만 기다려 주세요." />;
+  }
   return <StateView kind="loading" />;
 }
