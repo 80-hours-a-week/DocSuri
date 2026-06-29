@@ -36,6 +36,10 @@ _QUERY_TERMS = {
 # swap for exponential + jitter if a real API key lets us push throughput.
 _MAX_GET_JSON_RETRIES = 5
 _RETRY_BACKOFF_SECONDS = 2.0
+# ponytail: SS API keys are capped at ~1 req/s cumulative across all endpoints; pace bulk-search
+# pages just under it. The bulk endpoint is the only SS API call in the harvest (PDF fetch hits the
+# publisher host, not the API), so a per-page sleep is enough to stay compliant single-threaded.
+_SS_REQUEST_INTERVAL_SECONDS = 1.1
 
 
 def _get_json_retrying(
@@ -91,6 +95,10 @@ class SemanticScholarCorpusSource:
     ) -> list[SourcePaperRecord]:
         records: list[SourcePaperRecord] = []
         token: str | None = None
+        # Server-side publication-year bound: the bulk endpoint has no date filter but accepts a
+        # `year` range, cutting the harvest from "all of CS, all years" to the window's years —
+        # decisive at 1 req/s. _in_window still refines to the exact date span.
+        year_filter = f"{since.year}-{until.year}" if until else f"{since.year}-"
         while True:
             params = {
                 "query": _query(categories),
@@ -108,9 +116,10 @@ class SemanticScholarCorpusSource:
                     )
                 ),
                 "fieldsOfStudy": _FIELDS_OF_STUDY,
+                "year": year_filter,
                 # /paper/search/bulk rejects `limit` (it returns up to 1000/page and paginates
-                # via `token`) and has no `updated` field — either makes the request 400.
-                # Windowing falls back to publicationDate in _in_window.
+                # via `token`) and has no `updated` field — either makes the request 400. The
+                # `year` range bounds it server-side; _in_window refines to the exact date span.
             }
             if token:
                 params["token"] = token
@@ -129,6 +138,10 @@ class SemanticScholarCorpusSource:
             token = payload.get("token")
             if not token:
                 return records
+            # Pace pages to honour the SS key's ~1 req/s cumulative cap (only between pages, so
+            # single-page tests don't sleep). 429s still happen under contention — the retry above
+            # absorbs those.
+            time.sleep(_SS_REQUEST_INTERVAL_SECONDS)
 
     def fetch_pdf(self, record: SourcePaperRecord) -> bytes:
         if not record.pdf_url:
