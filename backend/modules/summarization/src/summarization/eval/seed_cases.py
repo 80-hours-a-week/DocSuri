@@ -74,8 +74,7 @@ _faithful_grounded = GroundingEvalCase(
     ),
     expected="faithful",
     rationale=(
-        "95.3 and 92.1 both appear in the body; the anchor span/label resolve. "
-        "Nothing fabricated."
+        "95.3 and 92.1 both appear in the body; the anchor span/label resolve. Nothing fabricated."
     ),
     confident=True,
 )
@@ -158,9 +157,41 @@ _probe_half_ungrounded = GroundingEvalCase(
 )
 
 
+# 6. Faithful with a ROUNDED figure: 95.3 is a correct rounding of the source's 95.34 → PASS
+# (matcher 정밀화 — rounding tolerance; before precision work this false-abstained).
+_faithful_rounded_figure = GroundingEvalCase(
+    name="faithful_rounded_figure",
+    gi=GroundingInput(
+        draft=_draft(results="Accuracy of 95.3 percent."),
+        refined=_refined("Our method reaches 95.34 percent accuracy on the test set."),
+    ),
+    expected="faithful",
+    rationale=(
+        "95.3 is a correct rounding of the source 95.34 (within half-a-ULP); matcher grounds it."
+    ),
+    confident=True,
+)
+
+# 7. Faithful with a THOUSAND-SEPARATED figure: 1,200 and 1200 are the same number → PASS.
+_faithful_thousand_sep = GroundingEvalCase(
+    name="faithful_thousand_separator",
+    gi=GroundingInput(
+        draft=_draft(results="Trained on 1,200 annotated examples."),
+        refined=_refined("The training set comprises 1200 annotated examples."),
+    ),
+    expected="faithful",
+    rationale=(
+        "1,200 and 1200 are the same figure (thousand separator); matcher normalizes the comma."
+    ),
+    confident=True,
+)
+
+
 SEED_CASES: tuple[GroundingEvalCase, ...] = (
     _faithful_grounded,
     _faithful_paraphrased_anchor,
+    _faithful_rounded_figure,
+    _faithful_thousand_sep,
     _fabricated_numbers,
     _fabricated_empty_method,
     _probe_half_ungrounded,

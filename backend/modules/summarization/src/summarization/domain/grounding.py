@@ -6,7 +6,8 @@ of check (document fidelity), so "single grounding authority = U6" is read as *s
 grounding only*. Deterministic checks ONLY; no LLM-judge (Q15):
 
   1. anchor existence  — each anchor's span/label must exist in the refined source
-  2. numeric match     — result numbers must appear in the source (normalized: 95.3% ↔ 0.953)
+  2. numeric match     — result numbers must appear in the source (normalized: 95.3% ↔ 0.953,
+                         thousand-sep 1,200 ↔ 1200, rounding tolerance 95.3 ↔ 95.34)
   3. schema complete   — required §3 fields present
   4. truncation/empty  — non-empty, not cut off
 
@@ -19,7 +20,9 @@ import re
 
 from .models import Anchor, AnchorVerdict, GroundingInput, SummaryDraft, Violation
 
-_NUM_RE = re.compile(r"\d+(?:\.\d+)?")
+# Match plain decimals AND thousand-separated forms ("1,200", "1,234.5") as a single token, so
+# "1,200" is not split into "1" + "200" (which would mis-ground). Longest-alternative-first.
+_NUM_RE = re.compile(r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?")
 
 # A math/formula span (e.g. ``𝓛={1y,1w,…}`` or ``\mathcal{L}``) can't be verbatim-matched against
 # the refined source, which stores math as LaTeX/MathML — a different string representation. Such
@@ -48,12 +51,25 @@ def _is_formula_span(text: str) -> bool:
 _NUMERIC_MISMATCH_THRESHOLD = 0.5
 
 
-def _normalize_number(token: str) -> set[str]:
-    """Return equivalent string forms of a number (95.3% ↔ 0.953 tolerance)."""
-    forms = {token}
+def _to_float(token: str) -> float | None:
+    """Parse a numeric token (thousand separators stripped) to float, or None."""
     try:
-        value = float(token)
+        return float(token.replace(",", ""))
     except ValueError:
+        return None
+
+
+def _decimals(token: str) -> int:
+    """Decimal places a token is written to (drives the rounding tolerance band)."""
+    _, _, frac = token.partition(".")
+    return len(frac)
+
+
+def _normalize_number(token: str) -> set[str]:
+    """Return equivalent string forms of a number (thousand-sep stripped, 95.3% ↔ 0.953)."""
+    forms = {token}
+    value = _to_float(token)
+    if value is None:
         return forms
     forms.add(f"{value:g}")
     if value > 1:  # percentage ↔ fraction
@@ -61,6 +77,23 @@ def _normalize_number(token: str) -> set[str]:
     else:
         forms.add(f"{value * 100:g}")
     return forms
+
+
+def _number_grounded(token: str, src_values: list[float], src_forms: set[str]) -> bool:
+    """A draft figure is grounded if it matches a source figure by exact normalized form OR
+    within a **rounding-tolerance band** at the draft's own precision (95.3 grounds 95.34, since
+    95.34 rounds to 95.3). Percentage↔fraction scaling (×100) is checked too, mirroring
+    ``_normalize_number``. Reduces false-abstain on rounded/re-scaled figures without widening
+    the gate beyond half-a-ULP at the stated precision."""
+    if _normalize_number(token) & src_forms:
+        return True
+    draft = _to_float(token)
+    if draft is None:
+        return False
+    band = 0.5 * 10 ** (-_decimals(token)) + 1e-9
+    return any(
+        abs(candidate - draft) <= band for s in src_values for candidate in (s, s * 100, s / 100)
+    )
 
 
 class GroundingValidator:
@@ -122,9 +155,10 @@ class GroundingValidator:
         # Abstain only when the ungrounded share exceeds the threshold (anti-fabrication intact).
         result_nums = _NUM_RE.findall(draft.results)
         if result_nums:
-            src_nums = _source_numbers(haystack, captions)
+            src_forms = _source_numbers(haystack, captions)
+            src_values = _source_values(haystack, captions)
             ungrounded = sum(
-                1 for t in result_nums if not (_normalize_number(t) & src_nums)
+                1 for t in result_nums if not _number_grounded(t, src_values, src_forms)
             )
             if ungrounded / len(result_nums) > _NUMERIC_MISMATCH_THRESHOLD:
                 hard.append(Violation("numeric_mismatch", "results"))
@@ -143,6 +177,17 @@ def _source_numbers(*texts: str) -> set[str]:
     for t in texts:
         for token in _NUM_RE.findall(t):
             out |= _normalize_number(token)
+    return out
+
+
+def _source_values(*texts: str) -> list[float]:
+    """Numeric values of every figure in the source — the basis for rounding-tolerance match."""
+    out: list[float] = []
+    for t in texts:
+        for token in _NUM_RE.findall(t):
+            value = _to_float(token)
+            if value is not None:
+                out.append(value)
     return out
 
 
