@@ -125,10 +125,12 @@ flowchart TD
 - [~] Functional Design (amend) - IN PROGRESS.
   - **Rationale**: GroundingValidator 레지스트리 등재·matcher 정밀화·전문번역 DocModel 정합·lazy 큐 deprecate·뷰프리셋/P3 제거.
   - **진행(2026-06-29)**: ✅ **레지스트리 등재** — `real_wiring.build_grounding_registry`가 U7 validator를 `summary`/`advisory`로 등재(`SummarizationBundle.grounding_registry` 노출), 호출 경로(오케스트레이터 seam) 불변. 계약 테스트(`test_grounding_registry.py`)로 경계 잠금(summary≠enforcement 가드). FD `business-logic-model §3.8`·`business-rules BR-S7` 정합. ✅ **뷰프리셋 폐기 정합** — 코드 검증: `SummaryRequest`에 `view` 필드 부재 확인(잔존 docstring 언급 제거)·`domain-entities`/`BR-S10`/클라이언트 다이어그램 stale 정리(표시 슬라이싱=U5 렌더). P3 커뮤니티 용어집은 U7 코드·FD에 이미 부재(§12 제외, requirements에만 잔존). ✅ **lazy 큐 deprecate** — `DocModelBuildQueuePort` docstring + FD `SourceSelector`에 "레거시 백필 전용·eager 빌드(D6)로 대체·백필 후 제거" 명문화(동작 불변, 신규 의존 금지). 🔒 남음: matcher 정밀화·수치 임계(0.5) 재보정 = **QT-1 평가셋 의존(데이터 게이트)** — 평가셋 선행 전 미착수(과민기권 회귀 방지).
-- [ ] NFR Requirements (amend) - EXECUTE.
+- [x] NFR Requirements (amend) - COMPLETED.
   - **Rationale**: 온디맨드 NFR-P2·비용 게이트 ratio 0.80·영구저장·임계 재보정 목표.
-- [ ] NFR Design (amend) - EXECUTE.
+  - **진행(2026-06-29, 코드 검증)**: §6 비용 게이트 정밀화(`cost_guard.py` `warning_ratio=0.80`·cap 1600·hard 0.95 → degradeMode non-normal=RERANK_OFF부터 U7 일괄 기권, lexical 폴백 없음)·§2 온디맨드 3종(요약·초록번역·전문번역 DocModel v1) 영구저장(S3 immutable+Redis TTL 필수) 명문화·§9 QT-1 충실도 하니스 등재(held-out 코퍼스=OP/팀·임계 재보정 데이터 게이트)·§10 추적성 QT-1 추가.
+- [x] NFR Design (amend) - COMPLETED.
   - **Rationale**: degrade 매핑(검색 신호 재사용 정합)·캐시/저장·스트리밍 TTFB.
+  - **진행(2026-06-29, 코드 검증)**: §1.3 비용 degradeMode 임계(ratio ≥0.80)·**도메인별 저하 매핑**(U7=non-normal 일괄 기권 vs 검색=lexical 부분저하, 신호는 공유) 명문화·§2.1 저장 불변식(S3 영구 immutable + Redis TTL 필수=만료없는 키 금지·3종 동일) 정합. 스트리밍 TTFB(버퍼-검증)는 기존 §2.2 유지.
 - [~] QT-1 충실도 평가셋 + `run_eval_set` - IN PROGRESS (하니스 스캐폴딩).
   - **Rationale**: 수치 임계 재보정의 데이터 기반·할루시네이션 운영 인수. 소유 OP/팀.
   - **진행(2026-06-29)**: ✅ **하니스 + 시드 스캐폴딩** — `summarization/eval/grounding_eval.py`(`run_grounding_eval`: 라벨 케이스를 `GroundingValidator`에 돌려 `false_pass`[날조 누출]/`false_abstain`[과민 기권] 분류·집계, 요약 도메인용 `run_eval_set` 대응물)·`eval/seed_cases.py`(faithful/fabricated **confident 4** + **임계 probe 1**, 라벨은 리뷰 보류)·`tests/test_grounding_eval.py`(하니스 math 잠금 + confident 케이스 날조누출·과민기권 0 + probe 현 동작 기록=현 임계서 false_pass). **수치 임계 재보정·matcher 정밀화는 미실시**(held-out 라벨 코퍼스 선행 — OP/팀). 🔒 남음: 코퍼스 확장(소유 OP/팀)·임계 strict 재보정·matcher 정밀화.
