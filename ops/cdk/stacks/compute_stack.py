@@ -114,7 +114,8 @@ class ComputeStack(Stack):
         # not a code change: `cdk deploy -c ops_alert_email=a@x.com,b@y.com` (or cdk.json context).
         # Defaults to the team ops inbox so a context-less deploy can't silently DROP the email
         # subscriptions + budget — a full `cdk deploy --all` without -c did exactly that, tearing
-        # down alerting. Pass -c to change recipients; pass `-c ops_alert_email=` (empty) to opt out.
+        # down alerting. Pass -c to change recipients; pass `-c ops_alert_email=` (empty) to
+        # opt out.
         _DEFAULT_OPS_ALERT_EMAIL = "corpseonthemission@icloud.com"
         _ctx_alert_emails = self.node.try_get_context("ops_alert_email")
         _raw_alert_emails = (
