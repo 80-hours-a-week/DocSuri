@@ -14,6 +14,8 @@ import { mockListLibrary, mockListSaved, mockListHistory } from '@/mocks/library
 // DTO contract test (LC-7) — the mock fixtures must conform to the generated
 // types (which derive from shared/dtos). If the schema/types drift, this fails.
 
+// Phase 2 (Q2): cards additively expose source-neutral sourceName/sourceUrl (optional).
+// blockRefs/sourceProvenance themselves stay internal (Q3) — never on a card.
 const CARD_FIELDS: (keyof ResultCardVM)[] = [
   'title',
   'authors',
@@ -22,6 +24,8 @@ const CARD_FIELDS: (keyof ResultCardVM)[] = [
   'abstractSnippet',
   'relevance',
   'arxivUrl',
+  'sourceName',
+  'sourceUrl',
 ];
 
 describe('DTO contract', () => {
@@ -31,9 +35,13 @@ describe('DTO contract', () => {
     expect(typeof page.meta.degraded).toBe('boolean');
   });
 
-  it('every card exposes exactly the 7 contract fields (SEC-9)', () => {
+  it('every card key is an allowed contract field — no internal leak (SEC-9)', () => {
+    // sourceName/sourceUrl are optional (additive), so assert each key is in the allowed set
+    // rather than an exact count: the SEC-9 invariant is that no INTERNAL field ever leaks.
     for (const card of pageResponse.cards) {
-      expect(Object.keys(card).sort()).toEqual([...CARD_FIELDS].sort());
+      for (const key of Object.keys(card)) {
+        expect(CARD_FIELDS).toContain(key);
+      }
     }
   });
 

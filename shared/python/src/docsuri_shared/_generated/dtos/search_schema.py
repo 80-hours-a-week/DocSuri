@@ -18,7 +18,7 @@ class DegradationMode(RootModel[str]):
 
 class ResultCardVM(BaseModel):
     """
-    Single-paper phone card view-model. Consumed by U5 ResultCard.render(card). The 6 fields title/authors/year/arxivId/abstractSnippet/arxivUrl are the external-exposure PROJECTION of vector-spec.md §2 IndexRecord card fields (FR-4), 1:1, and are NOT added/removed without an IndexRecord change (FROZEN-adjacent). `relevance` does NOT belong to IndexRecord — it is a display-only value derived from ranking (raw scores NOT exposed, SEC-9). Internal IndexRecord fields (vector, lexicalTerms, chunkId, section, categories) are NOT exposed on the card (SEC-9). Trace: dtos.md §1.1, FR-4, FR-5.
+    Single-paper phone card view-model. Consumed by U5 ResultCard.render(card). The 6 fields title/authors/year/arxivId/abstractSnippet/arxivUrl are the external-exposure PROJECTION of vector-spec.md §2 IndexRecord card fields (FR-4), 1:1, and are NOT added/removed without an IndexRecord change (FROZEN-adjacent). `relevance` does NOT belong to IndexRecord — it is a display-only value derived from ranking (raw scores NOT exposed, SEC-9). Internal IndexRecord fields (vector, lexicalTerms, chunkId, section, categories) are NOT exposed on the card (SEC-9). Phase 2 (Q2): the card additively exposes source-neutral `sourceName`/`sourceUrl` (derived from IndexRecord.sourceProvenance; the arXiv path keeps arxivId/arxivUrl). Internal `blockRefs`/`sourceProvenance` themselves stay unexposed (Q3). Trace: dtos.md §1.1, FR-4, FR-5.
     """
 
     model_config = ConfigDict(
@@ -50,7 +50,15 @@ class ResultCardVM(BaseModel):
     )
     arxivUrl: str = Field(
         ...,
-        description='Resolvable real link (FR-5 grounding — no fabrication). Source: IndexRecord.arxivUrl (vector-spec.md §2). Trace: FR-4, FR-5.',
+        description='Resolvable real link (FR-5 grounding — no fabrication; arXiv path). Source: IndexRecord.arxivUrl (vector-spec.md §2). Trace: FR-4, FR-5.',
+    )
+    sourceName: str | None = Field(
+        None,
+        description='Phase 2 (Q2). Source label for the multi-source corpus (arXiv / Semantic Scholar / OpenAlex). Derived from IndexRecord.sourceProvenance.sourceName; defaults to "arXiv" for legacy/arXiv-only records. Optional (additive, backward-compatible) but always populated by the assembler. Trace: FR-4, FR-5.',
+    )
+    sourceUrl: str | None = Field(
+        None,
+        description='Phase 2 (Q2). Source-neutral resolvable real link (FR-5 grounding — no fabrication): arXiv = arxivUrl, non-arXiv = sourceProvenance.sourceUrl / DOI. Optional (additive) but always populated by the assembler. Trace: FR-4, FR-5.',
     )
 
 
