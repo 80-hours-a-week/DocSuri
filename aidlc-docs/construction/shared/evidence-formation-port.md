@@ -2,7 +2,7 @@
 
 **단계**: CONSTRUCTION → 공용 계약 선행 작성 · **일자**: 2026-06-29
 **상태**: PROVISIONAL — 문헌탐색·근거형성 Agent 질문지 Q1~Q3 확정 전 초안.
-**대상**: 사용자가 말한 "U11" 맥락의 연구 에이전트 공유 계약. 현재 `develop` 기준 구 통합 U11은 폐기되고 문헌탐색·근거형성 / 연구아이디어 2개 유닛으로 분리되어 있으므로, 본 문서는 그중 **문헌탐색·근거형성 Agent가 연구아이디어 Agent에 제공하는 포트 계약**을 정의한다.
+**대상**: 연구 에이전트 공유 계약. 현재 `develop` 기준 구 통합 연구 에이전트는 폐기되고 문헌탐색·근거형성 / 연구아이디어 2개 유닛으로 분리되어 있으므로, 본 문서는 그중 **문헌탐색·근거형성 Agent가 연구아이디어 Agent에 제공하는 포트 계약**을 정의한다.
 **근거**: `inception/plans/reinception-2026-06-charter.md` D2/D5 · `inception/requirements/requirement-verification-questions-literature-evidence-agent.md` · `inception/application-design/agent-tool-port-contract-draft.md` · `construction/shared/docmodel.md` · `construction/shared/vector-spec.md` · `construction/shared/ports.md`.
 
 ---
@@ -80,6 +80,16 @@
 | `anchor` | DocModelAnchor | Y | `docmodel.md`의 Section/Block id, 선택 span |
 | `quote` | string | N | 짧은 검증용 발췌. UI/저장 정책에 따라 생략 가능 |
 
+### 3.6 공통 참조 타입
+
+| 타입 | 출처/정의 |
+|---|---|
+| `AgentContext` | 호출자, owner-scoped 세션, trace/cost context를 담는 실행 컨텍스트. 최종 필드는 문헌탐색·근거형성 Agent Functional/NFR Design에서 확정 |
+| `AttachmentRef` | owner-scoped 첨부 핸들. 처리 여부와 파싱 방식은 질문지 Q6에서 확정 |
+| `PaperId` | `00-shared-contracts-overview.md` 횡단 규약 |
+| `IndexRecordRef` | `vector-spec.md` IndexRecord 핸들 |
+| `DocModelAnchor` | `docmodel.md` Section/Block id + 선택 span |
+
 ---
 
 ## 4. 재사용 계약
@@ -115,7 +125,7 @@
 | 항목 | 정책 |
 |---|---|
 | 동결 조건 | 질문지 Q1~Q3 확정 후 `EvidenceItem` 필드 깊이와 근거표 형태 확정 |
-| 하위 호환 | 선택 필드 추가는 허용. 필수 필드 제거/의미 변경은 버전업 |
+| 하위 호환 | `00-shared-contracts-overview.md`의 DTO 진화 규칙을 따른다. 선택 필드 추가는 허용하고, 필수 필드 제거/의미 변경은 버전업 |
 | 변경 승인 | 동결 후 변경은 공유 계약 PR + 문헌탐색·근거형성 Agent / 연구아이디어 Agent 양쪽 사인오프 |
 | fixture | 문헌탐색 Agent가 대표 `EvidenceResult` fixture를 제공하고 연구아이디어 Agent는 그 fixture로 병렬 개발 |
 
