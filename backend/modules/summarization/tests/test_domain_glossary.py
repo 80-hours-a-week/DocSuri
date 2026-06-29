@@ -18,6 +18,38 @@ def test_resolve_fail_soft_on_repo_error() -> None:
     assert g.user_overrides == ()  # degraded — no crash
 
 
+def test_version_methods_route_to_distinct_repo_queries() -> None:
+    # NFR-C1: summary keys on prompt-enforced terms only (they affect prompt output); translate
+    # keys on the full version (post-substitution terms affect translation). The resolver must
+    # delegate to the matching repo query so a translate-only edit can't fork the summary cache.
+    class _Repo:
+        def get_user_glossary(self, user_id):
+            return ()
+
+        def get_glossary_version(self, user_id):
+            return 5
+
+        def get_prompt_glossary_version(self, user_id):
+            return 2
+
+    res = GlossaryResolver(_Repo())
+    assert res.glossary_version("u1") == 5
+    assert res.prompt_glossary_version("u1") == 2
+
+
+def test_prompt_version_degrades_to_baseline_on_fault() -> None:
+    class _BrokenRepo:
+        def get_user_glossary(self, user_id):
+            return ()
+
+        def get_prompt_glossary_version(self, user_id):
+            raise RuntimeError("db down")
+
+    # A versioning fault must degrade to the shared baseline (0), not fail the request.
+    assert GlossaryResolver(_BrokenRepo()).prompt_glossary_version("u1") == 0
+    assert GlossaryResolver(None).prompt_glossary_version("u1") == 0
+
+
 def test_post_substitute_applies_user_simple_noun() -> None:
     glossary = Glossary(
         user_overrides=(TermMapping("잠재공간", "latent space", prompt_enforced=False),)

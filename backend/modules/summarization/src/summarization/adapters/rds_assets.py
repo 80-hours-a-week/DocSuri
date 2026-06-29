@@ -31,10 +31,10 @@ class RdsS3AssetReader:
 
     def _connect(self) -> Any:
         if self._conn is not None:
-            return self._conn
-        import psycopg  # lazy: only the `real` extra needs psycopg
+            return self._conn  # injected (tests): caller owns the connection
+        from ._pg import connection  # lazy: only the `real` extra needs psycopg
 
-        return psycopg.connect(self._dsn)
+        return connection(self._dsn)  # pooled (graceful fallback to direct connect)
 
     def _client(self) -> Any:
         if self._s3 is None:

@@ -28,22 +28,18 @@ from docsuri_shared.dtos import DocModel
 
 from ..ports.ports import LlmGatewayPort
 from .models import Glossary, SummaryRequest, TranslationDraft, TranslationSegment
+from .token_estimate import estimate_tokens
 
 # Per-chunk budget: bounded by the model's *output* token cap (a translation is ~ the size of
 # its input), not the much larger single-call *input* budget used for summary. Conservative
 # defaults; runtime-tunable (NFR).
 _DEFAULT_CHUNK_BUDGET_TOKENS = 6_000
-_CHARS_PER_TOKEN = 4  # matches the refiner's cheap estimate
 
 # Human-readable seg-id suffixes (BR-S18). NOTE: these descriptive ids are NOT used as the LLM
 # segment key — translate() keys segments by reading-order index, so correctness does not depend
 # on doc-model id uniqueness. The suffixes only make the walk's output legible (debug/tests).
 _TITLE_SUFFIX = "#title"
 _CAPTION_SUFFIX = "#caption"
-
-
-def _estimate_tokens(text: str) -> int:
-    return max(1, len(text) // _CHARS_PER_TOKEN)
 
 
 class StructuredTranslator:
@@ -101,7 +97,7 @@ class StructuredTranslator:
         cur: list[TranslationSegment] = []
         cur_tokens = 0
         for seg in segments:
-            t = _estimate_tokens(seg.text)
+            t = estimate_tokens(seg.text)
             if cur and cur_tokens + t > self._budget:
                 yield tuple(cur)
                 cur, cur_tokens = [], 0

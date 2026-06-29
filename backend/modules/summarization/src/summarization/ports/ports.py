@@ -30,6 +30,8 @@ __all__ = [
     "SummaryStorePort",
     "FullTextSourcePort",
     "DocModelReadPort",
+    "DocModelBuildQueuePort",
+    "SummaryJobQueuePort",
     "GlossaryRepositoryPort",
     "AssetReadPort",
 ]
@@ -157,7 +159,14 @@ class GlossaryRepositoryPort(Protocol):
         ...
 
     def get_glossary_version(self, user_id: str) -> int:
-        """Return the user's current ``glossary_ver`` (0 when none → shared baseline)."""
+        """Return the user's current ``glossary_ver`` (0 when none → shared baseline). Reflects
+        ALL terms — the translate cache identity (post-substitution terms affect translation)."""
+        ...
+
+    def get_prompt_glossary_version(self, user_id: str) -> int:
+        """Return the version of the user's PROMPT-ENFORCED terms only (0 when none). These are the
+        terms that ride into the prompt and so affect summary output; the summary cache keys on
+        this (not the full version) so translate-only term edits don't fork the summary cache."""
         ...
 
     def upsert_term(

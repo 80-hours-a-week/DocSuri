@@ -10,6 +10,7 @@ Returns a ``(system, user)`` pair — adapters map it onto the Bedrock message f
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
 
 from ..domain.models import (
@@ -20,6 +21,18 @@ from ..domain.models import (
     SummaryRequest,
     TranslationSegment,
 )
+
+# Our prompt-isolation delimiter tags. External paper text is wrapped in these and declared DATA,
+# but a body / segment that itself contains a literal ``</paper>`` (or ``</segments>``) could close
+# the data region early and have whatever follows read as instructions. Strip the tags from the
+# data before wrapping so the breakout is impossible — defense-in-depth behind the "treat as data"
+# instruction (Prompt Injection). Real papers don't use these XML-ish tags as content, so removal
+# is loss-free.
+_DELIM_RE = re.compile(r"</?(?:paper|segments)\s*>", re.IGNORECASE)
+
+
+def _strip_delimiters(text: str) -> str:
+    return _DELIM_RE.sub("", text)
 
 # Persona only shapes WORDING/treatment within the §3 fields — the JSON structure is identical
 # for both (no extra/missing fields). All grounding rules in the system prompt still apply, so
@@ -77,7 +90,7 @@ def build_summary_prompt(
         f"- 용어집:\n{_glossary_block(glossary)}\n"
         f"- 출력은 다음 JSON 계약을 정확히 따른다: {_JSON_CONTRACT}"
     )
-    user = f"<paper>\n{refined.body}\n</paper>"
+    user = f"<paper>\n{_strip_delimiters(refined.body)}\n</paper>"
     return system, user
 
 
@@ -103,7 +116,7 @@ def build_translate_segments_prompt(
         '- 출력은 {"translations": {"<id>": "<번역텍스트>"}, "keptTerms": [str]} JSON으로 한다.'
     )
     payload = json.dumps(
-        [{"id": s.id, "text": s.text} for s in segments], ensure_ascii=False
+        [{"id": s.id, "text": _strip_delimiters(s.text)} for s in segments], ensure_ascii=False
     )
     user = f"<segments>\n{payload}\n</segments>"
     return system, user

@@ -55,6 +55,30 @@ class GlossaryResolver:
             user_overrides=tuple(overrides),
         )
 
+    def glossary_version(self, user_id: str | None) -> int:
+        """The user's current ``glossary_ver`` (0 = shared baseline, no personal terms). Folds
+        into the cache key so a personal-term edit invalidates the user's cached results. A repo
+        fault degrades to the shared baseline (0) rather than failing the request — versioning is
+        advisory, off the response-critical path."""
+        if self._repo is None or user_id is None:
+            return 0
+        try:
+            return self._repo.get_glossary_version(user_id)
+        except Exception:  # noqa: BLE001 — versioning failure → shared baseline (degrade, not fail)
+            return 0
+
+    def prompt_glossary_version(self, user_id: str | None) -> int:
+        """Version of the user's prompt-enforced terms only (0 = none). The summary cache keys on
+        this so a translate-only (post-substitution) term edit does not invalidate/fork the user's
+        summary cache — summary output only changes with prompt-enforced terms (NFR-C1). Same
+        degrade-to-baseline-on-fault contract as [[glossary_version]]."""
+        if self._repo is None or user_id is None:
+            return 0
+        try:
+            return self._repo.get_prompt_glossary_version(user_id)
+        except Exception:  # noqa: BLE001 — versioning failure → shared baseline (degrade, not fail)
+            return 0
+
     def list_user_terms(self, user_id: str) -> Sequence[TermMapping]:
         """Return the user's personal term overrides (owner-scoped, SEC-8). Empty when no
         repository is configured — used to pre-fill the badge editor (read-only)."""

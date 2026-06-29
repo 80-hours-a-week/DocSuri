@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 
-from .models import Anchor, AnchorVerdict, GroundingInput, SummaryDraft, Violation
+from .models import Anchor, AnchorVerdict, GroundingInput, Violation
 
 # Match plain decimals AND thousand-separated forms ("1,200", "1,234.5") as a single token, so
 # "1,200" is not split into "1" + "200" (which would mis-ground). Longest-alternative-first.
@@ -194,7 +194,3 @@ def _source_values(*texts: str) -> list[float]:
             if value is not None:
                 out.append(value)
     return out
-
-
-def is_empty_draft(draft: SummaryDraft) -> bool:
-    return not draft.tldr.strip() and not draft.contributions
