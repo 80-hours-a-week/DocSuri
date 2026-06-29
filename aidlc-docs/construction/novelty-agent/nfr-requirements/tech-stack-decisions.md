@@ -14,8 +14,8 @@
 | TD-NV-4 | Provide v1 live progress through streaming/SSE, with polling fallback for reconnect/compatibility. | `nfr-answer.md` Q4 selected B; product needs visible exploration progress. |
 | TD-NV-5 | Reuse U2 `full` search through its existing port/API with bounded query, timeout, and budget. | No novelty search index or ranking fork. |
 | TD-NV-6 | Run Agent-Browser only server-side in the worker with allowlisted GitHub/dataset sources, query budgets, and timeouts. | Keeps raw user material out of external sites and prevents client-side tool exposure. |
-| TD-NV-7 | Keep DOCX parsing in shared ingestion/doc-model or evidence formation parsing, not in novelty business logic. | Preserves shared contract boundary and avoids parser duplication. |
-| TD-NV-8 | If no existing DOCX parser path exists, select a lightweight Python parser such as `python-docx` in the shared parsing layer. | Minimal dependency; DOCX is v1 scope. |
+| TD-NV-7 | Keep manuscript parsing in shared ingestion/doc-model or evidence formation parsing, not in novelty business logic. | Preserves shared contract boundary and avoids parser duplication. |
+| TD-NV-8 | Defer DOCX support from v1. | Current codebase has no DOCX parser path; PDF/Markdown/TXT cover the lower-cost v1 manuscript scope. |
 | TD-NV-9 | Store uploaded manuscript references and parsed artifacts owner-scoped; delete them with novelty session deletion. | Matches privacy and delete requirements. |
 | TD-NV-10 | Use user-specific Notion OAuth/explicit connection with encrypted token storage and revocation. | Avoids shared server token and supports owner-scoped export. |
 | TD-NV-11 | Reuse U6 CostGuard/rate limit and ObservabilityHub/EventStore. | Cost/observability single authority already exists in shared ports. |
@@ -37,7 +37,7 @@ SSE is the preferred v1 progress channel. Polling is still allowed as a fallback
 
 ## Parsing Boundary
 
-DOCX support is implemented through shared parsing. Novelty Agent must not import `python-docx` or equivalent directly for business logic. It consumes parsed `EvidenceResult`, `SourceRef`, and attachment/doc-model handles.
+PDF, Markdown, and TXT manuscript parsing is implemented through shared parsing or evidence formation. Novelty Agent consumes parsed `EvidenceResult`, `SourceRef`, and attachment/doc-model handles. DOCX is deferred to a later cycle instead of adding a new parser dependency now.
 
 ## Validation Boundary
 
@@ -50,4 +50,5 @@ Novelty output validation checks schemas, required source refs, unsupported-cell
 - Separate cost guard or observability pipeline.
 - Client-side Agent-Browser execution.
 - News search.
+- DOCX upload support and `python-docx` or equivalent parser dependency.
 - Mandatory fast-check dependency before frontend logic requires it.

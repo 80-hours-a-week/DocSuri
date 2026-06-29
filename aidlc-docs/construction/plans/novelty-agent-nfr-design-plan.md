@@ -3,7 +3,7 @@
 **단계**: CONSTRUCTION -> NFR Design  
 **유닛**: Novelty Agent  
 **일자**: 2026-06-29  
-**상태**: 질문 답변 대기  
+**상태**: 확정 — `nfr-design-review.md` 답변 반영, NFR Design 산출물 생성 완료
 **근거**: `construction/novelty-agent/nfr-requirements/`, `construction/novelty-agent/functional-design/`
 
 ## 1. NFR Design 렌즈
@@ -18,13 +18,13 @@
 
 답변 확정 후 아래 산출물을 `aidlc-docs/construction/novelty-agent/nfr-design/`에 작성한다.
 
-- [ ] `nfr-design-patterns.md`
+- [x] `nfr-design-patterns.md`
   - async job pattern
   - retry/timeout/degraded pattern
   - progress streaming pattern
   - output validation pattern
   - token/export safety pattern
-- [ ] `logical-components.md`
+- [x] `logical-components.md`
   - API controller and service
   - job repository and artifact store
   - worker and queue
@@ -49,7 +49,7 @@ C) 새 workflow engine을 도입한다.
 
 X) 기타 (아래 [Answer]: 태그 뒤에 설명해 주세요)
 
-[Answer]:
+[Answer]: A
 
 ### Q2 — Worker retry policy
 source별 실패 retry는 어떻게 설계할까요?
@@ -62,7 +62,7 @@ C) retry 없이 즉시 실패 처리한다.
 
 X) 기타 (아래 [Answer]: 태그 뒤에 설명해 주세요)
 
-[Answer]:
+[Answer]: A
 
 ### Q3 — Progress stream design
 SSE progress stream은 어디서 읽을까요?
@@ -75,7 +75,7 @@ C) SSE 없이 polling만 유지한다.
 
 X) 기타 (아래 [Answer]: 태그 뒤에 설명해 주세요)
 
-[Answer]:
+[Answer]: A — 단, v1은 Last-Event-ID 기반 event-log replay를 만들지 않고 재접속 시 status endpoint/current snapshot으로 복구한다.
 
 ### Q4 — Artifact snapshot layout
 stage snapshot은 어떻게 저장할까요?
@@ -88,7 +88,7 @@ C) 최종 결과만 저장하고 stage snapshot은 저장하지 않는다.
 
 X) 기타 (아래 [Answer]: 태그 뒤에 설명해 주세요)
 
-[Answer]:
+[Answer]: A
 
 ### Q5 — Worker concurrency and backpressure
 worker 동시성은 어떻게 제한할까요?
@@ -101,7 +101,7 @@ C) 항상 job 하나씩만 전역 직렬 처리한다.
 
 X) 기타 (아래 [Answer]: 태그 뒤에 설명해 주세요)
 
-[Answer]:
+[Answer]: A
 
 ### Q6 — Output validation component
 LLM 출력 검증 컴포넌트는 어디에 둘까요?
@@ -114,20 +114,20 @@ C) 검증 없이 LLM 출력을 저장한다.
 
 X) 기타 (아래 [Answer]: 태그 뒤에 설명해 주세요)
 
-[Answer]:
+[Answer]: A
 
-### Q7 — DOCX parser integration
-DOCX parser는 어떤 adapter 경계로 붙일까요?
+### Q7 — Manuscript parser integration
+원고 파서는 어떤 adapter 경계로 붙일까요?
 
-A) shared ingestion/doc-model or evidence parser adapter에 붙이고 novelty worker는 parsed attachment/Evidence만 소비한다. (권장)
+A) PDF/Markdown/TXT 파싱은 shared ingestion/doc-model or evidence parser adapter에 두고 novelty worker는 parsed attachment/Evidence만 소비한다. DOCX는 v1 제외. (권장)
 
-B) novelty worker 내부에서 DOCX를 직접 파싱한다.
+B) novelty worker 내부에서 원고를 직접 파싱한다.
 
-C) 프론트에서 DOCX를 텍스트로 변환해 보낸다.
+C) 프론트에서 원고를 텍스트로 변환해 보낸다.
 
 X) 기타 (아래 [Answer]: 태그 뒤에 설명해 주세요)
 
-[Answer]:
+[Answer]: A
 
 ### Q8 — Notion export safety
 Notion export 실패와 토큰 문제는 어떤 패턴으로 처리할까요?
@@ -140,7 +140,7 @@ C) Notion 토큰을 job payload에 평문 저장한다.
 
 X) 기타 (아래 [Answer]: 태그 뒤에 설명해 주세요)
 
-[Answer]:
+[Answer]: A
 
 ### Q9 — Cancel behavior
 사용자가 job을 취소하면 worker는 어떻게 반응할까요?
@@ -153,7 +153,7 @@ C) 취소 시 모든 artifact를 즉시 삭제한다.
 
 X) 기타 (아래 [Answer]: 태그 뒤에 설명해 주세요)
 
-[Answer]:
+[Answer]: A
 
 ### Q10 — Frontend degraded display contract
 프론트 degraded 표시는 어떤 계약을 따를까요?
@@ -166,7 +166,7 @@ C) 하나라도 degraded면 전체 화면을 실패로 표시한다.
 
 X) 기타 (아래 [Answer]: 태그 뒤에 설명해 주세요)
 
-[Answer]:
+[Answer]: A
 
 ## 4. 답변 후 생성할 산출물 요약
 

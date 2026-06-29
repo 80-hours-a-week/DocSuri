@@ -353,7 +353,7 @@
 
 ### US-NV2 — 업로드 원고에서 novelty job 시작
 **As** 연구자(P1), **I want** 작성 중인 논문 문서를 올려 novelty 분석을 받기를, **so that** 내 원고와 겹치는 선행 연구와 차별화 지점을 확인한다.
-- **Given** 사용자가 PDF, DOCX, Markdown, TXT 중 하나를 업로드하면, **When** 분석을 시작하면, **Then** 공통 ingestion/doc-model 또는 문헌탐색·근거형성 경로가 문서를 파싱하고 novelty Agent는 파싱된 Evidence/SourceRef만 소비한다.
+- **Given** 사용자가 PDF, Markdown, TXT 중 하나를 업로드하면, **When** 분석을 시작하면, **Then** 공통 ingestion/doc-model 또는 문헌탐색·근거형성 경로가 문서를 파싱하고 novelty Agent는 파싱된 Evidence/SourceRef만 소비한다.
 - **Given** 파싱에 실패하면, **When** 결과 화면을 보면, **Then** 파싱 실패 사유를 비기술 메시지로 표시하고 원본이나 내부 오류 상세를 노출하지 않는다.
 - **Traces**: FR-30, SEC-5, SEC-9
 

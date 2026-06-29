@@ -81,10 +81,6 @@ novelty session 삭제는 job metadata, 입력 참조, 단계 이벤트, partial
 
 SourceRef와 DocModel anchor 검증은 `docmodel.md`의 Section/Block id와 `ports.md`의 공통 앵커 확인 방향을 따른다. novelty Agent가 별도 앵커 검증 정책을 새로 만들지 않는다.
 
-### BR-NV20 — DOCX Parser Decision Remains NFR/Open Item
-
-요구사항상 DOCX는 v1 포함이지만 신규 파서 의존성은 NFR/Code 단계에서 확정한다. FD는 owner-scoped attachment와 parsed Evidence 소비 경계만 고정한다.
-
 ## Progress State Rules
 
 | Transition | Rule |
@@ -149,11 +145,11 @@ SourceRef와 DocModel anchor 검증은 `docmodel.md`의 Section/Block id와 `por
 
 | Requirement / Story | Rules |
 |---|---|
-| FR-30 | BR-NV1, BR-NV2, BR-NV20 |
+| FR-30 | BR-NV1, BR-NV2 |
 | FR-31 | BR-NV2, BR-NV4, BR-NV5, BR-NV6, BR-NV7, BR-NV8 |
 | FR-32 | BR-NV3, BR-NV9, BR-NV10, BR-NV11 |
 | FR-33 | BR-NV12 |
 | FR-34 | BR-NV13, BR-NV14 |
 | FR-35 | BR-NV15, BR-NV16, BR-NV17, BR-NV18 |
 | QT-10 | PBT-NV1..PBT-NV7 |
-| US-NV1..US-NV9 | BR-NV1..BR-NV20 |
+| US-NV1..US-NV9 | BR-NV1..BR-NV19 |

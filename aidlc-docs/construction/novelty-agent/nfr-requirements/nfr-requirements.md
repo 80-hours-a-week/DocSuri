@@ -48,7 +48,7 @@ Novelty Agent runs long-running research-assist jobs from natural language input
 | NFR-NV-SEC4 | Notion export requires user-specific OAuth or explicit connection; tokens must be encrypted at rest and revocable. |
 | NFR-NV-SEC5 | Notion export sends only user-approved preview content. It is never automatic. |
 | NFR-NV-SEC6 | User-facing failures hide parser, tool, MCP, token, stack trace, and infrastructure details. |
-| NFR-NV-SEC7 | DOCX support belongs in the shared ingestion/doc-model or evidence formation parsing boundary, not inside novelty Agent business logic. |
+| NFR-NV-SEC7 | Manuscript parsing belongs in the shared ingestion/doc-model or evidence formation parsing boundary, not inside novelty Agent business logic. |
 
 ## Cost and Budget
 
@@ -76,14 +76,12 @@ Novelty Agent runs long-running research-assist jobs from natural language input
 | NFR-NV-V3 | This is novelty-local output validation, not a second U6 `GroundingEnforcementHook` invocation site. |
 | NFR-NV-V4 | Anchor existence may reuse the shared DocModel/anchor utility direction from `ports.md` and `docmodel.md`; enforcement policy remains local to novelty outputs. |
 
-## DOCX and Manuscript Parsing
+## Manuscript Parsing
 
 | ID | Requirement |
 |---|---|
-| NFR-NV-DOC1 | DOCX remains in v1 scope. |
-| NFR-NV-DOC2 | Before adding a dependency, implementation must confirm whether an existing shared parser path already handles DOCX. |
-| NFR-NV-DOC3 | If absent, choose a lightweight Python DOCX parser in the shared parsing layer; novelty Agent consumes parsed Evidence/SourceRef only. |
-| NFR-NV-DOC4 | DOCX parse failure must produce a user-safe parse failure state and must not leak document internals. |
+| NFR-NV-MP1 | v1 manuscript upload supports PDF, Markdown, and TXT. DOCX is deferred to a later cycle because no existing parser path is present. |
+| NFR-NV-MP2 | Novelty Agent consumes parsed Evidence/SourceRef only; parser failures must produce user-safe parse failure states without leaking document internals. |
 
 ## Test Requirements
 
@@ -103,7 +101,7 @@ Novelty Agent runs long-running research-assist jobs from natural language input
 
 | Source | Covered By |
 |---|---|
-| FR-30 | NFR-NV-P1/P2, NFR-NV-SEC1/SEC7, NFR-NV-DOC1..DOC4 |
+| FR-30 | NFR-NV-P1/P2, NFR-NV-SEC1/SEC7, NFR-NV-MP1..MP2 |
 | FR-31 | NFR-NV-P3, NFR-NV-SC2, NFR-NV-R1/R2 |
 | FR-32 | NFR-NV-V1..V4 |
 | FR-33 | QT-10.5, NFR-NV-V1/V2 |

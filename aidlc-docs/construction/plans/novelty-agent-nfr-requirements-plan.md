@@ -30,7 +30,7 @@
   - job persistence and worker boundary
   - U2 full/search adapter reuse
   - Agent-Browser and Notion MCP execution boundary
-  - DOCX parser decision
+  - manuscript parser boundary
   - PBT framework and CI boundary
 
 ---
@@ -117,12 +117,12 @@ X) 기타 (아래 [Answer]: 태그 뒤에 설명해 주세요)
 
 [Answer]: A
 
-### Q7 — DOCX 파서 의존성
-DOCX 업로드 지원은 어떤 방식으로 확정할까요?
+### Q7 — 원고 파서 의존성
+원고 업로드 지원은 어떤 방식으로 확정할까요?
 
-A) v1에 DOCX를 포함하되, 기존 Python 생태계의 경량 파서를 선택하고 실패 시 명확한 파싱 실패 상태로 degrade한다. (권장)
+A) v1은 PDF/Markdown/TXT만 지원하고 DOCX는 차기 사이클로 둔다. (권장)
 
-B) DOCX는 이번 구현에서 제외하고 PDF/Markdown/TXT만 지원한다.
+B) v1에 DOCX를 포함하되 신규 Python DOCX 파서를 공통 파싱 레이어에 추가한다.
 
 C) DOCX를 외부 SaaS 변환 서비스로 보낸다.
 
@@ -226,4 +226,4 @@ X) 기타 (아래 [Answer]: 태그 뒤에 설명해 주세요)
 답변 확정 후 다음 문서를 생성한다.
 
 - `nfr-requirements.md`: job 비동기, 저장/보존, 보안, 저하, 비용, 관측성, 테스트 요구사항
-- `tech-stack-decisions.md`: 기존 backend/worker/RDS/S3/U6/U2 재사용 여부, Agent-Browser/Notion/DOCX/PBT 선택
+- `tech-stack-decisions.md`: 기존 backend/worker/RDS/S3/U6/U2 재사용 여부, Agent-Browser/Notion/원고 파싱/PBT 선택
