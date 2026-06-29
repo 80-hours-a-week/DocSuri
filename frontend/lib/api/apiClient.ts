@@ -63,6 +63,7 @@ export interface ApiClientOptions {
 export interface PageQuery {
   limit?: number;
   cursor?: string;
+  query?: string;
 }
 
 const DEFAULT_PAGE_LIMIT = 20;
@@ -70,6 +71,7 @@ const DEFAULT_PAGE_LIMIT = 20;
 function pageQuery(params?: PageQuery): string {
   const sp = new URLSearchParams({ limit: String(params?.limit ?? DEFAULT_PAGE_LIMIT) });
   if (params?.cursor) sp.set('cursor', params.cursor);
+  if (params?.query) sp.set('query', params.query);
   return `?${sp.toString()}`;
 }
 

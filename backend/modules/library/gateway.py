@@ -73,10 +73,18 @@ class DiscoverySearchGateway:
         request = SearchRequest(query=query)
 
         loop = asyncio.get_running_loop()
-        response = await loop.run_in_executor(
-            None,
-            partial(run_search, bundle.orchestrator, grounding_hook, request, ctx),
-        )
+        try:
+            response = await loop.run_in_executor(
+                None,
+                partial(run_search, bundle.orchestrator, grounding_hook, request, ctx),
+            )
+        except Exception:
+            return SearchResultSetDTO(
+                SearchResultPageDTO(
+                    cards=[],
+                    meta=ResultMeta(resultCount=0, degraded=False, degradationMode=None),
+                )
+            )
 
         root = response.root
 

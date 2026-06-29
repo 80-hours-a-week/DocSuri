@@ -12,11 +12,10 @@ export function SaveSearchButton({ query }: { query: string }) {
   useEffect(() => {
     let cancelled = false;
     getApiClient()
-      .listSavedSearches()
+      .listSavedSearches({ query })
       .then((page) => {
         if (cancelled) return;
-        const alreadySaved = page.items.some((s) => s.query === query);
-        setState(alreadySaved ? 'saved' : 'idle');
+        setState(page.items.length > 0 ? 'saved' : 'idle');
       })
       .catch(() => {
         if (!cancelled) setState('idle');
