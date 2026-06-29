@@ -173,11 +173,12 @@ class IngestionStack(Stack):
                 # (bedrock_model_id_v2) stays unset now the migration is done.
                 "DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus-v2",
                 "DOCSURI_OPENSEARCH_ALIAS": "docsuri-corpus",
-                # SS/OpenAlex temporarily disabled: the SS bulk-search adapter sends an invalid
-                # request (400) and on_schedule_tick has no per-source isolation, so one bad
-                # source crashes the whole tick + worker. Re-enable once both are fixed and a
-                # bounded backfill window is set. GROBID stays wired for that re-enable.
-                "DOCSURI_CORPUS_SOURCES": "ARXIV",
+                # SS/OpenAlex re-enabled after fixing the SS bulk-search 400 (commit c7bd065d)
+                # and adding per-source isolation to on_schedule_tick — a bad source now logs +
+                # skips instead of crashing the worker. Watermarks seeded to now(), so the daily
+                # tick harvests only forward deltas; a real SS/OpenAlex corpus needs a separate
+                # bounded backfill (DOCSURI_BACKFILL_START/END), not enabled here.
+                "DOCSURI_CORPUS_SOURCES": "ARXIV,SEMANTIC_SCHOLAR,OPENALEX",
                 "DOCSURI_GROBID_URL": "http://127.0.0.1:8070",
                 "DOCSURI_OPENSEARCH_INDEX_V2": "docsuri-corpus-v2",
                 "DOCSURI_CONTROL_PLANE_DSN": control_plane_dsn,
