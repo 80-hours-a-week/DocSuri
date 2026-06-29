@@ -14,6 +14,7 @@ export function RouteGuard({ redirectTo, children }: { redirectTo: string; child
   const router = useRouter();
   const sawSignOut = useRef(false);
 
+  // Logout callers must navigate after signOut; this latch only suppresses RouteGuard's /login race.
   if (signingOut) sawSignOut.current = true;
   const isSignOutFlow = signingOut || sawSignOut.current;
 
