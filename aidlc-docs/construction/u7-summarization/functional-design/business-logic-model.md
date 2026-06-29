@@ -83,6 +83,7 @@
 ### 3.8 `GroundingValidator` (Q4=A / Q15=A)
 - **결정적 체크만**(LLM-judge 미사용): ① 앵커 실재성(섹션/표/span이 `RefinedSource`에 실재?) ② 수치 일치(정규화 비교 95.3%↔0.953) ③ 스키마 완전성 ④ 잘림/빈출력.
 - 판정 → `AnchorVerdict`. **1차 실패 → 1회 재시도 → 그래도 실패 시 기권(fail-closed)**. 정당한 코퍼스밖 abstain은 재시도 없음.
+- **레지스트리 등재(D3 / `shared/ports` §2.1)**: 합성 시점(`real_wiring.build_grounding_registry`)에 `GroundingValidatorRegistry`에 `domain=summary`·`authority=advisory`·`owner_unit=U7`로 등재된다. enforcement 권위는 `search`(U6) 단독이며 레지스트리 가드가 요약의 enforcement 주장을 거부한다(단일 근거화 권위 = 검색 한정). **호출 경로는 불변** — 오케스트레이터가 `validate`를 직접 호출(seam 유지)하고, 레지스트리는 "누가 어느 도메인을 소유·강제하는가"를 기록하는 거버넌스 카탈로그다. 별개 배포 단위이므로 런타임 단일 싱글톤이 아니라 모듈별 등재.
 
 ### 3.9 `ResultAssembler`
 - 통과 → `SummaryResultDTO`(draft/translation + anchors + meta). 후치환 용어집 적용(3.5 경로2). write-through + telemetry.
