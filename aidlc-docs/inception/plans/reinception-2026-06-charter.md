@@ -151,6 +151,10 @@ AI/ML 최근 1년  -->  최근 5년  -->  전체  -->  타 분야 확장
 Chunk 전략 · Embedding 모델 · Hybrid Search · Cross-Encoder Reranker · Learning to Rank ·
 Query Expansion · Ranking Personalization · Feedback Learning · Click Log 기반 Ranking 개선.
 
+> **백로그 (페이즈 2 이월, 2026-06-29)**:
+> - **연도/메타데이터 facet 필터** — 검색창의 정렬(관련도순/최신순) 옆에 연도 선택(전체/2026/2025…). 클라이언트 top-N 필터가 아니라 **백엔드 facet**으로: `SearchRequest`에 연도 필터 추가 → `HybridRetriever`가 OpenSearch `year` 필드로 필터 재질의 → 전체=전체 정렬, 연도 선택=그 연도 결과에 관련도/최신순 정렬. (페이즈 2에서 "검색 기능 추가"라 범위 밖으로 이월.)
+> - **상세 라우트 소스 중립 *식별자*** — 상세 **헤더**의 소스 표시·링크아웃은 페이즈 2에서 소스 중립화 완료(`PaperMetaDTO`/`PaperMetaVM` +sourceName/sourceUrl·`PaperDetailIsland` 렌더, 카드와 일치). **잔여**: 라우트 *키* 자체(`/paper/{id}`가 `arxivId` 기반)는 비-arXiv 전용 논문(arXiv 미수록) 대비 소스 중립 id 필요(U2 코드리뷰 #3 — id/라우트 부분만 이월).
+
 ---
 
 ## 4. 에이전트 유닛 경계 재설계 (D2 — 2유닛 분리 승인 / 의존 방향 — 확정 대상)
