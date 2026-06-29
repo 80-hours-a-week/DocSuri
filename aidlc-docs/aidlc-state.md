@@ -524,3 +524,34 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - Scope boundary: v1 = 모드 A 구현; novelty(모드 B)는 다음 사이클(Q4=A). 생성 산문·재현성 판정 제외(C-2). HOW(코퍼스 확장·외부 API·출력 스키마·근거표 컬럼·모델·멀티턴·네비/세션 UI)는 Construction 라운드로 이월.
 - Current gate: Requirements review/approval (PR #170). Next stage (별도 승인): User Stories → Units Generation → Construction.
 - Code generated: no.
+
+## Novelty Agent — Requirements, User Stories, Functional Design Plan Ready
+
+- Date: 2026-06-29
+- Stage: INCEPTION / Requirements Analysis + User Stories, CONSTRUCTION / Functional Design question gate
+- Trigger: 차별화(novelty) 형성 Agent 구현을 위한 AI-DLC 질문지 답변 반영 및 다음 단계 진행.
+- Branch: `docs/novelty-agent-questionnaire`
+- Inputs:
+  - `aidlc-docs/inception/requirements/requirement-verification-questions-novelty-agent.md`
+  - `requirement-verification-questions-answer-1.md`
+  - `aidlc-docs/construction/shared/evidence-formation-port.md`
+- Answers reflected:
+  - Q1~Q7=A, Q8=B(뉴스 검색 v1 제외), Q9~Q28=A, Q29=C, Q30=A, Q31=A, Q32=B.
+- Requirements updated:
+  - `aidlc-docs/inception/requirements/requirements.md`
+  - Added FR-30..35, NFR-P5, NFR-R3, QT-10, novelty Agent §12 carve-out, success criterion #9, traceability row.
+- User stories updated:
+  - `aidlc-docs/inception/user-stories/stories.md`
+  - Added Epic 9 with US-NV1..US-NV9.
+  - Updated persona/story and FR/story coverage maps.
+  - `aidlc-docs/inception/user-stories/personas.md` updated for P1/P2/OP novelty goals and ops responsibility.
+- Plans created:
+  - `aidlc-docs/inception/plans/novelty-agent-user-stories-assessment.md`
+  - `aidlc-docs/inception/plans/novelty-agent-story-generation-plan.md`
+  - `aidlc-docs/construction/plans/novelty-agent-functional-design-plan.md` (Functional Design 질문 16개, 답변 대기)
+- Scope boundary:
+  - novelty Agent consumes EvidenceFormationPort/SourceRef; it does not implement literature/evidence formation internals.
+  - v1 external search = GitHub + datasets; news search is next cycle.
+  - No novelty score, "newness proven" judgment, paper prose generation, or code skeleton generation.
+- Current gate: `novelty-agent-functional-design-plan.md` Q1~Q16 답변 대기.
+- Code generated: no.
