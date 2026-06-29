@@ -91,7 +91,9 @@ export class ApiClient {
   /** Submit a search; returns a classified terminal outcome (FR-11). */
   async search(query: string): Promise<SearchOutcome> {
     const body: SearchRequest = { query };
-    const res = await this.request({ method: 'POST', path: '/api/search', body, idempotent: true });
+    // idempotent: false — POST /api/search records search history on the backend.
+    // Retrying on 500 would create duplicate history entries.
+    const res = await this.request({ method: 'POST', path: '/api/search', body, idempotent: false });
     if (res.status === 200 || res.status === 400) {
       return classifySearchResponse(res.body);
     }
