@@ -862,9 +862,20 @@ class RefreshOrchestrationService:
         for source_name in self._enabled_sources:
             if source_name is SourceName.ARXIV:
                 continue
-            queued += self._queue_external_source(
-                source_name, since=since, until=until, kind=JobKind.SEED_REBUILD
-            )
+            # Per-source isolation: one source exhausting its retries (e.g. unauthenticated SS
+            # rate-limited to abort) must not drop the others — log + skip and carry on, mirroring
+            # on_schedule_tick. Each source's paged fetch already retries transient blips, so this
+            # only catches a sustained/permanent failure of that whole source.
+            try:
+                queued += self._queue_external_source(
+                    source_name, since=since, until=until, kind=JobKind.SEED_REBUILD
+                )
+            except Exception as exc:  # noqa: BLE001 — defensive boundary around one source
+                self._observability.emit_metric(
+                    "ingestion.backfill.external.failed",
+                    1.0,
+                    {"source": source_name.value, "error": type(exc).__name__},
+                )
         self._observability.emit_metric("ingestion.backfill.external.queued", float(queued), {})
         return queued
 

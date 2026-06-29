@@ -3,6 +3,7 @@ from __future__ import annotations
 import ipaddress
 import json
 import socket
+import time
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
@@ -27,6 +28,45 @@ _QUERY_TERMS = {
     "cs.LG": "machine learning",
     "stat.ML": "machine learning",
 }
+
+
+# ponytail: bounded retry for transient 429/5xx during multi-page harvests — the bulk endpoints
+# page for a long time, so one transient blip must not abort the whole run. A sustained rate-limit
+# (e.g. unauthenticated SS) still surfaces after the cap. Linear backoff is enough at this volume;
+# swap for exponential + jitter if a real API key lets us push throughput.
+_MAX_GET_JSON_RETRIES = 5
+_RETRY_BACKOFF_SECONDS = 2.0
+
+
+def _get_json_retrying(
+    url: str,
+    *,
+    params: dict[str, str],
+    headers: dict[str, str] | None,
+    timeout_seconds: float,
+    transport: object | None,
+    stage: str,
+) -> dict[str, Any]:
+    """``_get_json`` that retries transient failures (429/5xx/timeout -> RetriableIngestionError)
+    with linear backoff. Permanent errors (other 4xx, parse) propagate immediately. Used for the
+    paged harvest calls so a single transient page failure mid-pagination doesn't discard the
+    whole accumulated run."""
+    attempt = 0
+    while True:
+        try:
+            return _get_json(
+                url,
+                params=params,
+                headers=headers,
+                timeout_seconds=timeout_seconds,
+                transport=transport,
+                stage=stage,
+            )
+        except RetriableIngestionError:
+            attempt += 1
+            if attempt > _MAX_GET_JSON_RETRIES:
+                raise
+            time.sleep(_RETRY_BACKOFF_SECONDS * attempt)
 
 
 class SemanticScholarCorpusSource:
@@ -74,7 +114,7 @@ class SemanticScholarCorpusSource:
             }
             if token:
                 params["token"] = token
-            payload = _get_json(
+            payload = _get_json_retrying(
                 f"{self._base_url}/paper/search/bulk",
                 params=params,
                 headers={"x-api-key": self._api_key} if self._api_key else None,
@@ -133,7 +173,7 @@ class OpenAlexCorpusSource:
             ]
             if until is not None:
                 filters.append(f"to_updated_date:{until.date().isoformat()}")
-            payload = _get_json(
+            payload = _get_json_retrying(
                 f"{self._base_url}/works",
                 params={
                     "filter": ",".join(filters),
