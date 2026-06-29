@@ -164,3 +164,24 @@
 - `MypageController`
 - `UserPreferencesService`
 - `DataExportService`
+
+---
+
+## U11 — Evidence Formation Agent 서비스 (재인셉션 Phase 4 / requirements "[U4]")
+
+> 공통: 모든 호출은 U6 게이트웨이(authn/authz·rate-limit·비용·관측성) 통과 후 진입. 스트리밍 응답(SSE)은 응답 엣지 근거화 게이트를 통과한다.
+
+### EvidenceChatService (동기 스트리밍 — SSE)
+- **책임**: 사용자 채팅 턴 오케스트레이션 — 세션 진입·생성, Agent 실행, 스트리밍 응답, 턴 영속(FR-30, FR-31, NFR-P5).
+- **오케스트레이션**: `EvidenceChatController`(sync, SSE) → 세션 load/create(`EvidenceSessionRepository`) → `EvidenceAgentOrchestrator.run(request, ctx)` → 스트림 `EvidenceChunk` 반환 → 완료 시 `EvidenceSessionRepository.appendTurn`(turn 영속) → SSE 종료. 후속 질문은 `continueSession`(멀티턴 맥락 유지, Q7=A). 긴 분석은 `EvidenceJobService`로 오프로드(NFR-P5, Q9=A).
+- **Trace**: FR-30, FR-31, NFR-P5, Q7=A, US-EV1, US-EV2, US-EV5
+
+### EvidenceSessionManagementService (동기 CRUD)
+- **책임**: 세션 목록·삭제·초기화 오케스트레이션 — owner-scoped SEC-8 소유권 강제(FR-32).
+- **오케스트레이션**: `EvidenceChatController` → 소유권 확인(`U3.AuthorizationGuard` 위임) → `EvidenceSessionRepository.listSessions/deleteSession/resetAllSessions` → 응답. 타 소유자 세션은 NotFound 일반화(SEC-9, SEC-15).
+- **Trace**: FR-32, SEC-8, SEC-9, SEC-15, US-EV7, US-EV8
+
+### EvidenceJobService (비동기 잡 옵션 — 긴 다논문 분석)
+- **책임**: 스트리밍 SLA를 초과하는 긴 다논문 분석을 비동기 잡으로 오프로드(NFR-P5, Q9=A, U7 잡 패턴 재사용).
+- **오케스트레이션**: 요청 수신 → 즉시 `jobId` 응답(폴링 URL 포함) → `EvidenceAgentOrchestrator` 실행을 비동기 잡 큐에 발행(event) → 워커가 결과 완료 후 `EvidenceSessionRepository`에 저장 → 클라이언트는 `GET /api/evidence/jobs/:id`로 상태/결과 폴링.
+- **Trace**: NFR-P5, Q9=A, US-EV9
