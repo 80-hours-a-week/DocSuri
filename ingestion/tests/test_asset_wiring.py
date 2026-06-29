@@ -50,7 +50,7 @@ class _Extracted:
         self._assets = assets
         self._raises = raises
 
-    def extract(self, *, paper_id, version, pdf, eprint):
+    def extract(self, *, paper_id, version, pdf, eprint, figure_specs=None):
         if self._raises:
             raise RuntimeError("boom")
         return self._assets
