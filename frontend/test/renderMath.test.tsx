@@ -62,4 +62,35 @@ describe('renderInlineMath', () => {
     expect(c.querySelector('.katex')).not.toBeNull();
     expect(c.textContent).not.toContain('\\myop');
   });
+
+  it('resolves common blackboard-bold fallbacks (\\R) without any meta.macros', () => {
+    // \R is not a KaTeX builtin; without the fallback map it would render as red source text.
+    const c = html(<MathDisplay latex={'x \\in \\R'} />);
+    expect(c.querySelector('.katex')).not.toBeNull();
+    expect(c.textContent).not.toContain('\\R');
+    expect(c.querySelector('.katex-error')).toBeNull();
+  });
+
+  it('swallows non-math layout macros (\\centering) instead of red-flagging them', () => {
+    const c = html(<MathDisplay latex={'\\centering x^2'} />);
+    expect(c.querySelector('.katex')).not.toBeNull();
+    expect(c.textContent).not.toContain('\\centering');
+    expect(c.querySelector('.katex-error')).toBeNull();
+  });
+
+  it('lets a paper macro override a fallback default', () => {
+    const c = html(<MathDisplay latex={'\\R'} macros={{ '\\R': '\\mathbb{Q}' }} />);
+    expect(c.querySelector('.katex')).not.toBeNull();
+    expect(c.textContent).not.toContain('\\R');
+  });
+
+  it('does not leak a \\gdef across macro-less renders (isolated default macros)', () => {
+    // KaTeX mutates the macro object it is given — a \gdef writes a global into it. The default
+    // (no meta.macros) path is shared by every abstract; a single mutable object would carry one
+    // paper's \gdef into every later render. Each default-path render gets a fresh copy instead.
+    html(<MathDisplay latex={'\\gdef\\leaktest{LEAKED}'} />);
+    const after = html(<MathDisplay latex={'\\leaktest'} />);
+    expect(after.textContent).not.toContain('LEAKED'); // definition must not have leaked
+    expect(after.textContent).toContain('\\leaktest'); // shows the raw, undefined command
+  });
 });

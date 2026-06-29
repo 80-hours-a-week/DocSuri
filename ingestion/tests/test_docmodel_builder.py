@@ -86,6 +86,60 @@ def _builder(
     )
 
 
+_TEI = (
+    '<TEI xmlns="http://www.tei-c.org/ns/1.0"><text><body>'
+    "<div><head>Method</head><p>Body text.</p></div>"
+    "</body></text></TEI>"
+)
+
+
+def test_build_from_tei_produces_structured_sections() -> None:
+    store = _FakeStore()
+    builder = _builder(_FakeSource(None), store)
+    result = builder.build_from_tei("src-1", 1, "Title", "Abs", _TEI, "fallback text")
+    assert result.cached is False
+    titles = [s.title for s in result.docModel.sections]
+    assert "Method" in titles
+    assert store.put_calls  # cached for reuse
+
+
+def test_build_from_tei_falls_back_to_flat_text_on_bad_tei() -> None:
+    store = _FakeStore()
+    builder = _builder(_FakeSource(None), store)
+    result = builder.build_from_tei("src-2", 1, "Title", "Abs", "<TEI", "flat fallback body")
+    # malformed TEI -> flat-text doc-model carrying the fallback text as a single paragraph
+    assert "flat fallback body" in result.docModel.fullText
+
+
+_TEI_FORMULA = (
+    '<TEI xmlns="http://www.tei-c.org/ns/1.0"><text><body><div><head>M</head>'
+    '<formula coords="1,5,6,30,12"><label>(2)</label>x=y</formula>'
+    "</div></body></text></TEI>"
+)
+
+
+def test_build_from_tei_collects_crop_specs_in_one_parse() -> None:
+    # The asset step reuses the crop specs gathered during this single TEI parse (out-param)
+    # instead of re-parsing via tei_crop_specs. assetIds match the doc-model blocks (same walk).
+    store = _FakeStore()
+    builder = _builder(_FakeSource(None), store)
+    crops: list = []
+    result = builder.build_from_tei("src-9", 1, "T", "A", _TEI_FORMULA, "fb", crops=crops)
+    assert result.cached is False
+    assert [c.asset_id for c in crops] == ["src-9:v1:formula:0"]
+
+
+def test_build_from_tei_skips_crop_collection_on_cache_hit() -> None:
+    # A cache hit does not parse the TEI, so crops stays empty — the caller relies on this
+    # (via result.cached) to fall back to deriving the specs from the TEI itself.
+    store = _FakeStore(cached=_doc())
+    builder = _builder(_FakeSource(None), store)
+    crops: list = []
+    result = builder.build_from_tei("src-1", 1, "T", "A", _TEI_FORMULA, "fb", crops=crops)
+    assert result.cached is True
+    assert crops == []
+
+
 def test_cache_hit_returns_cached_without_fetching() -> None:
     store = _FakeStore(cached=_doc())
     source = _FakeSource((_HTML, SourceTier.native_html))

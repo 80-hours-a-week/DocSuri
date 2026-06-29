@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel
 from typing import Any
+from enum import StrEnum
 
 
 class DegradationMode(RootModel[str]):
@@ -74,6 +75,15 @@ class ResultMeta(BaseModel):
     )
 
 
+class Scope(StrEnum):
+    """
+    Retrieval breadth. "lite" (default): BM25 over title+abstract only, no k-NN — the low-latency human search box (P50<3s). "full": hybrid (title+abstract+full-body chunks + k-NN) for deep recall — the literature/evidence agent and the opt-in "본문까지 검색" toggle. Absent ⇒ lite. Trace: FR-2.
+    """
+
+    lite = 'lite'
+    full = 'full'
+
+
 class SearchRequest(BaseModel):
     """
     Synchronous search entry input. Source: QueryIntakeController.search(request: SearchRequest, ctx) (component-methods U2). Trace: dtos.md §1, FR-1, SEC-5, US-H1.
@@ -87,6 +97,10 @@ class SearchRequest(BaseModel):
         description='Search query. Validated per FR-1/SEC-5 (non-empty, <=500 chars, sanitized). Trace: FR-1, SEC-5.',
         max_length=500,
         min_length=1,
+    )
+    scope: Scope | None = Field(
+        None,
+        description='Retrieval breadth. "lite" (default): BM25 over title+abstract only, no k-NN — the low-latency human search box (P50<3s). "full": hybrid (title+abstract+full-body chunks + k-NN) for deep recall — the literature/evidence agent and the opt-in "본문까지 검색" toggle. Absent ⇒ lite. Trace: FR-2.',
     )
     options: Any | None = Field(
         None,

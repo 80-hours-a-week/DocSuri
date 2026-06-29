@@ -124,8 +124,12 @@ class InputRefiner:
             if kind == "paragraph":
                 emit(b.text.strip() + "\n\n")
             elif kind == "formula":
-                formulas.append(_clean(b.latex))
-                emit(b.latex + "\n\n")
+                # Image-only formulas (PDF/GROBID page-crop fallback) carry no LaTeX — they are
+                # display-only with no text to summarize, so skip them here. Guarding avoids a
+                # TypeError on the optional latex field (re.sub/str concat against None).
+                if b.latex:
+                    formulas.append(_clean(b.latex))
+                    emit(b.latex + "\n\n")
             elif kind == "table":
                 label = _clean(b.anchorLabel or "")
                 caption = _clean(b.caption or "")

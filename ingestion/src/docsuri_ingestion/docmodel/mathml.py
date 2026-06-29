@@ -36,7 +36,8 @@ _DELIMITER_PAIRS = (("$$", "$$"), ("\\[", "\\]"), ("\\(", "\\)"), ("$", "$"))
 _INTERNAL_MACRO_RE = re.compile(r"\\@[A-Za-z@]+")
 _LAYOUT_MACRO_RE = re.compile(
     r"\\(?:centering|raggedright|raggedleft|centerline|noindent|par|"
-    r"hfill|vfill|hfil|vfil|medskip|smallskip|bigskip|newline|linebreak|newpage|clearpage)"
+    r"hfill|vfill|hfil|vfil|medskip|smallskip|bigskip|newline|linebreak|newpage|clearpage|"
+    r"protect|xspace|unskip)"
     r"(?![A-Za-z])"
 )
 _LABEL_RE = re.compile(r"\\label\s*\{[^{}]*\}")

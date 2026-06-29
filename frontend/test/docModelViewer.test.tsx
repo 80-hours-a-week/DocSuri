@@ -31,6 +31,18 @@ describe('DocModelViewer', () => {
     expect(document.querySelector('.katex')).toBeTruthy();
   });
 
+  it('keeps a numbered formula as a placeholder when it has neither LaTeX nor a crop image', async () => {
+    render(<DocModelViewer paperId="2401.00001" version={1} anchor={null} />);
+    await screen.findByRole('heading', { name: 'Model Architecture' });
+
+    // The image-fallback equation (2) has no LaTeX and no loadable asset — it degrades to a
+    // placeholder, but the equation number survives so the anchor target + in-text reference
+    // alignment are preserved (the whole block must NOT disappear).
+    const placeholder = screen.getByLabelText('수식을 표시할 수 없습니다');
+    expect(placeholder).toBeTruthy();
+    expect(screen.getByText('(2)')).toBeTruthy();
+  });
+
   it('reveals the "맨 위로" button once the reading surface scrolls past the threshold', async () => {
     render(<DocModelViewer paperId="2401.00001" version={1} anchor={null} />);
     await screen.findByRole('heading', { name: 'Model Architecture' });

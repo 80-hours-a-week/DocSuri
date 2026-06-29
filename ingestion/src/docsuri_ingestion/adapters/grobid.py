@@ -9,19 +9,41 @@ _TEMPORARY_4XX = {408, 409, 423, 425, 429}
 
 
 class GrobidHttpClient:
-    """Internal GROBID client. The PDF bytes are posted and discarded in-process."""
+    """Internal GROBID client. The PDF bytes are posted and discarded in-process.
 
-    def __init__(self, *, base_url: str, timeout_seconds: float = 30.0) -> None:
+    ``extract_tei`` returns the raw TEI for the structured doc-model parser; ``extract_text``
+    is the flattened-text projection (legacy/withdrawal-scan use). Both share one POST. The
+    request asks GROBID for ``teiCoordinates`` on figures/formulas so the asset pipeline can
+    page-crop them by bbox (FR-17); coordinates are additive — absent ones simply mean no crop.
+    """
+
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        timeout_seconds: float = 30.0,
+        coordinate_elements: tuple[str, ...] = ("figure", "formula"),
+    ) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout_seconds = timeout_seconds
+        self._coordinate_elements = coordinate_elements
 
     def extract_text(self, pdf: bytes) -> str:
+        """Flattened reading-order text (TEI ``itertext``). Legacy/withdrawal-scan use."""
+        return _tei_to_text(self.extract_tei(pdf))
+
+    def extract_tei(self, pdf: bytes) -> str:
+        """Raw TEI XML from ``processFulltextDocument`` (structured doc-model source)."""
         import httpx
 
+        # GROBID reads ``teiCoordinates`` as a repeated form field naming the elements whose
+        # page/bbox coordinates to emit (the ``coords`` attribute), enabling bbox page-crops.
+        data = {"teiCoordinates": list(self._coordinate_elements)}
         try:
             response = httpx.post(
                 f"{self._base_url}/api/processFulltextDocument",
                 files={"input": ("paper.pdf", pdf, "application/pdf")},
+                data=data,
                 timeout=self._timeout_seconds,
             )
         except httpx.TimeoutException as exc:
@@ -57,7 +79,7 @@ class GrobidHttpClient:
                 reason=FailureReason.PARSE_FAILURE,
                 stage="grobid",
             )
-        return _tei_to_text(response.text)
+        return response.text
 
 
 def _tei_to_text(tei: str) -> str:

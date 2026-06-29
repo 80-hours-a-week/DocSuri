@@ -19,6 +19,8 @@ from docsuri_shared.dtos import DocModel, DocModelResultDTO, SourceTier, SourceU
 
 from docsuri_ingestion.docmodel.macros import extract_macros
 from docsuri_ingestion.docmodel.parser import parse_html_to_docmodel, parse_text_to_docmodel
+from docsuri_ingestion.docmodel.tei import parse_tei_to_docmodel
+from docsuri_ingestion.domain.assets import AssetCropSpec
 from docsuri_ingestion.domain.models import MetadataRecord
 from docsuri_ingestion.ports import DocModelSourcePort, DocModelStorePort, EprintSourcePort
 
@@ -172,6 +174,57 @@ class DocModelBuilder:
             schema_version=self._schema_version,
             generated_at=self._clock.now(),
         )
+        self._store.put(doc)
+        return DocModelResultDTO(status="ok", cached=False, docModel=doc)
+
+    def build_from_tei(
+        self,
+        paper_id: str,
+        version: int,
+        title: str,
+        abstract: str,
+        tei: str,
+        fallback_text: str,
+        *,
+        source_tier: SourceTier = SourceTier.pdf,
+        crops: list[AssetCropSpec] | None = None,
+    ) -> DocModelResultDTO:
+        """Structured doc-model from GROBID TEI for non-arXiv sources (sections/tables/figures).
+
+        Falls back to the flat-text doc-model when TEI is missing or unparseable, so a GROBID
+        quirk never blocks ingestion (best-effort, BR-27-style). The fallback emits a metric so
+        a systematic TEI regression is visible rather than silently degrading every paper.
+
+        When ``crops`` is supplied, the figure/formula page-crop specs are collected during this
+        single TEI parse (the parser's out-param) so the asset step need not re-parse the TEI.
+        On a cache hit the TEI is not parsed, so ``crops`` stays empty — the caller distinguishes
+        that via the returned ``cached`` flag.
+        """
+        cached = self._fresh_cached(paper_id, version)
+        if cached is not None:
+            return DocModelResultDTO(status="ok", cached=True, docModel=cached)
+        doc = None
+        if tei and tei.strip():
+            try:
+                doc = parse_tei_to_docmodel(
+                    tei,
+                    paper_id=paper_id,
+                    version=version,
+                    title=title,
+                    abstract=abstract or None,
+                    source_tier=source_tier,
+                    parser_version=self._parser_version,
+                    schema_version=self._schema_version,
+                    generated_at=self._clock.now(),
+                    crops=crops,
+                )
+            except Exception:  # noqa: BLE001 - any TEI parse fault degrades to flat text
+                self._emit("ingestion.docmodel.tei_fallback", 1.0)
+                doc = None
+        if doc is None:
+            return self.build_from_paper(
+                paper_id, version, title, abstract, fallback_text, source_tier=source_tier
+            )
         self._store.put(doc)
         return DocModelResultDTO(status="ok", cached=False, docModel=doc)
 

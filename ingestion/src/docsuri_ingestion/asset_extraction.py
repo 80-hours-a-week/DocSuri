@@ -15,6 +15,7 @@ import re
 from collections.abc import Sequence
 
 from .domain.assets import (
+    AssetCropSpec,
     ExtractedAsset,
     FigureTableAsset,
     RawAssetCandidate,
@@ -185,7 +186,7 @@ class AssetExtractor:
                         if kind is None or (kind is AssetType.FIGURE and not want_figures):
                             continue
                         bbox = _caption_region(page, line, kind)
-                        image = _render_crop(pdfium_doc, page_no, page, bbox)
+                        image = _render_bbox_to_png(pdfium_doc, page_no, bbox, plumber_page=page)
                         image = self._normalizer.normalize(image) if image else None
                         if image is None:
                             continue
@@ -217,19 +218,30 @@ def _caption_region(page, line, kind) -> tuple[float, float, float, float]:
     return (0.0, max(0.0, top - page_h * 0.4), float(page.width), top)
 
 
-def _render_crop(pdfium_doc, page_no: int, plumber_page, bbox) -> bytes | None:
-    """Render the bbox region of a page to PNG bytes via pypdfium2."""
+def _render_bbox_to_png(
+    pdfium_doc, page_no: int, bbox, *, plumber_page=None
+) -> bytes | None:
+    """Render the bbox region of a page to PNG bytes via pypdfium2 (points-space bbox -> pixels).
+
+    The page size in PDF points comes from ``plumber_page`` when the caller has a pdfplumber page
+    (HTML/caption-region path) and from ``page.get_size()`` otherwise (TEI/GROBID coords path) —
+    the only thing that differs between the two callers. The bbox is clamped to the rendered
+    bitmap so an over-range coordinate can't yield an empty/oversized crop."""
     try:
         page = pdfium_doc[page_no]
         bitmap = page.render(scale=2.0)
         pil = bitmap.to_pil()
-        scale_x = pil.width / float(plumber_page.width)
-        scale_y = pil.height / float(plumber_page.height)
+        if plumber_page is not None:
+            width_pt, height_pt = plumber_page.width, plumber_page.height
+        else:
+            width_pt, height_pt = page.get_size()
+        scale_x = pil.width / float(width_pt)
+        scale_y = pil.height / float(height_pt)
         box = (
-            int(bbox[0] * scale_x),
-            int(bbox[1] * scale_y),
-            int(bbox[2] * scale_x),
-            int(bbox[3] * scale_y),
+            max(0, int(bbox[0] * scale_x)),
+            max(0, int(bbox[1] * scale_y)),
+            min(pil.width, int(bbox[2] * scale_x)),
+            min(pil.height, int(bbox[3] * scale_y)),
         )
         if box[2] <= box[0] or box[3] <= box[1]:
             return None
@@ -238,3 +250,57 @@ def _render_crop(pdfium_doc, page_no: int, plumber_page, bbox) -> bytes | None:
         return out.getvalue()
     except Exception:  # noqa: BLE001
         return None
+
+
+def crop_assets_from_specs(
+    pdf: bytes,
+    specs: Sequence[AssetCropSpec],
+    *,
+    paper_id: str,
+    version: int,
+    normalizer: ImageNormalizer | None = None,
+) -> tuple[ExtractedAsset, ...]:
+    """Render TEI-coordinate page-crops into stored assets (PDF/GROBID path, FR-17).
+
+    Each spec's bbox (PDF points, top-left origin) is rendered from the PDF and normalized to
+    WebP, keyed by the spec's ``asset_id`` — the SAME id the doc-model block references, so the
+    image lands on the right FormulaBlock/FigureBlock (ordinal alignment guaranteed upstream).
+    Best-effort: any failure yields an empty tuple (assets never block indexing, BR-27).
+    """
+    if not specs:
+        return ()
+    normalizer = normalizer or ImageNormalizer()
+    try:
+        import pypdfium2 as pdfium
+    except ImportError as exc:  # pragma: no cover - assets extra not installed
+        raise RuntimeError(_ASSETS_EXTRA_MISSING) from exc
+
+    out: list[ExtractedAsset] = []
+    try:
+        doc = pdfium.PdfDocument(pdf)
+        page_count = len(doc)
+        for spec in specs:
+            page_idx = spec.page - 1  # GROBID coords are 1-based
+            if page_idx < 0 or page_idx >= page_count:
+                continue
+            raw = _render_bbox_to_png(doc, page_idx, spec.bbox)
+            image = normalizer.normalize(raw) if raw else None
+            if image is None:
+                continue
+            meta = FigureTableAsset(
+                asset_id=spec.asset_id,
+                paper_id=paper_id,
+                version=version,
+                type=spec.type,
+                ordinal=spec.ordinal,
+                source_mode=AssetSourceMode.PAGE_CROP,
+                caption=spec.caption,
+                page_ref=spec.page,
+                bbox=spec.bbox,
+            )
+            out.append(ExtractedAsset(meta=meta, image=image))
+    except Exception:  # noqa: BLE001 - best-effort; skip assets for this paper
+        return ()
+    return tuple(out)
+
+

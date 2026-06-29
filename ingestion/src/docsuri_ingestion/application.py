@@ -7,10 +7,12 @@ from uuid import uuid4
 
 from docsuri_shared.dtos import DocModel, DocModelResultDTO, SourceTier, SourceUnavailableDTO
 
-from .asset_extraction import AssetExtractor
+from .asset_extraction import AssetExtractor, crop_assets_from_specs
 from .config import CORPUS_SLICE_CATEGORIES, WITHDRAWAL_MARKERS
 from .corpus_sources import CorpusSourceAdapterSet, CorpusTextCandidate, SourcePaperRecord
 from .docmodel import DocModelBuilder
+from .docmodel.tei import tei_crop_specs
+from .domain.assets import AssetCropSpec
 from .domain.canonical import canonical_key
 from .domain.enums import DedupDecision, FailureClass, FailureReason, JobKind, SourceName
 from .domain.errors import IngestionError, PermanentIngestionError
@@ -246,13 +248,14 @@ class IngestionPipelineService:
         )
         paper = self._paper_from_source_record(record, candidate, job, key)
 
-        doc_model = self._build_doc_model_from_paper(paper, SourceTier.pdf)
+        doc_model, record_crops = self._build_doc_model_from_record(paper, candidate)
         decision = self._index_paper(
             job,
             paper,
             doc_model=doc_model,
             watermark_name=record.source_name.value.lower(),
             asset_metadata=None,
+            record_asset_ctx=(record, candidate, record_crops),
         )
         if decision is not DedupDecision.STALE and not paper.withdrawal_detected:
             self._record_canonical_winner(
@@ -272,6 +275,10 @@ class IngestionPipelineService:
         doc_model: DocModel | None,
         watermark_name: str,
         asset_metadata,
+        record_asset_ctx: tuple[
+            SourcePaperRecord, CorpusTextCandidate, tuple[AssetCropSpec, ...] | None
+        ]
+        | None = None,
     ) -> DedupDecision:
         if paper.withdrawal_detected:
             return self._tombstone(job, paper, watermark_name=watermark_name)
@@ -370,6 +377,8 @@ class IngestionPipelineService:
         # FR-17 assets: best-effort, AFTER the index commit so it can never block (BR-27).
         if asset_metadata is not None:
             self._store_assets_best_effort(paper, asset_metadata)
+        elif record_asset_ctx is not None:
+            self._store_record_assets_best_effort(paper, *record_asset_ctx)
         self._control_plane.record_job_finished(job.job_id, success=True)
         self._observability.emit_metric(
             "ingestion.paper.indexed",
@@ -633,6 +642,60 @@ class IngestionPipelineService:
             )
             self._observability.emit_metric("ingestion.assets.failed", 1.0, {})
 
+    def _store_record_assets_best_effort(
+        self,
+        paper,
+        record: SourcePaperRecord,
+        candidate: CorpusTextCandidate,
+        crops: tuple[AssetCropSpec, ...] | None = None,
+    ) -> None:
+        """Coordinate page-crop figure/formula assets for a non-arXiv (TEI) paper (FR-17).
+
+        Renders the TEI crop specs — whose assetIds match the doc-model blocks — to WebP. Reuses
+        the crop specs gathered during the doc-model build (``crops``) instead of re-parsing the
+        TEI, and the PDF bytes already fetched for GROBID (``candidate.pdf``) instead of
+        re-fetching — the latter also keeps the crop aligned to the exact bytes the TEI
+        coordinates came from. Falls back to re-parsing / re-fetching only when those are
+        unavailable. Gated on the asset store being wired (multimodal enabled); best-effort and
+        never raises (BR-27)."""
+        if self._asset_store is None or self._corpus_sources is None or not candidate.tei:
+            return
+        reason = FailureReason.ASSET_EXTRACT_FAILURE
+        try:
+            specs = (
+                list(crops)
+                if crops is not None
+                else tei_crop_specs(
+                    candidate.tei, paper_id=paper.paper_id, version=paper.version
+                )
+            )
+            if not specs:
+                return
+            pdf = (
+                candidate.pdf
+                if candidate.pdf is not None
+                else self._corpus_sources.fetch_record_pdf(record)
+            )
+            extracted = crop_assets_from_specs(
+                pdf, specs, paper_id=paper.paper_id, version=paper.version
+            )
+            reason = FailureReason.ASSET_STORE_FAILURE
+            if extracted:
+                self._asset_store.store_assets(paper.paper_id, paper.version, extracted)
+            self._observability.emit_metric(
+                "ingestion.assets.stored", float(len(extracted)), {"paperId": paper.paper_id}
+            )
+        except Exception as exc:  # noqa: BLE001 - best-effort: never block indexing (BR-27)
+            self._observability.emit_log(
+                {
+                    "type": "asset_pipeline_failure",
+                    "reason": reason.value,
+                    "paperId": paper.paper_id,
+                    "error": str(exc),
+                }
+            )
+            self._observability.emit_metric("ingestion.assets.failed", 1.0, {})
+
     def _remove_assets_best_effort(self, paper_id: str) -> None:
         if self._asset_store is None:
             return
@@ -661,25 +724,39 @@ class IngestionPipelineService:
         )
         return result.docModel
 
-    def _build_doc_model_from_paper(
-        self, paper: ParsedPaper, source_tier: SourceTier
-    ) -> DocModel | None:
+    def _build_doc_model_from_record(
+        self, paper: ParsedPaper, candidate: CorpusTextCandidate
+    ) -> tuple[DocModel | None, tuple[AssetCropSpec, ...] | None]:
+        """Structured doc-model for a non-arXiv source record from its GROBID TEI.
+
+        ``build_from_tei`` parses the TEI (sections/tables/figures/formulas) and degrades to the
+        flat-text doc-model when the TEI is absent/unparseable — so a GROBID quirk never blocks
+        the index path. The figure/formula crop specs are gathered during that single parse and
+        returned, so the asset step reuses them instead of re-parsing the TEI. On a cache hit no
+        parse runs here, so crops is returned as None and the asset step re-derives them."""
         if self._doc_model_builder is None:
-            return None
-        result = self._doc_model_builder.build_from_paper(
+            return None, None
+        crops: list[AssetCropSpec] = []
+        result = self._doc_model_builder.build_from_tei(
             paper.paper_id,
             paper.version,
             paper.title,
             paper.abstract,
+            candidate.tei or "",
             paper.full_text,
-            source_tier=source_tier,
+            source_tier=SourceTier.pdf,
+            crops=crops,
         )
         self._observability.emit_metric(
             "ingestion.docmodel.eager_build",
             1.0,
-            {"status": "pdf_fallback", "cached": str(result.cached).lower()},
+            {"status": "tei" if candidate.tei else "pdf_fallback",
+             "cached": str(result.cached).lower()},
         )
-        return result.docModel
+        # A cache hit skips the TEI parse, so an empty list there means "not derived" (not "no
+        # crops"); signal None so the asset step parses the TEI itself.
+        record_crops = None if result.cached else tuple(crops)
+        return result.docModel, record_crops
 
 
 class RefreshOrchestrationService:
