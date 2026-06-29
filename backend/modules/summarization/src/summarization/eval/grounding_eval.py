@@ -105,3 +105,37 @@ def run_grounding_eval(
         for case in cases
     )
     return GroundingEvalReport(results=results)
+
+
+@dataclass(frozen=True, slots=True)
+class ThresholdPoint:
+    threshold: float
+    false_pass: int  # fabrications leaked (worst)
+    false_abstain: int  # faithful blocked
+    correct: int
+
+
+def sweep_numeric_threshold(
+    cases: Sequence[GroundingEvalCase], thresholds: Sequence[float]
+) -> list[ThresholdPoint]:
+    """Run the corpus at each candidate ``_NUMERIC_MISMATCH_THRESHOLD`` and report the
+    false-pass / false-abstain trade-off per threshold (the recalibration curve).
+
+    NOTE: the curve only reflects *these* labeled cases — for synthetic cases it encodes the
+    label policy, so the 'best' point is a policy choice, not an objective optimum. A real
+    held-out corpus (OP/team) is needed to commit a production threshold change.
+    """
+    out: list[ThresholdPoint] = []
+    for t in thresholds:
+        report = run_grounding_eval(
+            cases, validator=GroundingValidator(numeric_mismatch_threshold=t)
+        )
+        out.append(
+            ThresholdPoint(
+                threshold=t,
+                false_pass=report.false_pass,
+                false_abstain=report.false_abstain,
+                correct=report.correct,
+            )
+        )
+    return out

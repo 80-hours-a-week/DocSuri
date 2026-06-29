@@ -97,6 +97,11 @@ def _number_grounded(token: str, src_values: list[float], src_forms: set[str]) -
 
 
 class GroundingValidator:
+    def __init__(self, *, numeric_mismatch_threshold: float = _NUMERIC_MISMATCH_THRESHOLD) -> None:
+        # Injectable so the QT-1 harness can sweep the value for recalibration; production wiring
+        # uses the default. abstain when the ungrounded share of result figures EXCEEDS this.
+        self._numeric_threshold = numeric_mismatch_threshold
+
     def validate(self, gi: GroundingInput) -> AnchorVerdict:
         draft, refined = gi.draft, gi.refined
         # HARD violations abstain the whole summary (fail-closed, INV-4). The anchor-existence
@@ -160,7 +165,7 @@ class GroundingValidator:
             ungrounded = sum(
                 1 for t in result_nums if not _number_grounded(t, src_values, src_forms)
             )
-            if ungrounded / len(result_nums) > _NUMERIC_MISMATCH_THRESHOLD:
+            if ungrounded / len(result_nums) > self._numeric_threshold:
                 hard.append(Violation("numeric_mismatch", "results"))
 
         if hard:

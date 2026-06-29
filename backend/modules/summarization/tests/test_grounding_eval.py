@@ -11,7 +11,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from summarization.domain.models import GroundingInput
-from summarization.eval.grounding_eval import GroundingEvalCase, run_grounding_eval
+from summarization.eval.grounding_eval import (
+    GroundingEvalCase,
+    run_grounding_eval,
+    sweep_numeric_threshold,
+)
+from summarization.eval.numeric_corpus import NUMERIC_CONFIDENT
 from summarization.eval.seed_cases import CONFIDENT_CASES, PROBE_CASES, SEED_CASES
 
 
@@ -76,3 +81,22 @@ def test_threshold_probe_current_behavior_is_pass() -> None:
     assert result.outcome == "pass"
     # Labeled 'fabricated' → today this counts as a false-pass: the recalibration target.
     assert result.classification == "false_pass"
+
+
+def test_numeric_confident_corpus_clean_at_default() -> None:
+    """The stable-label numeric corpus has no leak/over-abstention at the default 0.5 — the
+    clear ends do not argue for changing the threshold (only the policy probes do)."""
+    report = run_grounding_eval(NUMERIC_CONFIDENT)
+    assert report.false_pass == 0
+    assert report.false_abstain == 0
+
+
+def test_sweep_tradeoff_is_monotone() -> None:
+    """Recalibration invariant: as the threshold rises, false-abstain never increases and
+    false-pass never decreases (a looser gate blocks fewer faithful, passes more fabricated)."""
+    points = sweep_numeric_threshold(NUMERIC_CONFIDENT, [0.0, 0.25, 0.5, 0.99])
+    assert [p.threshold for p in points] == [0.0, 0.25, 0.5, 0.99]
+    false_abstain = [p.false_abstain for p in points]
+    false_pass = [p.false_pass for p in points]
+    assert false_abstain == sorted(false_abstain, reverse=True)  # non-increasing
+    assert false_pass == sorted(false_pass)  # non-decreasing
