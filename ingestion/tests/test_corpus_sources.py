@@ -298,10 +298,12 @@ def test_openalex_provider_reconstructs_abstract_and_pdf_record() -> None:
         base_url="https://example.test",
         transport=httpx.MockTransport(handler),
     )
-    records = source.fetch_incremental(datetime(2026, 1, 1, tzinfo=UTC), ("cs.LG",))
+    # Windowed by publication_date (2025-01-01) now, not updated_date — since must precede it.
+    records = source.fetch_incremental(datetime(2024, 12, 31, tzinfo=UTC), ("cs.LG",))
 
     assert len(records) == 1
     assert records[0].source_name is SourceName.OPENALEX
+    assert records[0].updated_at is None  # windows by published_at, uniform with SS
     assert records[0].abstract == "hello world"
     assert records[0].arxiv_id == "2401.00001"
     assert source.fetch_pdf(records[0]) == b"%PDF"

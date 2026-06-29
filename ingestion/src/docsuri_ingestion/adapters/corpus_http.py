@@ -181,13 +181,17 @@ class OpenAlexCorpusSource:
         records: list[SourcePaperRecord] = []
         cursor = "*"
         while cursor:
+            # Window by publication_date, not updated_date: updated_date range queries are
+            # hard-rate-limited by OpenAlex (429 on the first page, even polite-pool) AND
+            # publication date is what a "papers from year N" corpus actually means. updated_date
+            # is just when OpenAlex last touched the record.
             filters = [
-                f"from_updated_date:{since.date().isoformat()}",
+                f"from_publication_date:{since.date().isoformat()}",
                 "open_access.is_oa:true",
                 "type:article",
             ]
             if until is not None:
-                filters.append(f"to_updated_date:{until.date().isoformat()}")
+                filters.append(f"to_publication_date:{until.date().isoformat()}")
             params = {
                 "filter": ",".join(filters),
                 "search": _query(categories),
@@ -282,7 +286,11 @@ def _openalex_record(item: dict[str, Any]) -> SourcePaperRecord | None:
         abstract=_abstract_text(item.get("abstract_inverted_index") or {}),
         authors=tuple(_openalex_authors(item)),
         published_at=_parse_date(item.get("publication_date")),
-        updated_at=_parse_date(item.get("updated_date")),
+        # Leave updated_at unset so the client-side _in_window + queue guard window by
+        # published_at, matching the server-side publication_date filter (and uniform with SS,
+        # which has no updated timestamp). Filtering on updated_date here would drop 2025 papers
+        # whose OpenAlex record was merely touched later.
+        updated_at=None,
         year=_int_or_none(item.get("publication_year")),
         pdf_url=pdf_url,
         html_url=_https_url(location.get("landing_page_url")),
