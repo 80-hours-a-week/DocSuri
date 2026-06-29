@@ -620,6 +620,51 @@ def test_full_rebuild_skips_external_records_outside_corpus_window() -> None:
     assert queue.jobs == []
 
 
+def test_backfill_external_sources_enqueues_only_external_seed_jobs_in_window() -> None:
+    control = InMemoryControlPlaneStore()
+    queue = InMemoryQueue()
+    observability = type(
+        "Obs",
+        (),
+        {
+            "metrics": [],
+            "emit_metric": lambda self, name, value, tags=None: self.metrics.append(
+                (name, value, tags or {})
+            ),
+            "emit_log": lambda self, entry: None,
+            "emit_failure_signal": lambda self, job_id, stage, error: None,
+        },
+    )()
+    record = _external_record()  # updated_at 2025-06-02, inside the window below
+    provider = _ExternalSource(record)
+    corpus_sources = CorpusSourceAdapterSet(
+        arxiv=FakeArxivSource([sample_metadata()]),
+        openalex=provider,
+        grobid=_Grobid(),
+    )
+    service = RefreshOrchestrationService(
+        arxiv=FakeArxivSource([sample_metadata()]),
+        control_plane=control,
+        queue=queue,
+        observability=observability,
+        corpus_sources=corpus_sources,
+        enabled_sources=(SourceName.ARXIV, SourceName.OPENALEX),
+    )
+
+    since = datetime(2025, 1, 1, tzinfo=UTC)
+    until = datetime(2025, 12, 31, tzinfo=UTC)
+    assert service.backfill_external_sources(since, until) == 1
+
+    # arXiv is NOT re-harvested — only the external source is enqueued, and as a SEED job.
+    assert len(queue.jobs) == 1
+    job = queue.jobs[0]
+    assert job.source_name is SourceName.OPENALEX
+    assert job.kind is JobKind.SEED_REBUILD
+    # The run-scoped window is passed straight through to the source adapter.
+    assert provider.incremental_calls[0][0] == since
+    assert provider.incremental_calls[0][2] == until
+
+
 def test_source_record_ingest_uses_grobid_docmodel_and_source_watermark() -> None:
     record = _external_record()
     provider = _ExternalSource(record)

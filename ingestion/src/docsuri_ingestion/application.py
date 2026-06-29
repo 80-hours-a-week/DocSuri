@@ -850,6 +850,24 @@ class RefreshOrchestrationService:
         finally:
             self._control_plane.release_rebuild_lock(owner)
 
+    def backfill_external_sources(self, since: datetime, until: datetime) -> int:
+        """Bounded one-off backfill of the non-arXiv corpus sources (SS/OpenAlex) over an explicit
+        [since, until] window — the run-scoped path the daily tick can't cover (its watermark
+        starts at now(), so it only harvests forward and queues ~0). arXiv is left untouched: no
+        seed re-harvest, no rebuild lock. Enqueues source-record SEED jobs (exempt from the BR-13
+        incremental fence) that the worker drains into the index; the per-paper watermark advance
+        hands the source off to the daily tick. Idempotent — canonical dedup + chunkId upsert make
+        re-runs safe."""
+        queued = 0
+        for source_name in self._enabled_sources:
+            if source_name is SourceName.ARXIV:
+                continue
+            queued += self._queue_external_source(
+                source_name, since=since, until=until, kind=JobKind.SEED_REBUILD
+            )
+        self._observability.emit_metric("ingestion.backfill.external.queued", float(queued), {})
+        return queued
+
     def on_schedule_tick(self) -> int:
         if self._control_plane.is_rebuild_active():
             self._observability.emit_metric(
