@@ -8,8 +8,10 @@ from hypothesis import strategies as st
 
 from docsuri_ingestion.asset_extraction import (
     ImageNormalizer,
+    _caption_key,
     caption_kind,
     crop_assets_from_specs,
+    figure_caption_anchors,
     finalize_assets,
 )
 from docsuri_ingestion.domain.assets import RawAssetCandidate, asset_id
@@ -92,6 +94,80 @@ def test_pbt_p7_finalize_deterministic_and_contiguous_ordinals(raw) -> None:
         assert ordinals == list(range(len(ordinals)))  # contiguous per type
         ids = [a.meta.asset_id for a in first if a.meta.type is kind]
         assert len(ids) == len(set(ids))  # unique
+
+
+# ---------------------------------------------------- caption matching (asset id alignment)
+
+
+def _fig(caption: str, x: float, page: int = 0) -> RawAssetCandidate:
+    return RawAssetCandidate(
+        type=AssetType.FIGURE,
+        image=b"img",
+        source_mode=AssetSourceMode.PAGE_CROP,
+        caption=caption,
+        page=page,
+        x=x,
+    )
+
+
+def test_caption_anchors_align_ordinals_against_extraction_order() -> None:
+    # Doc-model reading order: fig 0 = architecture, fig 1 = attention.
+    anchors = (
+        (0, _caption_key("The Transformer - model architecture.")),
+        (1, _caption_key("Scaled Dot-Product Attention.")),
+    )
+    # Extraction (page, y, x) order is REVERSED vs reading order; without matching the
+    # architecture figure would wrongly take ordinal 1.
+    cands = [
+        _fig("Figure 2: Scaled Dot-Product Attention.", x=0.0),
+        _fig("Figure 1: The Transformer - model architecture.", x=1.0),
+    ]
+    by_caption = {
+        a.meta.caption: a.meta.ordinal
+        for a in finalize_assets("p", 1, cands, figure_anchors=anchors)
+    }
+    assert by_caption["Figure 1: The Transformer - model architecture."] == 0
+    assert by_caption["Figure 2: Scaled Dot-Product Attention."] == 1
+
+
+def test_unmatched_figure_takes_lowest_free_ordinal() -> None:
+    anchors = ((0, _caption_key("Known result.")),)
+    cands = [
+        _fig("Figure 1: Known result.", x=0.0),
+        _fig("Figure 9: Mystery plot with no anchor.", x=1.0),
+    ]
+    assets = finalize_assets("p", 1, cands, figure_anchors=anchors)
+    assert sorted(a.meta.ordinal for a in assets) == [0, 1]  # matched=0, unmatched=free 1
+    assert len({a.meta.asset_id for a in assets}) == 2  # no id collision
+
+
+def test_no_anchors_keeps_positional_legacy_behavior() -> None:
+    cands = [_fig("Figure 2: b", x=0.0), _fig("Figure 1: a", x=1.0)]
+    assert [a.meta.ordinal for a in finalize_assets("p", 1, cands)] == [0, 1]
+
+
+def test_figure_caption_anchors_skips_nested_asset_ref() -> None:
+    # A FigureBlock and its nested assetRef both carry type="figure"; only the block counts.
+    doc = {
+        "sections": [
+            {
+                "id": "s1",
+                "blocks": [
+                    {
+                        "id": "s1.fig1",
+                        "type": "figure",
+                        "caption": "Overview diagram.",
+                        "assetRef": {
+                            "assetId": "p:v1:figure:0",
+                            "type": "figure",
+                            "ordinal": 0,
+                        },
+                    }
+                ],
+            }
+        ]
+    }
+    assert figure_caption_anchors(doc) == ((0, _caption_key("Overview diagram.")),)
 
 
 # ---------------------------------------------------------------- ImageNormalizer
