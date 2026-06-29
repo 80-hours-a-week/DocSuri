@@ -150,7 +150,7 @@ C) 참고 링크로만 표시하고 novelty 분석에는 반영하지 않는다.
 
 X) Other (please describe after [Answer]: tag below)
 
-[Answer]: C — Q8=B로 뉴스가 다음 사이클이므로 v1 제외. (Q8을 A로 바꿔 뉴스를 v1에 포함하면 Q11=A로 전환.)
+[Answer]: A
 
 ## Question 11
 최신 뉴스 검색 결과는 novelty 분석에서 어떻게 사용할까요?
@@ -163,7 +163,7 @@ C) 뉴스 검색은 v1에서 제외한다.
 
 X) Other (please describe after [Answer]: tag below)
 
-[Answer]: A
+[Answer]: C — Q8=B로 뉴스가 다음 사이클이므로 v1 제외. (Q8을 A로 바꿔 뉴스를 v1에 포함하면 Q11=A로 전환.)
 
 ## Question 12
 관련 데이터셋 검색 결과는 어떤 출력에 반영할까요?
