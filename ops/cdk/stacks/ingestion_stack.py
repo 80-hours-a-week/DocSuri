@@ -247,6 +247,11 @@ class IngestionStack(Stack):
 
         # Grant SQS consume + S3 read/write + Bedrock embed-model invoke to the task role
         self.queue.grant_consume_messages(task_def.task_role)
+        # The worker also PRODUCES to the main queue — on_schedule_tick / backfill_external /
+        # trigger_full_rebuild all send_job onto it. grant_consume_messages alone (receive/delete)
+        # left SendMessage as an implicitDeny, so every worker-side enqueue failed with a botocore
+        # ClientError. Grant send too.
+        self.queue.grant_send_messages(task_def.task_role)
         dlq.grant_send_messages(task_def.task_role)
         self.bucket.grant_read_write(task_def.task_role)
         task_def.add_to_task_role_policy(
