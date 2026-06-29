@@ -65,7 +65,7 @@
 
 ## 2.1 GroundingValidatorRegistry (도메인-중립 Validator 카탈로그) 🟡 PROVISIONAL
 
-**상태**: 🟡 PROVISIONAL (D3 — 재인셉션 페이즈 3에서 신설; `shared/ports.py` 코드 추가됨, U6 사인오프 대기)
+**상태**: 🟡 PROVISIONAL (D3 — 재인셉션 페이즈 3에서 신설; `shared/ports.py` 코드 추가됨, **U6 사인오프 코드 검증 완료 2026-06-29**)
 **근거**: 재인셉션 차터 D3(grounding은 `shared/ports` 확장·유닛 신설 금지), 페이즈 3 U7 워크플로 플랜 §모듈 업데이트 순서 1, §2 설계 주석(병렬 설계·policy 분리 유지)
 **불변식**: **enforcement 권위 = `search` 도메인 단독**("단일 근거화 권위 = U6 검색 게이트"). `summary`/`agent`는 **advisory**(verdict는 표시/주석용 — 시스템 근거화 게이트로 작동하지 않음).
 
@@ -87,7 +87,7 @@
 
 > **가산성·FROZEN 무변경**: 레지스트리는 가산적 이음새다 — `enforce`/`validate` 시그니처도, 유일 invocation site(§2 게이트웨이 post-handler)도 변경하지 않는다. 컨슈머는 도메인으로 조회해 자신이 소유한 구상 형상으로 호출한다. 실제 등재(U6 hook·U7 validator 와이어링)는 CONSTRUCTION(U7 FD amendment·`real_wiring`)에서 수행하며 `shared/ports`는 추상/레지스트리만 보유한다.
 
-> **U6 사인오프 포인트**: ① "단일 근거화 권위 = 검색 한정" 명문화(enforcement=search 단독, register 가드로 강제) ② FROZEN `enforce`/`get_budget_state` 시그니처 무변경 ③ U6 GroundingEnforcementHook은 `search` 슬롯에 advisory가 아닌 enforcement 권위로만 등재.
+> **U6 사인오프 포인트 (코드 검증 완료 2026-06-29)**: ① "단일 근거화 권위 = 검색 한정" 명문화(enforcement=search 단독, register 가드로 강제) ② FROZEN `enforce`/`get_budget_state` 시그니처 무변경 ③ U6 GroundingEnforcementHook은 `search` 슬롯에 advisory가 아닌 enforcement 권위로만 등재. — develop 대비 `shared/ports.py` diff가 레지스트리 심볼 추가뿐임을 확인(① register 가드 존재 ② enforce/get_budget_state 정의 무변경 ③ U7=`summary`/advisory 등재 `real_wiring`)으로 세 포인트 입증.
 
 ---
 

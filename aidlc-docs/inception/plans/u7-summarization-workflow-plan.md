@@ -57,7 +57,7 @@ flowchart TD
         RA["Requirements Analysis<br/><b>COMPLETED</b>"]
         US["User Stories<br/><b>COMPLETED</b>"]
         WP["Workflow Planning<br/><b>COMPLETED</b>"]
-        AD["Application Design (shared/ports registry 등재 · U6 사인오프 대기)<br/><b>COMPLETED</b>"]
+        AD["Application Design (shared/ports registry 등재 · U6 사인오프 코드 검증)<br/><b>COMPLETED</b>"]
         UG["Units Generation<br/><b>REVIEW</b>"]
     end
 
@@ -68,7 +68,7 @@ flowchart TD
         EVAL["QT-1 충실도 평가셋 + run_eval_set<br/><b>EXECUTE (신규)</b>"]
         ID["U7 Infrastructure Design<br/><b>MINOR</b>"]
         CG["U7 Code Generation<br/><b>EXECUTE</b>"]
-        BT["Build and Test (통합 게이트=페이즈1 스모크)<br/><b>EXECUTE</b>"]
+        BT["Build and Test (통합 게이트=페이즈1 스모크 완료)<br/><b>COMPLETED</b>"]
     end
 
     subgraph OPERATIONS["OPERATIONS"]
@@ -91,7 +91,7 @@ flowchart TD
     style EVAL fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
     style ID fill:#FFF59D,stroke:#F9A825,stroke-width:2px,color:#000
     style CG fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
-    style BT fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
+    style BT fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
     style OPS fill:#FFF59D,stroke:#F9A825,stroke-width:2px,color:#000
     style Start fill:#CE93D8,stroke:#6A1B9A,stroke-width:3px,color:#000
     style End fill:#CE93D8,stroke:#6A1B9A,stroke-width:3px,color:#000
@@ -114,10 +114,10 @@ flowchart TD
 - [x] Requirements Analysis - COMPLETED (FR-5/12/13/14·NFR-C1[U7]·QT-5 개정·추적성).
 - [x] User Stories - COMPLETED (US-S1~S6·US-P5 개정).
 - [x] Workflow Planning - COMPLETED (본 문서).
-- [x] Application Design - COMPLETED (코드+계약 등재; U6 사인오프 대기).
+- [x] Application Design - COMPLETED (코드+계약 등재·U6 사인오프 코드 검증).
   - **Rationale**: U7는 `unit-of-work.md`에 이미 존재. 신규 유닛 없음.
-  - **산출물(2026-06-29)**: `shared/ports.py`에 `GroundingValidatorRegistry`+`ValidatorRegistration`+`GroundingDomain`/`GroundingAuthority` **가산 추가**(레지스트리 카탈로그 방식 — 검색/요약 시그니처 비통합, `validator: object`로 유닛 구상 타입 비import). `register()` 가드로 **enforcement 권위=`search` 단독** 런타임 강제(단일 근거화 권위=U6). `enforce`/`get_budget_state` 🔒 FROZEN·유일 invocation site 무변경. `ports.md` §2.1 신설(타입 카드·**U6 사인오프 포인트 3개**)·§5 정합. 검증: 스모크·기존 shared 테스트 green·ruff clean.
-  - **남은 게이트**: U6 사인오프(사람) — ① "단일권위=검색 한정" 명문화 ② FROZEN 무변경 ③ U6 hook은 search 슬롯에 enforcement로만 등재. 실제 레지스트리 와이어링은 CONSTRUCTION(U7 FD amendment·`real_wiring`).
+  - **산출물(2026-06-29)**: `shared/ports.py`에 `GroundingValidatorRegistry`+`ValidatorRegistration`+`GroundingDomain`/`GroundingAuthority` **가산 추가**(레지스트리 카탈로그 방식 — 검색/요약 시그니처 비통합, `validator: object`로 유닛 구상 타입 비import). `register()` 가드로 **enforcement 권위=`search` 단독** 런타임 강제(단일 근거화 권위=U6). `enforce`/`get_budget_state` 🔒 FROZEN·유일 invocation site 무변경. `ports.md` §2.1 신설(타입 카드·U6 사인오프 포인트 3개)·§5 정합. 검증: 스모크·기존 shared 테스트 green·ruff clean.
+  - **U6 사인오프 — 코드 검증 완료(2026-06-29)**: develop 대비 `shared/ports.py` diff = 레지스트리 심볼 추가만 → ① "단일권위=검색 한정" = `register()` 가드(enforcement→search 외 `ValueError`) ② FROZEN 무변경 = `enforce`/`get_budget_state` 정의 diff에 부재 ③ U7 hook은 `real_wiring`에서 `summary`/`advisory`로 등재(enforcement 아님). 세 포인트 코드 입증·사용자 승인 반영. 실제 와이어링은 CONSTRUCTION(`real_wiring`)에서 완료.
 - [ ] Units Generation - REVIEW.
   - **Rationale**: U7 소유 유지. 신규 유닛 부여 없음.
 
@@ -140,9 +140,9 @@ flowchart TD
 - [~] Code Generation - PARTIAL (가능분 완료·나머지 데이터 게이트).
   - **Rationale**: Validator 레지스트리·matcher 정밀화·임계값·deprecate·제거. FROZEN 계약 무변경.
   - **진행(2026-06-29)**: ✅ 레지스트리 등재(`real_wiring`)·뷰프리셋/잔존 `view` 제거·lazy 큐 deprecate 주석·QT-1 하니스(`eval/`) = 커밋 c4987c6·7f3f69b·9dc75e2. ✅ **matcher 정밀화**(`_number_grounded`/`_source_values`·반올림 톨러런스·천단위·단위 정규화·테스트). ✅ **수치 임계 재보정 분석**(`GroundingValidator` 임계 주입화·`sweep_numeric_threshold`·프랙션 코퍼스 `eval/numeric_corpus.py`) — 곡선상 안정 라벨 기준 0.5는 [0.25,0.66] 안전, 정책 민감 경계(절반 미검증)만 0.4~0.49로 잡힘. **결정(2026-06-29): 0.5 유지·실 held-out 논문 코퍼스까지 변경 보류**(합성 데이터로 사용자 튜닝값 변경 안 함). 🔒 남음=OP/팀 실 코퍼스 확보 후 재보정(인프라 준비완료). FROZEN `enforce`/`get_budget_state` 무변경.
-- [~] Build and Test - PARTIAL (단위 green·통합 게이트 대기).
+- [x] Build and Test - COMPLETED (단위 green·통합 게이트 닫힘).
   - **Rationale**: QT-5/QT-1·비용 게이트·앵커 PBT. **통합 완료 게이트 = 페이즈 1 라이브 스모크**(eager DocModel 실소비).
-  - **진행(2026-06-29)**: ✅ 매 커밋 요약 모듈 전체 단위 테스트 green·ruff clean·QT-1 하니스 회귀(`test_grounding_eval`)·레지스트리 계약 테스트(`test_grounding_registry`). 🔒 **통합 완료 게이트 = 페이즈 1 `ingest-one` 라이브 스모크**(팀 소유·외부 게이트).
+  - **진행(2026-06-29)**: ✅ 매 커밋 요약 모듈 전체 단위 테스트 green(132 passed·3 skipped)·ruff clean(변경 파일)·QT-1 하니스 회귀(`test_grounding_eval`)·레지스트리 계약 테스트(`test_grounding_registry`). ✅ **통합 완료 게이트 = 페이즈 1 `ingest-one` 라이브 스모크 — 팀원 완료(2026-06-29 확인)** → 요약이 실제 eager DocModel을 소비하는 통합 경로 확인됨.
 
 ### OPERATIONS
 - [ ] Operations - PLACEHOLDER.
