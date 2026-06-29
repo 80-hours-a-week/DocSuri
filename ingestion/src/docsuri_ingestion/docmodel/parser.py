@@ -502,13 +502,44 @@ def _inline_text(el: Tag) -> str:
     return _WS_RE.sub(" ", "".join(parts)).strip()
 
 
+def _is_figure_container(node: object) -> bool:
+    return (
+        isinstance(node, Tag)
+        and node.name == "figure"
+        and bool({"ltx_figure", "ltx_table"} & _classes(node))
+    )
+
+
+def _nearest_figure_ancestor(node: Tag) -> Tag | None:
+    parent = node.parent
+    while isinstance(parent, Tag):
+        if _is_figure_container(parent):
+            return parent
+        parent = parent.parent
+    return None
+
+
+def _own_figcaption(figure_el: Tag) -> Tag | None:
+    """The figure's OWN ``ltx_caption`` — not one belonging to a nested sub-figure panel.
+
+    LaTeXML lays a subfigure group's panel captions ("(a)", "(b)", …) out BEFORE the figure's
+    own "Figure N:" caption, so a plain descendant ``find`` grabs the first panel's "(a)" — which
+    mislabels the figure and strips its number (breaking caption-number matching). Pick the
+    figcaption whose nearest figure container is ``figure_el`` itself.
+    """
+    for figcaption in figure_el.find_all("figcaption", class_="ltx_caption"):
+        if _nearest_figure_ancestor(figcaption) is figure_el:
+            return figcaption
+    return None
+
+
 def _caption(figure_el: Tag) -> tuple[str, str]:
-    """Return ``(anchorLabel, caption)`` from an ``ltx_caption`` figcaption.
+    """Return ``(anchorLabel, caption)`` from the figure's own ``ltx_caption`` figcaption.
 
     The leading ``ltx_tag`` span ("Figure 1: ") yields the anchor label; the remaining
-    text is the caption.
+    text is the caption. Nested sub-figure panel captions are ignored (see ``_own_figcaption``).
     """
-    figcaption = figure_el.find("figcaption", class_="ltx_caption")
+    figcaption = _own_figcaption(figure_el)
     if figcaption is None:
         return "", ""
     tag = figcaption.find("span", class_="ltx_tag")
