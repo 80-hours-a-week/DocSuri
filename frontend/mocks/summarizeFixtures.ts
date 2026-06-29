@@ -135,8 +135,19 @@ export const fullTranslationResponse: TranslationOkDTO = {
         provenance: _provenance,
       },
       fullText:
-        '모델 구조\n\nTransformer는 순환 대신 스케일드 닷-프로덕트 어텐션 \\(\\mathrm{Attention}(Q,K,V)\\)을 사용한다.\n\n\\mathrm{Attention}(Q,K,V)=\\mathrm{softmax}\\left(\\frac{QK^{T}}{\\sqrt{d_{k}}}\\right)V\n\nFigure 1 Transformer — 모델 구조.\n\n셀프 어텐션을 쓰는 이유\n\nTable 1 최대 경로 길이와 층별 복잡도.',
+        '초록\n\n지배적인 시퀀스 변환 모델들은 인코더와 디코더를 포함한 복잡한 순환 신경망이나 합성곱 신경망에 기반한다. 우리는 순환과 합성곱을 완전히 배제하고 오직 어텐션 메커니즘에만 기반한 새로운 단순 네트워크 구조인 Transformer를 제안한다.\n\n모델 구조\n\nTransformer는 순환 대신 스케일드 닷-프로덕트 어텐션 \\(\\mathrm{Attention}(Q,K,V)\\)을 사용한다.\n\n\\mathrm{Attention}(Q,K,V)=\\mathrm{softmax}\\left(\\frac{QK^{T}}{\\sqrt{d_{k}}}\\right)V\n\nFigure 1 Transformer — 모델 구조.\n\n셀프 어텐션을 쓰는 이유\n\nTable 1 최대 경로 길이와 층별 복잡도.',
       sections: [
+        {
+          id: 's0',
+          title: '초록',
+          blocks: [
+            {
+              id: 's0.p1',
+              type: 'paragraph',
+              text: '지배적인 시퀀스 변환 모델들은 인코더와 디코더를 포함한 복잡한 순환 신경망이나 합성곱 신경망에 기반한다. 우리는 순환과 합성곱을 완전히 배제하고 오직 어텐션 메커니즘에만 기반한 새로운 단순 네트워크 구조인 Transformer를 제안한다.',
+            },
+          ],
+        },
         {
           id: 's3',
           title: '모델 구조',
@@ -152,6 +163,14 @@ export const fullTranslationResponse: TranslationOkDTO = {
               latex: '\\mathrm{Attention}(Q,K,V)=\\mathrm{softmax}\\left(\\frac{QK^{T}}{\\sqrt{d_{k}}}\\right)V',
               display: true,
               anchorLabel: '(1)',
+            },
+            {
+              // Mirrors the 전문 fixture: a formula with neither LaTeX nor a joinable crop →
+              // degrades to a numbered placeholder (structure parity with the original).
+              id: 's3.eq2',
+              type: 'formula',
+              display: true,
+              anchorLabel: '(2)',
             },
             {
               id: 's3.fig1',
@@ -184,6 +203,13 @@ export const fullTranslationResponse: TranslationOkDTO = {
                         { text: 'Self-Attention' },
                         { text: '\\(O(n^{2}\\cdot d)\\)' },
                         { text: '\\(O(1)\\)' },
+                      ],
+                    },
+                    {
+                      cells: [
+                        { text: 'Recurrent' },
+                        { text: '\\(O(n\\cdot d^{2})\\)' },
+                        { text: '\\(O(n)\\)' },
                       ],
                     },
                   ],
@@ -259,7 +285,8 @@ export const docModelResponse: DocModelOkDTO = {
       paperId: '2401.00001',
       version: 1,
       title: 'Attention Is All You Need',
-      abstract: 'RNN·CNN 없이 어텐션만으로 시퀀스 변환을 수행하는 Transformer를 제안한다.',
+      abstract:
+        'The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely.',
       provenance: {
         sourceTier: 'ar5iv',
         parserVersion: 'docmodel-parser@1',
@@ -268,8 +295,19 @@ export const docModelResponse: DocModelOkDTO = {
       },
     },
     fullText:
-      'Model Architecture\n\nThe Transformer uses scaled dot-product attention \\(\\mathrm{Attention}(Q,K,V)\\) in place of recurrence.\n\n\\mathrm{Attention}(Q,K,V)=\\mathrm{softmax}\\left(\\frac{QK^{T}}{\\sqrt{d_{k}}}\\right)V\n\nFigure 1 The Transformer — model architecture.\n\nWhy Self-Attention\n\nTable 1 Maximum path lengths and per-layer complexity.',
+      'Abstract\n\nThe dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely.\n\nModel Architecture\n\nThe Transformer uses scaled dot-product attention \\(\\mathrm{Attention}(Q,K,V)\\) in place of recurrence.\n\n\\mathrm{Attention}(Q,K,V)=\\mathrm{softmax}\\left(\\frac{QK^{T}}{\\sqrt{d_{k}}}\\right)V\n\nFigure 1 The Transformer — model architecture.\n\nWhy Self-Attention\n\nTable 1 Maximum path lengths and per-layer complexity.',
     sections: [
+      {
+        id: 's0',
+        title: 'Abstract',
+        blocks: [
+          {
+            id: 's0.p1',
+            type: 'paragraph',
+            text: 'The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely.',
+          },
+        ],
+      },
       {
         id: 's3',
         title: 'Model Architecture',

@@ -146,7 +146,7 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
           전문
         </Link>
         <Link className={styles.action} href={translateHref} data-testid="open-full-translation">
-          본문 번역
+          전문 번역
         </Link>
       </div>
 

@@ -159,6 +159,12 @@ def project_full_text(doc_dict: dict[str, Any]) -> str:
 def iter_text_fields(
     doc_dict: dict[str, Any],
 ) -> Iterator[tuple[str, str, Callable[[str], None]]]:
+    # The paper title (meta.title) is a translatable text field too, so the 전문 번역 header is
+    # Korean rather than the carried-through original. It is not a section/block, so yield it here
+    # (before the section walk) with a setter back into meta. Glossary post-substitution applies.
+    meta = doc_dict.get("meta")
+    if isinstance(meta, dict) and meta.get("title"):
+        yield (f"#meta{_TITLE_SUFFIX}", meta["title"], _setter(meta, "title"))
     for section in doc_dict.get("sections") or []:
         yield from _iter_section(section)
 

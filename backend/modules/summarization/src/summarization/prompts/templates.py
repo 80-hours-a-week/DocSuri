@@ -21,11 +21,24 @@ from ..domain.models import (
     TranslationSegment,
 )
 
+# Persona only shapes WORDING/treatment within the §3 fields — the JSON structure is identical
+# for both (no extra/missing fields). All grounding rules in the system prompt still apply, so
+# neither persona may add facts beyond the provided text.
 _PERSONA_RULES = {
-    Persona.EXPERT: "전문용어·약어·수식을 유지한다.",
+    Persona.EXPERT: (
+        "독자는 해당 분야 전문가다.\n"
+        "  · 논문의 전문용어·약어·수식·지표 이름을 원문 그대로 쓴다(음차·치환·생략 금지).\n"
+        "  · 방법론·모델·데이터셋 이름은 줄이지 말고 정확히 표기한다.\n"
+        "  · 비유·배경 설명은 넣지 말고 핵심만 압축한다.\n"
+        "  · 정량 결과는 수치·단위를 원문 그대로 인용한다."
+    ),
     Persona.BEGINNER: (
-        "전문용어는 첫 등장 시 괄호로 설명하고, 약어는 첫 등장 시 원문을 전개하며, "
-        "수식은 자연어 해설을 덧붙인다(이후 등장은 원어 유지)."
+        "독자는 입문자(학부 수준)다.\n"
+        "  · 전문용어는 첫 등장 시 괄호로 쉬운 설명을 덧붙이고, 약어는 첫 등장 시 원문을 전개한다"
+        "(이후 등장은 원어 유지 — 음차·치환하지 않는다).\n"
+        "  · 수식·지표는 무엇을 뜻하는지 자연어로 풀어 준다.\n"
+        "  · 직관적 비유는 이해에 필요한 경우에만 쓰고, 부정확하거나 과도한 비유는 피한다.\n"
+        "  · 쉬운 문장을 쓰되, 원문에 없는 사실은 추가하지 않는다."
     ),
 }
 
