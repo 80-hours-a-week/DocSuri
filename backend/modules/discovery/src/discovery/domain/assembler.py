@@ -40,14 +40,11 @@ def _source_ref(r: IndexRecord) -> tuple[str, str]:
     return prov.sourceName, url
 
 
-# Internal abstain reason (non-technical; not exposed verbatim, SEC-9).
-_STRUCTURAL_GUARD_REASON = "ungrounded_card_link"
-
-
-def _has_resolvable_link(card: ResultCardVM) -> bool:
-    """A card is grounded only if it carries a resolvable http(s) link (FR-5)."""
-    url = card.sourceUrl or card.arxivUrl
-    return bool(url) and url.startswith(("http://", "https://"))
+def _record_has_link(record: IndexRecord) -> bool:
+    """A record is structurally grounded only if its source-neutral projection yields a
+    resolvable http(s) link (FR-5). Scheme check is case-insensitive."""
+    _, url = _source_ref(record)
+    return url.lower().startswith(("http://", "https://"))
 
 
 def _card(candidate: Candidate, rank: int) -> ResultCardVM:
@@ -79,23 +76,21 @@ class ResultAssembler:
         if isinstance(result, AbstainResult):
             return SearchResponse(AbstainDTO(reason=result.reason))
 
-        # No-match, or a grounding pass that filtered out every candidate: an explicit empty
-        # page (resultCount=0), NOT an abstain (BR-9 / U5 B3-a: 기권 ≠ 빈 결과). The empty page
-        # carries no degrade banner — there are no cards to qualify.
-        # Order matters: NoMatchResult is checked first so ``.items`` is only read on the
-        # remaining GroundedResults branch (NoMatchResult has no ``items``).
-        if isinstance(result, NoMatchResult) or not result.items:
-            meta = ResultMeta(resultCount=0, degraded=False, degradationMode=None)
-            return SearchResponse(SearchResultPageDTO(cards=[], meta=meta))
+        # NoMatchResult has no ``items`` → explicit empty page (resultCount=0, BR-9).
+        if isinstance(result, NoMatchResult):
+            return self._empty_page()
 
-        cards = [_card(c, rank=i + 1) for i, c in enumerate(result.items)]
-        # GroundingStructuralGuard (defense-in-depth, FR-5; business-logic-model §3.7): every
-        # exposed card MUST carry a resolvable real link. A record with no link at all is a
-        # structural grounding failure → fail-closed to abstain rather than ship an ungrounded
-        # card. In practice _source_ref always falls back to arxivUrl, so this only trips on a
-        # malformed record (e.g. a non-arXiv record with empty sourceUrl/doi AND empty arxivUrl).
-        if any(not _has_resolvable_link(card) for card in cards):
-            return SearchResponse(AbstainDTO(reason=_STRUCTURAL_GUARD_REASON))
+        # GroundingStructuralGuard (defense-in-depth, FR-5; business-logic-model §3.7): keep only
+        # candidates whose source-neutral projection yields a resolvable real link, then re-rank
+        # the survivors 1..N. A single malformed record is DROPPED rather than shipped ungrounded
+        # — it must not sink the whole page. If every candidate is dropped (or there were none),
+        # terminate as an explicit empty page (resultCount=0), NOT an abstain (BR-9 / U5 B3-a:
+        # 기권 ≠ 빈 결과; 근거화 통과 후 전량 필터 → 빈 페이지).
+        grounded = [c for c in result.items if _record_has_link(c.record)]
+        if not grounded:
+            return self._empty_page()
+
+        cards = [_card(c, rank=i + 1) for i, c in enumerate(grounded)]
         if degrade_mode is DegradeMode.NORMAL:
             meta = ResultMeta(resultCount=len(cards), degraded=False, degradationMode=None)
             return SearchResponse(SearchResultPageDTO(cards=cards, meta=meta))
@@ -103,3 +98,9 @@ class ResultAssembler:
         mode = DegradationMode(degrade_mode.value)
         meta = ResultMeta(resultCount=len(cards), degraded=True, degradationMode=mode)
         return SearchResponse(DegradedResultDTO(cards=cards, meta=meta, mode=mode))
+
+    @staticmethod
+    def _empty_page() -> SearchResponse:
+        """Explicit empty page (resultCount=0) — no-match or all candidates filtered (BR-9)."""
+        meta = ResultMeta(resultCount=0, degraded=False, degradationMode=None)
+        return SearchResponse(SearchResultPageDTO(cards=[], meta=meta))

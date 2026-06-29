@@ -114,12 +114,27 @@ def test_non_arxiv_card_falls_back_to_arxiv_url_when_no_link() -> None:
     assert card.sourceUrl == record.arxivUrl
 
 
-def test_structural_guard_abstains_on_card_with_no_resolvable_link() -> None:
-    # Defense-in-depth (FR-5, business-logic-model §3.7): a record with NO link anywhere
-    # (empty arxivUrl + non-arXiv provenance with no sourceUrl/doi) is a structural grounding
-    # failure → fail-closed AbstainDTO rather than shipping an ungrounded card.
+def test_structural_guard_drops_unlinkable_card_and_keeps_the_rest() -> None:
+    # Defense-in-depth (FR-5, business-logic-model §3.7): a record with NO link anywhere is
+    # dropped rather than shipped ungrounded — but it must NOT sink the whole page. The good
+    # card survives and is re-ranked to 1 (no rank gap from the drop).
+    good = Candidate(record=RECORDS[0], retrieval_score=1.0)
+    bad_record = RECORDS[1].model_copy(
+        update={"arxivUrl": "", "sourceProvenance": _provenance(source_name="OpenAlex")}
+    )
+    bad = Candidate(record=bad_record, retrieval_score=0.5)
+    response = _assembler.assemble(GroundedResults(items=(good, bad)), DegradeMode.NORMAL)
+    assert isinstance(response.root, SearchResultPageDTO)
+    assert response.root.meta.resultCount == 1
+    assert response.root.cards[0].title == RECORDS[0].title
+    assert response.root.cards[0].relevance == 1
+
+
+def test_structural_guard_all_unlinkable_is_empty_page_not_abstain() -> None:
+    # When every candidate is dropped, terminate as an explicit empty page (BR-9), NOT abstain.
     prov = _provenance(source_name="OpenAlex", source_url="", doi="")
     record = RECORDS[0].model_copy(update={"arxivUrl": "", "sourceProvenance": prov})
     items = (Candidate(record=record, retrieval_score=1.0),)
     response = _assembler.assemble(GroundedResults(items=items), DegradeMode.NORMAL)
-    assert isinstance(response.root, AbstainDTO)
+    assert isinstance(response.root, SearchResultPageDTO)
+    assert response.root.meta.resultCount == 0
