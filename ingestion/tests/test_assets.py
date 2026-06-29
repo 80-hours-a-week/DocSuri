@@ -94,6 +94,25 @@ def test_pbt_p7_finalize_deterministic_and_contiguous_ordinals(raw) -> None:
         assert len(ids) == len(set(ids))  # unique
 
 
+# ---------------------------------------------------- caption matching (asset id alignment)
+
+
+def _fig(caption: str, x: float, page: int = 0) -> RawAssetCandidate:
+    return RawAssetCandidate(
+        type=AssetType.FIGURE,
+        image=b"img",
+        source_mode=AssetSourceMode.PAGE_CROP,
+        caption=caption,
+        page=page,
+        x=x,
+    )
+
+
+def test_no_anchors_keeps_positional_legacy_behavior() -> None:
+    cands = [_fig("Figure 2: b", x=0.0), _fig("Figure 1: a", x=1.0)]
+    assert [a.meta.ordinal for a in finalize_assets("p", 1, cands)] == [0, 1]
+
+
 # ---------------------------------------------------------------- ImageNormalizer
 
 

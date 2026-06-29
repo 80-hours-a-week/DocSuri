@@ -4,6 +4,7 @@ import xml.etree.ElementTree as ET
 
 from docsuri_ingestion.domain.enums import FailureReason
 from docsuri_ingestion.domain.errors import PermanentIngestionError, RetriableIngestionError
+from docsuri_ingestion.xmlsafe import safe_fromstring
 
 _TEMPORARY_4XX = {408, 409, 423, 425, 429}
 
@@ -79,12 +80,14 @@ class GrobidHttpClient:
                 reason=FailureReason.PARSE_FAILURE,
                 stage="grobid",
             )
+        # TEI from an internal sidecar; the entity-expansion + 32 MB size cap lives in the
+        # downstream ``safe_fromstring`` parse (xmlsafe), and the input PDF is itself fetch-capped.
         return response.text
 
 
 def _tei_to_text(tei: str) -> str:
     try:
-        root = ET.fromstring(tei)
+        root = safe_fromstring(tei)
     except ET.ParseError as exc:
         raise PermanentIngestionError(
             "GROBID returned invalid TEI",

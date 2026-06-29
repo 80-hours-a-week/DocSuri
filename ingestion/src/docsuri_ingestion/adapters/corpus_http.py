@@ -1,12 +1,22 @@
 from __future__ import annotations
 
+import ipaddress
+import socket
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urljoin, urlsplit
 
 from docsuri_ingestion.corpus_sources import SourcePaperRecord
 from docsuri_ingestion.domain.enums import FailureReason, SourceName
 from docsuri_ingestion.domain.errors import PermanentIngestionError, RetriableIngestionError
+
+# Hops to follow for an attacker-influenced PDF URL, validating each target host (SSRF guard).
+_MAX_PDF_REDIRECTS = 5
+
+
+class SsrfBlockedError(Exception):
+    """Raised when a fetch target resolves to a non-public address (BR-18 / SEC-15)."""
 
 _FIELDS_OF_STUDY = "Computer Science"
 _QUERY_TERMS = {
@@ -257,14 +267,92 @@ def _get_json(
 def _get_bytes(
     url: str, *, timeout_seconds: float, transport: object | None, stage: str
 ) -> bytes:
-    return _request(
-        url,
-        params=None,
-        headers=None,
-        timeout_seconds=timeout_seconds,
-        transport=transport,
+    """Fetch a PDF from an attacker-influenced URL with an SSRF host guard + size cap.
+
+    The URL comes from third-party API data (Semantic Scholar / OpenAlex), so each hop's host is
+    validated against public addresses before connecting (BR-18 / SEC-15) and the body is capped
+    (NFR §0.5). Auto-redirects are off so a redirect can't bypass the per-hop check; we follow
+    manually. The host check is skipped when a test transport is injected (no real network).
+    """
+    import httpx
+
+    from docsuri_ingestion.http_limits import ResponseTooLargeError, read_capped
+
+    try:
+        with httpx.Client(
+            timeout=timeout_seconds, follow_redirects=False, transport=transport
+        ) as client:
+            current = url
+            for _ in range(_MAX_PDF_REDIRECTS + 1):
+                if transport is None:
+                    _assert_public_host(current)
+                with client.stream("GET", current) as response:
+                    location = response.headers.get("location")
+                    if response.is_redirect and location:
+                        current = urljoin(current, location)
+                        continue
+                    _raise_for_corpus_status(response.status_code, stage)
+                    return read_capped(response)
+    except httpx.TimeoutException as exc:
+        raise RetriableIngestionError(
+            "external corpus request timed out", reason=FailureReason.TIMEOUT, stage=stage
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise RetriableIngestionError(
+            "external corpus request failed",
+            reason=FailureReason.FETCH_FAILURE,
+            stage=stage,
+        ) from exc
+    except (ResponseTooLargeError, SsrfBlockedError) as exc:
+        raise PermanentIngestionError(
+            "external corpus PDF rejected (too large or non-public host)",
+            reason=FailureReason.FETCH_FAILURE,
+            stage=stage,
+        ) from exc
+    raise PermanentIngestionError(
+        "external corpus PDF exceeded redirect limit",
+        reason=FailureReason.FETCH_FAILURE,
         stage=stage,
-    ).content
+    )
+
+
+def _assert_public_host(url: str) -> None:
+    """Reject a fetch whose host resolves to a private/loopback/link-local/reserved address."""
+    host = urlsplit(url).hostname
+    if not host:
+        raise SsrfBlockedError(f"fetch URL has no host: {url!r}")
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror as exc:
+        raise SsrfBlockedError(f"cannot resolve host {host!r}") from exc
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_multicast
+            or ip.is_unspecified
+        ):
+            raise SsrfBlockedError(f"host {host!r} resolves to non-public address {ip}")
+
+
+def _raise_for_corpus_status(status_code: int, stage: str) -> None:
+    if status_code == 429 or status_code >= 500:
+        raise RetriableIngestionError(
+            f"external corpus source returned {status_code}",
+            reason=FailureReason.RATE_LIMITED
+            if status_code == 429
+            else FailureReason.FETCH_FAILURE,
+            stage=stage,
+        )
+    if status_code >= 400:
+        raise PermanentIngestionError(
+            f"external corpus source returned {status_code}",
+            reason=FailureReason.FETCH_FAILURE,
+            stage=stage,
+        )
 
 
 def _request(
@@ -295,20 +383,7 @@ def _request(
             reason=FailureReason.FETCH_FAILURE,
             stage=stage,
         ) from exc
-    if response.status_code == 429 or response.status_code >= 500:
-        raise RetriableIngestionError(
-            f"external corpus source returned {response.status_code}",
-            reason=FailureReason.RATE_LIMITED
-            if response.status_code == 429
-            else FailureReason.FETCH_FAILURE,
-            stage=stage,
-        )
-    if response.status_code >= 400:
-        raise PermanentIngestionError(
-            f"external corpus source returned {response.status_code}",
-            reason=FailureReason.FETCH_FAILURE,
-            stage=stage,
-        )
+    _raise_for_corpus_status(response.status_code, stage)
     return response
 
 
