@@ -525,16 +525,17 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - Current gate: Requirements review/approval (PR #170). Next stage (별도 승인): User Stories → Units Generation → Construction.
 - Code generated: no.
 
-## Novelty Agent — Functional Design Complete / NFR Requirements Question Gate
+## Novelty Agent — NFR Requirements Complete / NFR Design Question Gate
 
 - Date: 2026-06-29
-- Stage: CONSTRUCTION / NFR Requirements question gate
+- Stage: CONSTRUCTION / NFR Requirements + NFR Design question gate
 - Trigger: 차별화(novelty) 형성 Agent 구현을 위한 AI-DLC 질문지 답변 반영 및 다음 단계 진행.
 - Branch: `docs/novelty-agent-questionnaire`
 - Inputs:
   - `aidlc-docs/inception/requirements/requirement-verification-questions-novelty-agent.md`
   - `requirement-verification-questions-answer-1.md`
   - `FD-Answer-1.md`
+  - `nfr-answer.md`
   - `aidlc-docs/construction/shared/evidence-formation-port.md`
 - Answers reflected:
   - Q1~Q7=A, Q8=B(뉴스 검색 v1 제외), Q9~Q28=A, Q29=C, Q30=A, Q31=A, Q32=B.
@@ -559,10 +560,15 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
   - `aidlc-docs/construction/novelty-agent/functional-design/business-rules.md`
   - `aidlc-docs/construction/novelty-agent/functional-design/frontend-components.md`
 - NFR Requirements plan created:
-  - `aidlc-docs/construction/plans/novelty-agent-nfr-requirements-plan.md` (NFR Requirements 질문 14개, 답변 대기)
+  - `aidlc-docs/construction/plans/novelty-agent-nfr-requirements-plan.md` (NFR Requirements 질문 14개, 답변 반영 완료; Q4=B, 나머지 A)
+- NFR Requirements artifacts generated:
+  - `aidlc-docs/construction/novelty-agent/nfr-requirements/nfr-requirements.md`
+  - `aidlc-docs/construction/novelty-agent/nfr-requirements/tech-stack-decisions.md`
+- NFR Design plan created:
+  - `aidlc-docs/construction/plans/novelty-agent-nfr-design-plan.md` (NFR Design 질문 10개, 답변 대기)
 - Scope boundary:
   - novelty Agent consumes EvidenceFormationPort/SourceRef; it does not implement literature/evidence formation internals.
   - v1 external search = GitHub + datasets; news search is next cycle.
   - No novelty score, "newness proven" judgment, paper prose generation, or code skeleton generation.
-- Current gate: `novelty-agent-nfr-requirements-plan.md` Q1~Q14 답변 대기.
+- Current gate: `novelty-agent-nfr-design-plan.md` Q1~Q10 답변 대기.
 - Code generated: no.
