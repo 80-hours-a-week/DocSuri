@@ -137,10 +137,12 @@ flowchart TD
 - [x] Infrastructure Design - COMPLETED (MINOR).
   - **Rationale**: 신규 인프라 없음(LLM/S3/Redis/RDS 기존); 평가셋 저장/실행 정도.
   - **진행(2026-06-29, 코드 검증)**: 신규 인프라 0 재확인 — QT-1 하니스=순수 Python 단위 CI 레인(증분 0)·lazy 큐 deprecate. 비용 임계 정합: CDK `CfnBudget amount=1600·threshold=80%`(=$1,280)=`cost_guard.warning_ratio 0.80` 미러 명시. §2.2 Redis TTL 필수·§7 증분표에 QT-1 하니스(0) 행 추가.
-- [ ] Code Generation - EXECUTE.
+- [~] Code Generation - PARTIAL (가능분 완료·나머지 데이터 게이트).
   - **Rationale**: Validator 레지스트리·matcher 정밀화·임계값·deprecate·제거. FROZEN 계약 무변경.
-- [ ] Build and Test - EXECUTE.
+  - **진행(2026-06-29)**: ✅ 레지스트리 등재(`real_wiring`)·뷰프리셋/잔존 `view` 제거·lazy 큐 deprecate 주석·QT-1 하니스(`eval/`) = 커밋 c4987c6·7f3f69b·9dc75e2. 🔒 **남음=matcher 정밀화·수치 임계 재보정**(held-out 코퍼스 선행, 데이터 게이트). FROZEN `enforce`/`get_budget_state` 무변경.
+- [~] Build and Test - PARTIAL (단위 green·통합 게이트 대기).
   - **Rationale**: QT-5/QT-1·비용 게이트·앵커 PBT. **통합 완료 게이트 = 페이즈 1 라이브 스모크**(eager DocModel 실소비).
+  - **진행(2026-06-29)**: ✅ 매 커밋 요약 모듈 전체 단위 테스트 green·ruff clean·QT-1 하니스 회귀(`test_grounding_eval`)·레지스트리 계약 테스트(`test_grounding_registry`). 🔒 **통합 완료 게이트 = 페이즈 1 `ingest-one` 라이브 스모크**(팀 소유·외부 게이트).
 
 ### OPERATIONS
 - [ ] Operations - PLACEHOLDER.
