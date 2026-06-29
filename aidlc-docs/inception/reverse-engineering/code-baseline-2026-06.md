@@ -1,6 +1,6 @@
 # 코드 베이스라인 (Reverse-Engineering Baseline) — 2026-06
 
-**단계**: INCEPTION 재진입 · 리버스 엔지니어링 · **작성일**: 2026-06-26 · **상태**: 초안(1차 패스) · **back-sync**: 2026-06-29(Phase 1 — GROBID TEI·S2/OpenAlex·소스별 watermark·DLQ/scheduler·DocModel eager 인덱싱 반영)
+**단계**: INCEPTION 재진입 · 리버스 엔지니어링 · **작성일**: 2026-06-26 · **상태**: 초안(1차 패스) · **back-sync**: 2026-06-29(Phase 1 — GROBID TEI·S2/OpenAlex·소스별 watermark·DLQ/scheduler·DocModel eager 인덱싱 반영 / Phase 2 — U2 검색 정합·소스 중립 카드 Q2 완료 #244 반영)
 **상위 문서**: `aidlc-docs/inception/plans/reinception-2026-06-charter.md` (재인셉션 차터, SSOT 앵커)
 
 > **목적**: 재인셉션(D1)의 사실 기준을 stale 문서가 아니라 **실제 코드**에서 확립한다
@@ -54,7 +54,7 @@
 | 페이즈 | 영역 | 코드에 있는 것 | 없는 것(=신규) |
 |---|---|---|---|
 | **1** U1 Corpus | `ingestion/` | arXiv 어댑터(**HTML 우선 → PDF 폴백**, SourceTier ar5iv/native_html)·**소스별 watermark**(`postgres.py` `watermark` 테이블·`get/advance/reset_watermark`, `watermark_name=source` cross-source)·`docmodel/`(builder·parser·mathml·**tei**)·**GROBID TEI 구조화 파서 + 좌표 page-crop(FR-17)**·**Semantic Scholar·OpenAlex 어댑터**(`adapters/corpus_http.py`)·**DLQ**(`failure_handler.send_to_dlq`)·**scheduler**(`on_schedule_tick`)·`full_text_extraction`·`asset_extraction`·dedup 테스트·`migrate`·resilience·observability | (back-sync 후) **실외부호출 라이브 검증 미실행**(테스트는 fake/mock 기준)·**전량 리빌드 운영 게이트**(`validate_corpus_build_settings`로 의도적 동결)·페이즈 6 대량 스케일 운영 표면 |
-| **2** U2 검색 | `discovery/` | domain(retriever·ranker·assembler·validator·expander·grounding_adapter)·adapters(bedrock_embedding·opensearch·event_publisher)·ports/search_ports·mocks·real_wiring | 페이즈 7 개선 항목(reranker·LTR·click log 등) |
+| **2** U2 검색 ✅**완료(#244)** | `discovery/` | domain(retriever·ranker·assembler·validator·expander·grounding_adapter)·adapters(bedrock_embedding·opensearch·event_publisher)·ports/search_ports·mocks·real_wiring. **(#244, 2026-06-29)** 소스 중립 결과 카드 Q2 — `domain/source_ref.py`(실 도메인, 카드+상세 헤더 공유)·`search.schema.json` sourceName/sourceUrl 계약·실 프론트 컴포넌트(`ResultCard`/`PaperDetailIsland`) 착지 | 페이즈 7 개선 항목(reranker·LTR·click log 등). **이월 2건(→페이즈 7 백로그)**: 연도 facet 필터·상세 라우트 *키* 소스 중립 id. **데이터 조건**: 비-arXiv(S2/OpenAlex) 카드 분기는 코드 준비 완료이나 멀티소스 *적재*(페이즈 1 라이브)가 있어야 실데이터로 보임 |
 | **3** U7 요약/번역 + Grounding 통합 | `summarization/`·`shared/ports`·`discovery/domain/grounding_adapter`·`summarization/domain/grounding` | 요약: domain(refiner·grounding·map_reduce·structured_translator·glossary·source_selector·length_router·cache_key)·adapters(bedrock_llm·s3_docmodel·s3_full_text·s3_redis_store·rds_*·sqs_*)·worker. Grounding: `shared/ports`·도메인 grounding_adapter/grounding 존재 | 요약/번역은 상당 구현됨(정합·개선 성격). **단일 Grounding 프레임워크 통합**: enforce 단일권위(현재 U6) ↔ 도메인별 Validator(Search/Summary/**Agent**) 레지스트리 재조정 |
 | **4** 문헌탐색·근거형성 Agent | — | **전부 그린필드** (`research_agent` 모듈 부재) — 구체 파이프라인/방식은 인셉션 질문지로 결정 |
 | **5** 연구아이디어 Agent | — | **전부 그린필드** |
@@ -135,3 +135,8 @@
 - [ ] discovery/summarization 런타임 거동(grounding 호출 지점) 실측 — D3 재조정 입력.
 - [ ] **(Phase 1 closeout 선행)** 단건 `ingest-one` 라이브 스모크 — S3 `full-text/`·`doc-model/`·`assets/`
       생성·OpenSearch 청크 업서트·TEI 그림/수식 crop을 실호출로 1회 확인(테스트는 fake/mock 기준).
+      > **게이트 성격 명확화(2026-06-29)**: 이 스모크는 **페이즈 3의 *통합 완료* 게이트**이지 **착수 게이트가 아니다.**
+      > 차터 §4.2 원칙("인셉션 문서는 계약 레벨 — 코드 가동 불필요")에 따라 페이즈 3의 **문서 정합·질문지(requirements)는
+      > 스모크 없이 착수 가능**(소비할 DocModel/Search/grounding 계약은 이미 코드에 존재). 페이즈 3는 D6대로 **실제 DocModel
+      > (eager 빌드+Block 인덱싱)을 입력으로 소비**하므로, 페이즈 1이 라이브로 산출물을 내는지 1회 확인되어야 **통합 검증/완료**가
+      > 성립한다. 즉 스모크는 "페이즈 3 코드 통합 검증에 들어가기 전"까지만 끝나면 된다(mock/fixture 기반 구현은 그 전에 가능).
