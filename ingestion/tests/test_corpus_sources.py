@@ -198,6 +198,27 @@ def test_semantic_scholar_provider_fetches_oa_pdf_records() -> None:
     assert source.fetch_pdf(records[0]) == b"%PDF"
 
 
+def test_semantic_scholar_bulk_request_omits_limit_and_updated_field() -> None:
+    # /paper/search/bulk 400s on `limit` (it paginates by `token`) and on the non-existent
+    # `updated` field — regression guard for the 400 that crashed the live tick.
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "search/bulk" in str(request.url):
+            captured["has_limit"] = "limit" in request.url.params
+            captured["fields"] = request.url.params.get("fields", "")
+        return httpx.Response(200, json={"data": []})
+
+    source = SemanticScholarCorpusSource(
+        base_url="https://example.test",
+        transport=httpx.MockTransport(handler),
+    )
+    source.fetch_incremental(datetime(2026, 1, 1, tzinfo=UTC), ("cs.LG",))
+
+    assert captured["has_limit"] is False
+    assert "updated" not in captured["fields"]
+
+
 def test_openalex_provider_reconstructs_abstract_and_pdf_record() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if str(request.url).endswith("paper.pdf"):

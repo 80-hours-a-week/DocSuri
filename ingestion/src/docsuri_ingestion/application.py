@@ -874,7 +874,16 @@ class RefreshOrchestrationService:
         for source_name in self._enabled_sources:
             if source_name is SourceName.ARXIV:
                 continue
-            queued += self._queue_external_incremental(source_name)
+            # Per-source isolation: a single source failing (e.g. an upstream 4xx/timeout)
+            # must not abort the whole tick or crash the worker — skip it and carry on.
+            try:
+                queued += self._queue_external_incremental(source_name)
+            except Exception as exc:  # noqa: BLE001 — defensive boundary around one source
+                self._observability.emit_metric(
+                    "ingestion.source.incremental.failed",
+                    1.0,
+                    {"source": source_name.value, "error": type(exc).__name__},
+                )
         self._observability.emit_metric("ingestion.incremental.queued", float(queued), {})
         return queued
 

@@ -65,11 +65,12 @@ class SemanticScholarCorpusSource:
                         "externalIds",
                         "openAccessPdf",
                         "isOpenAccess",
-                        "updated",
                     )
                 ),
                 "fieldsOfStudy": _FIELDS_OF_STUDY,
-                "limit": "100",
+                # /paper/search/bulk rejects `limit` (it returns up to 1000/page and paginates
+                # via `token`) and has no `updated` field — either makes the request 400.
+                # Windowing falls back to publicationDate in _in_window.
             }
             if token:
                 params["token"] = token
