@@ -43,7 +43,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setUser(null);
       setStatus('anonymous');
-      window.setTimeout(() => setSigningOut(false), 1000);
+      setSigningOut(false);
     }
   }, []);
 

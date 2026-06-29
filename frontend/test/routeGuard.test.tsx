@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RouteGuard } from '@/components/RouteGuard';
 import { SessionProvider, useSession } from '@/components/session/SessionContext';
-import { mockLogin } from '@/mocks/accountFixtures';
+import { mockLogin, mockLogout } from '@/mocks/accountFixtures';
 
 const replace = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -20,12 +20,27 @@ function LogoutButton() {
 }
 
 beforeEach(() => {
-  mockLogin('route-guard-test@example.com');
+  mockLogout();
   replace.mockClear();
 });
 
 describe('RouteGuard', () => {
+  it('uses neutral loading copy while checking a protected route', () => {
+    render(
+      <SessionProvider>
+        <RouteGuard redirectTo="/search">
+          <p>protected</p>
+        </RouteGuard>
+      </SessionProvider>,
+    );
+
+    expect(screen.getByText('페이지를 불러오는 중…')).toBeInTheDocument();
+    expect(screen.queryByText('검색 중…')).not.toBeInTheDocument();
+  });
+
   it('shows logout-specific loading copy while signing out', async () => {
+    mockLogin('route-guard-test@example.com');
+
     render(
       <SessionProvider>
         <RouteGuard redirectTo="/search">
@@ -36,8 +51,11 @@ describe('RouteGuard', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: '로그아웃' }));
 
-    expect(await screen.findByText('로그아웃 중…')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: '로그아웃' })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText('로그아웃 중…')).toBeInTheDocument();
     expect(screen.queryByText('검색 중…')).not.toBeInTheDocument();
-    await waitFor(() => expect(replace).not.toHaveBeenCalled());
+    expect(replace).not.toHaveBeenCalled();
   });
 });
