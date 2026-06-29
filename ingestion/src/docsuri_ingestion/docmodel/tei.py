@@ -14,7 +14,10 @@ What each TEI node maps to (and the honest fidelity limits of the PDF path):
         — the equation degrades to a page-crop image (TD-12, our 3a decision). Image bytes are
         populated by the coordinate crop pipeline; the parser only assigns the deterministic id.
   - ``<figure type="table"><table>``     -> TableBlock as DATA (rows/cells) — GROBID gives real
-        table structure, so tables are data here too (D8), not crops.
+        table structure, so the structured rows stay the PRIMARY representation (D8). When the
+        table also carries coordinates we ALSO attach a page-crop ``assetRef`` as a last-resort
+        fallback (schema-sanctioned), so a later vision reader can re-read numbers GROBID's cell
+        reconstruction may have garbled — the image never displaces the searchable data.
   - ``<figure>``                         -> FigureBlock (assetRef image, FR-17)
 
 Figure/table position: GROBID groups ``<figure>`` elements (typically at body end), so their
@@ -218,6 +221,7 @@ def _table_block(figure_el: ET.Element, sec_ctx: _SectionCtx, doc_ctx: _DocCtx) 
                 rows.append({"cells": cells})
     if not rows:
         return None
+    ordinal = doc_ctx.table_ordinal
     doc_ctx.table_ordinal += 1
     label, caption = _figure_label_caption(figure_el)
     block: dict = {"id": sec_ctx.next_id("table"), "type": "table", "rows": rows}
@@ -225,6 +229,21 @@ def _table_block(figure_el: ET.Element, sec_ctx: _SectionCtx, doc_ctx: _DocCtx) 
         block["caption"] = caption
     if label:
         block["anchorLabel"] = label
+    # Rows are the PRIMARY, searchable representation (D8). When GROBID supplies table coordinates
+    # we ALSO mint a page-crop image as a last-resort fallback (schema allows assetRef on a table),
+    # so a later vision reader can re-read numbers GROBID's cell reconstruction may have garbled —
+    # without that image ever displacing the structured data. No coordinates -> data only.
+    aid = asset_id(doc_ctx.paper_id, doc_ctx.version, AssetType.TABLE, ordinal)
+    if _record_crop(doc_ctx, figure_el, aid, AssetType.TABLE, ordinal, caption):
+        asset_ref: dict = {
+            "assetId": aid,
+            "type": "table",
+            "ordinal": ordinal,
+            "sourceMode": "page-crop",
+        }
+        if caption:
+            asset_ref["caption"] = caption
+        block["assetRef"] = asset_ref
     return block
 
 
@@ -279,19 +298,30 @@ def _record_crop(
     asset_type: AssetType,
     ordinal: int,
     caption: str,
-) -> None:
-    """Append a page-crop spec for ``el`` to the collector, if one is active and coords exist."""
-    if doc_ctx.crops is None:
-        return
+) -> bool:
+    """Report whether ``el`` can be page-cropped, appending its spec when a collector is active.
+
+    Returns True when the element carries GROBID coordinates (a crop image is therefore possible),
+    so a caller can decide whether to attach an ``assetRef`` independently of whether the crop
+    collector is currently running — the doc-model build runs with no collector yet still needs
+    the coords-present answer. The spec itself is appended only when ``doc_ctx.crops`` is active
+    (the asset-pipeline walk in ``tei_crop_specs``)."""
     parsed = _parse_coords(el)
     if parsed is None:
-        return  # no coordinates -> no crop possible (the block still renders its caption)
-    page, bbox = parsed
-    doc_ctx.crops.append(
-        AssetCropSpec(
-            asset_id=aid, type=asset_type, ordinal=ordinal, page=page, bbox=bbox, caption=caption
+        return False  # no coordinates -> no crop possible (the block still renders its caption)
+    if doc_ctx.crops is not None:
+        page, bbox = parsed
+        doc_ctx.crops.append(
+            AssetCropSpec(
+                asset_id=aid,
+                type=asset_type,
+                ordinal=ordinal,
+                page=page,
+                bbox=bbox,
+                caption=caption,
+            )
         )
-    )
+    return True
 
 
 def _parse_coords(el: ET.Element) -> tuple[int, tuple[float, float, float, float]] | None:

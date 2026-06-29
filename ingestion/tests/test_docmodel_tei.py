@@ -86,6 +86,43 @@ def test_table_is_structured_data_not_image() -> None:
     assert [c.text for c in table.rows[1].cells] == ["ours", "0.92"]
 
 
+def test_table_with_coords_also_carries_page_crop_fallback() -> None:
+    # Rows stay primary, but a coord-bearing table ALSO references a page-crop image fallback,
+    # so a later vision reader can re-read numbers GROBID may have garbled.
+    doc = _parse(_TEI)
+    figures = doc.sections[-1]
+    table = next(b.root for b in figures.blocks if b.root.type == "table")
+    assert table.assetRef is not None
+    assert table.assetRef.type.value == "table"
+    assert table.assetRef.assetId == "src-abc:v1:table:0"
+    assert table.rows  # data is not displaced by the image
+
+
+def test_table_without_coords_stays_data_only() -> None:
+    # No coordinates -> no image is possible, so no dangling assetRef is attached.
+    tei = (
+        f"<TEI {_NS}><text><body><figure type=\"table\">"
+        "<head>Table 1</head><table><row><cell>a</cell><cell>b</cell></row></table>"
+        "</figure></body></text></TEI>"
+    )
+    doc = parse_tei_to_docmodel(
+        tei,
+        paper_id="p",
+        version=1,
+        title="t",
+        abstract=None,
+        source_tier=SourceTier.pdf,
+        parser_version="pv",
+        schema_version="sv",
+        generated_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    table = next(
+        b.root for s in doc.sections for b in s.blocks if b.root.type == "table"
+    )
+    assert table.assetRef is None
+    assert tei_crop_specs(tei, paper_id="p", version=1) == []
+
+
 def test_figure_is_image_assetref_with_caption() -> None:
     doc = _parse(_TEI)
     figures = doc.sections[-1]
@@ -141,8 +178,11 @@ def test_crop_spec_parses_page_and_bbox_from_coords() -> None:
     assert figure.asset_id == "src-abc:v1:figure:0"
     assert figure.page == 2
     assert figure.bbox == (10.0, 40.0, 110.0, 90.0)
-    # the table is DATA (no crop) and the figure here is the only coord-bearing figure
-    assert all(s.type.value != "table" for s in specs)
+    # the table keeps its structured data AND, having coords, gets a page-crop fallback spec
+    table = next(s for s in specs if s.type.value == "table")
+    assert table.asset_id == "src-abc:v1:table:0"
+    assert table.page == 3
+    assert table.bbox == (10.0, 20.0, 110.0, 70.0)
 
 
 def test_crop_spec_for_formula_with_coords() -> None:
