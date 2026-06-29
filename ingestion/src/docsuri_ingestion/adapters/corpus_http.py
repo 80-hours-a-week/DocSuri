@@ -152,10 +152,12 @@ class OpenAlexCorpusSource:
         base_url: str = "https://api.openalex.org",
         timeout_seconds: float = 30.0,
         transport: object | None = None,
+        mailto: str | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout_seconds = timeout_seconds
         self._transport = transport
+        self._mailto = mailto
 
     def fetch_incremental(
         self,
@@ -173,29 +175,32 @@ class OpenAlexCorpusSource:
             ]
             if until is not None:
                 filters.append(f"to_updated_date:{until.date().isoformat()}")
+            params = {
+                "filter": ",".join(filters),
+                "search": _query(categories),
+                "per-page": "100",
+                "cursor": cursor,
+                "select": ",".join(
+                    (
+                        "id",
+                        "ids",
+                        "doi",
+                        "display_name",
+                        "abstract_inverted_index",
+                        "authorships",
+                        "publication_year",
+                        "publication_date",
+                        "updated_date",
+                        "primary_location",
+                        "locations",
+                    )
+                ),
+            }
+            if self._mailto:
+                params["mailto"] = self._mailto  # OpenAlex polite pool — higher, steadier limits
             payload = _get_json_retrying(
                 f"{self._base_url}/works",
-                params={
-                    "filter": ",".join(filters),
-                    "search": _query(categories),
-                    "per-page": "100",
-                    "cursor": cursor,
-                    "select": ",".join(
-                        (
-                            "id",
-                            "ids",
-                            "doi",
-                            "display_name",
-                            "abstract_inverted_index",
-                            "authorships",
-                            "publication_year",
-                            "publication_date",
-                            "updated_date",
-                            "primary_location",
-                            "locations",
-                        )
-                    ),
-                },
+                params=params,
                 headers=None,
                 timeout_seconds=self._timeout_seconds,
                 transport=self._transport,
