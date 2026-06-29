@@ -13,29 +13,59 @@ from __future__ import annotations
 import io
 import re
 from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Any
 
 from .domain.assets import (
     AssetCropSpec,
     ExtractedAsset,
+    FigureSpec,
     FigureTableAsset,
     RawAssetCandidate,
     asset_id,
 )
 from .domain.enums import AssetSourceMode, AssetType
 
-# Caption detection — "Figure 1", "Fig. 2", "Table 3" (case-insensitive, line start).
-_CAPTION_RE = re.compile(r"^\s*(figure|fig\.?|table)\s+\d+", re.IGNORECASE)
+# Caption detection — a line that STARTS with "Figure 3:", "Fig. 2.", or "Table 1 —". A delimiter
+# (":" / "." / em dash) after the number is required, which:
+#   - admits no-space PDF text extractions ("Figure1:Our…", common in pdfplumber output), and
+#   - rejects body sentences that merely open with a number ("Table 6 shows that …") — the bug
+#     that produced bogus table crops.
+# The captured number drives label-matching of an unmatched figure to its page-crop.
+_CAPTION_RE = re.compile(r"^\s*(figure|fig\.?|table)\s*(\d+)\s*[:.—]", re.IGNORECASE)
+_LABEL_NUM_RE = re.compile(r"(\d+)")
 
 _ASSETS_EXTRA_MISSING = "multimodal assets extra not installed (pip install .[assets])"
 
 
+def _member_stem(name: str) -> str:
+    """Lowercased basename without its extension ('a/b/Fig1.PNG' -> 'fig1'), for figure matching.
+
+    Stem (not full basename) so an HTML ``<img src>`` that points at LaTeXML's converted graphic
+    can still match the e-print source under a different extension. Pure."""
+    base = name.rsplit("/", 1)[-1]
+    return base.rsplit(".", 1)[0].lower()
+
+
+def _label_number(label: str) -> int | None:
+    """First integer in a figure anchor label ('Figure 3' -> 3), or None. Pure."""
+    match = _LABEL_NUM_RE.search(label or "")
+    return int(match.group(1)) if match else None
+
+
 def caption_kind(text: str) -> AssetType | None:
     """Classify a text line as a figure/table caption, or None. Pure (P7)."""
+    result = caption_kind_and_number(text)
+    return result[0] if result else None
+
+
+def caption_kind_and_number(text: str) -> tuple[AssetType, int] | None:
+    """Caption ``(kind, number)`` for a line — "Figure 3:" -> (FIGURE, 3) — or None. Pure (P7)."""
     match = _CAPTION_RE.match(text or "")
     if not match:
         return None
-    head = match.group(1).lower()
-    return AssetType.TABLE if head.startswith("table") else AssetType.FIGURE
+    kind = AssetType.TABLE if match.group(1).lower().startswith("table") else AssetType.FIGURE
+    return kind, int(match.group(2))
 
 
 def finalize_assets(
@@ -45,15 +75,21 @@ def finalize_assets(
 ) -> tuple[ExtractedAsset, ...]:
     """Order candidates deterministically and assign per-type ordinals + asset ids (P7).
 
-    Ordering is (page, y, x); ordinals are independent per AssetType. Pure — given the same
-    candidates it always yields the same assets/ids (PBT P7).
+    Ordering is (page, y, x); ordinals are independent per AssetType. A candidate carrying an
+    explicit ``ordinal`` (e-print figure matched to a doc-model block) keeps it verbatim so its
+    ``assetId`` aligns with the FigureBlock that references it; the positional counter is used
+    only for candidates that leave it ``None`` (page-crop path). Pure — given the same candidates
+    it always yields the same assets/ids (PBT P7).
     """
     ordered = sorted(candidates, key=lambda c: (c.page, c.y, c.x, c.type.value))
     counters: dict[AssetType, int] = {AssetType.FIGURE: 0, AssetType.TABLE: 0}
     out: list[ExtractedAsset] = []
     for cand in ordered:
-        ordinal = counters[cand.type]
-        counters[cand.type] = ordinal + 1
+        if cand.ordinal is not None:
+            ordinal = cand.ordinal
+        else:
+            ordinal = counters[cand.type]
+            counters[cand.type] = ordinal + 1
         meta = FigureTableAsset(
             asset_id=asset_id(paper_id, version, cand.type, ordinal),
             paper_id=paper_id,
@@ -112,6 +148,20 @@ class ImageNormalizer:
             return None
 
 
+@dataclass(frozen=True, slots=True)
+class _CropHit:
+    """One caption-anchored PDF crop: its kind, caption number, WebP image, and page position."""
+
+    kind: AssetType
+    number: int
+    image: bytes
+    page: int
+    y: float
+    x: float
+    bbox: tuple[float, float, float, float]
+    caption: str
+
+
 class AssetExtractor:
     """Extract figure/table assets for a paper (hybrid, best-effort).
 
@@ -123,37 +173,122 @@ class AssetExtractor:
     def __init__(self, *, normalizer: ImageNormalizer | None = None) -> None:
         self._normalizer = normalizer or ImageNormalizer()
 
-    def extract(self, *, paper_id: str, version: int, pdf: bytes | None, eprint: bytes | None
-                ) -> tuple[ExtractedAsset, ...]:
+    def extract(
+        self,
+        *,
+        paper_id: str,
+        version: int,
+        pdf: bytes | None,
+        eprint: bytes | None,
+        figure_specs: Sequence[FigureSpec] | None = None,
+    ) -> tuple[ExtractedAsset, ...]:
+        """Resolve a paper's figure/table images (hybrid, per-ordinal, best-effort).
+
+        With ``figure_specs`` (the doc-model FigureBlocks in document order) each figure ordinal is
+        resolved independently: the original-quality e-print graphic when its ``src`` matches a
+        tarball member, otherwise a PDF page-crop matched to the figure by its caption NUMBER. So a
+        paper mixing author rasters and LaTeXML-rendered vector figures still images every figure a
+        source covers — instead of the old all-or-nothing where any structured hit disabled every
+        page-crop figure. Tables always page-crop (TD-12). Without ``figure_specs`` the legacy
+        whole-tarball / all-or-nothing path runs (backfill cache hit or a direct call).
+        """
         candidates: list[RawAssetCandidate] = []
-        # Figures: prefer e-print structured graphics (original quality); fall back to crop.
         if eprint:
-            candidates.extend(self._structured_figures(eprint))
-        if pdf:
-            # Tables always page-crop (TD-12); figures page-crop when e-print yielded none.
-            want_figures = not candidates
-            candidates.extend(self._page_crop(pdf, want_figures=want_figures))
+            candidates.extend(self._structured_figures(eprint, figure_specs))
+        if not pdf:
+            return finalize_assets(paper_id, version, candidates)
+
+        if figure_specs is None:
+            # Legacy: no doc-model guidance — figures only if e-print yielded none (all-or-nothing).
+            candidates.extend(self._page_crop(pdf, want_figures=not candidates))
+            return finalize_assets(paper_id, version, candidates)
+
+        matched = {c.ordinal for c in candidates if c.type is AssetType.FIGURE}
+        unmatched = [(i, spec) for i, spec in enumerate(figure_specs) if i not in matched]
+        hits = self._scan_caption_crops(pdf, figures=bool(unmatched), tables=True)
+        if unmatched:
+            crops_by_number: dict[int, bytes] = {}
+            for hit in hits:
+                if hit.kind is AssetType.FIGURE:
+                    crops_by_number.setdefault(hit.number, hit.image)
+            for ordinal, spec in unmatched:
+                number = _label_number(spec.label)
+                image = crops_by_number.get(number) if number is not None else None
+                if image is not None:
+                    candidates.append(
+                        RawAssetCandidate(
+                            type=AssetType.FIGURE,
+                            image=image,
+                            source_mode=AssetSourceMode.PAGE_CROP,
+                            caption=spec.label,
+                            ordinal=ordinal,
+                            x=float(ordinal),
+                        )
+                    )
+        for hit in hits:
+            if hit.kind is AssetType.TABLE:
+                candidates.append(
+                    RawAssetCandidate(
+                        type=AssetType.TABLE,
+                        image=hit.image,
+                        source_mode=AssetSourceMode.PAGE_CROP,
+                        caption=hit.caption,
+                        page=hit.page,
+                        y=hit.y,
+                        x=hit.x,
+                        bbox=hit.bbox,
+                    )
+                )
         return finalize_assets(paper_id, version, candidates)
 
     # ---- hybrid paths (import-guarded; integration-tested in Build & Test) ----
 
-    def _structured_figures(self, eprint: bytes) -> list[RawAssetCandidate]:
-        """Extract raster graphics from an e-print tarball as figure candidates."""
+    def _structured_figures(
+        self, eprint: bytes, figure_specs: Sequence[FigureSpec] | None = None
+    ) -> list[RawAssetCandidate]:
+        """Extract raster graphics from an e-print tarball as figure candidates.
+
+        With ``figure_specs`` (the doc-model FigureBlocks, in document order) each figure's ``src``
+        is matched to its tarball member by filename STEM and emitted with the block's
+        document-order ordinal — so the ``assetId`` lands on the FigureBlock referencing it, and
+        rasters no block points at (logos, sub-panels) are excluded. Stem matching lets an HTML
+        ``<img src="x1.png">`` find a source ``x1.pdf``; an undecodable vector source then
+        normalizes to ``None`` and is skipped, so the caller's page-crop fill takes over.
+
+        Without ``figure_specs`` (no doc-model guidance — a backfill cache hit or a direct call)
+        the legacy filename-ordered scan runs: every raster becomes a figure, positionally ordered.
+        """
         import tarfile
 
         out: list[RawAssetCandidate] = []
         try:
             with tarfile.open(fileobj=io.BytesIO(eprint), mode="r:*") as tar:
-                members = sorted(
-                    (m for m in tar.getmembers() if m.isfile()), key=lambda m: m.name
-                )
-                for member in members:
+                files = [m for m in tar.getmembers() if m.isfile()]
+                if figure_specs is not None:
+                    members_by_stem: dict[str, Any] = {}
+                    for member in sorted(files, key=lambda m: m.name):
+                        members_by_stem.setdefault(_member_stem(member.name), member)
+                    for ordinal, spec in enumerate(figure_specs):
+                        member = members_by_stem.get(_member_stem(spec.src))
+                        if member is None:
+                            continue  # unmatched figure → page-crop fill by caption number
+                        image = self._read_and_normalize(tar, member)
+                        if image is None:
+                            continue
+                        out.append(
+                            RawAssetCandidate(
+                                type=AssetType.FIGURE,
+                                image=image,
+                                source_mode=AssetSourceMode.STRUCTURED,
+                                ordinal=ordinal,
+                                x=float(ordinal),
+                            )
+                        )
+                    return out
+                for member in sorted(files, key=lambda m: m.name):
                     if not member.name.lower().endswith((".png", ".jpg", ".jpeg")):
                         continue
-                    fh = tar.extractfile(member)
-                    if fh is None:
-                        continue
-                    image = self._normalizer.normalize(fh.read())
+                    image = self._read_and_normalize(tar, member)
                     if image is None:
                         continue
                     out.append(
@@ -168,44 +303,78 @@ class AssetExtractor:
             return []
         return out
 
-    def _page_crop(self, pdf: bytes, *, want_figures: bool) -> list[RawAssetCandidate]:
-        """Render figure/table regions from a PDF, anchored to detected captions."""
+    def _read_and_normalize(self, tar: Any, member: Any) -> bytes | None:
+        fh = tar.extractfile(member)
+        if fh is None:
+            return None
+        return self._normalizer.normalize(fh.read())
+
+    def _scan_caption_crops(
+        self, pdf: bytes, *, figures: bool, tables: bool
+    ) -> list[_CropHit]:
+        """Render caption-anchored figure/table crops from a PDF in one pass (page, caption order).
+
+        Detects lines that open with a "Figure N"/"Table N" caption, crops the region the caption
+        anchors, and normalizes it to WebP — returning the kind, caption NUMBER, image, and
+        position so callers can map a crop to a doc-model figure by number (figures) or order them
+        positionally (tables). Best-effort: any backend failure yields an empty list (BR-27)."""
         try:
             import pdfplumber
             import pypdfium2 as pdfium
         except ImportError as exc:  # pragma: no cover - assets extra not installed
             raise RuntimeError(_ASSETS_EXTRA_MISSING) from exc
 
-        out: list[RawAssetCandidate] = []
+        hits: list[_CropHit] = []
         try:
             pdfium_doc = pdfium.PdfDocument(pdf)
             with pdfplumber.open(io.BytesIO(pdf)) as plumber:
                 for page_no, page in enumerate(plumber.pages):
                     for line in page.extract_text_lines() or []:
-                        kind = caption_kind(line.get("text", ""))
-                        if kind is None or (kind is AssetType.FIGURE and not want_figures):
+                        parsed = caption_kind_and_number(line.get("text", ""))
+                        if parsed is None:
+                            continue
+                        kind, number = parsed
+                        if (kind is AssetType.FIGURE and not figures) or (
+                            kind is AssetType.TABLE and not tables
+                        ):
                             continue
                         bbox = _caption_region(page, line, kind)
                         image = _render_bbox_to_png(pdfium_doc, page_no, bbox, plumber_page=page)
                         image = self._normalizer.normalize(image) if image else None
                         if image is None:
                             continue
-                        out.append(
-                            RawAssetCandidate(
-                                type=kind,
+                        hits.append(
+                            _CropHit(
+                                kind=kind,
+                                number=number,
                                 image=image,
-                                source_mode=AssetSourceMode.PAGE_CROP,
-                                caption=line.get("text", "").strip(),
-                                section_ref=None,
                                 page=page_no,
                                 y=float(line.get("top", 0.0)),
                                 x=float(line.get("x0", 0.0)),
                                 bbox=bbox,
+                                caption=line.get("text", "").strip(),
                             )
                         )
         except Exception:  # noqa: BLE001 - best-effort; skip assets for this paper
             return []
-        return out
+        return hits
+
+    def _page_crop(self, pdf: bytes, *, want_figures: bool) -> list[RawAssetCandidate]:
+        """Legacy all-or-nothing page-crop (no doc-model guidance): positionally-ordered crops."""
+        return [
+            RawAssetCandidate(
+                type=hit.kind,
+                image=hit.image,
+                source_mode=AssetSourceMode.PAGE_CROP,
+                caption=hit.caption,
+                section_ref=None,
+                page=hit.page,
+                y=hit.y,
+                x=hit.x,
+                bbox=hit.bbox,
+            )
+            for hit in self._scan_caption_crops(pdf, figures=want_figures, tables=True)
+        ]
 
 
 def _caption_region(page, line, kind) -> tuple[float, float, float, float]:

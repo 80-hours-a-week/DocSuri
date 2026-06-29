@@ -27,16 +27,28 @@ def test_crop_assets_from_specs_empty_is_noop_without_pdfium() -> None:
     "text,expected",
     [
         ("Figure 1: overview", AssetType.FIGURE),
-        ("Fig. 2 results", AssetType.FIGURE),
+        ("Fig. 2: results", AssetType.FIGURE),
         ("Table 3 — metrics", AssetType.TABLE),
-        ("  table 10 ", AssetType.TABLE),
+        ("Figure1:Ourreparametrization", AssetType.FIGURE),  # no-space PDF extraction
+        ("Figure 4. Caption with a period delimiter", AssetType.FIGURE),
+        ("  table 10: latency ", AssetType.TABLE),
+        ("Table 6 shows that, surprisingly, LoRA", None),  # body sentence, NOT a caption
         ("As shown in Figure", None),  # no number
+        ("Figure 1 overview", None),  # no caption delimiter after the number
         ("Section 2", None),
         ("", None),
     ],
 )
 def test_caption_kind(text: str, expected: AssetType | None) -> None:
     assert caption_kind(text) == expected
+
+
+def test_caption_kind_and_number() -> None:
+    from docsuri_ingestion.asset_extraction import caption_kind_and_number
+
+    assert caption_kind_and_number("Figure 3: subspace similarity") == (AssetType.FIGURE, 3)
+    assert caption_kind_and_number("Table12:hyperparameters") == (AssetType.TABLE, 12)
+    assert caption_kind_and_number("Table 6 shows that") is None
 
 
 # ---------------------------------------------------------------- finalize_assets (P7)

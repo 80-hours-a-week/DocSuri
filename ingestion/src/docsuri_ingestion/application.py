@@ -12,7 +12,7 @@ from .config import CORPUS_SLICE_CATEGORIES, WITHDRAWAL_MARKERS
 from .corpus_sources import CorpusSourceAdapterSet, CorpusTextCandidate, SourcePaperRecord
 from .docmodel import DocModelBuilder
 from .docmodel.tei import tei_crop_specs
-from .domain.assets import AssetCropSpec
+from .domain.assets import AssetCropSpec, FigureSpec
 from .domain.canonical import canonical_key
 from .domain.enums import DedupDecision, FailureClass, FailureReason, JobKind, SourceName
 from .domain.errors import IngestionError, PermanentIngestionError
@@ -201,7 +201,9 @@ class IngestionPipelineService:
         )
         paper = self._parser.parse(raw_document)
 
-        doc_model = self._build_doc_model_before_index(metadata, raw_document.text)
+        doc_model, figure_specs = self._build_doc_model_before_index(
+            metadata, raw_document.text
+        )
         keys = self._canonical_keys_for_metadata(metadata, paper.year)
         existing = self._canonical_state_for_keys(keys)
         decision = self._index_paper(
@@ -210,6 +212,7 @@ class IngestionPipelineService:
             doc_model=doc_model,
             watermark_name="arxiv",
             asset_metadata=metadata,
+            asset_figure_specs=figure_specs,
         )
         if decision is not DedupDecision.STALE and not paper.withdrawal_detected:
             self._record_canonical_winner(
@@ -275,6 +278,7 @@ class IngestionPipelineService:
         doc_model: DocModel | None,
         watermark_name: str,
         asset_metadata,
+        asset_figure_specs: tuple[FigureSpec, ...] = (),
         record_asset_ctx: tuple[
             SourcePaperRecord, CorpusTextCandidate, tuple[AssetCropSpec, ...] | None
         ]
@@ -376,7 +380,7 @@ class IngestionPipelineService:
         self._control_plane.advance_watermark(watermark_name, paper.updated_at)
         # FR-17 assets: best-effort, AFTER the index commit so it can never block (BR-27).
         if asset_metadata is not None:
-            self._store_assets_best_effort(paper, asset_metadata)
+            self._store_assets_best_effort(paper, asset_metadata, asset_figure_specs)
         elif record_asset_ctx is not None:
             self._store_record_assets_best_effort(paper, *record_asset_ctx)
         self._control_plane.record_job_finished(job.job_id, success=True)
@@ -612,9 +616,14 @@ class IngestionPipelineService:
         self._observability.emit_metric("ingestion.paper.tombstoned", 1.0, {"kind": job.kind.value})
         return DedupDecision.CHANGED
 
-    def _store_assets_best_effort(self, paper, metadata) -> None:
+    def _store_assets_best_effort(
+        self, paper, metadata, figure_specs: tuple[FigureSpec, ...] = ()
+    ) -> None:
         """Extract + store figure/table assets (FR-17). Never raises — assets are a
-        display-only, non-blocking side path (BR-27); failures are observed, not propagated."""
+        display-only, non-blocking side path (BR-27); failures are observed, not propagated.
+
+        ``figure_specs`` (the doc-model FigureBlocks, document order) lets the extractor resolve
+        each figure's image aligned to its block; empty falls back to the legacy scan."""
         if not (self._asset_extractor and self._asset_store and self._asset_source):
             return
         # Classify by where it fails (§7.3): fetch/extract → EXTRACT, persistence → STORE.
@@ -623,7 +632,11 @@ class IngestionPipelineService:
             eprint = self._asset_source.fetch_eprint(metadata)
             pdf = self._asset_source.fetch_pdf(metadata)
             extracted = self._asset_extractor.extract(
-                paper_id=paper.paper_id, version=paper.version, pdf=pdf, eprint=eprint
+                paper_id=paper.paper_id,
+                version=paper.version,
+                pdf=pdf,
+                eprint=eprint,
+                figure_specs=figure_specs or None,
             )
             reason = FailureReason.ASSET_STORE_FAILURE
             if extracted:
@@ -704,14 +717,23 @@ class IngestionPipelineService:
         except Exception:  # noqa: BLE001 - best-effort cleanup
             self._observability.emit_metric("ingestion.assets.remove_failed", 1.0, {})
 
-    def _build_doc_model_before_index(self, metadata, fallback_text: str) -> DocModel | None:
-        """Eagerly build/cache the doc-model before index exposure (phase-1 Corpus)."""
+    def _build_doc_model_before_index(
+        self, metadata, fallback_text: str
+    ) -> tuple[DocModel | None, tuple[FigureSpec, ...]]:
+        """Eagerly build/cache the doc-model before index exposure (phase-1 Corpus).
+
+        Returns the doc-model plus a FigureSpec per FigureBlock in document order — the eager asset
+        step uses them to resolve each figure's image aligned to its block. Empty when no figures
+        were parsed (text fallback) or on a cache hit (the parse is skipped); the extractor then
+        falls back to its legacy scan."""
         if self._doc_model_builder is None:
-            return None
-        result = self._doc_model_builder.build(metadata)
+            return None, ()
+        figure_specs: list[FigureSpec] = []
+        result = self._doc_model_builder.build(metadata, figure_specs=figure_specs)
         status = result.status
         cached = str(getattr(result, "cached", "")).lower()
         if isinstance(result, SourceUnavailableDTO):
+            figure_specs = []  # PDF/text fallback carries no structured figures
             result = self._doc_model_builder.build_from_text(
                 metadata, fallback_text, source_tier=SourceTier.pdf
             )
@@ -722,7 +744,7 @@ class IngestionPipelineService:
             1.0,
             {"status": status, "cached": cached},
         )
-        return result.docModel
+        return result.docModel, tuple(figure_specs)
 
     def _build_doc_model_from_record(
         self, paper: ParsedPaper, candidate: CorpusTextCandidate

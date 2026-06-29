@@ -20,7 +20,7 @@ from docsuri_shared.dtos import DocModel, DocModelResultDTO, SourceTier, SourceU
 from docsuri_ingestion.docmodel.macros import extract_macros
 from docsuri_ingestion.docmodel.parser import parse_html_to_docmodel, parse_text_to_docmodel
 from docsuri_ingestion.docmodel.tei import parse_tei_to_docmodel
-from docsuri_ingestion.domain.assets import AssetCropSpec
+from docsuri_ingestion.domain.assets import AssetCropSpec, FigureSpec
 from docsuri_ingestion.domain.models import MetadataRecord
 from docsuri_ingestion.ports import DocModelSourcePort, DocModelStorePort, EprintSourcePort
 
@@ -71,8 +71,19 @@ class DocModelBuilder:
         self._parser_version = parser_version
         self._schema_version = schema_version
 
-    def build(self, metadata: MetadataRecord) -> DocModelResultDTO | SourceUnavailableDTO:
-        """Return the doc-model for ``metadata`` — cached, freshly built, or unavailable."""
+    def build(
+        self,
+        metadata: MetadataRecord,
+        *,
+        figure_specs: list[FigureSpec] | None = None,
+    ) -> DocModelResultDTO | SourceUnavailableDTO:
+        """Return the doc-model for ``metadata`` — cached, freshly built, or unavailable.
+
+        ``figure_specs`` is an optional out-param threaded to the HTML parser: on a fresh build it
+        is filled with a FigureSpec per FigureBlock (document order) so the eager asset step can
+        resolve each figure's image aligned to its block. On a cache hit the parser does not run,
+        so it stays untouched and the extractor falls back to its legacy scan.
+        """
         paper_id = metadata.paper_id
         version = metadata.version
 
@@ -98,6 +109,7 @@ class DocModelBuilder:
             schema_version=self._schema_version,
             generated_at=self._clock.now(),
             macros=self._extract_macros(metadata),
+            figure_specs=figure_specs,
         )
         self._store.put(doc)
         return DocModelResultDTO(status="ok", cached=False, docModel=doc)
