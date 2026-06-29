@@ -28,6 +28,18 @@ const CARD_FIELDS: (keyof ResultCardVM)[] = [
   'sourceUrl',
 ];
 
+// The always-present card fields. sourceName/sourceUrl are additive (optional), so they are NOT
+// here — but every required field must still be present (completeness), not just "no leak".
+const REQUIRED_CARD_FIELDS: (keyof ResultCardVM)[] = [
+  'title',
+  'authors',
+  'year',
+  'arxivId',
+  'abstractSnippet',
+  'relevance',
+  'arxivUrl',
+];
+
 describe('DTO contract', () => {
   it('page fixture conforms to SearchResultPageDTO', () => {
     const page: SearchResultPageDTO = pageResponse;
@@ -38,10 +50,19 @@ describe('DTO contract', () => {
   it('every card key is an allowed contract field — no internal leak (SEC-9)', () => {
     // sourceName/sourceUrl are optional (additive), so assert each key is in the allowed set
     // rather than an exact count: the SEC-9 invariant is that no INTERNAL field ever leaks.
+    // Completeness is held separately (next test) so a dropped REQUIRED field is still caught.
     for (const card of pageResponse.cards) {
       for (const key of Object.keys(card)) {
         expect(CARD_FIELDS).toContain(key);
       }
+    }
+  });
+
+  it('every card carries all required contract fields — no field dropped (completeness)', () => {
+    // Relaxing exact-match for optional fields must not lose the missing-required-field check:
+    // a card that drops e.g. arxivUrl would otherwise still pass the leak test above.
+    for (const card of pageResponse.cards) {
+      expect(Object.keys(card)).toEqual(expect.arrayContaining(REQUIRED_CARD_FIELDS));
     }
   });
 
