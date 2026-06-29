@@ -63,6 +63,7 @@ export interface ApiClientOptions {
 export interface PageQuery {
   limit?: number;
   cursor?: string;
+  query?: string;
 }
 
 const DEFAULT_PAGE_LIMIT = 20;
@@ -70,6 +71,7 @@ const DEFAULT_PAGE_LIMIT = 20;
 function pageQuery(params?: PageQuery): string {
   const sp = new URLSearchParams({ limit: String(params?.limit ?? DEFAULT_PAGE_LIMIT) });
   if (params?.cursor) sp.set('cursor', params.cursor);
+  if (params?.query) sp.set('query', params.query);
   return `?${sp.toString()}`;
 }
 
@@ -91,7 +93,9 @@ export class ApiClient {
   /** Submit a search; returns a classified terminal outcome (FR-11). */
   async search(query: string): Promise<SearchOutcome> {
     const body: SearchRequest = { query };
-    const res = await this.request({ method: 'POST', path: '/api/search', body, idempotent: true });
+    // idempotent: false — POST /api/search records search history on the backend.
+    // Retrying on 500 would create duplicate history entries.
+    const res = await this.request({ method: 'POST', path: '/api/search', body, idempotent: false });
     if (res.status === 200 || res.status === 400) {
       return classifySearchResponse(res.body);
     }

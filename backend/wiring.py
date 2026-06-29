@@ -223,12 +223,12 @@ def _mount_library(app: FastAPI, settings: Settings, result: MountResult) -> Non
     # library (U4) is `backend.modules.library`. Absent → ModuleNotFoundError → skip.
     from backend.modules.library import controller as library
     from backend.modules.library.audit import InMemoryAuditSink
-    from backend.modules.library.gateway import StubSearchGateway
+    from backend.modules.library.gateway import DiscoverySearchGateway
     from backend.modules.library.history_consumer import SearchHistoryEventConsumer
     from backend.modules.library.repository.memory import InMemoryUserDataRepository
     from backend.modules.library.services.history import SearchHistoryService
 
-    gateway = StubSearchGateway()
+    gateway = DiscoverySearchGateway(app)
     audit = InMemoryAuditSink()
 
     # Read/request path repo: SQL against the U3-inherited RDS when DATABASE_URL is Postgres
