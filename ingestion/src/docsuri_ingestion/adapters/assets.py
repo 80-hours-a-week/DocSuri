@@ -45,11 +45,16 @@ class ArxivAssetSource:
     def _get(self, url: str) -> bytes | None:
         import httpx
 
+        from docsuri_ingestion.http_limits import read_capped
+
         try:
-            response = httpx.get(url, timeout=self._timeout, follow_redirects=True)
-            response.raise_for_status()
-            return response.content
-        except Exception:  # noqa: BLE001 - best-effort: missing source → no assets
+            with (
+                httpx.Client(timeout=self._timeout, follow_redirects=True) as client,
+                client.stream("GET", url) as response,
+            ):
+                response.raise_for_status()
+                return read_capped(response)  # caps oversize PDF/e-print (NFR §0.5)
+        except Exception:  # noqa: BLE001 - best-effort: missing/oversize source → no assets
             return None
 
 

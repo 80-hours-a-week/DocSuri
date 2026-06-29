@@ -256,7 +256,7 @@ def test_worker_dispatches_legacy_type_less_ingest_job() -> None:
         receipt_handle="legacy-job",
         body={"jobId": "job-1", "kind": "EVENT", "arxivRef": "2401.00001v1"},
     )
-    pipeline = SimpleNamespace(ingest_one=seen.append)
+    pipeline = SimpleNamespace(ingest_one=seen.append, is_rebuild_active=lambda: False)
     runtime = SimpleNamespace(pipeline=pipeline, queue=queue, observability=observability)
 
     process_message(runtime, message)

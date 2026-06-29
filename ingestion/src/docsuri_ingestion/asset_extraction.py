@@ -28,6 +28,11 @@ _CAPTION_RE = re.compile(r"^\s*(figure|fig\.?|table)\s+\d+", re.IGNORECASE)
 
 _ASSETS_EXTRA_MISSING = "multimodal assets extra not installed (pip install .[assets])"
 
+# Decompression-bomb guards for e-print image members (TD-15): cap per-image and per-tarball
+# decoded bytes so a hostile tar member can't inflate unbounded before the pixel guard runs.
+_MAX_IMAGE_BYTES = 20_000_000
+_MAX_EPRINT_IMAGE_TOTAL = 200_000_000
+
 
 def caption_kind(text: str) -> AssetType | None:
     """Classify a text line as a figure/table caption, or None. Pure (P7)."""
@@ -143,6 +148,7 @@ class AssetExtractor:
 
         out: list[RawAssetCandidate] = []
         try:
+            budget = _MAX_EPRINT_IMAGE_TOTAL
             with tarfile.open(fileobj=io.BytesIO(eprint), mode="r:*") as tar:
                 members = sorted(
                     (m for m in tar.getmembers() if m.isfile()), key=lambda m: m.name
@@ -150,10 +156,19 @@ class AssetExtractor:
                 for member in members:
                     if not member.name.lower().endswith((".png", ".jpg", ".jpeg")):
                         continue
+                    # Skip a member whose declared size is oversized, and stop once the per-tarball
+                    # decoded budget is spent (decompression-bomb guard, TD-15).
+                    if member.size > _MAX_IMAGE_BYTES or budget <= 0:
+                        continue
                     fh = tar.extractfile(member)
                     if fh is None:
                         continue
-                    image = self._normalizer.normalize(fh.read())
+                    # Bounded read — a lying tar header can't OOM us past the per-image cap.
+                    raw = fh.read(_MAX_IMAGE_BYTES + 1)
+                    if len(raw) > _MAX_IMAGE_BYTES:
+                        continue
+                    budget -= len(raw)
+                    image = self._normalizer.normalize(raw)
                     if image is None:
                         continue
                     out.append(
