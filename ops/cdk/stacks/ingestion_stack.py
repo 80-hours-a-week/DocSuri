@@ -131,10 +131,15 @@ class IngestionStack(Stack):
             self, "Cluster", cluster_name="docsuri", vpc=vpc,
             security_groups=[],
         )
+        # grobid/grobid:0.8.0 is the full deep-learning image (~20GB extracted, bundles
+        # TensorFlow) — the 20GB Fargate default ephemeral storage overflows on pull
+        # (CannotPullContainerError: no space left on device). Bump disk to fit it, and RAM
+        # so GROBID has headroom alongside the worker.
         task_def = ecs.FargateTaskDefinition(
             self, "WorkerTaskDef",
-            cpu=1024,
-            memory_limit_mib=3072,
+            cpu=2048,
+            memory_limit_mib=8192,
+            ephemeral_storage_gib=80,
         )
 
         # Control-plane DSN WITHOUT the password — libpq reads PGPASSWORD (injected as a secret
@@ -163,9 +168,16 @@ class IngestionStack(Stack):
                 "DOCSURI_S3_BUCKET": self.bucket.bucket_name,
                 "DOCSURI_BEDROCK_MODEL_ID": _BEDROCK_MODEL_ID,
                 "DOCSURI_OPENSEARCH_ENDPOINT": f"https://{opensearch_domain.domain_endpoint}",
-                "DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus-v1",
+                # Post-v4-cutover: live search reads alias docsuri-corpus -> v2, so the worker
+                # must write to v2. v1 is the retired pre-migration index; dual-write scaffolding
+                # (bedrock_model_id_v2) stays unset now the migration is done.
+                "DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus-v2",
                 "DOCSURI_OPENSEARCH_ALIAS": "docsuri-corpus",
-                "DOCSURI_CORPUS_SOURCES": "ARXIV,SEMANTIC_SCHOLAR,OPENALEX",
+                # SS/OpenAlex temporarily disabled: the SS bulk-search adapter sends an invalid
+                # request (400) and on_schedule_tick has no per-source isolation, so one bad
+                # source crashes the whole tick + worker. Re-enable once both are fixed and a
+                # bounded backfill window is set. GROBID stays wired for that re-enable.
+                "DOCSURI_CORPUS_SOURCES": "ARXIV",
                 "DOCSURI_GROBID_URL": "http://127.0.0.1:8070",
                 "DOCSURI_OPENSEARCH_INDEX_V2": "docsuri-corpus-v2",
                 "DOCSURI_CONTROL_PLANE_DSN": control_plane_dsn,
