@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from docsuri_shared.dtos import DocModel, DocModelResultDTO, SourceTier, SourceUnavailableDTO
 
-from .asset_extraction import AssetExtractor, crop_assets_from_specs, figure_caption_anchors
+from .asset_extraction import AssetExtractor, crop_assets_from_specs
 from .config import CORPUS_SLICE_CATEGORIES, WITHDRAWAL_MARKERS
 from .corpus_sources import CorpusSourceAdapterSet, CorpusTextCandidate, SourcePaperRecord
 from .docmodel import DocModelBuilder
@@ -381,7 +381,7 @@ class IngestionPipelineService:
         self._control_plane.advance_watermark(watermark_name, paper.updated_at)
         # FR-17 assets: best-effort, AFTER the index commit so it can never block (BR-27).
         if asset_metadata is not None:
-            self._store_assets_best_effort(paper, asset_metadata, doc_model)
+            self._store_assets_best_effort(paper, asset_metadata)
         elif record_asset_ctx is not None:
             self._store_record_assets_best_effort(paper, *record_asset_ctx)
         self._control_plane.record_job_finished(job.job_id, success=True)
@@ -617,13 +617,9 @@ class IngestionPipelineService:
         self._observability.emit_metric("ingestion.paper.tombstoned", 1.0, {"kind": job.kind.value})
         return DedupDecision.CHANGED
 
-    def _store_assets_best_effort(self, paper, metadata, doc_model=None) -> None:
+    def _store_assets_best_effort(self, paper, metadata) -> None:
         """Extract + store figure/table assets (FR-17). Never raises — assets are a
-        display-only, non-blocking side path (BR-27); failures are observed, not propagated.
-
-        ``doc_model`` (when built) aligns figure asset ids to the FigureBlocks that reference
-        them by caption, so a stored figure lands on the right block regardless of extraction
-        order (arXiv HTML reading order vs e-print/page-crop order)."""
+        display-only, non-blocking side path (BR-27); failures are observed, not propagated."""
         if not (self._asset_extractor and self._asset_store and self._asset_source):
             return
         # Classify by where it fails (§7.3): fetch/extract → EXTRACT, persistence → STORE.
@@ -632,11 +628,7 @@ class IngestionPipelineService:
             eprint = self._asset_source.fetch_eprint(metadata)
             pdf = self._asset_source.fetch_pdf(metadata)
             extracted = self._asset_extractor.extract(
-                paper_id=paper.paper_id,
-                version=paper.version,
-                pdf=pdf,
-                eprint=eprint,
-                figure_anchors=figure_caption_anchors(doc_model),
+                paper_id=paper.paper_id, version=paper.version, pdf=pdf, eprint=eprint
             )
             reason = FailureReason.ASSET_STORE_FAILURE
             if extracted:

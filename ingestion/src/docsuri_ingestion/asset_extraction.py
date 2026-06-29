@@ -43,116 +43,22 @@ def caption_kind(text: str) -> AssetType | None:
     return AssetType.TABLE if head.startswith("table") else AssetType.FIGURE
 
 
-# Strip a leading "Figure 3:" / "Fig. 2 -" label, then reduce to a comparable alphanumeric key.
-_FIG_LABEL_RE = re.compile(r"^\s*(?:figure|fig\.?|table|tab\.?)\s*\d+\s*[:.\-—]?\s*", re.IGNORECASE)
-
-
-def _caption_key(text: str) -> str:
-    """Normalized caption key for matching doc-model figures to extracted assets.
-
-    Drops the label prefix (numbering differs between sources) and non-alphanumerics, lowercased
-    and length-capped, so a page-crop caption ("Figure 1: The Transformer …") matches the HTML
-    figure caption ("The Transformer - model architecture."). Empty when there is nothing to key.
-    """
-    if not text:
-        return ""
-    stripped = _FIG_LABEL_RE.sub("", text)
-    return re.sub(r"[^a-z0-9]", "", stripped.lower())[:48]
-
-
-def figure_caption_anchors(doc_model: object | None) -> tuple[tuple[int, str], ...]:
-    """(ordinal, caption-key) for each FigureBlock in a doc-model, for asset-id alignment.
-
-    Walks figure blocks only (those with an ``id``), never their nested ``assetRef`` (which also
-    carries ``type="figure"``, so a naive type scan double-counts). Returns () with no doc-model.
-    """
-    if doc_model is None:
-        return ()
-    data = doc_model.model_dump(by_alias=True) if hasattr(doc_model, "model_dump") else doc_model
-    out: list[tuple[int, str]] = []
-
-    def visit(node: object) -> None:
-        if isinstance(node, dict):
-            if node.get("type") == "figure" and "id" in node:
-                ref = node.get("assetRef") or {}
-                ordinal = ref.get("ordinal")
-                if isinstance(ordinal, int):
-                    caption = node.get("caption") or ref.get("caption") or ""
-                    out.append((ordinal, _caption_key(caption)))
-                return  # do not descend into the figure's assetRef
-            for value in node.values():
-                visit(value)
-        elif isinstance(node, list):
-            for value in node:
-                visit(value)
-
-    visit(data)
-    return tuple(out)
-
-
-def _match_figure_ordinals(
-    figures: Sequence[RawAssetCandidate],
-    anchors: Sequence[tuple[int, str]] | None,
-) -> list[int]:
-    """Assign a doc-model figure ordinal to each (page,y,x)-ordered figure candidate.
-
-    Caption-match against ``anchors`` first; any unmatched figure takes the lowest still-free
-    ordinal, so the result is a collision-free permutation. No anchors -> positional (the legacy
-    behavior, kept for tables and the captionless e-print path).
-    """
-    n = len(figures)
-    if not anchors:
-        return list(range(n))
-    by_key: dict[str, int] = {}
-    for ordinal, key in anchors:
-        if key and key not in by_key:
-            by_key[key] = ordinal
-    result: list[int | None] = [None] * n
-    taken: set[int] = set()
-    for i, cand in enumerate(figures):
-        ordinal = by_key.get(_caption_key(cand.caption))
-        if ordinal is not None and ordinal not in taken:
-            result[i] = ordinal
-            taken.add(ordinal)
-    nxt = 0
-    for i in range(n):
-        if result[i] is None:
-            while nxt in taken:
-                nxt += 1
-            result[i] = nxt
-            taken.add(nxt)
-    return [o for o in result if o is not None]
-
-
 def finalize_assets(
     paper_id: str,
     version: int,
     candidates: Sequence[RawAssetCandidate],
-    *,
-    figure_anchors: Sequence[tuple[int, str]] | None = None,
 ) -> tuple[ExtractedAsset, ...]:
     """Order candidates deterministically and assign per-type ordinals + asset ids (P7).
 
-    Ordering is (page, y, x). Table ordinals are positional. FIGURE ordinals are caption-matched
-    to the doc-model's figure blocks when ``figure_anchors`` ((ordinal, caption-key) per figure)
-    is supplied, so a stored asset lands on the FigureBlock that references it even when the
-    extraction order (e-print filename / page position) differs from HTML reading order. Without
-    anchors, figures stay positional. Pure — same inputs always yield the same assets/ids (P7).
+    Ordering is (page, y, x); ordinals are independent per AssetType. Pure — given the same
+    candidates it always yields the same assets/ids (PBT P7).
     """
     ordered = sorted(candidates, key=lambda c: (c.page, c.y, c.x, c.type.value))
-    fig_ordinals = _match_figure_ordinals(
-        [c for c in ordered if c.type is AssetType.FIGURE], figure_anchors
-    )
-    table_counter = 0
-    fig_i = 0
+    counters: dict[AssetType, int] = {AssetType.FIGURE: 0, AssetType.TABLE: 0}
     out: list[ExtractedAsset] = []
     for cand in ordered:
-        if cand.type is AssetType.FIGURE:
-            ordinal = fig_ordinals[fig_i]
-            fig_i += 1
-        else:
-            ordinal = table_counter
-            table_counter += 1
+        ordinal = counters[cand.type]
+        counters[cand.type] = ordinal + 1
         meta = FigureTableAsset(
             asset_id=asset_id(paper_id, version, cand.type, ordinal),
             paper_id=paper_id,
@@ -222,15 +128,8 @@ class AssetExtractor:
     def __init__(self, *, normalizer: ImageNormalizer | None = None) -> None:
         self._normalizer = normalizer or ImageNormalizer()
 
-    def extract(
-        self,
-        *,
-        paper_id: str,
-        version: int,
-        pdf: bytes | None,
-        eprint: bytes | None,
-        figure_anchors: Sequence[tuple[int, str]] | None = None,
-    ) -> tuple[ExtractedAsset, ...]:
+    def extract(self, *, paper_id: str, version: int, pdf: bytes | None, eprint: bytes | None
+                ) -> tuple[ExtractedAsset, ...]:
         candidates: list[RawAssetCandidate] = []
         # Figures: prefer e-print structured graphics (original quality); fall back to crop.
         if eprint:
@@ -239,10 +138,7 @@ class AssetExtractor:
             # Tables always page-crop (TD-12); figures page-crop when e-print yielded none.
             want_figures = not candidates
             candidates.extend(self._page_crop(pdf, want_figures=want_figures))
-        # figure_anchors aligns figure ordinals to the doc-model's FigureBlocks by caption, so
-        # the stored asset id matches the block that references it (page-crop carries captions;
-        # the captionless e-print path falls back to positional order — see _match_figure_ordinals).
-        return finalize_assets(paper_id, version, candidates, figure_anchors=figure_anchors)
+        return finalize_assets(paper_id, version, candidates)
 
     # ---- hybrid paths (import-guarded; integration-tested in Build & Test) ----
 
