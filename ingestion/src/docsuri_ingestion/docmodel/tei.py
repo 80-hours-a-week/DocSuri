@@ -41,6 +41,7 @@ from docsuri_ingestion.docmodel.parser import (
 )
 from docsuri_ingestion.domain.assets import AssetCropSpec, asset_id
 from docsuri_ingestion.domain.enums import AssetType
+from docsuri_ingestion.xmlsafe import safe_fromstring
 
 _WS_RE = re.compile(r"\s+")
 
@@ -71,7 +72,7 @@ def parse_tei_to_docmodel(
     Raises ``ET.ParseError`` on malformed TEI — the builder catches it and falls back to the
     flat-text doc-model so a parser hiccup never blocks ingestion.
     """
-    root = ET.fromstring(tei)
+    root = safe_fromstring(tei)
     body = _find_descendant(root, "body")
     doc_ctx = _DocCtx(paper_id=paper_id, version=version, crops=crops)
 

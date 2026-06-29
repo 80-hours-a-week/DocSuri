@@ -44,6 +44,16 @@ _LABEL_RE = re.compile(r"\\label\s*\{[^{}]*\}")
 _IMAGE_PLACEHOLDER_RE = re.compile(r"\[Image\s*#?\s*\d+\]", re.IGNORECASE)
 _MULTI_WS_RE = re.compile(r"[ \t]{2,}")
 
+# Security denylist (SEC-5 / BR-19): KaTeX commands that under ``trust:true`` emit links, load
+# remote resources, or run TeX programming. Stored LaTeX (and macro bodies) are defence-in-depth
+# stripped/rejected so safety does not rely solely on the U5 renderer keeping ``trust:false``.
+DANGEROUS_LATEX_RE = re.compile(
+    r"\\(?:href|url|includegraphics|html(?:Class|Id|Data|Style)?|"
+    r"def|edef|gdef|xdef|let|futurelet|newcommand|renewcommand|providecommand|"
+    r"input|include|catcode|expandafter|csname|endcsname|immediate|write|openout|special)"
+    r"(?![A-Za-z])"
+)
+
 
 def mathml_to_latex(math: Tag) -> str:
     """Convert a ``<math>`` element to a LaTeX string (alttext-first, MathML fallback)."""
@@ -55,6 +65,7 @@ def mathml_to_latex(math: Tag) -> str:
 
 def _sanitize(latex: str) -> str:
     """Drop never-math layout/label/placeholder markup so KaTeX renders no red error tokens."""
+    latex = DANGEROUS_LATEX_RE.sub("", latex)  # SEC-5/BR-19 KaTeX-injection strip
     latex = _INTERNAL_MACRO_RE.sub("", latex)
     latex = _LAYOUT_MACRO_RE.sub("", latex)
     latex = _LABEL_RE.sub("", latex)

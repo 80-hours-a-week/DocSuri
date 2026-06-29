@@ -17,6 +17,8 @@ from __future__ import annotations
 import io
 import tarfile
 
+from docsuri_ingestion.docmodel.mathml import DANGEROUS_LATEX_RE
+
 # Bounds so a hostile or pathological e-print cannot bloat the doc-model: cap the macro count,
 # each expansion's length, and the total bytes read from the tarball.
 _MAX_MACROS = 512
@@ -89,7 +91,15 @@ def _parse_defs(text: str, out: dict[str, str]) -> None:
         else:
             i = j
             continue
-        if name and body is not None and len(body) <= _MAX_BODY_LEN:
+        # Reject a macro whose expansion carries a KaTeX-injection command (SEC-5/BR-19): a
+        # hostile preamble could define \R -> \href{javascript:...}{x}. Drop it; the formula
+        # still renders with the command shown verbatim, never executed.
+        if (
+            name
+            and body is not None
+            and len(body) <= _MAX_BODY_LEN
+            and not DANGEROUS_LATEX_RE.search(body)
+        ):
             out[name] = body
     return None
 

@@ -13,7 +13,7 @@ from .corpus_sources import CorpusSourceAdapterSet, CorpusTextCandidate, SourceP
 from .docmodel import DocModelBuilder
 from .docmodel.tei import tei_crop_specs
 from .domain.assets import AssetCropSpec, FigureSpec
-from .domain.canonical import canonical_key
+from .domain.canonical import canonical_key, source_priority_from_tier
 from .domain.enums import DedupDecision, FailureClass, FailureReason, JobKind, SourceName
 from .domain.errors import IngestionError, PermanentIngestionError
 from .domain.models import (
@@ -99,6 +99,11 @@ class IngestionPipelineService:
         self._embedding_v2 = embedding_v2
         self._vector_index_v2 = vector_index_v2
         self._corpus_sources = corpus_sources
+
+    def is_rebuild_active(self) -> bool:
+        """Whether a SEED_REBUILD holds the single-writer lock (BR-13). The worker fences in-flight
+        INCREMENTAL/EVENT jobs out of a rebuild window with this."""
+        return self._control_plane.is_rebuild_active()
 
     def build_doc_model(
         self, job: IngestionJob
@@ -714,7 +719,10 @@ class IngestionPipelineService:
             return
         try:
             self._asset_store.remove_assets(paper_id)
-        except Exception:  # noqa: BLE001 - best-effort cleanup
+        except Exception as exc:  # noqa: BLE001 - best-effort cleanup
+            self._observability.emit_log(
+                {"type": "asset_remove_failure", "paperId": paper_id, "error": str(exc)}
+            )
             self._observability.emit_metric("ingestion.assets.remove_failed", 1.0, {})
 
     def _build_doc_model_before_index(
@@ -976,14 +984,8 @@ def _source_priority(source_name: SourceName) -> int:
 
 
 def _source_priority_from_tier(source_tier: str) -> int:
-    normalized = source_tier.upper()
-    if "ARXIV" in normalized or source_tier in {"native_html", "ar5iv", "eprint_latex", "pdf"}:
-        return _source_priority(SourceName.ARXIV)
-    if "SEMANTIC_SCHOLAR" in normalized:
-        return _source_priority(SourceName.SEMANTIC_SCHOLAR)
-    if "OPENALEX" in normalized:
-        return _source_priority(SourceName.OPENALEX)
-    return _source_priority(SourceName.OPENALEX)
+    # Single source of truth shared with the control-plane guarded upsert (domain.canonical).
+    return source_priority_from_tier(source_tier)
 
 
 def detect_withdrawal_proxy(title: str, abstract: str, text: str) -> bool:
