@@ -139,7 +139,7 @@ flowchart TD
   - **진행(2026-06-29, 코드 검증)**: 신규 인프라 0 재확인 — QT-1 하니스=순수 Python 단위 CI 레인(증분 0)·lazy 큐 deprecate. 비용 임계 정합: CDK `CfnBudget amount=1600·threshold=80%`(=$1,280)=`cost_guard.warning_ratio 0.80` 미러 명시. §2.2 Redis TTL 필수·§7 증분표에 QT-1 하니스(0) 행 추가.
 - [~] Code Generation - PARTIAL (가능분 완료·나머지 데이터 게이트).
   - **Rationale**: Validator 레지스트리·matcher 정밀화·임계값·deprecate·제거. FROZEN 계약 무변경.
-  - **진행(2026-06-29)**: ✅ 레지스트리 등재(`real_wiring`)·뷰프리셋/잔존 `view` 제거·lazy 큐 deprecate 주석·QT-1 하니스(`eval/`) = 커밋 c4987c6·7f3f69b·9dc75e2. ✅ **matcher 정밀화**(`_number_grounded`/`_source_values`·반올림 톨러런스·천단위·단위 정규화·테스트). 🔒 **남음=수치 임계값(0.5) 재보정**(held-out 코퍼스 선행, 데이터 게이트). FROZEN `enforce`/`get_budget_state` 무변경.
+  - **진행(2026-06-29)**: ✅ 레지스트리 등재(`real_wiring`)·뷰프리셋/잔존 `view` 제거·lazy 큐 deprecate 주석·QT-1 하니스(`eval/`) = 커밋 c4987c6·7f3f69b·9dc75e2. ✅ **matcher 정밀화**(`_number_grounded`/`_source_values`·반올림 톨러런스·천단위·단위 정규화·테스트). ✅ **수치 임계 재보정 분석**(`GroundingValidator` 임계 주입화·`sweep_numeric_threshold`·프랙션 코퍼스 `eval/numeric_corpus.py`) — 곡선상 안정 라벨 기준 0.5는 [0.25,0.66] 안전, 정책 민감 경계(절반 미검증)만 0.4~0.49로 잡힘. **결정(2026-06-29): 0.5 유지·실 held-out 논문 코퍼스까지 변경 보류**(합성 데이터로 사용자 튜닝값 변경 안 함). 🔒 남음=OP/팀 실 코퍼스 확보 후 재보정(인프라 준비완료). FROZEN `enforce`/`get_budget_state` 무변경.
 - [~] Build and Test - PARTIAL (단위 green·통합 게이트 대기).
   - **Rationale**: QT-5/QT-1·비용 게이트·앵커 PBT. **통합 완료 게이트 = 페이즈 1 라이브 스모크**(eager DocModel 실소비).
   - **진행(2026-06-29)**: ✅ 매 커밋 요약 모듈 전체 단위 테스트 green·ruff clean·QT-1 하니스 회귀(`test_grounding_eval`)·레지스트리 계약 테스트(`test_grounding_registry`). 🔒 **통합 완료 게이트 = 페이즈 1 `ingest-one` 라이브 스모크**(팀 소유·외부 게이트).
@@ -150,7 +150,7 @@ flowchart TD
 ## 성공 기준
 - 요약·초록번역·**전문번역**이 eager DocModel(v1) 기반·온디맨드·S3 영구저장으로 일관 동작(3종 동일).
 - Grounding Framework 통합: 검색=U6 enforce(FROZEN)·요약=U7 결정론 Validator가 **공유 추상 인터페이스/레지스트리** 아래 동작; "단일권위=검색 한정" 명문화·U6 사인오프.
-- **QT-1 충실도 평가셋**에서 날조 0건·올바른 기권 보고; 수치 임계가 평가셋 기반 strict 값으로 재보정(0.5 추정값 대체); matcher 정밀화로 false-abstain 감소.
+- **QT-1 충실도 평가셋**에서 날조 0건·올바른 기권 보고; matcher 정밀화로 false-abstain 감소; 수치 임계는 재보정 **분석 인프라 완비**(스윕·프랙션 코퍼스) 후 **0.5 유지·실 held-out 코퍼스 확보 시 재보정**(합성 데이터로 변경 안 함).
 - 비용 게이트가 ratio ≥0.80에서 요약 일시 기권(U6 단일권위, U7 재판정 없음).
 - 뷰 프리셋·커뮤니티 용어집(P3) 폐기 정합; lazy DocModel 큐는 레거시 백필 전용으로 deprecate 경로 명시.
 - 기존 요약/번역/캐시/기권 경로 유지 또는 명시적 저하.
