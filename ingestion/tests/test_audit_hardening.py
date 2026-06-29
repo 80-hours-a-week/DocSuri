@@ -6,7 +6,11 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from docsuri_ingestion.adapters.corpus_http import SsrfBlockedError, _assert_public_host
+from docsuri_ingestion.adapters.corpus_http import (
+    SsrfBlockedError,
+    _assert_public_host,
+    _pin_url,
+)
 from docsuri_ingestion.adapters.local import InMemoryControlPlaneStore
 from docsuri_ingestion.docmodel.macros import _parse_defs
 from docsuri_ingestion.docmodel.mathml import DANGEROUS_LATEX_RE, _sanitize
@@ -42,8 +46,24 @@ def test_ssrf_guard_blocks_link_local_and_loopback() -> None:
             _assert_public_host(url)
 
 
-def test_ssrf_guard_allows_public_ip() -> None:
-    _assert_public_host("https://93.184.216.34/paper.pdf")  # public literal — no raise
+def test_ssrf_guard_allows_public_ip_and_pins_it() -> None:
+    # Returns (host, validated_ip) so the caller connects to the address it just checked — the
+    # IP we validate is the IP we reach (no DNS-rebinding window).
+    host, ip = _assert_public_host("https://93.184.216.34/paper.pdf")  # public literal — no raise
+    assert host == "93.184.216.34"
+    assert ip == "93.184.216.34"
+
+
+def test_pin_url_targets_ip_and_keeps_port_path_query() -> None:
+    # Host drops out of the netloc (it rides in the Host header + SNI); scheme/port/path/query stay.
+    assert (
+        _pin_url("https://example.test:8443/a/b?q=1", "93.184.216.34")
+        == "https://93.184.216.34:8443/a/b?q=1"
+    )
+    # IPv6 is bracketed so the netloc stays parseable.
+    assert _pin_url("https://example.test/p", "2606:2800:220:1::1").startswith(
+        "https://[2606:2800:220:1::1]/p"
+    )
 
 
 def test_katex_sanitize_strips_dangerous_commands() -> None:
