@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 import socket
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from docsuri_ingestion.corpus_sources import SourcePaperRecord
 from docsuri_ingestion.domain.enums import FailureReason, SourceName
@@ -284,9 +285,18 @@ def _get_bytes(
         ) as client:
             current = url
             for _ in range(_MAX_PDF_REDIRECTS + 1):
+                # Pin the connection to the validated IP (skipped under an injected test transport,
+                # which has no real network): the host we validate and the socket we open hit the
+                # same address, so a rebinding DNS answer can't slip a private IP past the guard.
+                # Host header + SNI keep the original hostname so TLS cert verification still checks
+                # the name, not the literal IP.
                 if transport is None:
-                    _assert_public_host(current)
-                with client.stream("GET", current) as response:
+                    host, ip = _assert_public_host(current)
+                    target = _pin_url(current, ip)
+                    send = {"headers": {"Host": host}, "extensions": {"sni_hostname": host}}
+                else:
+                    target, send = current, {}
+                with client.stream("GET", target, **send) as response:
                     location = response.headers.get("location")
                     if response.is_redirect and location:
                         current = urljoin(current, location)
@@ -316,8 +326,10 @@ def _get_bytes(
     )
 
 
-def _assert_public_host(url: str) -> None:
-    """Reject a fetch whose host resolves to a private/loopback/link-local/reserved address."""
+def _assert_public_host(url: str) -> tuple[str, str]:
+    """Resolve a fetch URL's host, reject any private/loopback/link-local/reserved address, and
+    return ``(host, pinned_ip)``. Connecting to the returned IP (instead of re-resolving) closes
+    the DNS-rebinding window between this check and the socket connect (BR-18 / SEC-15)."""
     host = urlsplit(url).hostname
     if not host:
         raise SsrfBlockedError(f"fetch URL has no host: {url!r}")
@@ -325,6 +337,7 @@ def _assert_public_host(url: str) -> None:
         infos = socket.getaddrinfo(host, None)
     except socket.gaierror as exc:
         raise SsrfBlockedError(f"cannot resolve host {host!r}") from exc
+    pinned: str | None = None
     for info in infos:
         ip = ipaddress.ip_address(info[4][0])
         if (
@@ -336,6 +349,22 @@ def _assert_public_host(url: str) -> None:
             or ip.is_unspecified
         ):
             raise SsrfBlockedError(f"host {host!r} resolves to non-public address {ip}")
+        if pinned is None:
+            pinned = str(ip)
+    if pinned is None:
+        raise SsrfBlockedError(f"host {host!r} resolved to no address")
+    return host, pinned
+
+
+def _pin_url(url: str, ip: str) -> str:
+    """Rewrite ``url`` to target a validated ``ip``, preserving scheme/port/path/query. The host
+    is dropped from the netloc (it travels in the Host header + TLS SNI instead). IPv6 is
+    bracketed."""
+    parts = urlsplit(url)
+    netloc = f"[{ip}]" if ":" in ip else ip
+    if parts.port is not None:
+        netloc = f"{netloc}:{parts.port}"
+    return urlunsplit((parts.scheme, netloc, parts.path or "/", parts.query, ""))
 
 
 def _raise_for_corpus_status(status_code: int, stage: str) -> None:
@@ -363,16 +392,20 @@ def _request(
     timeout_seconds: float,
     transport: object | None,
     stage: str,
-):
+) -> bytes:
     import httpx
 
+    from docsuri_ingestion.http_limits import ResponseTooLargeError, read_capped
+
     try:
-        with httpx.Client(
-            timeout=timeout_seconds,
-            follow_redirects=True,
-            transport=transport,
-        ) as client:
-            response = client.get(url, params=params, headers=headers)
+        with (
+            httpx.Client(
+                timeout=timeout_seconds, follow_redirects=True, transport=transport
+            ) as client,
+            client.stream("GET", url, params=params, headers=headers) as response,
+        ):
+            _raise_for_corpus_status(response.status_code, stage)
+            return read_capped(response)  # metadata JSON is capped too (NFR §0.5)
     except httpx.TimeoutException as exc:
         raise RetriableIngestionError(
             "external corpus request timed out", reason=FailureReason.TIMEOUT, stage=stage
@@ -383,13 +416,17 @@ def _request(
             reason=FailureReason.FETCH_FAILURE,
             stage=stage,
         ) from exc
-    _raise_for_corpus_status(response.status_code, stage)
-    return response
+    except ResponseTooLargeError as exc:
+        raise PermanentIngestionError(
+            "external corpus metadata exceeded size cap",
+            reason=FailureReason.FETCH_FAILURE,
+            stage=stage,
+        ) from exc
 
 
-def _response_json(response, stage: str) -> dict[str, Any]:
+def _response_json(raw: bytes, stage: str) -> dict[str, Any]:
     try:
-        payload = response.json()
+        payload = json.loads(raw)
     except ValueError as exc:
         raise PermanentIngestionError(
             "external corpus source returned invalid JSON",
