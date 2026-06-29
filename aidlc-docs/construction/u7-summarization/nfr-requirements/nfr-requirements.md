@@ -89,7 +89,7 @@ U7 = **온디맨드 요약/번역 API 모듈**(배포 ① backend 모놀리스).
 - **단위 테스트**: 도메인/오케스트레이션 로직을 **테스트 전용 Fixture/Stub**(출하 어댑터 아님)로 검증 — 허용. + Hypothesis PBT.
 - **통합 테스트**: **실 의존성**(Bedrock·S3·Redis·U6 후크·U1 전문) 대상. 자격증명/엔드포인트 구성 = CI/Infra.
 - **QT-5 근거화 평가셋**(요약/번역 케이스): U7은 출력 표면(앵커·기권 결정) 제공, **평가 실행 소유 = U6/OP**.
-- **QT-1 충실도 평가 하니스(요약 도메인, 신규)**: `summarization/eval/`(`run_grounding_eval`·시드 케이스) — 라벨(faithful/fabricated) 케이스를 `GroundingValidator`에 돌려 **false_pass(날조 누출)·false_abstain(과민 기권)** 분류·집계, 순수·결정적 CI 회귀. **held-out 라벨 코퍼스 = OP/팀 소유**(시드는 스캐폴드); 수치 임계(`_NUMERIC_MISMATCH_THRESHOLD=0.5`) strict 재보정·matcher 정밀화는 코퍼스 선행(데이터 게이트 — 평가셋 없이 조정 시 과민 기권 회귀).
+- **QT-1 충실도 평가 하니스(요약 도메인, 신규)**: `summarization/eval/`(`run_grounding_eval`·`sweep_numeric_threshold`·시드 케이스) — 라벨(faithful/fabricated) 케이스를 `GroundingValidator`에 돌려 **false_pass(날조 누출)·false_abstain(과민 기권)** 분류·집계, 순수·결정적 CI 회귀. **held-out 라벨 코퍼스 = OP/팀 소유**(시드는 스캐폴드). **수치 임계 재보정(2026-06-29)**: 실제 arXiv 논문 8건의 Results/Table 수치를 발췌한 코퍼스(`eval/real_corpus.py`)로 스윕 — confident 안전 평지=[0.25, 0.51], 0.5는 상단 끝(0.60 프랙션 실 날조 케이스 존재로 그 위는 불가), 14/14 무누출·무과민기권. **결정: `_NUMERIC_MISMATCH_THRESHOLD=0.5` 유지**(0.45는 "절반 미검증=날조" 정책 채택 시에만 우월하나, 구성 draft가 운영 matcher-miss를 과소평가 → 과민기권 위험으로 보류). matcher 정밀화는 완료. 회귀=`tests/test_real_corpus.py`.
 
 ### 9.2 PBT 속성 (QT-4 / Hypothesis)
 PBT-S1(캐시 키 결정성/멱등) · PBT-S2(정제 멱등·보존 콘텐츠 불변) · PBT-S3(후치환 멱등) · PBT-S4(`SummaryResponse` 라운드트립·비노출) · PBT-S5(앵커 검증 건전성). 차단성/권고 분류는 전역 PBT 정책 계승.
