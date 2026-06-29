@@ -58,6 +58,7 @@ _ZONE_ID = "Z0084324NUV4EPLJ7JH9"
 _VIEWER_CERT_ARN = "arn:aws:acm:us-east-1:028317349537:certificate/8973dd50-5acb-4cb6-9a68-c64ddcdf0243"  # noqa: E501
 # com.amazonaws.global.cloudfront.origin-facing in ap-northeast-2.
 _CLOUDFRONT_PREFIX_LIST = "pl-22a6434b"
+_LIBRARY_ENTRY_PATH = "/library/saved"
 # Per-synth origin-auth secret (never in source); see compute_stack for the rationale.
 _ORIGIN_VERIFY_SECRET = secrets.token_urlsafe(32)
 
@@ -93,6 +94,7 @@ class FrontendStack(Stack):
         container_env = {
             "NODE_ENV": "production",
             "DOCSURI_GATEWAY_URL": gateway_url,
+            "DOCSURI_LIBRARY_ENTRY_PATH": _LIBRARY_ENTRY_PATH,
         }
 
         # --- ALB + Fargate (HTTPS :443 with ACM cert + Route53 alias app-origin.docsuri.org) ---
@@ -216,3 +218,4 @@ class FrontendStack(Stack):
 
         CfnOutput(self, "AppUrl", value=f"https://{_APP_DOMAIN}", description="Public app URL")
         CfnOutput(self, "CdnDomain", value=self.cdn.distribution_domain_name)
+        CfnOutput(self, "LibraryEntryPath", value=_LIBRARY_ENTRY_PATH)
