@@ -62,6 +62,13 @@ _RDS_SECRET_ARN = (
     "arn:aws:secretsmanager:ap-northeast-2:028317349537:secret:"
     "DocsuriComputePostgresSecre-9qclXydED0pl-30WA1V"
 )
+# Semantic Scholar API key (x-api-key) for the corpus harvest — created out-of-band in Secrets
+# Manager; referenced by full ARN so the worker (and daily tick) authenticate SS. Plain-string
+# secret (no JSON field). ponytail: hardcoded id, revisit only if the secret is recreated.
+_SS_API_KEY_SECRET_ARN = (
+    "arn:aws:secretsmanager:ap-northeast-2:028317349537:secret:"
+    "docsuri/semantic-scholar-api-key-ExoKCk"
+)
 
 
 class IngestionStack(Stack):
@@ -149,6 +156,9 @@ class IngestionStack(Stack):
         db_secret = secretsmanager.Secret.from_secret_complete_arn(
             self, "DbSecret", _RDS_SECRET_ARN
         )
+        ss_api_key_secret = secretsmanager.Secret.from_secret_complete_arn(
+            self, "SsApiKeySecret", _SS_API_KEY_SECRET_ARN
+        )
 
         task_def.add_container(
             "grobid",
@@ -190,6 +200,13 @@ class IngestionStack(Stack):
             },
             secrets={
                 "PGPASSWORD": ecs.Secret.from_secrets_manager(db_secret, "password"),
+                # SS API key → x-api-key header (settings.semantic_scholar_api_key). Injecting it
+                # here also grants the execution role read on the secret, so the daily tick + any
+                # CDK-managed task is authed (the manual :13 revision used for the one-off backfill
+                # is outside CDK and superseded once this deploys).
+                "DOCSURI_SEMANTIC_SCHOLAR_API_KEY": ecs.Secret.from_secrets_manager(
+                    ss_api_key_secret
+                ),
             },
         )
 
