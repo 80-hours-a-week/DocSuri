@@ -75,9 +75,11 @@
 
 | 필드 | 타입 | 필수 | 의미 |
 |---|---|---:|---|
-| `paper_id` | PaperId | Y | 논문 식별자 |
-| `record_ref` | IndexRecordRef | Y | `vector-spec.md`의 검색/코퍼스 레코드 핸들 |
-| `anchor` | DocModelAnchor | Y | `docmodel.md`의 Section/Block id, 선택 span |
+| `source_type` | `corpus` \| `attachment` | Y | 코퍼스 논문 근거인지 사용자 첨부 근거인지 구분 |
+| `paper_id` | PaperId | N | `source_type=corpus`일 때 필수 논문 식별자 |
+| `record_ref` | IndexRecordRef | N | `source_type=corpus`일 때 필수 `vector-spec.md` 검색/코퍼스 레코드 핸들 |
+| `attachment_ref` | AttachmentRef | N | `source_type=attachment`일 때 필수 owner-scoped 첨부 핸들 |
+| `anchor` | DocModelAnchor | Y | 코퍼스 DocModel 또는 첨부 파싱 산출물의 Section/Block id, 선택 span |
 | `quote` | string | N | 짧은 검증용 발췌. UI/저장 정책에 따라 생략 가능 |
 
 ### 3.6 공통 참조 타입
@@ -111,7 +113,7 @@
 
 | 검증 | 정책 |
 |---|---|
-| 출처 실재성 | `SourceRef.record_ref`와 `SourceRef.anchor`가 존재해야 함 |
+| 출처 실재성 | `source_type=corpus`는 `record_ref`와 `anchor`, `source_type=attachment`는 `attachment_ref`와 `anchor`가 존재해야 함 |
 | 근거 부족 | `state=abstain`, `claims=[]`, 사용자용 `abstain_reason` 반환 |
 | 상충 근거 | 숨기지 않고 `conflicting`에 표현. 최종 필수 여부는 Q3에서 확정 |
 | 내부 상세 | 위반 상세, 내부 점수, owner 정보는 외부 DTO에 노출하지 않음 |
@@ -140,6 +142,7 @@
 | `conflicting`, `confidence` 포함 여부 | 질문지 Q3 |
 | 검색 scope 기본값 | 질문지 Q4 |
 | 첨부 처리 방식 | 질문지 Q6 |
+| 첨부 파싱 실패 시 `SourceRef` 허용 여부 | 질문지 Q6 / Functional Design |
 | 동기/비동기 표면 | 질문지 Q9 |
 
 이 항목이 닫히기 전까지 본 문서는 PROVISIONAL이다.
