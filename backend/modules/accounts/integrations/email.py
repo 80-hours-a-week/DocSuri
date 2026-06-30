@@ -255,8 +255,17 @@ class SESEmailClient(EmailClientInterface):
     def _get_client(self):
         if self._client is None:
             import boto3
-            # 컨테이너에 투과 주입된 IAM Role 또는 기본 자격 증명 사용
-            self._client = boto3.client("ses", region_name=self._region_name)
+            from botocore.config import Config
+
+            # S5: NFR §2.1 SES 3.0s 예산. 기본 botocore 타임아웃(~60s)이면 행이 걸린 SES 엔드포인트가
+            # to_thread 워커를 수십 초 잡아 가용성을 해친다. 연결/읽기를 3s로 죄고 재시도는 끈다
+            # (소프트 폴백이 상위에서 가입 트랜잭션을 보존하므로 boto3 자체 재시도는 불필요).
+            # 컨테이너에 투과 주입된 IAM Role 또는 기본 자격 증명 사용.
+            self._client = boto3.client(
+                "ses",
+                region_name=self._region_name,
+                config=Config(connect_timeout=3, read_timeout=3, retries={"max_attempts": 0}),
+            )
         return self._client
 
     async def send_verification_email(self, email: str, token: str, signup_link: str) -> bool:
@@ -354,7 +363,7 @@ class ResendEmailClient(EmailClientInterface):
         link = f"{signup_link}?token={token}"
         subject, body_text, body_html = _render_verification_email(link)
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=3.0) as client:  # S5: NFR §2.1 메일 발송 예산
                 resp = await client.post(
                     self._ENDPOINT,
                     headers={"Authorization": f"Bearer {self._api_key}"},
@@ -382,7 +391,7 @@ class ResendEmailClient(EmailClientInterface):
         link = f"{reset_link}?token={token}"
         subject, body_text, body_html = _render_password_reset_email(link)
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=3.0) as client:  # S5: NFR §2.1 메일 발송 예산
                 resp = await client.post(
                     self._ENDPOINT,
                     headers={"Authorization": f"Bearer {self._api_key}"},
@@ -407,7 +416,7 @@ class ResendEmailClient(EmailClientInterface):
 
     async def _send(self, to: str, subject: str, text: str, html: str) -> bool:
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=3.0) as client:  # S5: NFR §2.1 메일 발송 예산
                 resp = await client.post(
                     self._ENDPOINT,
                     headers={"Authorization": f"Bearer {self._api_key}"},
