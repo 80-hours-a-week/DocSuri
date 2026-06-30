@@ -75,7 +75,7 @@ class SignupService:
         )
         
         if not email_sent:
-            logger.warning(f"Verification email sending failed for {email_vo.value}, but registration transaction continues.")
+            logger.warning("Verification email sending failed, but registration transaction continues.")
 
         # 7. 관측성 이벤트/감사 로깅 (SEC-BR-1 민감정보 제외)
         if self._observability_hub:
@@ -113,7 +113,7 @@ class SignupService:
             email=email_vo.value, token=token, signup_link=verification_link_base
         )
         if not email_sent:
-            logger.warning(f"Resend verification email failed for {email_vo.value}; account remains PENDING.")
+            logger.warning("Resend verification email failed; account remains PENDING.")
         return email_sent
 
     async def verify_email(self, token: str) -> bool:

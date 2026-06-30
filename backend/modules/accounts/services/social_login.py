@@ -53,7 +53,11 @@ class SocialLoginService:
 
         existing_link = self._repo.get_social_identity(provider_v, claims.subject)
         if existing_link is not None:
-            return existing_link.account_id
+            if existing_link.status == "LINKED":
+                return existing_link.account_id
+            raise SocialLinkConfirmationRequired(
+                "이 이메일은 비밀번호로 가입된 계정입니다. 비밀번호로 로그인한 뒤 소셜 계정을 연결해 주세요."
+            )
 
         email = normalize_email(claims.email)
         account = self._repo.get_by_email(email)
