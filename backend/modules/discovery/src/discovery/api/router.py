@@ -91,6 +91,18 @@ def build_router(
     return router
 
 
+def register_search_unavailable_handler(app: FastAPI) -> None:
+    """Register the store-outage → fail-closed 503 handler (INV-3/SEC-15) on ``app``.
+
+    Owned by discovery so BOTH mount paths — the standalone ``build_app`` and the real app-shell
+    mount (``backend.wiring._mount_discovery``) — wire the SAME contract and SEC-9 message from
+    one place; neither can silently drift from the other if the wording changes."""
+
+    @app.exception_handler(SearchUnavailable)
+    def _on_unavailable(_request, _exc):  # fail-closed: generic 503, no internal detail
+        return JSONResponse(status_code=503, content={"message": _UNAVAILABLE_MESSAGE})
+
+
 def build_app(
     orchestrator: SearchOrchestrationService,
     grounding_hook: GroundingEnforcementHook,
@@ -105,9 +117,7 @@ def build_app(
         build_router(orchestrator, grounding_hook, paper_service, allow_dev_user=True)
     )
 
-    @app.exception_handler(SearchUnavailable)
-    def _on_unavailable(_request, _exc):  # fail-closed: generic 503 (INV-3/SEC-15)
-        return JSONResponse(status_code=503, content={"message": _UNAVAILABLE_MESSAGE})
+    register_search_unavailable_handler(app)
 
     @app.exception_handler(Exception)
     def _on_unexpected(_request, _exc):  # global catch-all: generic 500, no leak (INV-3/SEC-15)
