@@ -146,7 +146,7 @@ def _mount_discovery(app: FastAPI, settings: Settings, result: MountResult) -> N
     # the real read path: if it is configured but its `real` extra (opensearch-py/boto3) is not
     # installed, the import raises ModuleNotFoundError → skip (no silent mock fallback).
     from discovery.adapters.settings import DiscoverySettings
-    from discovery.api.router import build_router
+    from discovery.api.router import build_router, register_search_unavailable_handler
     from docsuri_ops.grounding import GroundingEnforcementHook
 
     # Read path selection (U2 real adapters, critical path ⑥): when the shared OpenSearch
@@ -205,6 +205,14 @@ def _mount_discovery(app: FastAPI, settings: Settings, result: MountResult) -> N
     grounding_hook = GroundingEnforcementHook()
     app.state.discovery_bundle = bundle
     app.state.grounding_hook = grounding_hook
+
+    # Map a store outage to a fail-closed, no-leak 503 (INV-3/SEC-15). The standalone build_app
+    # registers this itself; mounted via build_router here, the app-shell must do it too —
+    # otherwise SearchUnavailable falls through to the generic Exception→500 handler and a
+    # transient outage looks like a bug instead of a retryable 503 (the value the router/
+    # paper_meta docstrings already promise). Reuse discovery's own handler so the SEC-9 message
+    # stays single-sourced (no dev/app-shell drift).
+    register_search_unavailable_handler(app)
 
     # The paper-detail metadata endpoint (GET /api/papers/{id}) is U2-owned (corpus data); both
     # bundles expose a paper_service. getattr keeps this resilient if a bundle predates it.
