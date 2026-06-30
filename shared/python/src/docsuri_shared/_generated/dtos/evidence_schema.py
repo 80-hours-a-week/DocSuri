@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, Field, RootModel
-from typing import Any
+from typing import Any, Literal
 
 
 class EvidenceScope(StrEnum):
@@ -97,7 +97,7 @@ class EvidenceResult(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    state: EvidenceState = Field(..., description='ok 고정(성공). Trace: FR-5.')
+    state: Literal['ok'] = Field(..., description='ok 고정(성공). Trace: FR-5.')
     claims: list[EvidenceItem] = Field(
         ...,
         description='추출된 근거 명제 목록. 각 항목은 EvidenceItem{ statement, supporting[], conflicting[] }. Trace: Q1, Q3.',
@@ -109,14 +109,14 @@ class EvidenceResult(BaseModel):
 
 class EvidenceAbstainResult(BaseModel):
     """
-    근거 부족·범위 밖 기권(state=abstain). 날조 대신 기권(FR-5). abstain_reason = 비기술 사유만(내부 위반 상세 비노출 — SEC-9). Trace: FR-5, SEC-9, C-2.
+    근거 부족·범위 밖 기권(state=abstain). 날조 대신 기권(FR-5). abstainReason = 비기술 사유만(내부 위반 상세 비노출 — SEC-9). Trace: FR-5, SEC-9, C-2.
     """
 
     model_config = ConfigDict(
         extra='forbid',
     )
-    state: EvidenceState = Field(..., description='abstain 고정. Trace: FR-5.')
-    abstain_reason: str = Field(
+    state: Literal['abstain'] = Field(..., description='abstain 고정. Trace: FR-5.')
+    abstainReason: str = Field(
         ...,
         description='비기술 기권 사유(내부 위반 상세·점수 비노출 — SEC-9). 예: out_of_corpus, insufficient_evidence.',
     )
@@ -124,7 +124,7 @@ class EvidenceAbstainResult(BaseModel):
 
 class EvidenceRequest(BaseModel):
     """
-    근거형성 입력. topic = 연구 주제·질문. scope = 논문 집합 범위(Q4=A 혼합). paper_ids = explicit·mixed scope 시 사용자 명시 paper 집합. attachments = 사용자 첨부(Q6=A, doc-model 파이프라인 재사용). constraints = 기간·분야·논문 수 제한(상세는 FD 이월). Trace: Q4, Q6.
+    근거형성 입력. topic = 연구 주제·질문. scope = 논문 집합 범위(Q4=A 혼합). paperIds = explicit·mixed scope 시 사용자 명시 paper 집합. attachments = 사용자 첨부(Q6=A, doc-model 파이프라인 재사용). constraints = 기간·분야·논문 수 제한(상세는 FD 이월). Trace: Q4, Q6.
     """
 
     model_config = ConfigDict(
@@ -139,7 +139,7 @@ class EvidenceRequest(BaseModel):
     scope: EvidenceScope | None = Field(
         None, description='논문 집합 범위(Q4=A). 생략 시 auto.'
     )
-    paper_ids: list[str] | None = Field(
+    paperIds: list[str] | None = Field(
         None,
         description='explicit·mixed scope 시 사용자 명시 arXiv ID 목록. auto scope이면 무시.',
     )
@@ -156,6 +156,6 @@ class EvidenceRequest(BaseModel):
 class EvidenceResultModel(RootModel[EvidenceResult | EvidenceAbstainResult]):
     root: EvidenceResult | EvidenceAbstainResult = Field(
         ...,
-        description='U4 문헌탐색·근거형성 Agent 출력 DTO 계약. ROOT = EvidenceResult (터미널 상태 유니온). 페이즈 5(연구아이디어 Agent)가 EvidenceFormationPort.form_evidence() 반환값으로 소비한다 (D5 공유 계약). 근거 출력 깊이(Q3=B): EvidenceItem{ statement, supporting[], conflicting[] } — confidence 제외(FR-5 그라운딩 원칙·환각 위험). 검색 scope(Q4=A): auto|explicit|mixed. 첨부(Q6=A): attachments? 지원. 기권(FR-5/SEC-9): state=abstain + 비기술 abstain_reason, 내부 위반 상세 비노출. 생성 산문 금지(C-2): statement 필드는 논문에서 추출한 근거 명제만, 새로운 산문 생성 금지. Producer: U4; Consumer: U5. Trace: Q1, Q2, Q3, Q4, Q6, FR-5, SEC-9, C-2, D5.',
+        description='U4 문헌탐색·근거형성 Agent 출력 DTO 계약. ROOT = EvidenceResult (터미널 상태 유니온). 페이즈 5(연구아이디어 Agent)가 EvidenceFormationPort.form_evidence() 반환값으로 소비한다 (D5 공유 계약). 근거 출력 깊이(Q3=B): EvidenceItem{ statement, supporting[], conflicting[] } — confidence 제외(FR-5 그라운딩 원칙·환각 위험). 검색 scope(Q4=A): auto|explicit|mixed. 첨부(Q6=A): attachments? 지원. 기권(FR-5/SEC-9): state=abstain + 비기술 abstainReason, 내부 위반 상세 비노출. 생성 산문 금지(C-2): statement 필드는 논문에서 추출한 근거 명제만, 새로운 산문 생성 금지. Producer: U4; Consumer: U12. Trace: Q1, Q2, Q3, Q4, Q6, FR-5, SEC-9, C-2, D5.',
         title='EvidenceResult',
     )

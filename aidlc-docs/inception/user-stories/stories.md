@@ -339,7 +339,7 @@
 
 ## 에픽 9 — 문헌탐색·근거형성 Agent *(U4, 2026-06-29 편입)*
 
-> 연구자가 여러 논문을 가로질러 근거를 형성하는 대화형 AI Agent. 검색·DocModel·요약·인용 파이프라인을 Agent가 자율 오케스트레이션해 핵심 주장·방법·결과·한계를 추출·비교하고 쟁점 오버레이로 제시. 신뢰 원칙: 날조 없음(FR-5·C-2), 근거 0건이면 기권(abstain). D5 포트(EvidenceFormationPort)를 통해 U5(연구아이디어 Agent)가 소비한다. 설계 입력: `../requirements/requirements.md` §FR-30~32, NFR-P5, QT-8.
+> 연구자가 여러 논문을 가로질러 근거를 형성하는 대화형 AI Agent. 검색·DocModel·요약·인용 파이프라인을 Agent가 자율 오케스트레이션해 핵심 주장·방법·결과·한계를 추출·비교하고 쟁점 오버레이로 제시. 신뢰 원칙: 날조 없음(FR-5·C-2), 근거 0건이면 기권(abstain). D5 포트(EvidenceFormationPort)를 통해 U12(연구아이디어 Agent)가 소비한다. 설계 입력: `../requirements/requirements.md` §FR-30~32, NFR-P5, QT-8.
 
 ### US-EV1 — 근거형성 세션 시작
 **As** 연구자(P1), **I want** 로그인 후 채팅 화면에서 근거형성 세션을 시작하기를, **so that** 관심 주제를 멀티턴 대화로 탐색할 수 있다.
@@ -357,7 +357,7 @@
 
 ### US-EV3 — 명시 논문 집합 근거형성
 **As** 연구자(P1), **I want** 내 라이브러리 논문이나 arXiv ID를 지정해 근거형성 범위를 제한하기를, **so that** 이미 검토한 논문 집합 안에서 근거를 비교한다.
-- **Given** 사용자가 paper_ids를 명시해 질문하면, **When** Agent가 explicit scope으로 근거형성을 실행하면, **Then** 지정 논문 집합만 사용해 근거를 추출·비교하고 자동 검색은 하지 않는다.
+- **Given** 사용자가 paperIds를 명시해 질문하면, **When** Agent가 explicit scope으로 근거형성을 실행하면, **Then** 지정 논문 집합만 사용해 근거를 추출·비교하고 자동 검색은 하지 않는다.
 - **Given** 명시 집합과 자동 검색을 혼합 요청하면, **When** mixed scope을 사용하면, **Then** 명시 집합과 자동 검색 결과를 병합해 근거를 형성한다.
 - **Traces**: FR-31, FR-9, Q4=A
 
@@ -395,7 +395,7 @@
 **As** 운영자(OP), **I want** 근거형성 Agent의 날조 0건·abstain 경로·스트리밍 지연을 지속 검증하기를, **so that** 할루시네이션·반쪽짜리 결과를 조기 탐지한다.
 - **Given** QT-8 근거화 평가셋, **When** 시스템 대비 실행하면, **Then** 날조 근거 명제 0건, EvidenceItem DTO 라운드트립 정합, abstain 경로 정상 동작을 보고한다.
 - **Given** 스트리밍 응답, **When** NFR-P5 검사를 실행하면, **Then** 첫 토큰 지연이 허용 SLA 안에 있고 비동기 잡 오프로드가 올바르게 동작한다.
-- **Given** U5가 EvidenceFormationPort.form_evidence()를 호출하면, **When** state=abstain 응답이 반환되면, **Then** U5가 날조 없이 기권 처리하는 것을 D5 계약 테스트로 검증한다.
+- **Given** U12가 EvidenceFormationPort.form_evidence()를 호출하면, **When** state=abstain 응답이 반환되면, **Then** U12가 날조 없이 기권 처리하는 것을 D5 계약 테스트로 검증한다.
 - **Traces**: QT-8, FR-5, NFR-P5, NFR-O1, D5
 
 ---
