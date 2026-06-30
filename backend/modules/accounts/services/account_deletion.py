@@ -45,6 +45,21 @@ class AccountDeletedPublisher(Protocol):
     async def publish(self, account_id: str, occurred_at: datetime, event_id: str) -> None: ...
 
 
+class OwnerDataPurger(Protocol):
+    """동일 RDS 안의 owner-scoped 데이터 파기 포트.
+
+    EventBridge 발행은 외부/비동기 구독자를 위한 계약이고, 이 포트는 현재 모놀리식 DB에 이미
+    존재하는 owner-scoped 테이블을 같은 트랜잭션에서 정리하는 운영 backstop이다.
+    """
+
+    def purge(self, account_id: str) -> None: ...
+
+
+class NoopOwnerDataPurger:
+    def purge(self, account_id: str) -> None:
+        return None
+
+
 def _build_payload(account_id: str, occurred_at: datetime, event_id: str) -> dict:
     """발행 detail을 SSOT 계약(``AccountDeleted``)으로 검증·직렬화한다 — 계약 드리프트를 발행
     시점에 잡는다. ``occurred_at``은 tz-aware여야 한다(계약은 AwareDatetime)."""
@@ -118,11 +133,13 @@ class AccountDeletionService:
         credential_repo: CredentialRepository,
         session_manager: SessionManager | None,  # purge_job 경로는 미사용 → 워커는 None 주입.
         publisher: AccountDeletedPublisher | None = None,
+        owner_data_purger: OwnerDataPurger | None = None,
         grace_days: int = DEFAULT_GRACE_DAYS,
     ):
         self._repo = credential_repo
         self._session_manager = session_manager
         self._publisher = publisher or LoggingAccountDeletedPublisher()
+        self._owner_data_purger = owner_data_purger or NoopOwnerDataPurger()
         self._grace_days = grace_days
         self._hasher = get_password_hasher()
 
@@ -183,6 +200,7 @@ class AccountDeletionService:
                 # 나갔어도 계정은 DEACTIVATED로 남아 다음 회차에 동일 event_id로 재시도된다(멱등).
                 # 발행 자체가 실패하면 except로 빠져 파기를 건너뛴다(이벤트 유실→캐스케이드 누락 방지).
                 await self._publisher.publish(account_id, datetime.now(UTC), event_id)
+                self._owner_data_purger.purge(account_id)
                 self._repo.delete_account_permanently(account_id)
                 self._repo.mark_deletion_purged(account_id)
                 self._repo.commit()

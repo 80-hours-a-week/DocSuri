@@ -285,11 +285,12 @@ export class ApiClient {
    * MFA is an admin-only control (BR-A7) with no login-time challenge, so any
    * non-success is normalized to a user-facing error (401 → generalized auth).
    */
-  async login(req: LoginRequest): Promise<void> {
+  async login(req: LoginRequest, recaptchaToken?: string): Promise<void> {
     const res = await this.request({
       method: 'POST',
       path: '/auth/login',
       body: req,
+      headers: recaptchaToken ? { 'X-Recaptcha-Token': recaptchaToken } : undefined,
       idempotent: false,
     });
     if (res.status === 200 || res.status === 204) return;

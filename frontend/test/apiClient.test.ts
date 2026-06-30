@@ -47,6 +47,16 @@ describe('ApiClient retry policy', () => {
     });
   });
 
+  it('sends login reCAPTCHA token through the transport header', async () => {
+    let seen: TransportRequest | undefined;
+    const t = transportOf(async (req) => {
+      seen = req;
+      return { status: 200, body: { status: 'success' } };
+    });
+    await new ApiClient(t, fast).login({ email: 'a@b.co', password: 'Abcdef123!' }, 'captcha-token');
+    expect(seen?.headers).toEqual({ 'X-Recaptcha-Token': 'captcha-token' });
+  });
+
   it('normalizes a transport throw to a network UserFacingError', async () => {
     const t = transportOf(async () => {
       throw new Error('boom');

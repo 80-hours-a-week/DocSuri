@@ -6,9 +6,6 @@ exercises the security-critical decision logic against verified claims.
 """
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
 from backend.modules.accounts.models import (
     AccountStatus,
     DomainException,
@@ -22,6 +19,8 @@ from backend.modules.accounts.repository.credential import (
     CredentialRepository,
 )
 from backend.modules.accounts.services.social_login import OidcClaims, SocialLoginService
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 
 @pytest.fixture
@@ -70,6 +69,22 @@ def test_existing_password_account_requires_explicit_link_H1(repo):
     with pytest.raises(SocialLinkConfirmationRequired):
         SocialLoginService(repo).reconcile(OidcProvider.GOOGLE, _claims())
     # H1: a PENDING_CONFIRMATION identity is recorded — NOT auto-linked.
+    link = repo.get_social_identity("GOOGLE", "goog-sub-1")
+    assert link is not None
+    assert link.status == "PENDING_CONFIRMATION"
+
+
+def test_pending_confirmation_link_does_not_become_login_session(repo):
+    acct = repo.create_account("user@docsuri.org", get_password_hasher().hash("RealPw123!@x"))
+    acct.status = AccountStatus.ACTIVE.value
+    repo.update_account(acct)
+    svc = SocialLoginService(repo)
+
+    with pytest.raises(SocialLinkConfirmationRequired):
+        svc.reconcile(OidcProvider.GOOGLE, _claims())
+    with pytest.raises(SocialLinkConfirmationRequired):
+        svc.reconcile(OidcProvider.GOOGLE, _claims())
+
     link = repo.get_social_identity("GOOGLE", "goog-sub-1")
     assert link is not None
     assert link.status == "PENDING_CONFIRMATION"
