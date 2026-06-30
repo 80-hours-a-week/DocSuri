@@ -172,30 +172,32 @@ class MockEmailClient(EmailClientInterface):
     # 인증 토큰이 at-rest 해시로 저장된 뒤로 DB에서 원문을 복구할 수 없으므로, 로컬/테스트에서
     # 원문 토큰을 여기 보관해 전체 가입→검증 플로우를 검증할 수 있게 한다(SEC-BR-1 보완).
     last_verification_token: str | None = None
+    last_password_reset_token: str | None = None
 
     async def send_verification_email(self, email: str, token: str, signup_link: str) -> bool:
         self.last_verification_token = token
         logger.info("================ [MOCK EMAIL DELIVERY] ================")
-        logger.info(f"To: {email}")
+        logger.info("To: [redacted]")
         logger.info("Subject: DocSuri 이메일 인증 안내")
-        logger.info(f"Verification Token: {token}")
-        logger.info(f"Verification Link: {signup_link}?token={token}")
+        logger.info("Verification token captured in MockEmailClient.last_verification_token.")
+        logger.info("Verification link omitted from logs because it contains a bearer token.")
         logger.info("=========================================================")
         return True
 
     async def send_password_reset_email(self, email: str, token: str, reset_link: str) -> bool:
+        self.last_password_reset_token = token
         logger.info("================ [MOCK PASSWORD RESET EMAIL] ================")
-        logger.info(f"To: {email}")
-        logger.info(f"Reset Token: {token}")
-        logger.info(f"Reset Link: {reset_link}?token={token}")
+        logger.info("To: [redacted]")
+        logger.info("Reset token captured in MockEmailClient.last_password_reset_token.")
+        logger.info("Reset link omitted from logs because it contains a bearer token.")
         logger.info("=============================================================")
         return True
 
     async def _send(self, to: str, subject: str, text: str, html: str) -> bool:
         logger.info("================ [MOCK EMAIL DELIVERY] ================")
-        logger.info(f"To: {to}")
+        logger.info("To: [redacted]")
         logger.info(f"Subject: {subject}")
-        logger.info(f"Body: {text}")
+        logger.info("Body omitted from logs because transactional email can contain recipient secrets.")
         logger.info("=========================================================")
         return True
 
@@ -236,10 +238,7 @@ class SESEmailClient(EmailClientInterface):
                     },
                 )
             )
-            logger.info(
-                f"Verification email sent successfully via SES to {email}. "
-                f"MessageId: {response.get('MessageId')}"
-            )
+            logger.info("Verification email sent successfully via SES. MessageId: %s", response.get("MessageId"))
             return True
         except Exception as e:
             logger.error(f"Amazon SES 이메일 발송 실패 (Soft-Fallback 활성): {str(e)}")
@@ -265,7 +264,7 @@ class SESEmailClient(EmailClientInterface):
                     },
                 )
             )
-            logger.info(f"Password reset email sent via SES to {email}. MessageId: {response.get('MessageId')}")
+            logger.info("Password reset email sent via SES. MessageId: %s", response.get("MessageId"))
             return True
         except Exception as e:
             logger.error(f"Amazon SES 재설정 메일 발송 실패 (Soft-Fallback): {str(e)}")
@@ -288,7 +287,7 @@ class SESEmailClient(EmailClientInterface):
                     },
                 )
             )
-            logger.info(f"Email sent via SES to {to}. MessageId: {response.get('MessageId')}")
+            logger.info("Email sent via SES. MessageId: %s", response.get("MessageId"))
             return True
         except Exception as e:
             logger.error(f"Amazon SES 발송 실패 (Soft-Fallback): {str(e)}")
@@ -327,10 +326,10 @@ class ResendEmailClient(EmailClientInterface):
                     },
                 )
             if resp.status_code in (200, 201):
-                logger.info(f"Verification email sent via Resend to {email}.")
+                logger.info("Verification email sent via Resend.")
                 return True
             # 4xx/5xx — 소프트 폴백(가입 트랜잭션 유지) + 실패 신호
-            logger.error(f"Resend 이메일 발송 실패 status={resp.status_code} body={resp.text[:200]}")
+            logger.error("Resend 이메일 발송 실패 status=%s", resp.status_code)
             _emit_email_failure(self._observability_hub, RuntimeError(f"resend_status_{resp.status_code}"), provider="resend")
             return False
         except Exception as e:
@@ -355,9 +354,9 @@ class ResendEmailClient(EmailClientInterface):
                     },
                 )
             if resp.status_code in (200, 201):
-                logger.info(f"Password reset email sent via Resend to {email}.")
+                logger.info("Password reset email sent via Resend.")
                 return True
-            logger.error(f"Resend 재설정 메일 발송 실패 status={resp.status_code} body={resp.text[:200]}")
+            logger.error("Resend 재설정 메일 발송 실패 status=%s", resp.status_code)
             _emit_email_failure(self._observability_hub, RuntimeError(f"resend_status_{resp.status_code}"), provider="resend")
             return False
         except Exception as e:
@@ -380,9 +379,9 @@ class ResendEmailClient(EmailClientInterface):
                     },
                 )
             if resp.status_code in (200, 201):
-                logger.info(f"Email sent via Resend to {to}.")
+                logger.info("Email sent via Resend.")
                 return True
-            logger.error(f"Resend 발송 실패 status={resp.status_code} body={resp.text[:200]}")
+            logger.error("Resend 발송 실패 status=%s", resp.status_code)
             _emit_email_failure(self._observability_hub, RuntimeError(f"resend_status_{resp.status_code}"), provider="resend")
             return False
         except Exception as e:
