@@ -89,6 +89,10 @@ export function SignupForm() {
       >
         Google로 계속하기
       </a>
+      {/* ORCID 소셜 가입/로그인 — 전체 페이지 OIDC 리다이렉트(/auth/social/orcid/start). */}
+      <a className={styles.socialButton} href="/auth/social/orcid/start" data-testid="signup-orcid">
+        ORCID로 계속하기
+      </a>
     </form>
   );
 }

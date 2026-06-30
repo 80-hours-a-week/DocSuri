@@ -95,7 +95,12 @@ export class ApiClient {
     const body: SearchRequest = { query };
     // idempotent: false — POST /api/search records search history on the backend.
     // Retrying on 500 would create duplicate history entries.
-    const res = await this.request({ method: 'POST', path: '/api/search', body, idempotent: false });
+    const res = await this.request({
+      method: 'POST',
+      path: '/api/search',
+      body,
+      idempotent: false,
+    });
     if (res.status === 200 || res.status === 400) {
       return classifySearchResponse(res.body);
     }
@@ -545,7 +550,8 @@ export class ApiClient {
     throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
-  /** ORCID 무료 API 공개 레코드 (MOCK). loginProvider !== 'ORCID'면 404 -> null. */
+  /** ORCID 공개 프로필 (REAL — U3 `GET /mypage/orcid-profile`, FR-27/BR-A13). 이름·소속은
+   * 로그인 시 캐시한 값, works는 ORCID Public API 라이브. loginProvider !== 'ORCID'면 404 -> null. */
   async getOrcidProfile(): Promise<OrcidProfileVM | null> {
     const res = await this.request({
       method: 'GET',
