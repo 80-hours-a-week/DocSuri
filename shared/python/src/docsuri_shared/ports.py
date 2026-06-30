@@ -45,6 +45,9 @@ __all__ = [
     "GroundingEnforcementHook",
     "CostGuardCircuitBreaker",
     "ObservabilityHub",
+    "EvidenceRequest",
+    "EvidenceResult",
+    "EvidenceFormationPort",
 ]
 
 # --- Grounding (ports.md §2) -------------------------------------------------
@@ -226,5 +229,37 @@ class ObservabilityHub(Protocol):
         """🟡 PROVISIONAL — spec: ``auditAppend(event) -> void`` (append-only, 90 days+).
 
         Trace: SEC-13, SEC-14.
+        """
+        ...
+
+
+# --- Evidence Formation (shared/ports §4) ------------------------------------
+# 🔒 FROZEN (D5 계약 게이트 — Q1~Q3 확정 후 동결, 2026-06-29).
+# Producer: U4(문헌탐색·근거형성 Agent). Consumer: U12(연구아이디어 Agent, 주입 lib).
+# U12는 EvidenceFormationPort를 재구현 금지 — shared/ports 추상에만 의존.
+# 데이터 스키마 SSOT: shared/dtos/evidence.schema.json (§5-B 생성).
+EvidenceRequest = Any   # → evidence.schema.json#/$defs/EvidenceRequest (생성 타입으로 교체 예정)
+EvidenceResult = Any    # → evidence.schema.json#/$defs/EvidenceResult | EvidenceAbstainResult
+
+
+@runtime_checkable
+class EvidenceFormationPort(Protocol):
+    """다논문 근거형성 단일 권한 포트. U4가 구현, U12가 주입 lib으로 소비.
+
+    U12는 Research Gap/Novelty 판단 입력으로 EvidenceResult.claims를 사용한다.
+    순환 차단: U12 → shared/ports(추상) ← U4. U12가 U4 구체 모듈을 직접 import 금지.
+    """
+
+    async def form_evidence(
+        self, request: EvidenceRequest, ctx: Any
+    ) -> EvidenceResult:
+        """🔒 FROZEN — spec:
+        ``async form_evidence(request, ctx) -> EvidenceResult | EvidenceAbstainResult``.
+
+        다논문 교차확인 → 근거 비교·정리 → 출처·기권.
+        - 근거 1건 이상: EvidenceResult(state=ok, claims=[...], coverage={...})
+        - 근거 없음/범위 밖: EvidenceAbstainResult(state=abstain, abstainReason=...)
+        긴 다논문 분석은 비동기 잡(U7 패턴)으로 오프로드 가능 — 표면은 U4 FD 이월.
+        Trace: Q1, Q3, Q4, Q9, FR-5, SEC-9, C-2, D5.
         """
         ...
