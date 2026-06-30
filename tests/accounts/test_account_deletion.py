@@ -275,6 +275,31 @@ async def test_purge_writes_5y_withdrawal_backup_without_credentials(session):
 
 
 @pytest.mark.asyncio
+async def test_purge_writes_withdrawal_backup_for_orcid_account_without_email(session):
+    from backend.modules.accounts.repository.credential import AccountWithdrawalBackupTable
+
+    repo = CredentialRepository(session)
+    acct = repo.create_social_account(None)
+    repo.create_social_identity("ORCID", "0000-0002-1825-0097", acct.id, None)
+    acct_id = acct.id
+    session.commit()
+    svc = AccountDeletionService(repo, AsyncMock(), AsyncMock(), grace_days=0)
+
+    await svc.request_deletion(acct_id)
+    session.commit()
+    await svc.purge_job(now=_naive(days=1))
+    session.commit()
+
+    backup = (
+        session.query(AccountWithdrawalBackupTable)
+        .filter(AccountWithdrawalBackupTable.original_account_id == acct_id)
+        .one()
+    )
+    assert backup.email is None
+    assert repo.get_by_id(acct_id) is None
+
+
+@pytest.mark.asyncio
 async def test_request_deletion_requires_correct_password(session):
     # 감사 H7: 비밀번호 계정 탈퇴는 현재 비밀번호 재인증 필수(CSRF·세션탈취 방어).
     repo = CredentialRepository(session)

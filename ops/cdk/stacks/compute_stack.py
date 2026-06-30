@@ -256,6 +256,14 @@ class ComputeStack(Stack):
             # so this callback path is routed to the backend by a CloudFront behavior on the
             # frontend distribution (frontend_stack: /auth/social/* → backend origin — TODO).
             "GOOGLE_OIDC_REDIRECT_URI": "https://docsuri.org/auth/social/google/callback",
+            # --- U3 social login (FR-27/BR-A13, ORCID OIDC) ---
+            # ORCID OIDC는 이메일을 반환하지 않아 email=NULL 계정을 만든다(BR-A13). client_id는
+            # 공개값(plain env); 미설정이면 토큰 교환이 Fail-Closed로 실패해 ORCID 로그인만 비활성
+            # (Google/이메일 로그인은 영향 없음). 활성화: `cdk deploy -c orcid_oidc_client_id=APP-…
+            # -c orcid_oidc_secret_arn=<완전ARN>` (ORCID Developer Tools에서 클라이언트 등록 후).
+            "ORCID_OIDC_CLIENT_ID": self.node.try_get_context("orcid_oidc_client_id") or "",
+            "ORCID_OIDC_REDIRECT_URI": "https://docsuri.org/auth/social/orcid/callback",
+            "ORCID_OIDC_ENV": self.node.try_get_context("orcid_oidc_env") or "prod",
             # --- U3 account deletion cascade (FR-28/BR-A11) ---
             # AccountDeletedPublisher puts events here; subscribers (U4/U2/U11) attach bus rules.
             # Unset → app falls back to the Logging publisher (no real fan-out).
@@ -288,6 +296,18 @@ class ComputeStack(Stack):
         container_secrets["GOOGLE_OIDC_CLIENT_SECRET"] = ecs.Secret.from_secrets_manager(
             google_oidc_secret
         )
+        # ORCID OIDC client secret (FR-27/BR-A13). Context-gated so deploys keep working before
+        # ORCID is registered: only wired when `-c orcid_oidc_secret_arn=<COMPLETE ARN>` is passed
+        # (the secret MUST exist in Secrets Manager first). Complete ARN (not name) for the same
+        # grant/valueFrom reason documented for the Google secret above.
+        orcid_oidc_secret_arn = self.node.try_get_context("orcid_oidc_secret_arn")
+        if orcid_oidc_secret_arn:
+            orcid_oidc_secret = secretsmanager.Secret.from_secret_complete_arn(
+                self, "OrcidOidcClientSecret", orcid_oidc_secret_arn,
+            )
+            container_secrets["ORCID_OIDC_CLIENT_SECRET"] = ecs.Secret.from_secrets_manager(
+                orcid_oidc_secret
+            )
 
         # --- TLS for the origin: Route53 zone + ACM cert for origin.docsuri.org ---
         zone = route53.HostedZone.from_hosted_zone_attributes(
