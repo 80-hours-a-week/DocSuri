@@ -17,6 +17,7 @@ Provisional payload shapes are intentionally loose aliases (``Any``) until U6 FD
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any, Literal, Protocol, runtime_checkable
 
 from .vector_spec import IndexRecord
@@ -29,6 +30,10 @@ __all__ = [
     "RetrievedRecordSet",
     "GroundingEvalSet",
     "GroundingEvalReport",
+    "GroundingDomain",
+    "GroundingAuthority",
+    "ValidatorRegistration",
+    "GroundingValidatorRegistry",
     "StructuredLogEntry",
     "AuditEvent",
     "Span",
@@ -89,6 +94,68 @@ class GroundingEnforcementHook(Protocol):
         Run the QT-1 eval set through the *same* hook (zero-fabrication / abstain report).
         """
         ...
+
+
+# --- Grounding validator registry (ports.md §2.1 — D3 domain-neutral catalog) ---
+# Search grounding (``GroundingEnforcementHook.enforce(candidate, retrieved)``) and summary
+# grounding (U7's deterministic ``validate(GroundingInput) -> AnchorVerdict``) are DIFFERENT
+# checks with DIFFERENT signatures — search verifies a candidate against a retrieved record
+# SET, U7 verifies a structured summary against ONE paper's refined source (document fidelity).
+# They are deliberately parallel (ports.md §2 design note), not interchangeable. This registry
+# catalogs validators by domain WITHOUT forcing a common call signature, and encodes the one
+# substantive boundary U6 signs off on: *enforcement* authority belongs to the ``search``
+# domain ONLY ("single grounding authority = U6 search gate"); every other domain is advisory.
+GroundingDomain = Literal["search", "summary", "agent"]
+GroundingAuthority = Literal["enforcement", "advisory"]
+
+
+@dataclass(frozen=True)
+class ValidatorRegistration:
+    """One domain's grounding validator + its authority class (ports.md §2.1).
+
+    ``validator`` is intentionally ``object``: the search slot holds a
+    ``GroundingEnforcementHook`` (``enforce(candidate, retrieved)``) while the summary slot
+    holds U7's anchor validator (``validate(GroundingInput) -> AnchorVerdict``) — the shapes
+    genuinely differ and are NOT unified here (ports.md §2 note). A consumer fetches by domain
+    and calls the concrete shape it owns; ``shared/ports`` never imports a unit's concrete type.
+    """
+
+    domain: GroundingDomain
+    authority: GroundingAuthority
+    owner_unit: str  # implementing unit, e.g. "U6", "U7"
+    validator: object
+
+
+class GroundingValidatorRegistry:
+    """Domain → validator catalog (D3). An ADDITIVE seam: it does not change ``enforce`` /
+    ``validate`` and does not centralize them — it only records WHICH validator owns WHICH
+    domain and WHO may *enforce*. Invariant (U6 sign-off): enforcement authority is reserved
+    for the ``search`` domain — the single grounding authority. ``summary``/``agent`` are
+    advisory (their verdicts inform/annotate; they do not act as the system's grounding gate).
+    """
+
+    def __init__(self) -> None:
+        self._by_domain: dict[GroundingDomain, ValidatorRegistration] = {}
+
+    def register(self, registration: ValidatorRegistration) -> None:
+        """Register (or replace) the validator for a domain. Rejects an enforcement-authority
+        registration for any domain other than ``search`` — the boundary U6 signs off on
+        ("single grounding authority = search")."""
+        if registration.authority == "enforcement" and registration.domain != "search":
+            raise ValueError(
+                "enforcement authority is reserved for the 'search' domain "
+                "(single grounding authority = U6 search gate); "
+                f"got domain={registration.domain!r}"
+            )
+        self._by_domain[registration.domain] = registration
+
+    def get(self, domain: GroundingDomain) -> ValidatorRegistration:
+        """Return the registration for ``domain``; raises ``KeyError`` if unregistered."""
+        return self._by_domain[domain]
+
+    def domains(self) -> Sequence[GroundingDomain]:
+        """Registered domains, for catalog introspection."""
+        return tuple(self._by_domain)
 
 
 # --- Cost guard (ports.md §3) ------------------------------------------------

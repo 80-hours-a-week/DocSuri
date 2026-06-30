@@ -112,9 +112,15 @@ class ComputeStack(Stack):
 
         # Ops alert recipients — comma-separated so adding teammates later is a deploy-arg change,
         # not a code change: `cdk deploy -c ops_alert_email=a@x.com,b@y.com` (or cdk.json context).
-        # Empty → topic/alarms still synthesize, just with no email subscription/budget. A team
-        # alias beats individual inboxes (vacation = missed page), but a list works without one.
-        _raw_alert_emails = self.node.try_get_context("ops_alert_email") or ""
+        # Defaults to the team ops inbox so a context-less deploy can't silently DROP the email
+        # subscriptions + budget — a full `cdk deploy --all` without -c did exactly that, tearing
+        # down alerting. Pass -c to change recipients; pass `-c ops_alert_email=` (empty) to
+        # opt out.
+        _DEFAULT_OPS_ALERT_EMAIL = "corpseonthemission@icloud.com"
+        _ctx_alert_emails = self.node.try_get_context("ops_alert_email")
+        _raw_alert_emails = (
+            _DEFAULT_OPS_ALERT_EMAIL if _ctx_alert_emails is None else _ctx_alert_emails
+        )
         ops_alert_emails = [e.strip() for e in _raw_alert_emails.split(",") if e.strip()]
 
         # --- ECR repository (already created manually; import by name) ---

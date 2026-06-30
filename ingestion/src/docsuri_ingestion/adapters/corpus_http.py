@@ -3,6 +3,7 @@ from __future__ import annotations
 import ipaddress
 import json
 import socket
+import time
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
@@ -29,6 +30,49 @@ _QUERY_TERMS = {
 }
 
 
+# ponytail: bounded retry for transient 429/5xx during multi-page harvests — the bulk endpoints
+# page for a long time, so one transient blip must not abort the whole run. A sustained rate-limit
+# (e.g. unauthenticated SS) still surfaces after the cap. Linear backoff is enough at this volume;
+# swap for exponential + jitter if a real API key lets us push throughput.
+_MAX_GET_JSON_RETRIES = 5
+_RETRY_BACKOFF_SECONDS = 2.0
+# ponytail: SS API keys are capped at ~1 req/s cumulative across all endpoints; pace bulk-search
+# pages just under it. The bulk endpoint is the only SS API call in the harvest (PDF fetch hits the
+# publisher host, not the API), so a per-page sleep is enough to stay compliant single-threaded.
+_SS_REQUEST_INTERVAL_SECONDS = 1.1
+
+
+def _get_json_retrying(
+    url: str,
+    *,
+    params: dict[str, str],
+    headers: dict[str, str] | None,
+    timeout_seconds: float,
+    transport: object | None,
+    stage: str,
+) -> dict[str, Any]:
+    """``_get_json`` that retries transient failures (429/5xx/timeout -> RetriableIngestionError)
+    with linear backoff. Permanent errors (other 4xx, parse) propagate immediately. Used for the
+    paged harvest calls so a single transient page failure mid-pagination doesn't discard the
+    whole accumulated run."""
+    attempt = 0
+    while True:
+        try:
+            return _get_json(
+                url,
+                params=params,
+                headers=headers,
+                timeout_seconds=timeout_seconds,
+                transport=transport,
+                stage=stage,
+            )
+        except RetriableIngestionError:
+            attempt += 1
+            if attempt > _MAX_GET_JSON_RETRIES:
+                raise
+            time.sleep(_RETRY_BACKOFF_SECONDS * attempt)
+
+
 class SemanticScholarCorpusSource:
     def __init__(
         self,
@@ -51,6 +95,10 @@ class SemanticScholarCorpusSource:
     ) -> list[SourcePaperRecord]:
         records: list[SourcePaperRecord] = []
         token: str | None = None
+        # Server-side publication-year bound: the bulk endpoint has no date filter but accepts a
+        # `year` range, cutting the harvest from "all of CS, all years" to the window's years —
+        # decisive at 1 req/s. _in_window still refines to the exact date span.
+        year_filter = f"{since.year}-{until.year}" if until else f"{since.year}-"
         while True:
             params = {
                 "query": _query(categories),
@@ -65,15 +113,17 @@ class SemanticScholarCorpusSource:
                         "externalIds",
                         "openAccessPdf",
                         "isOpenAccess",
-                        "updated",
                     )
                 ),
                 "fieldsOfStudy": _FIELDS_OF_STUDY,
-                "limit": "100",
+                "year": year_filter,
+                # /paper/search/bulk rejects `limit` (it returns up to 1000/page and paginates
+                # via `token`) and has no `updated` field — either makes the request 400. The
+                # `year` range bounds it server-side; _in_window refines to the exact date span.
             }
             if token:
                 params["token"] = token
-            payload = _get_json(
+            payload = _get_json_retrying(
                 f"{self._base_url}/paper/search/bulk",
                 params=params,
                 headers={"x-api-key": self._api_key} if self._api_key else None,
@@ -88,6 +138,10 @@ class SemanticScholarCorpusSource:
             token = payload.get("token")
             if not token:
                 return records
+            # Pace pages to honour the SS key's ~1 req/s cumulative cap (only between pages, so
+            # single-page tests don't sleep). 429s still happen under contention — the retry above
+            # absorbs those.
+            time.sleep(_SS_REQUEST_INTERVAL_SECONDS)
 
     def fetch_pdf(self, record: SourcePaperRecord) -> bytes:
         if not record.pdf_url:
@@ -111,10 +165,12 @@ class OpenAlexCorpusSource:
         base_url: str = "https://api.openalex.org",
         timeout_seconds: float = 30.0,
         transport: object | None = None,
+        mailto: str | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout_seconds = timeout_seconds
         self._transport = transport
+        self._mailto = mailto
 
     def fetch_incremental(
         self,
@@ -125,36 +181,43 @@ class OpenAlexCorpusSource:
         records: list[SourcePaperRecord] = []
         cursor = "*"
         while cursor:
+            # Window by publication_date, not updated_date: updated_date range queries are
+            # hard-rate-limited by OpenAlex (429 on the first page, even polite-pool) AND
+            # publication date is what a "papers from year N" corpus actually means. updated_date
+            # is just when OpenAlex last touched the record.
             filters = [
-                f"from_updated_date:{since.date().isoformat()}",
+                f"from_publication_date:{since.date().isoformat()}",
                 "open_access.is_oa:true",
                 "type:article",
             ]
             if until is not None:
-                filters.append(f"to_updated_date:{until.date().isoformat()}")
-            payload = _get_json(
+                filters.append(f"to_publication_date:{until.date().isoformat()}")
+            params = {
+                "filter": ",".join(filters),
+                "search": _query(categories),
+                "per-page": "100",
+                "cursor": cursor,
+                "select": ",".join(
+                    (
+                        "id",
+                        "ids",
+                        "doi",
+                        "display_name",
+                        "abstract_inverted_index",
+                        "authorships",
+                        "publication_year",
+                        "publication_date",
+                        "updated_date",
+                        "primary_location",
+                        "locations",
+                    )
+                ),
+            }
+            if self._mailto:
+                params["mailto"] = self._mailto  # OpenAlex polite pool — higher, steadier limits
+            payload = _get_json_retrying(
                 f"{self._base_url}/works",
-                params={
-                    "filter": ",".join(filters),
-                    "search": _query(categories),
-                    "per-page": "100",
-                    "cursor": cursor,
-                    "select": ",".join(
-                        (
-                            "id",
-                            "ids",
-                            "doi",
-                            "display_name",
-                            "abstract_inverted_index",
-                            "authorships",
-                            "publication_year",
-                            "publication_date",
-                            "updated_date",
-                            "primary_location",
-                            "locations",
-                        )
-                    ),
-                },
+                params=params,
                 headers=None,
                 timeout_seconds=self._timeout_seconds,
                 transport=self._transport,
@@ -223,7 +286,11 @@ def _openalex_record(item: dict[str, Any]) -> SourcePaperRecord | None:
         abstract=_abstract_text(item.get("abstract_inverted_index") or {}),
         authors=tuple(_openalex_authors(item)),
         published_at=_parse_date(item.get("publication_date")),
-        updated_at=_parse_date(item.get("updated_date")),
+        # Leave updated_at unset so the client-side _in_window + queue guard window by
+        # published_at, matching the server-side publication_date filter (and uniform with SS,
+        # which has no updated timestamp). Filtering on updated_date here would drop 2025 papers
+        # whose OpenAlex record was merely touched later.
+        updated_at=None,
         year=_int_or_none(item.get("publication_year")),
         pdf_url=pdf_url,
         html_url=_https_url(location.get("landing_page_url")),
