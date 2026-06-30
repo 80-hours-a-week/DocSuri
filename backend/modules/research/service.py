@@ -27,7 +27,7 @@ class ResearchService:
         self.add_message(
             owner_id,
             job.jobId,
-            ResearchMessageCreateRequest(content=dto.content, attachments=dto.attachments),
+            dto,
         )
         return ResearchJobCreateResponse(jobId=job.jobId, state=job.state)
 
@@ -64,11 +64,10 @@ class ResearchService:
                 jobId=job_id,
                 ownerId=owner_id,
                 role=ChatRole.USER,
-                content=dto.content.strip(),
+                content=dto.content,
                 attachments=dto.attachments,
             )
         )
 
     def list_messages(self, owner_id: str, job_id: str) -> ResearchMessageListResponse:
         return ResearchMessageListResponse(messages=self._repo.list_messages(owner_id, job_id))
-

@@ -25,7 +25,7 @@ class ChatRole(StrEnum):
     SYSTEM = "system"
 
 
-class ResearchJobCreateRequest(BaseModel):
+class ResearchChatRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     content: str = Field(min_length=1, max_length=12000)
@@ -40,19 +40,8 @@ class ResearchJobCreateRequest(BaseModel):
         return stripped
 
 
-class ResearchMessageCreateRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    content: str = Field(min_length=1, max_length=12000)
-    attachments: list[dict[str, Any]] = Field(default_factory=list, max_length=8)
-
-    @field_validator("content")
-    @classmethod
-    def _strip_content(cls, value: str) -> str:
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError("content is required")
-        return stripped
+ResearchJobCreateRequest = ResearchChatRequest
+ResearchMessageCreateRequest = ResearchChatRequest
 
 
 class ResearchJob(BaseModel):

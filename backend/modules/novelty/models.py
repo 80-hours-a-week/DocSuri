@@ -110,6 +110,14 @@ class NoveltyJobRequest(BaseModel):
     constraints: dict[str, Any] = Field(default_factory=dict)
     exportToNotion: bool = False
 
+    @field_validator("topic")
+    @classmethod
+    def _strip_topic(cls, value: str) -> str:
+        stripped = value.strip()
+        if len(stripped) < 3:
+            raise ValueError("topic must be at least 3 characters")
+        return stripped
+
     @model_validator(mode="after")
     def _manuscript_required_for_manuscript_input(self):
         if self.inputType is InputType.MANUSCRIPT and self.manuscript is None:

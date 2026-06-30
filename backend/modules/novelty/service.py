@@ -57,7 +57,7 @@ class NoveltyService:
             NoveltyJob(
                 ownerId=owner_id,
                 inputType=dto.inputType,
-                topic=dto.topic.strip(),
+                topic=dto.topic,
                 manuscript=dto.manuscript,
             )
         )
@@ -157,7 +157,7 @@ class NoveltyService:
                 jobId=job_id,
                 ownerId=owner_id,
                 role=ChatRole.USER,
-                content=dto.content.strip(),
+                content=dto.content,
                 attachments=dto.attachments,
             )
         )

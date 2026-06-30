@@ -344,3 +344,17 @@ def test_api_rejects_unsupported_manuscript(monkeypatch) -> None:
     )
 
     assert resp.status_code == 422
+
+
+def test_api_rejects_blank_topic_before_job_is_created(monkeypatch) -> None:
+    principal = _principal()
+    repo = InMemoryNoveltyRepository()
+    client = _client(monkeypatch, principal, repo)
+
+    resp = client.post(
+        "/api/novelty/jobs",
+        json={"inputType": "natural_language", "topic": "   "},
+    )
+
+    assert resp.status_code == 422
+    assert repo.list_jobs(principal.user_id) == []
