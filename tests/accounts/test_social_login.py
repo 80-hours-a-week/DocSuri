@@ -6,9 +6,11 @@ exercises the security-critical decision logic against verified claims.
 """
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from backend.modules.accounts.controller import _principal_for_social_account
 from backend.modules.accounts.models import (
     AccountStatus,
     DomainException,
@@ -75,6 +77,20 @@ def test_existing_password_account_requires_explicit_link_H1(repo):
     assert link.status == "PENDING_CONFIRMATION"
 
 
+def test_existing_pending_confirmation_link_requires_explicit_confirmation_on_replay(repo):
+    acct = repo.create_account("user@docsuri.org", get_password_hasher().hash("RealPw123!@x"))
+    acct.status = AccountStatus.ACTIVE.value
+    repo.update_account(acct)
+    svc = SocialLoginService(repo)
+
+    with pytest.raises(SocialLinkConfirmationRequired):
+        svc.reconcile(OidcProvider.GOOGLE, _claims())
+    with pytest.raises(SocialLinkConfirmationRequired):
+        svc.reconcile(OidcProvider.GOOGLE, _claims())
+
+    assert repo.get_social_identity("GOOGLE", "goog-sub-1").status == "PENDING_CONFIRMATION"
+
+
 def test_unverified_email_rejected(repo):
     with pytest.raises(DomainException):
         SocialLoginService(repo).reconcile(OidcProvider.GOOGLE, _claims(verified=False))
@@ -117,3 +133,14 @@ def test_orcid_profile_cache_update(repo):
     assert ident.orcid_name == "Josiah Carberry"
     assert ident.orcid_affiliation == "Brown University"
     assert ident.orcid_synced_at is not None
+
+
+def test_social_session_principal_requires_active_account(repo):
+    acct = repo.create_social_account(None)
+    acct.status = AccountStatus.DEACTIVATED.value
+    repo.update_account(acct)
+
+    with pytest.raises(HTTPException) as exc:
+        _principal_for_social_account(acct.id, repo)
+
+    assert exc.value.status_code == 401

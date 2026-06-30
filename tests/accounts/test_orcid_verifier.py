@@ -1,7 +1,8 @@
-"""FR-27 / BR-A13 — OrcidOidcVerifier (local id_token claim verification) + Public API parsing.
+"""FR-27 / BR-A13 — OrcidOidcVerifier (local id_token signature/claim verification) + Public API.
 
-ORCID는 tokeninfo가 없고 이메일을 제공하지 않는다. 서버 대 서버로 직접 받은 id_token을 디코드해
-aud/iss/nonce/exp를 강제하는 보안 핵심 경로와, 공개 레코드 파싱(소속·works)을 네트워크 없이 검증한다.
+ORCID는 tokeninfo가 없고 이메일을 제공하지 않는다. 서버 대 서버로 직접 받은 id_token의 RS256
+서명을 JWKS로 검증한 뒤 aud/iss/nonce/exp를 강제하는 보안 핵심 경로와, 공개 레코드 파싱
+(소속·works)을 네트워크 없이 검증한다.
 """
 
 import base64
@@ -10,6 +11,8 @@ import time
 from unittest.mock import AsyncMock
 
 import pytest
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 from backend.modules.accounts.integrations import oidc as oidc_mod
 from backend.modules.accounts.integrations.oidc import OrcidOidcVerifier, fetch_orcid_public_record
@@ -17,13 +20,33 @@ from backend.modules.accounts.models import DomainException
 
 CLIENT_ID = "APP-ORCIDCLIENT123"
 ISS = "https://orcid.org"
+KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+OTHER_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
 
 def _verifier():
     return OrcidOidcVerifier(client_id=CLIENT_ID, client_secret="secret")
 
 
-def _id_token(**over):
+def _b64u(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+
+def _json_segment(payload: dict) -> str:
+    return _b64u(json.dumps(payload, separators=(",", ":")).encode())
+
+
+def _int_b64u(value: int) -> str:
+    return _b64u(value.to_bytes((value.bit_length() + 7) // 8, "big"))
+
+
+def _public_jwk(key=KEY, kid="kid-1") -> dict:
+    numbers = key.public_key().public_numbers()
+    return {"kty": "RSA", "kid": kid, "alg": "RS256", "n": _int_b64u(numbers.n), "e": _int_b64u(numbers.e)}
+
+
+def _id_token(*, key=KEY, kid="kid-1", alg="RS256", **over):
+    header = {"typ": "JWT", "alg": alg, "kid": kid}
     payload = {
         "aud": CLIENT_ID,
         "iss": ISS,
@@ -34,13 +57,17 @@ def _id_token(**over):
         "family_name": "Carberry",
     }
     payload.update(over)
-    body = base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=").decode()
-    return f"header.{body}.sig"  # 서명은 검증하지 않음(서버 대 서버 수신, JWKS는 후속)
+    signing_input = f"{_json_segment(header)}.{_json_segment(payload)}".encode()
+    if alg != "RS256":
+        return f"{signing_input.decode()}.{_b64u(b'untrusted-signature')}"
+    signature = key.sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
+    return f"{signing_input.decode()}.{_b64u(signature)}"
 
 
-def _with_token(**over):
+def _with_token(token: str | None = None, *, jwk_key=KEY, **over):
     v = _verifier()
-    v._exchange_code = AsyncMock(return_value=_id_token(**over))
+    v._exchange_code = AsyncMock(return_value=token or _id_token(**over))
+    v._fetch_jwks = AsyncMock(return_value={"keys": [_public_jwk(jwk_key)]})
     return v
 
 
@@ -80,6 +107,20 @@ async def test_rejects_bad_claims(over):
 @pytest.mark.asyncio
 async def test_rejects_expired_token():
     v = _with_token(exp=int(time.time()) - 10)
+    with pytest.raises(DomainException):
+        await v.exchange_and_verify("code", "https://app/cb", "n1", "v1")
+
+
+@pytest.mark.asyncio
+async def test_rejects_invalid_signature():
+    v = _with_token(token=_id_token(key=OTHER_KEY))
+    with pytest.raises(DomainException):
+        await v.exchange_and_verify("code", "https://app/cb", "n1", "v1")
+
+
+@pytest.mark.asyncio
+async def test_rejects_untrusted_algorithm():
+    v = _with_token(token=_id_token(alg="none"))
     with pytest.raises(DomainException):
         await v.exchange_and_verify("code", "https://app/cb", "n1", "v1")
 

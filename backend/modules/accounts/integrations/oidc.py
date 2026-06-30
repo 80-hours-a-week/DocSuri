@@ -25,6 +25,9 @@ import time
 from urllib.parse import urlencode
 
 import httpx
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 from ..models import DomainException
 from ..services.social_login import OidcClaims
@@ -129,37 +132,60 @@ class GoogleOidcVerifier:
 
 # ── ORCID OIDC 트랜스포트 (FR-27 / BR-A13) ──────────────────────────────────────
 # ORCID는 Google과 달리 (1) tokeninfo 엔드포인트가 없고 (2) OIDC가 이메일 클레임을 반환하지
-# 않는다(scopes=[openid], claims=[sub, name, given_name, family_name, ...]). id_token은 *서버 대
-# 서버* 토큰 교환으로 ORCID 토큰 엔드포인트에서 직접(HTTPS) 받으므로, 페이로드를 디코드해
-# iss/aud/nonce/exp를 강제하는 것으로 재생·주입을 방어한다(감사 #9의 Google 논리와 동형: 직접
-# 수신한 id_token의 클레임 검증은 우회가 아님).
-# ponytail: 로컬 JWKS/RS256 서명 검증은 새 crypto 의존성(미설치)을 요구 → 방어심층화 항목으로
-#   ORCID_OIDC_VERIFY_MODE env 게이트로 후속(Google의 동일 SECURITY-DEBT와 동형).
+# 않는다(scopes=[openid], claims=[sub, name, given_name, family_name, ...]). 따라서 ORCID JWKS로
+# id_token RS256 서명을 로컬 검증한 뒤 iss/aud/nonce/exp를 강제한다.
 ORCID_BASES = {
     "prod": ("https://orcid.org", "https://pub.orcid.org/v3.0"),
     "sandbox": ("https://sandbox.orcid.org", "https://pub.sandbox.orcid.org/v3.0"),
 }
 
 
-def _decode_jwt_payload(token: str) -> dict:
-    """JWT의 페이로드(가운데 세그먼트)를 서명 검증 없이 디코드한다. 직접 수신한 id_token의
-    클레임을 읽기 위함(서명 검증은 상단 주석의 JWKS 후속 항목). 형식 불량 시 거부."""
+def _b64url_decode(segment: str) -> bytes:
+    return base64.urlsafe_b64decode(segment + "=" * (-len(segment) % 4))
+
+
+def _decode_jwt_json(segment: str) -> dict:
     try:
-        payload_b64 = token.split(".")[1]
-        padded = payload_b64 + "=" * (-len(payload_b64) % 4)
-        return json.loads(base64.urlsafe_b64decode(padded))
-    except (IndexError, ValueError, binascii.Error, json.JSONDecodeError) as e:
+        return json.loads(_b64url_decode(segment))
+    except (ValueError, binascii.Error, json.JSONDecodeError) as e:
         raise DomainException("소셜 로그인 토큰 형식이 올바르지 않습니다.") from e
+
+
+def _split_jwt(token: str) -> tuple[dict, dict, bytes, bytes]:
+    parts = token.split(".")
+    if len(parts) != 3 or not all(parts):
+        raise DomainException("소셜 로그인 토큰 형식이 올바르지 않습니다.")
+    header = _decode_jwt_json(parts[0])
+    payload = _decode_jwt_json(parts[1])
+    try:
+        signature = _b64url_decode(parts[2])
+    except (ValueError, binascii.Error) as e:
+        raise DomainException("소셜 로그인 토큰 형식이 올바르지 않습니다.") from e
+    return header, payload, f"{parts[0]}.{parts[1]}".encode("ascii"), signature
+
+
+def _rsa_public_key_from_jwk(jwk: dict):
+    if jwk.get("kty") != "RSA":
+        raise DomainException("소셜 로그인 토큰 키 형식이 올바르지 않습니다.")
+    try:
+        n = int.from_bytes(_b64url_decode(jwk["n"]), "big")
+        e = int.from_bytes(_b64url_decode(jwk["e"]), "big")
+    except (KeyError, ValueError, binascii.Error) as exc:
+        raise DomainException("소셜 로그인 토큰 키 형식이 올바르지 않습니다.") from exc
+    return rsa.RSAPublicNumbers(e, n).public_key()
 
 
 class OrcidOidcVerifier:
     """ORCID 인가 코드 흐름 트랜스포트. GoogleOidcVerifier와 인터페이스(build_authorization_url·
-    exchange_and_verify)는 같지만 검증은 로컬 클레임 검증(JWKS 후속)이고 이메일을 받지 않는다."""
+    exchange_and_verify)는 같지만 검증은 로컬 JWKS/RS256이고 이메일을 받지 않는다."""
 
     def __init__(self, client_id: str, client_secret: str, *, env: str = "prod", timeout: float = 10.0):
         self._client_id = client_id
         self._client_secret = client_secret
         self._base, self._pub_base = ORCID_BASES.get(env, ORCID_BASES["prod"])
+        self._jwks_url = f"{self._base}/oauth/jwks"
+        self._jwks_cache: dict | None = None
+        self._jwks_cached_at = 0.0
         self._timeout = timeout
 
     @property
@@ -205,6 +231,47 @@ class OrcidOidcVerifier:
             raise DomainException("소셜 로그인 응답에 id_token이 없습니다.")
         return id_token
 
+    async def _fetch_jwks(self, *, force: bool = False) -> dict:
+        now = time.time()
+        if self._jwks_cache is not None and not force and now - self._jwks_cached_at < 3600:
+            return self._jwks_cache
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                resp = await client.get(self._jwks_url)
+            if resp.status_code != 200:
+                logger.warning("ORCID JWKS fetch failed: status=%s", resp.status_code)
+                raise DomainException("소셜 로그인 토큰 검증 키를 가져오지 못했습니다.")
+            jwks = resp.json()
+        except httpx.HTTPError as e:
+            raise DomainException("소셜 로그인 토큰 검증 키를 가져오지 못했습니다.") from e
+        if not isinstance(jwks.get("keys"), list):
+            raise DomainException("소셜 로그인 토큰 검증 키 형식이 올바르지 않습니다.")
+        self._jwks_cache = jwks
+        self._jwks_cached_at = now
+        return jwks
+
+    async def _jwk_for_kid(self, kid: str) -> dict:
+        for force in (False, True):
+            jwks = await self._fetch_jwks(force=force)
+            for key in jwks["keys"]:
+                if key.get("kid") == kid:
+                    return key
+        raise DomainException("소셜 로그인 토큰 검증 키를 찾을 수 없습니다.")
+
+    async def _verify_id_token(self, token: str) -> dict:
+        header, payload, signing_input, signature = _split_jwt(token)
+        if header.get("alg") != "RS256":
+            raise DomainException("소셜 로그인 토큰 서명 알고리즘이 올바르지 않습니다.")
+        kid = header.get("kid")
+        if not kid:
+            raise DomainException("소셜 로그인 토큰 검증 키가 누락되었습니다.")
+        public_key = _rsa_public_key_from_jwk(await self._jwk_for_kid(kid))
+        try:
+            public_key.verify(signature, signing_input, padding.PKCS1v15(), hashes.SHA256())
+        except InvalidSignature as e:
+            raise DomainException("소셜 로그인 토큰 서명 검증에 실패했습니다.") from e
+        return payload
+
     async def exchange_and_verify(
         self, code: str, redirect_uri: str, expected_nonce: str, code_verifier: str | None = None
     ) -> OidcClaims:
@@ -213,7 +280,7 @@ class OrcidOidcVerifier:
         if not code_verifier:
             raise DomainException("PKCE 증명(code_verifier)이 누락되었습니다. (보안 정책)")
         id_token = await self._exchange_code(code, redirect_uri, code_verifier)
-        info = _decode_jwt_payload(id_token)
+        info = await self._verify_id_token(id_token)
         if info.get("aud") != self._client_id:
             raise DomainException("소셜 로그인 토큰의 대상(aud)이 일치하지 않습니다.")
         if info.get("iss") != self._base:

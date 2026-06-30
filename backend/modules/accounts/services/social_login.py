@@ -22,6 +22,16 @@ from ..repository.credential import CredentialRepository, has_usable_password
 logger = logging.getLogger(__name__)
 
 
+def _account_id_for_existing_link(link) -> str:
+    if link.status == "LINKED":
+        return link.account_id
+    if link.status == "PENDING_CONFIRMATION":
+        raise SocialLinkConfirmationRequired(
+            "이 이메일은 비밀번호로 가입된 계정입니다. 비밀번호로 로그인한 뒤 소셜 계정을 연결해 주세요."
+        )
+    raise DomainException("소셜 계정 연결 상태가 올바르지 않습니다.")
+
+
 @dataclass(frozen=True)
 class OidcClaims:
     """프로바이더 id_token에서 서명·nonce 검증 후 추출한 신뢰 클레임 (FR-27).
@@ -61,7 +71,7 @@ class SocialLoginService:
 
         existing_link = self._repo.get_social_identity(provider_v, claims.subject)
         if existing_link is not None:
-            return existing_link.account_id
+            return _account_id_for_existing_link(existing_link)
 
         email = normalize_email(claims.email)
         account = self._repo.get_by_email(email)
@@ -95,7 +105,7 @@ class SocialLoginService:
         provider_v = provider.value
         existing_link = self._repo.get_social_identity(provider_v, claims.subject)
         if existing_link is not None:
-            return existing_link.account_id
+            return _account_id_for_existing_link(existing_link)
         account = self._repo.create_social_account(None)
         self._repo.create_social_identity(provider_v, claims.subject, account.id, None, status="LINKED")
         logger.info(f"Social signup (emailless): new ACTIVE account {account.id} via {provider_v}.")

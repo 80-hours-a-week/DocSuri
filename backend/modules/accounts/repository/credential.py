@@ -124,7 +124,7 @@ class AccountWithdrawalBackupTable(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
     original_account_id = Column(String(36), nullable=False, index=True)
-    email = Column(String(254), nullable=False)
+    email = Column(String(254), nullable=True)
     status = Column(String(20), nullable=False)
     signed_up_at = Column(DateTime, nullable=False)
     withdrawn_at = Column(DateTime, nullable=False)
