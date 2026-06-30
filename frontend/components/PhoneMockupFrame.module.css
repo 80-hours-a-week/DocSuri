@@ -20,10 +20,9 @@
    branch here, so building real desktop layouts above never leaks into the phone view. */
 @media (min-width: 768px) {
   .frame {
-    /* Use more of the desktop width (less side gutter) while still capping the line length
-       so text stays readable on very wide monitors. Inner screens that need a tighter
-       measure (reading / forms / mypage) set their own narrower max-width. */
-    max-width: 1280px;
-    margin: 0 auto;
+    /* Full window width on desktop (no side gutter). Inner screens that need a tighter
+       measure — reading / forms / mypage / the search box — set their own narrower
+       max-width, so only the wide layouts (search grid, paper detail) span the screen. */
+    max-width: none;
   }
 }

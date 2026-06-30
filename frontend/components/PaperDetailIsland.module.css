@@ -111,28 +111,36 @@
   color: var(--color-accent);
 }
 
-/* Desktop: two columns — metadata reads on the left, actions become a sticky right rail.
-   Mirrors the mobile semantics (요약/초록/각주 grouped at the top, 전문 access toward the
-   bottom) while using the wide screen. Grid placement keeps the phone DOM/scroll order. */
+/* Desktop: an article page. A horizontal action toolbar on top, a large title/abstract
+   header, then the full body (doc-model) inline below — no separate 본문 navigation, since
+   the doc-model is pre-stored. Centered to a wide-but-readable measure. Mobile is unchanged
+   (top action bar + bottom 전문/전문 번역 buttons → separate route). */
 @media (min-width: 768px) {
   .root {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 240px;
-    grid-template-areas:
-      'meta actions'
-      'cite body';
-    column-gap: 2.5rem;
-    row-gap: 1.5rem;
-    align-items: start;
+    /* Fill the whole content area (no inner cap) so the article uses the full frame width. */
+    max-width: none;
+    gap: 1.25rem;
+  }
+
+  /* Top toolbar: horizontal, with all buttons the same fixed width (not stretched, not
+     content-sized) so 요약 / 초록 번역 / 각주 트리 / 전문 번역 line up evenly. */
+  .actionsBar {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 0.625rem;
+  }
+
+  .actionsBar .action {
+    flex: 0 0 auto;
+    width: 9rem;
+    padding: 0;
   }
 
   .meta {
-    grid-area: meta;
     gap: 1rem;
   }
 
-  /* The metadata is the focus on desktop — scale the title and abstract up so the wide
-     screen reads as a real article header rather than a stretched phone card. */
+  /* The header reads as a real article head on the wide screen. */
   .title {
     font-size: 2.25rem;
     line-height: 1.2;
@@ -147,31 +155,10 @@
     line-height: 1.75;
   }
 
-  .citationWrap {
-    grid-area: cite;
-    min-width: 0;
-  }
-
-  /* Action openers stack vertically in the rail (top), staying sticky as the page scrolls. */
-  .actionsBar {
-    grid-area: actions;
-    flex-direction: column;
-    top: 1rem;
-    padding: 0;
-  }
-
-  /* Body access sits at the bottom of the rail (mirrors its bottom placement on phones). */
-  .bodyActions {
-    grid-area: body;
-    flex-direction: column;
-    flex-wrap: nowrap;
-    margin-top: 0;
-  }
-
-  /* In the vertical rail the buttons size to content and stretch to full rail width
-     (override the phone's equal-share row flex). */
-  .actionsBar .action,
-  .bodyActions .action {
-    flex: 0 0 auto;
+  /* The inline full body, separated from the abstract by a rule. */
+  .inlineBody {
+    margin-top: 0.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--color-border);
   }
 }

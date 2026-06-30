@@ -14,6 +14,7 @@ import { renderInlineMath } from '@/lib/renderMath';
 import { SummaryModal, type DetailView } from './SummaryModal';
 import { SaveToLibraryButton } from './SaveToLibraryButton';
 import { CitationTreePanel } from './CitationTreePanel';
+import { DocModelViewer } from './DocModelViewer';
 import { recordPaperOpened } from '@/lib/personalization';
 import styles from './PaperDetailIsland.module.css';
 
@@ -32,6 +33,12 @@ const ACTIONS: { view: DetailView; label: string }[] = [
 export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIslandProps) {
   const [modalView, setModalView] = useState<DetailView | null>(null);
   const [citationOpen, setCitationOpen] = useState(false);
+  // Desktop shows the full body inline (the doc-model is pre-stored); phones keep the 전문
+  // button that opens the separate full-screen route. Resolved client-side after mount.
+  const [isDesktop, setIsDesktop] = useState(false);
+  // On desktop, a summary "source anchor" scrolls the inline body to the matching block
+  // instead of navigating to the doc-model route.
+  const [inlineAnchor, setInlineAnchor] = useState<AnchorVM | null>(null);
   const meta = usePaperMeta(paperId);
   // Source-neutral header (FR-4/FR-5, Phase 2 Q2): the detail header agrees with the search card
   // on the discovery source. arXiv keeps "arXiv:<id>"; a non-arXiv paper shows its source name
@@ -51,11 +58,25 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
     recordPaperOpened(paperId);
   }, [paperId]);
 
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
   // 본문 / 본문 번역 are in-app routes (Link). A summary source anchor navigates to the 본문
   // route scrolled to the matching block (label carried via the query).
   const bodyHref = `/paper/${encodeURIComponent(paperId)}/doc-model?version=${version}`;
   const translateHref = `/paper/${encodeURIComponent(paperId)}/translate?version=${version}`;
   const openBody = (anchor?: AnchorVM | null) => {
+    // Desktop: the body is already on the page — scroll the inline viewer to the anchor.
+    if (isDesktop) {
+      setInlineAnchor(anchor ?? null);
+      return;
+    }
+    // Phone: open the full-screen doc-model route scrolled to the matching block.
     const sp = new URLSearchParams({ version: String(version) });
     if (anchor?.label) {
       sp.set('anchorLabel', anchor.label);
@@ -88,6 +109,13 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
         >
           각주 트리
         </button>
+        {/* Desktop shows the body inline below, so 전문 번역 joins the top toolbar (no bottom
+            body row). On phones it stays in the bottom row next to 전문. */}
+        {isDesktop ? (
+          <Link className={styles.action} href={translateHref} data-testid="open-full-translation">
+            전문 번역
+          </Link>
+        ) : null}
       </div>
 
       {citationOpen ? (
@@ -141,16 +169,32 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
         </p>
       ) : null}
 
-      {/* Body access — below the metadata. Both navigate in-app to a full-screen route (each
-          with its own ← back): 본문 = the doc-model rich view, 본문 번역 = the full-text translation. */}
-      <div className={styles.bodyActions} role="group" aria-label="전문">
-        <Link className={styles.action} href={bodyHref} data-testid="open-doc-model">
-          전문
-        </Link>
-        <Link className={styles.action} href={translateHref} data-testid="open-full-translation">
-          전문 번역
-        </Link>
-      </div>
+      {/* Phone: body access as buttons below the metadata — each opens a full-screen route
+          (본문 = doc-model rich view, 본문 번역 = full-text translation). */}
+      {!isDesktop ? (
+        <div className={styles.bodyActions} role="group" aria-label="전문">
+          <Link className={styles.action} href={bodyHref} data-testid="open-doc-model">
+            전문
+          </Link>
+          <Link className={styles.action} href={translateHref} data-testid="open-full-translation">
+            전문 번역
+          </Link>
+        </div>
+      ) : null}
+
+      {/* Desktop: the full body is shown inline (the doc-model is pre-stored), so there is no
+          separate 전문 navigation. The title is hidden — the metadata header above carries it. */}
+      {isDesktop ? (
+        <div className={styles.inlineBody} data-testid="detail-inline-body">
+          <DocModelViewer
+            paperId={paperId}
+            version={version}
+            anchor={inlineAnchor}
+            arxivUrl={arxivUrl}
+            hideTitle
+          />
+        </div>
+      ) : null}
 
       {modalView ? (
         <SummaryModal

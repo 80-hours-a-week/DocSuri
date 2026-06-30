@@ -11,8 +11,8 @@
 @media (min-width: 768px) {
   .toggle {
     position: fixed;
-    top: 16px;
-    right: 16px;
+    bottom: 16px;
+    left: 16px;
     z-index: 80; /* above the mobile stage so it stays clickable to switch back */
     display: inline-flex;
     align-items: center;
