@@ -2,9 +2,13 @@
 
 ⏳ FastAPI is a backend-shared (app-shell) decision pending @ELSAPHABA sign-off (CG-1/DS-3);
 import this module only with the ``api`` extra. In production, authn/authz/rate-limit and the
-grounding post-handler are the U6 gateway's job — here we read a dev header for the user id
-and wire the stub hook so U5 can develop against a live endpoint. The app-shell mounts the
-returned router and owns real gateway wiring (CG-5).
+grounding post-handler are the U6 gateway's job; the request identity comes ONLY from the
+gateway-injected principal (``request.state.principal``), never from a client-supplied header
+(SEC-8/BR-13) — so a caller cannot forge another user's id. An anonymous request (no principal)
+still searches but is attributed to no user (no history). For standalone mock-first dev
+(``build_app``) there is no gateway, so a dev ``X-User-Id`` header fallback can be opted in via
+``dev_user_fallback`` — OFF by default, and it MUST stay off behind the real gateway. The
+app-shell mounts the returned router and owns real gateway wiring (CG-5).
 """
 
 from __future__ import annotations
@@ -30,6 +34,8 @@ def build_router(
     orchestrator: SearchOrchestrationService,
     grounding_hook: GroundingEnforcementHook,
     paper_service: PaperMetadataService | None = None,
+    *,
+    dev_user_fallback: bool = False,
 ) -> APIRouter:
     router = APIRouter()
 
@@ -37,11 +43,19 @@ def build_router(
     def search(
         http_request: Request,
         request: SearchRequest,
-        x_user_id: str = Header(default="dev-user"),
+        x_user_id: str | None = Header(default=None),
     ) -> JSONResponse:
-        # Prefer gateway-injected principal (SEC-8); fall back to dev header for mock-first.
+        # Identity comes ONLY from the gateway-injected principal (SEC-8/BR-13). An anonymous
+        # request (no principal) still searches but is attributed to no user (history skipped).
+        # The X-User-Id header is a STANDALONE-DEV-ONLY fallback (dev_user_fallback) — never
+        # trusted behind the real gateway, so a client cannot forge another user's identity.
         principal = getattr(http_request.state, "principal", None)
-        user_id = principal.user_id if principal else x_user_id
+        if principal is not None:
+            user_id = principal.user_id
+        elif dev_user_fallback:
+            user_id = x_user_id
+        else:
+            user_id = None
         request_id = getattr(http_request.state, "request_id", None) or uuid.uuid4().hex
         ctx = RequestContext(
             auth_session=AuthSession(user_id=user_id), request_id=request_id
@@ -72,7 +86,11 @@ def build_app(
 ) -> FastAPI:
     """Standalone dev app (mock-first). The real backend app is the app-shell's (CG-5)."""
     app = FastAPI(title="DocSuri Discovery (U2) — mock-first")
-    app.include_router(build_router(orchestrator, grounding_hook, paper_service))
+    # Standalone dev has no gateway to inject a principal, so opt into the X-User-Id dev
+    # fallback here. The real app-shell mount (backend.wiring) leaves it OFF (default).
+    app.include_router(
+        build_router(orchestrator, grounding_hook, paper_service, dev_user_fallback=True)
+    )
 
     @app.exception_handler(SearchUnavailable)
     def _on_unavailable(_request, _exc):  # fail-closed: generic 503 (INV-3/SEC-15)

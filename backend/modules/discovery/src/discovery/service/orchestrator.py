@@ -60,7 +60,7 @@ class GroundingPending:
     grounding_input: GroundingInput
     ranked: RankedResults
     degrade_mode: DegradeMode
-    user_id: str
+    user_id: str | None
     query: str
 
 
@@ -195,8 +195,16 @@ class SearchOrchestrationService:
         except Exception:  # noqa: BLE001
             pass
 
-    def _publish(self, user_id: str, query: str, count: int) -> None:
-        """Fire-and-forget SearchExecuted (BR-14). Failure MUST NOT affect the response."""
+    def _publish(self, user_id: str | None, query: str, count: int) -> None:
+        """Fire-and-forget SearchExecuted (BR-14). Failure MUST NOT affect the response.
+
+        Anonymous requests (``user_id`` is None — no authenticated principal) write no history:
+        ``SearchExecutedEvent.userId`` is a frozen non-null contract and there is no account to
+        attribute to. Skipping here is also the defense-in-depth backstop that keeps a search
+        from ever being recorded under a client-supplied identity (SEC-8/BR-13).
+        """
+        if user_id is None:
+            return
         try:
             event = SearchExecutedEvent(
                 userId=user_id,

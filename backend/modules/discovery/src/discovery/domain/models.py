@@ -43,9 +43,11 @@ class SearchScope(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class AuthSession:
-    """Authenticated principal injected by the U6 gateway (SEC-8; BR-13). U2 trusts it."""
+    """Requesting principal resolved by the U6 gateway (SEC-8; BR-13). ``user_id`` is None for an
+    anonymous request (no session) — the search still runs, but no history is attributed. U2
+    derives identity ONLY from this gateway-resolved value, never from a client-supplied header."""
 
-    user_id: str
+    user_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
