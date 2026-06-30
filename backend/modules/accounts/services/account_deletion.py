@@ -129,9 +129,9 @@ def build_account_deleted_publisher() -> AccountDeletedPublisher:
     env = os.getenv("ENV", "local").strip().lower()
     if env not in {"local", "test", "dev"}:
         raise RuntimeError(
-            "ACCOUNT_EVENTS_BUS가 설정되지 않았습니다 (ENV=%s). 프로덕션 파기 워커는 AccountDeleted를 "
+            f"ACCOUNT_EVENTS_BUS가 설정되지 않았습니다 (ENV={env}). 프로덕션 파기 워커는 AccountDeleted를 "
             "발행해야 U4/U2/U11이 owner-scoped 데이터를 파기합니다(GDPR). 버스를 설정하거나 ENV=local로 "
-            "실행하세요." % env
+            "실행하세요."
         )
     return LoggingAccountDeletedPublisher()
 
