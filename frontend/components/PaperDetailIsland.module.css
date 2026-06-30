@@ -128,6 +128,23 @@
 
   .meta {
     grid-area: meta;
+    gap: 1rem;
+  }
+
+  /* The metadata is the focus on desktop — scale the title and abstract up so the wide
+     screen reads as a real article header rather than a stretched phone card. */
+  .title {
+    font-size: 2rem;
+    line-height: 1.25;
+  }
+
+  .authors {
+    font-size: 1rem;
+  }
+
+  .abstract {
+    font-size: 1.0625rem;
+    line-height: 1.75;
   }
 
   .citationWrap {
