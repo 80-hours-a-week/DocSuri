@@ -301,14 +301,14 @@
 - **Given** 로그인한 사용자가 검색, 논문 조회, 라이브러리 저장/해제, 요약/번역 요청, 출처 앵커 클릭, 용어집 수정을 수행하면, **When** 해당 API 또는 UI 액션이 성공하면, **Then** 사용자별 `user_behavior_events`에 최소 이벤트가 기록된다.
 - **Given** 단순 hover, scroll, 임의 클릭, 페이지 체류 시간, **When** 사용자가 화면을 탐색하면, **Then** v1에서는 행동 이벤트로 기록하지 않는다.
 - **Given** 행동 이벤트 기록 저장소가 실패하면, **When** 본 기능 요청이 완료되어야 할 때, **Then** 요청은 실패하지 않고 개인화 이벤트만 누락/저하 신호로 남는다.
-- **Traces**: FR-18, NFR-P4, SEC-8, SEC-9, RES-9
+- **Traces**: FR-39, NFR-P4, SEC-8, SEC-9, RES-9
 
 ### US-P2 — 라이브러리 저장/해제와 출처 앵커 신호
 **As** 연구자(P1), **I want** 라이브러리 저장·해제와 출처 보기 행동이 관심 신호로 반영되기를, **so that** 내가 실제로 검토한 논문이 프로필에 반영된다.
 - **Given** 사용자가 논문을 라이브러리에 저장하면, **When** 저장이 성공하면, **Then** `library_added` 이벤트가 논문 ID와 함께 기록된다.
 - **Given** 사용자가 논문을 라이브러리에서 해제하면, **When** 삭제가 성공하면, **Then** 삭제 전 확보한 논문 ID로 `library_removed` 이벤트가 기록된다.
 - **Given** 사용자가 요약/번역의 출처 보기를 탭하면, **When** 앵커 이동이 성공하면, **Then** `source_anchor_clicked` 이벤트가 기록되며 원문 내용 자체는 저장하지 않는다.
-- **Traces**: FR-18, FR-9, FR-12, FR-13, SEC-8, QT-7
+- **Traces**: FR-39, FR-9, FR-12, FR-13, SEC-8, QT-7
 
 ### US-P3 — 사용자 관심 프로필 집계
 **As** 연구자(P1), **I want** 내 행동이 관심 주제 프로필로 집계되기를, **so that** 반복적으로 보는 분야가 다음 탐색에 반영된다.
@@ -347,7 +347,7 @@
 
 ---
 
-## 에픽 9 — 차별화(novelty) 형성 Agent *(2026-06-29 편입)*
+## 에픽 9 — 차별화(novelty) 형성 Agent *(U12, 2026-06-29 편입)*
 
 > 자연어 연구 의도 또는 업로드 원고를 받아 유사 연구를 정리하고, 근거 기반 차별화 후보와 실험 계획을 만든다. 문헌탐색·근거형성 Agent는 별도 유닛이며, 본 Agent는 `EvidenceFormationPort`/`SourceRef` 공유계약만 소비한다. v1 외부 탐색은 GitHub와 데이터셋으로 제한하고 뉴스 검색은 다음 사이클로 둔다.
 
@@ -412,7 +412,7 @@
 
 ---
 
-## 에픽 10 — 문헌탐색·근거형성 Agent *(U4, 2026-06-29 편입)*
+## 에픽 10 — 문헌탐색·근거형성 Agent *(U11, 2026-06-29 편입)*
 
 > 연구자가 여러 논문을 가로질러 근거를 형성하는 대화형 AI Agent. 검색·DocModel·요약·인용 파이프라인을 Agent가 자율 오케스트레이션해 핵심 주장·방법·결과·한계를 추출·비교하고 쟁점 오버레이로 제시. 신뢰 원칙: 날조 없음(FR-5·C-2), 근거 0건이면 기권(abstain). D5 포트(EvidenceFormationPort)를 통해 U12(연구아이디어 Agent)가 소비한다. 설계 입력: `../requirements/requirements.md` §FR-36~38, NFR-P6, QT-8.
 
@@ -533,22 +533,23 @@
 | NFR-P3 (각주 트리 온디맨드 응답) [U8] | US-CG1 |
 | QT-6 (인용 엣지 정확도·그래프 불변식) [U8] | US-CG2, US-CG3, US-CG6 |
 | NFR-C1 (U8 citation API 쿼터 게이트) [U8] | US-CG5 |
+| FR-39 (행동 이벤트 기록) [U9] *(구 FR-18; FR-22~25 폐기 ID 회피, 2026-06-30 재번호)* | US-P1, US-P2 |
 | FR-19 (사용자 관심 프로필) [U9] | US-P3, US-P6 |
 | FR-20 (개인화 적용) [U9] | US-P4, US-P5, US-P6 |
 | NFR-P4 (개인화 비차단) [U9] | US-P1, US-P4, US-P7 |
 | QT-7 (행동/프로필 불변식) [U9] | US-P2, US-P3, US-P7 |
-| FR-30 (novelty 입력·오케스트레이션) | US-NV1, US-NV2 |
-| FR-31 (U2 full 검색·외부 탐색) | US-NV1, US-NV3, US-NV4 |
-| FR-32 (유사 연구·차별화 후보) | US-NV3, US-NV6 |
-| FR-33 (실험 계획) | US-NV6 |
-| FR-34 (원고 위험 신호) | US-NV5 |
-| FR-35 (진행상태·저장·Notion export) | US-NV7, US-NV8 |
-| NFR-P5/R3 (novelty 비동기·source별 저하) | US-NV7, US-NV9 |
-| QT-10 (novelty 품질/불변식) | US-NV3, US-NV5, US-NV9 |
-| FR-36 (근거형성 세션·멀티턴) [U4] | US-EV1, US-EV5 |
-| FR-37 (다논문 근거형성·추출·기권) [U4] | US-EV2, US-EV3, US-EV4, US-EV5, US-EV6 |
-| FR-38 (근거형성 세션 영속·사용자 제어) [U4] | US-EV7, US-EV8 |
-| NFR-P6 (스트리밍 우선·비동기 잡) [U4] | US-EV2, US-EV9 |
-| QT-8 (근거형성 근거화·불변식) [U4] | US-EV2, US-EV6, US-EV9 |
+| FR-30 (novelty 입력·오케스트레이션) [U12] | US-NV1, US-NV2 |
+| FR-31 (U2 full 검색·외부 탐색) [U12] | US-NV1, US-NV3, US-NV4 |
+| FR-32 (유사 연구·차별화 후보) [U12] | US-NV3, US-NV6 |
+| FR-33 (실험 계획) [U12] | US-NV6 |
+| FR-34 (원고 위험 신호) [U12] | US-NV5 |
+| FR-35 (진행상태·저장·Notion export) [U12] | US-NV7, US-NV8 |
+| NFR-P5/R3 (novelty 비동기·source별 저하) [U12] | US-NV7, US-NV9 |
+| QT-10 (novelty 품질/불변식) [U12] | US-NV3, US-NV5, US-NV9 |
+| FR-36 (근거형성 세션·멀티턴) [U11] | US-EV1, US-EV5 |
+| FR-37 (다논문 근거형성·추출·기권) [U11] | US-EV2, US-EV3, US-EV4, US-EV5, US-EV6 |
+| FR-38 (근거형성 세션 영속·사용자 제어) [U11] | US-EV7, US-EV8 |
+| NFR-P6 (스트리밍 우선·비동기 잡) [U11] | US-EV2, US-EV9 |
+| QT-8 (근거형성 근거화·불변식) [U11] | US-EV2, US-EV6, US-EV9 |
 
-_FR-1..11 전부 커버됨(표 본문 대조 검증). **FR-12..14·NFR-P2·QT-5 = U7 에픽 6(US-S1..S6) 커버(2026-06-18 편입, 팀 합의). FR-15..16·NFR-P3·QT-6 = U8 에픽 7(US-CG1..CG6) 커버(2026-06-19 편입). FR-18·QT-9 = U1 Corpus/DocModel eager 개정(US-I1..I3 + US-S3) 커버(2026-06-26 편입). FR-19..20·NFR-P4·QT-7 = U9 에픽 8(US-P1..P7) 커버(2026-06-23 편입). FR-26..29 = 계정 에픽 2 보강(US-A3..A7) 커버(2026-06-24 편입 — 재설정·소셜 OIDC·라이프사이클·입력 견고화). FR-30..35·NFR-P5/R3·QT-10 = U12 에픽 9(US-NV1..NV9) 커버(2026-06-29 편입 — 차별화(novelty) 형성 Agent). FR-36~38·NFR-P6·QT-8 = U4 에픽 10(US-EV1..EV9) 커버(2026-06-29 편입 — 문헌탐색·근거형성 Agent).** SEC/RES의 인프라·설계 단계 항목(SEC-1/2/6/7/10/13/14, RES-1/2/3/4/10/12)은 스토리에 비매핑하고 NFR/Infra Design에서 다룬다. 적대적 비평 패스 완료(2026-06-15, 7/7 critic)._
+_FR-1..11 전부 커버됨(표 본문 대조 검증). **FR-12..14·NFR-P2·QT-5 = U7 에픽 6(US-S1..S6) 커버(2026-06-18 편입, 팀 합의). FR-15..16·NFR-P3·QT-6 = U8 에픽 7(US-CG1..CG6) 커버(2026-06-19 편입). FR-18·QT-9 = U1 Corpus/DocModel eager 개정(US-I1..I3 + US-S3) 커버(2026-06-26 편입). FR-39·FR-19·FR-20·NFR-P4·QT-7 = U9 에픽 8(US-P1..P7) 커버(2026-06-23 편입; FR-39=행동 이벤트 기록은 구 FR-18, FR-22~25 폐기 ID 회피로 신규 FR-39 재번호 2026-06-30). FR-26..29 = 계정 에픽 2 보강(US-A3..A7) 커버(2026-06-24 편입 — 재설정·소셜 OIDC·라이프사이클·입력 견고화). FR-30..35·NFR-P5/R3·QT-10 = U12 에픽 9(US-NV1..NV9) 커버(2026-06-29 편입 — 차별화(novelty) 형성 Agent). FR-36~38·NFR-P6·QT-8 = U11 에픽 10(US-EV1..EV9) 커버(2026-06-29 편입 — 문헌탐색·근거형성 Agent; requirements 초안 `[U4]` 오기 → `[U11]` 정정 2026-06-30).** SEC/RES의 인프라·설계 단계 항목(SEC-1/2/6/7/10/13/14, RES-1/2/3/4/10/12)은 스토리에 비매핑하고 NFR/Infra Design에서 다룬다. 적대적 비평 패스 완료(2026-06-15, 7/7 critic)._

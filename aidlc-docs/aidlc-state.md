@@ -4,7 +4,7 @@
 - **프로젝트명**: DocSuri (연구 지원 애플리케이션)
 - **프로젝트 유형**: Greenfield(그린필드)
 - **시작일**: 2026-06-15T04:36:30Z
-- **현재 단계**: OPERATIONS - 재인셉션 페이즈 1 / U1 Corpus Operations placeholder 확인 완료. 현 AI-DLC 워크플로우 종료.
+- **현재 단계**: OPERATIONS — U1 Corpus 운영 진입 이후에도 재인셉션 페이즈 4 **U11(문헌탐색·근거형성)** 및 **U12(novelty) 에이전트** 사이클이 이어짐(요구사항 FR-30~38·스토리 US-NV/US-EV·설계/코드 `construction/novelty-agent/`·배포 `Docsuri-Novelty`). _(구 "U1 Corpus에서 AI-DLC 워크플로우 종료" 표기는 이후 U11/U12 작업 수행으로 정정 — 2026-06-30, `aidlc-suite-review` PR #280.)_
 - **문서 언어**: 한국어(`aidlc-docs/` 산출물). 업스트림 룰셋(`AGENTS.md`, `.aidlc-rule-details/`)은 영어 유지.
 
 ## ⚠️ 검증 재기준선 (Verification Re-baseline) — 2026-06-16

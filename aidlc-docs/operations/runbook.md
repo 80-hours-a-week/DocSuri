@@ -6,18 +6,21 @@
 
 ## 1. 시스템 맵
 
-CDK 스택 6개 (`ops/cdk/app.py`, account/region 하드코딩 `app.py:20`):
+CDK 스택 8개 (`ops/cdk/app.py`, account/region 하드코딩 `app.py:20`):
 
 | 스택 | 배포단위 | 제공 | RemovalPolicy 트랩 |
 |---|---|---|---|
 | `Docsuri-Network` | — | VPC, 2 AZ, **NAT 0개**(비용절감), public/isolated subnet | 없음 |
-| `Docsuri-Search` | — | OpenSearch `docsuri-papers` (2.11, m6g.large ×2, kNN 1024 + BM25) | **RETAIN** (`search_stack.py:47`) |
+| `Docsuri-Search` | — | OpenSearch alias `docsuri-corpus` (2.19, m6g.large ×2, kNN 1024 + BM25) | **RETAIN** (`search_stack.py:47`) |
 | `Docsuri-Compute` | ① API | ECS Fargate `docsuri`, RDS PG16(Multi-AZ), Redis 7.1, ALB:443, CloudFront, SES | **RDS RETAIN** (`compute_stack.py:105`) |
 | `Docsuri-Ingestion` | ② Worker | SQS+DLQ, S3 `docsuri-papers-fulltext-*`, EventBridge `docsuri-arxiv-daily`(15:00 KST), Fargate worker(desired 0) | **S3 RETAIN** (`ingestion_stack.py:81`) |
 | `Docsuri-Frontend` | ④ FE | Next.js SSR Fargate, ALB, CloudFront @ docsuri.org | 없음 |
+| `Docsuri-Summarization` | Worker | ECS Fargate 요약 워커 + SQS `docsuri-summary-job-queue`(+DLQ). 장문 map-reduce 요약을 비동기 처리, 결과는 papers 버킷 `summaries/`에 write-through | 없음 |
+| `Docsuri-Novelty` | ⑪ Worker | novelty 형성 에이전트 Fargate 워커 (인셉션 유닛 **U12**; 코드/CDK는 구 U11 엄브렐러 네이밍 잔존) + SQS `docsuri-novelty-agent-job-queue`(+DLQ). `NOVELTY_AGENT_ENABLED=true`로 배포 시 활성 | 없음 |
 | `Docsuri-Access` | — | 크로스계정 팀 접근 역할 `DocsuriCrossAccountDev` (PowerUser+MFA, §9) | 없음 |
 
 > ③ Ops worker: 디텍터 코드는 `ops/src/docsuri_ops/`에 존재하나 **독립 배포 스택 없음** — 현재는 라이브러리 코드. 실배포 워커로 안 돌고 있음 (§4 갭).
+> **summarization·novelty 스택은 원래 6-스택 인벤토리 작성 이후 추가됨** (`app.py:19` `SummarizationStack`, `app.py:17` `NoveltyStack`) — 둘 다 SQS 잡 큐 기반 Fargate 백그라운드 워커. 현재 라이브 스택은 8개.
 
 ## 2. 🔴 알려진 함정 (Footguns)
 
