@@ -21,7 +21,10 @@ class RdsGlossaryRepository:
 
     def _connect(self) -> Any:
         if self._conn is not None:
-            return self._conn  # injected (tests): caller owns the connection
+            # Injected connection (tests use a fake). The call site's ``with self._connect()``
+            # drives its context manager — for a real psycopg connection that commits/closes on
+            # exit, so inject a fresh (or fake) connection, not a long-lived shared one.
+            return self._conn
         from ._pg import connection  # lazy: only the `real` extra needs psycopg
 
         return connection(self._dsn)  # pooled (graceful fallback to direct connect)
@@ -40,20 +43,6 @@ class RdsGlossaryRepository:
 
     def get_glossary_version(self, user_id: str) -> int:
         sql = "SELECT COALESCE(MAX(glossary_ver), 0) FROM user_glossary WHERE user_id = %s"
-        with self._connect() as conn, conn.cursor() as cur:
-            cur.execute(sql, (user_id,))
-            row = cur.fetchone()
-            return int(row[0]) if row else 0
-
-    def get_prompt_glossary_version(self, user_id: str) -> int:
-        """Version reflecting ONLY prompt-enforced terms — the subset that changes summary output
-        (they ride into the prompt; post-substitution terms touch translation only). The summary
-        cache keys on this so a translate-only term edit does not fork the per-user summary cache
-        and force an identical re-summary (NFR-C1, avoid redundant LLM spend)."""
-        sql = (
-            "SELECT COALESCE(MAX(glossary_ver), 0) FROM user_glossary "
-            "WHERE user_id = %s AND prompt_enforced = true"
-        )
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(sql, (user_id,))
             row = cur.fetchone()

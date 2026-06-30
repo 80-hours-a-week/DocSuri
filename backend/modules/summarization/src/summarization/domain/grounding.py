@@ -82,18 +82,23 @@ def _normalize_number(token: str) -> set[str]:
 def _number_grounded(token: str, src_values: list[float], src_forms: set[str]) -> bool:
     """A draft figure is grounded if it matches a source figure by exact normalized form OR
     within a **rounding-tolerance band** at the draft's own precision (95.3 grounds 95.34, since
-    95.34 rounds to 95.3). Percentage↔fraction scaling (×100) is checked too, mirroring
-    ``_normalize_number``. Reduces false-abstain on rounded/re-scaled figures without widening
-    the gate beyond half-a-ULP at the stated precision."""
+    95.34 rounds to 95.3).
+
+    Cross-scale equivalence (percentage↔fraction, 95.3% = 0.953) is matched ONLY via the exact
+    normalized forms above — the rounding band is applied at the SAME scale, never to ×100/÷100
+    rescalings. Rescaling inside the tolerant band would let a coarse (e.g. integer) draft figure
+    false-ground an unrelated source value that happens to be ~100× it: draft "20" vs a year
+    "2020" (2020/100 = 20.2, within the integer band 0.5) — fabricated figure passes the HARD
+    anti-fabrication gate (INV-4). Rounded cross-scale (a percent draft vs a fraction written to
+    more decimals) is therefore given up on purpose: it fails closed (false-abstain), the safe
+    direction for a fabrication gate."""
     if _normalize_number(token) & src_forms:
         return True
     draft = _to_float(token)
     if draft is None:
         return False
     band = 0.5 * 10 ** (-_decimals(token)) + 1e-9
-    return any(
-        abs(candidate - draft) <= band for s in src_values for candidate in (s, s * 100, s / 100)
-    )
+    return any(abs(s - draft) <= band for s in src_values)
 
 
 class GroundingValidator:

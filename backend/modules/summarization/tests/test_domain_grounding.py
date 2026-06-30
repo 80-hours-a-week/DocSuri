@@ -155,6 +155,28 @@ def test_thousand_separator_grounds_figure() -> None:
     assert not any(v.kind == "numeric_mismatch" for v in verdict.violations)
 
 
+def test_integer_figure_not_grounded_by_scaled_source_year() -> None:
+    # Regression: a fabricated integer figure must NOT false-ground against an unrelated source
+    # value ~100× it. The old ×100/÷100 tolerance band grounded "20" against a year "2020"
+    # (2020/100 = 20.2, within the integer band 0.5) → the figure slipped past the HARD
+    # anti-fabrication gate. Cross-scale equivalence is now exact-normalized-form only.
+    from summarization.domain.models import RefinedSource
+
+    draft = SummaryDraft(
+        tldr="t",
+        contributions=("c",),
+        method="m",
+        results="we obtain a score of 20",
+        limitations="l",
+        reproducibility={"code": "", "data": ""},
+        anchors=(),
+    )
+    refined = RefinedSource(body="published in 2020 with no other figures", captions=())
+    verdict = GroundingValidator().validate(GroundingInput(draft=draft, refined=refined))
+    assert not verdict.ok
+    assert any(v.kind == "numeric_mismatch" for v in verdict.violations)
+
+
 def test_rounding_tolerance_is_bounded() -> None:
     # The band is half-a-ULP at the draft's precision, NOT loose: 95.3 vs 95.9 (diff 0.6) must
     # still mismatch — matcher precision must not turn the numeric guard off.

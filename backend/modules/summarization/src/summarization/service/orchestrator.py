@@ -122,12 +122,13 @@ class SummarizationOrchestrationService:
         user_id = ctx.auth_session.user_id
 
         # 0. cache lookup (read-through) — HIT ends here (LLM 0 calls, §11).
-        # Summary output only varies with PROMPT-ENFORCED terms, so it keys on the prompt-enforced
-        # version; translate also varies with post-substitution terms, so it keys on the full
-        # version. This keeps a translate-only term edit from forking the per-user summary cache
-        # into an identical re-summary (NFR-C1).
+        # Summary output only varies with PROMPT-ENFORCED terms, so it keys on a content signature
+        # of that subset; translate also varies with post-substitution terms, so it keys on the
+        # full monotonic version. This keeps a translate-only term edit from forking the per-user
+        # summary cache into an identical re-summary (NFR-C1), while the content signature (unlike a
+        # filtered MAX) still invalidates when a prompt-enforced term is demoted (BR-S1).
         glossary_ver = (
-            self._glossary.prompt_glossary_version(user_id)
+            self._glossary.prompt_glossary_signature(user_id)
             if request.task == Task.SUMMARY
             else self._glossary.glossary_version(user_id)
         )

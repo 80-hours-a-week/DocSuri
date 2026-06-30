@@ -31,7 +31,10 @@ class RdsS3AssetReader:
 
     def _connect(self) -> Any:
         if self._conn is not None:
-            return self._conn  # injected (tests): caller owns the connection
+            # Injected connection (tests use a fake). The call site's ``with self._connect()``
+            # drives its context manager — for a real psycopg connection that commits/closes on
+            # exit, so inject a fresh (or fake) connection, not a long-lived shared one.
+            return self._conn
         from ._pg import connection  # lazy: only the `real` extra needs psycopg
 
         return connection(self._dsn)  # pooled (graceful fallback to direct connect)

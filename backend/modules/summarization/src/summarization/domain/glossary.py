@@ -8,6 +8,7 @@ attachment ("어텐션을/어텐션이") stays safe.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 from collections.abc import Sequence
@@ -67,17 +68,31 @@ class GlossaryResolver:
         except Exception:  # noqa: BLE001 — versioning failure → shared baseline (degrade, not fail)
             return 0
 
-    def prompt_glossary_version(self, user_id: str | None) -> int:
-        """Version of the user's prompt-enforced terms only (0 = none). The summary cache keys on
-        this so a translate-only (post-substitution) term edit does not invalidate/fork the user's
-        summary cache — summary output only changes with prompt-enforced terms (NFR-C1). Same
-        degrade-to-baseline-on-fault contract as [[glossary_version]]."""
+    def prompt_glossary_signature(self, user_id: str | None) -> int:
+        """Stable CONTENT identity of the user's prompt-enforced terms (0 = none), for the summary
+        cache key. Summary output varies ONLY with prompt-enforced terms (they ride into the
+        prompt; post-substitution terms touch translation only), so the summary cache must key on
+        exactly that subset — keying on the full ``glossary_ver`` would needlessly fork the cache
+        per user on a translate-only term edit (NFR-C1).
+
+        It is a content HASH, not a counter: a filtered ``MAX(glossary_ver) WHERE prompt_enforced``
+        is non-monotonic — demoting the max prompt-enforced term to post-substitution leaves the
+        value unchanged, so a stale summary would be served (BR-S1 invalidation miss). The hash
+        changes whenever the prompt-enforced set is added to / edited / demoted, and is unchanged
+        by post-substitution-only edits. Degrades to baseline (0) on a repo fault, like
+        [[glossary_version]]."""
         if self._repo is None or user_id is None:
             return 0
         try:
-            return self._repo.get_prompt_glossary_version(user_id)
+            terms = self._repo.get_user_glossary(user_id)
         except Exception:  # noqa: BLE001 — versioning failure → shared baseline (degrade, not fail)
             return 0
+        enforced = sorted((m.term_from, m.term_to) for m in terms if m.prompt_enforced)
+        if not enforced:
+            return 0
+        digest = hashlib.sha256(repr(enforced).encode("utf-8")).hexdigest()
+        # Positive content id; 0 is reserved above for "no prompt-enforced terms" (shared baseline).
+        return int(digest[:12], 16)
 
     def list_user_terms(self, user_id: str) -> Sequence[TermMapping]:
         """Return the user's personal term overrides (owner-scoped, SEC-8). Empty when no
