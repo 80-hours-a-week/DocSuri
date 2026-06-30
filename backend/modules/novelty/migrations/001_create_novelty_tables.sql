@@ -59,14 +59,3 @@ CREATE TABLE IF NOT EXISTS novelty_notion_exports (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT uq_novelty_notion_exports_job UNIQUE (owner_id, job_id)
 );
-
-CREATE TABLE IF NOT EXISTS notion_connections (
-    owner_id UUID PRIMARY KEY,
-    encrypted_token BYTEA NOT NULL,
-    token_nonce BYTEA NOT NULL,
-    key_id TEXT NOT NULL,
-    workspace_id TEXT,
-    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);

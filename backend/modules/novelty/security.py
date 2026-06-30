@@ -32,11 +32,10 @@ def is_safe_external_url(url: str, allowed_hosts: set[str] | frozenset[str] | No
     if not host:
         return False
     try:
-        ip = ipaddress.ip_address(host)
+        ipaddress.ip_address(host)
     except ValueError:
         pass
     else:
-        return not (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved)
+        return False
     hosts = allowed_hosts or ALLOWED_EXTERNAL_HOSTS
     return any(host == allowed or host.endswith(f".{allowed}") for allowed in hosts)
-

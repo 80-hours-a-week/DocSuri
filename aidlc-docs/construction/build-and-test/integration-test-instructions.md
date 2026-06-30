@@ -26,7 +26,7 @@ python -m pytest backend/tests/test_novelty.py backend/tests/test_app_shell.py -
 
 Observed result:
 
-- 24 passed
+- 28 passed
 
 Run the backend suite after installing declared test dependencies:
 

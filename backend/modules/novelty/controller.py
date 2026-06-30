@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -62,7 +63,10 @@ async def create_job(
     repo: NoveltyRepository = REPO_DEP,
 ) -> CreateJobResponse:
     try:
-        return NoveltyService(repo, _observability(request)).create_job(principal.user_id, dto)
+        service = NoveltyService(repo, _observability(request))
+        created = service.create_job(principal.user_id, dto)
+        _dispatch_job(repo, principal.user_id, created.jobId, _observability(request))
+        return created
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -160,3 +164,27 @@ async def approve_notion_export(
 
 routers = (router,)
 
+
+def _dispatch_job(repo: NoveltyRepository, owner_id: str, job_id: str, observability=None) -> None:
+    queue_url = os.getenv("DOCSURI_NOVELTY_JOB_QUEUE_URL")
+    if not queue_url:
+        from .worker import process_job
+
+        process_job(repo, owner_id, job_id, observability=observability)
+        return
+
+    commit = getattr(repo, "commit", None)
+    if commit is not None:
+        commit()
+
+    import boto3
+
+    sqs = boto3.client(
+        "sqs",
+        region_name=os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION", "ap-northeast-2"),
+    )
+    sqs.send_message(
+        QueueUrl=queue_url,
+        MessageBody=json.dumps({"ownerId": owner_id, "jobId": job_id}),
+        DelaySeconds=1,
+    )

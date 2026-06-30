@@ -31,6 +31,9 @@ class NoveltyRepository(Protocol):
     def list_artifacts(self, owner_id: str, job_id: str) -> list[ArtifactRef]: ...
     def get_export(self, owner_id: str, job_id: str) -> NotionExport | None: ...
     def save_export(self, export: NotionExport) -> NotionExport: ...
+    def commit(self) -> None: ...
+    def rollback(self) -> None: ...
+    def close(self) -> None: ...
 
 
 class ArtifactStore(Protocol):
@@ -121,6 +124,15 @@ class InMemoryNoveltyRepository:
             self.get_job(export.ownerId, export.jobId)
             self._exports[export.jobId] = export
             return export
+
+    def commit(self) -> None:
+        return None
+
+    def rollback(self) -> None:
+        return None
+
+    def close(self) -> None:
+        return None
 
 
 def _after(events: list[ProgressEvent], after_event_id: str | None) -> list[ProgressEvent]:
@@ -403,3 +415,12 @@ class SqlNoveltyRepository:
                 setattr(row, key, value)
         self._s.flush()
         return export.model_copy(update={"updatedAt": data["updated_at"]})
+
+    def commit(self) -> None:
+        self._s.commit()
+
+    def rollback(self) -> None:
+        self._s.rollback()
+
+    def close(self) -> None:
+        self._s.close()

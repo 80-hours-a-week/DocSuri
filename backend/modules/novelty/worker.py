@@ -1,17 +1,30 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import signal
+import sys
+import threading
+from collections.abc import Callable, Iterable
 from typing import Any
 
-from .adapters import NoveltyAdapters
+from .adapters import NoveltyAdapters, RetrievalBundle
 from .models import TERMINAL_STATES, ArtifactKind, EvidenceStatus, InputType, JobState
 from .repository import NoveltyRepository
 from .service import NoveltyService
 
+log = logging.getLogger("docsuri.novelty.worker")
+
 
 class InvalidWorkerPayload(ValueError):
     pass
+
+
+class _Message:
+    def __init__(self, body: dict[str, Any], receipt_handle: str | None = None) -> None:
+        self.body = body
+        self.receipt_handle = receipt_handle
 
 
 def parse_sqs_payload(body: str | bytes | dict[str, Any]) -> tuple[str, str]:
@@ -36,6 +49,43 @@ def process_sqs_payload(
     process_job(repo, owner_id, job_id, adapters=adapters, observability=observability)
 
 
+def run_worker(
+    *,
+    repo_factory: Callable[[], NoveltyRepository],
+    receive: Callable[[], Iterable[_Message]],
+    ack: Callable[[_Message], None],
+    should_stop: Callable[[], bool],
+    adapters: NoveltyAdapters | None = None,
+    observability=None,
+) -> None:
+    while not should_stop():
+        for message in receive():
+            repo = repo_factory()
+            try:
+                process_sqs_payload(
+                    repo,
+                    message.body,
+                    adapters=adapters,
+                    observability=observability,
+                )
+                commit = getattr(repo, "commit", None)
+                if commit is not None:
+                    commit()
+            except Exception:  # noqa: BLE001 - leave unacked for retry/DLQ.
+                rollback = getattr(repo, "rollback", None)
+                if rollback is not None:
+                    rollback()
+                log.exception("novelty job failed; leaving message for redelivery")
+                continue
+            finally:
+                close = getattr(repo, "close", None)
+                if close is not None:
+                    close()
+            ack(message)
+            if should_stop():
+                break
+
+
 def process_job(
     repo: NoveltyRepository,
     owner_id: str,
@@ -54,19 +104,15 @@ def process_job(
 
         service.advance_state(owner_id, job_id, JobState.RETRIEVING_CORPUS, "Searching U2 corpus")
         corpus = adapters.corpus.full_search(owner_id, job.topic)
-        if corpus.degradedReason:
-            degraded_reasons.append(corpus.degradedReason)
+        corpus_payload, degraded_reason = _payload_from_bundle(corpus)
+        if degraded_reason:
+            degraded_reasons.append(degraded_reason)
         service.save_artifact(
             owner_id,
             job_id,
             ArtifactKind.EVIDENCE,
             "Corpus evidence",
-            {
-                "items": corpus.items,
-                "evidenceStatus": corpus.evidenceStatus.value,
-                "degradedReason": corpus.degradedReason,
-                "sourceRefs": [],
-            },
+            corpus_payload,
         )
 
         service.advance_state(
@@ -76,19 +122,15 @@ def process_job(
             "Searching external sources",
         )
         external = adapters.external.search(job.topic)
-        if external.degradedReason:
-            degraded_reasons.append(external.degradedReason)
+        external_payload, degraded_reason = _payload_from_bundle(external)
+        if degraded_reason:
+            degraded_reasons.append(degraded_reason)
         service.save_artifact(
             owner_id,
             job_id,
             ArtifactKind.EXTERNAL_FINDINGS,
             "External findings",
-            {
-                "items": external.items,
-                "evidenceStatus": external.evidenceStatus.value,
-                "degradedReason": external.degradedReason,
-                "sourceRefs": [],
-            },
+            external_payload,
         )
 
         service.advance_state(
@@ -117,19 +159,15 @@ def process_job(
                 "Checking sentence similarity and AI-style risks",
             )
             similarity = adapters.similarity.check(owner_id, job.manuscript.model_dump())
-            if similarity.degradedReason:
-                degraded_reasons.append(similarity.degradedReason)
+            similarity_payload, degraded_reason = _payload_from_bundle(similarity)
+            if degraded_reason:
+                degraded_reasons.append(degraded_reason)
             service.save_artifact(
                 owner_id,
                 job_id,
                 ArtifactKind.RISK_SIGNALS,
                 "Similarity and style risk signals",
-                {
-                    "items": similarity.items,
-                    "evidenceStatus": similarity.evidenceStatus.value,
-                    "degradedReason": similarity.degradedReason,
-                    "sourceRefs": [],
-                },
+                similarity_payload,
             )
 
         service.advance_state(
@@ -198,15 +236,96 @@ def process_job(
         raise
 
 
-def main() -> None:
-    # The ECS worker entrypoint is intentionally small; queue consumption will be wired when the
-    # SQS adapter lands. This keeps image activation safe: the service can scale to zero and start.
-    payload = os.getenv("DOCSURI_NOVELTY_INLINE_JOB")
-    if payload:
-        print(json.dumps({"status": "inline_job_not_supported", "payload": json.loads(payload)}))
-    else:
-        print(json.dumps({"status": "idle", "worker": "novelty"}))
+def _payload_from_bundle(bundle: RetrievalBundle) -> tuple[dict[str, Any], str | None]:
+    source_refs = _collect_source_refs(bundle.items)
+    degraded_reason = bundle.degradedReason
+    status = bundle.evidenceStatus
+    if status is EvidenceStatus.SUPPORTED and not source_refs:
+        status = EvidenceStatus.UNSUPPORTED
+        degraded_reason = degraded_reason or "supported adapter output missing sourceRefs"
+    return (
+        {
+            "items": bundle.items,
+            "evidenceStatus": status.value,
+            "degradedReason": degraded_reason,
+            "sourceRefs": source_refs,
+        },
+        degraded_reason,
+    )
+
+
+def _collect_source_refs(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    for item in items:
+        for ref in item.get("sourceRefs") or item.get("source_refs") or []:
+            if isinstance(ref, dict):
+                refs.append(ref)
+    return refs
+
+
+_shutdown = threading.Event()
+
+
+def _on_signal(signum, _frame) -> None:
+    log.info("received %s; draining then exiting", signal.Signals(signum).name)
+    _shutdown.set()
+
+
+def main(argv: list[str] | None = None) -> int:
+    del argv
+    logging.basicConfig(level=logging.INFO)
+    signal.signal(signal.SIGTERM, _on_signal)
+    signal.signal(signal.SIGINT, _on_signal)
+
+    queue_url = os.getenv("DOCSURI_NOVELTY_JOB_QUEUE_URL")
+    if not queue_url:
+        log.error("DOCSURI_NOVELTY_JOB_QUEUE_URL not set; nothing to consume")
+        return 1
+
+    from backend.config import Settings
+    from backend.db import make_engine, make_session_factory
+
+    from .repository import SqlNoveltyRepository
+
+    settings = Settings.from_env()
+    engine = make_engine(settings.database_url)
+    session_factory = make_session_factory(engine)
+
+    def repo_factory() -> NoveltyRepository:
+        return SqlNoveltyRepository(session_factory())
+
+    import boto3
+
+    sqs = boto3.client(
+        "sqs",
+        region_name=os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION", "ap-northeast-2"),
+    )
+
+    def receive() -> list[_Message]:
+        resp = sqs.receive_message(
+            QueueUrl=queue_url,
+            MaxNumberOfMessages=10,
+            WaitTimeSeconds=20,
+        )
+        return [
+            _Message(json.loads(message["Body"]), message["ReceiptHandle"])
+            for message in resp.get("Messages", [])
+        ]
+
+    def ack(message: _Message) -> None:
+        if message.receipt_handle:
+            sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=message.receipt_handle)
+
+    log.info("novelty worker started; polling queue")
+    run_worker(
+        repo_factory=repo_factory,
+        receive=receive,
+        ack=ack,
+        should_stop=_shutdown.is_set,
+    )
+    log.info("novelty worker shut down gracefully")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main(sys.argv[1:]))

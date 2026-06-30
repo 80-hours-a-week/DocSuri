@@ -14,6 +14,7 @@ from backend.modules.novelty.adapters import NoveltyAdapters, RetrievalBundle
 from backend.modules.novelty.models import (
     ArtifactKind,
     ArtifactValidationError,
+    EvidenceStatus,
     ExportApprovalError,
     JobState,
     NoveltyJobRequest,
@@ -23,7 +24,7 @@ from backend.modules.novelty.security import is_safe_external_url, sanitize_exte
 from backend.modules.novelty.service import NoveltyService
 from backend.modules.novelty.streaming import encode_sse
 from backend.modules.novelty.validators import normalize_source_key, validate_artifact_payload
-from backend.modules.novelty.worker import process_job
+from backend.modules.novelty.worker import process_job, run_worker
 
 
 def _principal(user_id: str | None = None) -> Principal:
@@ -120,6 +121,7 @@ def test_external_query_and_url_guards() -> None:
     assert is_safe_external_url("https://github.com/openai/codex") is True
     assert is_safe_external_url("http://github.com/openai/codex") is False
     assert is_safe_external_url("https://127.0.0.1/admin") is False
+    assert is_safe_external_url("https://8.8.8.8/dns-query") is False
     assert is_safe_external_url("https://github.com.evil.example/x") is False
 
 
@@ -159,6 +161,71 @@ def test_worker_completes_when_adapters_are_not_degraded() -> None:
     assert NoveltyService(repo).result(owner_id, job_id).job.state is JobState.COMPLETED
 
 
+def test_worker_manuscript_path_records_similarity_risk_degradation() -> None:
+    repo = InMemoryNoveltyRepository()
+    service = NoveltyService(repo)
+    owner_id = str(uuid4())
+    created = service.create_job(
+        owner_id,
+        NoveltyJobRequest(
+            inputType="manuscript",
+            topic="novelty agent draft",
+            manuscript={"fileName": "draft.pdf", "contentType": "application/pdf"},
+        ),
+    )
+
+    process_job(repo, owner_id, created.jobId)
+
+    result = service.result(owner_id, created.jobId)
+    assert result.job.state is JobState.DEGRADED
+    assert ArtifactKind.RISK_SIGNALS in {artifact.kind for artifact in result.artifacts}
+
+
+def test_supported_adapter_without_source_refs_degrades_not_fails() -> None:
+    class UnsupportedCorpus:
+        def full_search(self, owner_id: str, query: str) -> RetrievalBundle:
+            return RetrievalBundle(
+                items=[{"title": query}],
+                evidenceStatus=EvidenceStatus.SUPPORTED,
+            )
+
+    repo = InMemoryNoveltyRepository()
+    _, owner_id, job_id = _service_job(repo)
+
+    process_job(repo, owner_id, job_id, adapters=NoveltyAdapters(corpus=UnsupportedCorpus()))
+
+    result = NoveltyService(repo).result(owner_id, job_id)
+    assert result.job.state is JobState.DEGRADED
+    assert "missing sourceRefs" in repo.list_events(owner_id, job_id)[-1].model_dump_json()
+
+
+def test_worker_loop_acks_successful_message() -> None:
+    class Message:
+        def __init__(self, body):
+            self.body = body
+
+    repo = InMemoryNoveltyRepository()
+    _, owner_id, job_id = _service_job(repo)
+    message = Message({"ownerId": owner_id, "jobId": job_id})
+    acked: list[Message] = []
+    calls = 0
+
+    def receive():
+        nonlocal calls
+        calls += 1
+        return [message] if calls == 1 else []
+
+    run_worker(
+        repo_factory=lambda: repo,
+        receive=receive,
+        ack=acked.append,
+        should_stop=lambda: calls > 1,
+    )
+
+    assert acked == [message]
+    assert NoveltyService(repo).result(owner_id, job_id).job.state is JobState.DEGRADED
+
+
 def test_sse_snapshot_encodes_progress_event() -> None:
     repo = InMemoryNoveltyRepository()
     _, owner_id, job_id = _service_job(repo)
@@ -184,8 +251,8 @@ def test_api_create_status_and_cancel(monkeypatch) -> None:
     cancelled = client.post(f"/api/novelty/jobs/{job_id}/cancel")
 
     assert created.status_code == 200
-    assert status.json()["job"]["state"] == "queued"
-    assert cancelled.json()["state"] == "cancelled"
+    assert status.json()["job"]["state"] == "degraded"
+    assert cancelled.json()["state"] == "degraded"
 
 
 def test_api_rejects_unsupported_manuscript(monkeypatch) -> None:

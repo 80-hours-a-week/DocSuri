@@ -10,7 +10,7 @@
 - `backend/modules/novelty/repository.py`: owner-scoped in-memory and SQL repositories plus artifact-store seam.
 - `backend/modules/novelty/service.py`: job creation, status/result, cancel, artifact validation, Notion preview/approval/export invariant.
 - `backend/modules/novelty/controller.py`: `/api/novelty` routes for job create/status/result/cancel, SSE progress snapshot, and Notion approval flow.
-- `backend/modules/novelty/worker.py`: worker processing loop, SQS payload parser, stage progress emission, degraded no-op adapter behavior.
+- `backend/modules/novelty/worker.py`: SQS polling/ack loop, SQS payload parser, stage progress emission, degraded no-op adapter behavior.
 - `backend/modules/novelty/adapters.py`: seams for U2 full search, external browser search, similarity check, and Notion export.
 - `backend/modules/novelty/validators.py`: source-key normalization, source-ref requirements for supported outputs, experiment-plan shape validation.
 - `backend/modules/novelty/security.py`: external query minimization and SSRF/egress URL guard.
@@ -29,7 +29,7 @@
 ## Persistence
 
 - Added migration `backend/modules/novelty/migrations/001_create_novelty_tables.sql`.
-- Tables: `novelty_jobs`, `novelty_progress_events`, `novelty_artifacts`, `novelty_notion_exports`, `notion_connections`.
+- Tables: `novelty_jobs`, `novelty_progress_events`, `novelty_artifacts`, `novelty_notion_exports`.
 - Startup migrations now include novelty migrations.
 - CLI migration defaults now include novelty migrations.
 
@@ -39,6 +39,7 @@
 - Updated app-shell registry tests for the new `novelty` module.
 - Added `ops/cdk/stacks/novelty_stack.py` with SQS queue/DLQ, Fargate worker, S3 prefix permissions, Bedrock invoke permission, RDS access, and DLQ alarm.
 - Registered `Docsuri-Novelty` in `ops/cdk/app.py`.
+- Novelty worker RDS endpoint/port/security group/secret are passed as stack props from CDK context instead of being fixed inside the stack.
 - Updated API task deploy env in `ops/cdk/stacks/compute_stack.py`:
   - `NOVELTY_AGENT_ENABLED=true`
   - `DOCSURI_NOVELTY_JOB_QUEUE_URL`
@@ -49,11 +50,11 @@
 ## Tests and Verification
 
 - Added `backend/tests/test_novelty.py`.
-- Covered source-key normalization, source-ref validation, owner isolation, state transition guard, Notion approval invariant, SSRF guard, worker completion, SSE encoding, API create/status/cancel, and unsupported manuscript rejection.
+- Covered source-key normalization, source-ref validation, owner isolation, state transition guard, Notion approval invariant, SSRF guard, worker completion, manuscript degraded path, SSE encoding, API create/status/cancel, and unsupported manuscript rejection.
 
 Commands run:
 
-- `python -m pytest backend/tests/test_novelty.py -q` -> 10 passed
+- `python -m pytest backend/tests/test_novelty.py -q` -> 14 passed
 - `python -m pytest backend/tests/test_novelty.py backend/tests/test_app_shell.py -q` -> novelty tests passed; existing app-shell assertions failed because this local shell lacks `docsuri_shared`, `docsuri_ops`, and discovery dependencies.
 - `python -m ruff check backend/modules/novelty backend/wiring.py backend/app.py backend/migrations/__main__.py backend/tests/test_novelty.py backend/tests/test_app_shell.py ops/cdk/stacks/novelty_stack.py ops/cdk/stacks/compute_stack.py ops/cdk/app.py` -> passed
 - `python -m compileall backend/modules/novelty backend/wiring.py ops/cdk/stacks/novelty_stack.py ops/cdk/app.py` -> passed

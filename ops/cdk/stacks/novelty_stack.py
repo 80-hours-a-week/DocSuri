@@ -15,17 +15,6 @@ from aws_cdk import aws_secretsmanager as secretsmanager
 from aws_cdk import aws_sqs as sqs
 from constructs import Construct
 
-_RDS_ENDPOINT = (
-    "docsuri-compute-postgres9dc8bb04-7ajkntsj0ouu"
-    ".cpegcaqmu01d.ap-northeast-2.rds.amazonaws.com"
-)
-_RDS_PORT = 5432
-_RDS_SECURITY_GROUP_ID = "sg-0633ac0c0b8c7a052"
-_RDS_SECRET_ARN = (
-    "arn:aws:secretsmanager:ap-northeast-2:028317349537:secret:"
-    "DocsuriComputePostgresSecre-9qclXydED0pl-30WA1V"
-)
-
 
 class NoveltyStack(Stack):
     def __init__(
@@ -34,6 +23,10 @@ class NoveltyStack(Stack):
         construct_id: str,
         *,
         vpc: ec2.IVpc,
+        db_endpoint: str,
+        db_port: int,
+        db_security_group_id: str,
+        db_secret_arn: str,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -68,11 +61,14 @@ class NoveltyStack(Stack):
         )
         task_def = ecs.FargateTaskDefinition(self, "WorkerTaskDef", cpu=512, memory_limit_mib=1024)
 
-        database_url = f"postgresql://docsuri_admin@{_RDS_ENDPOINT}:{_RDS_PORT}/docsuri"
+        database_url = (
+            f"postgresql://docsuri_admin@{db_endpoint}:"
+            f"{db_port}/docsuri"
+        )
         db_secret = secretsmanager.Secret.from_secret_complete_arn(
             self,
             "DbSecret",
-            _RDS_SECRET_ARN,
+            db_secret_arn,
         )
 
         task_def.add_container(
@@ -120,10 +116,10 @@ class NoveltyStack(Stack):
         rds_sg = ec2.SecurityGroup.from_security_group_id(
             self,
             "RdsSg",
-            _RDS_SECURITY_GROUP_ID,
+            db_security_group_id,
             mutable=True,
         )
-        self.service.connections.allow_to(rds_sg, ec2.Port.tcp(_RDS_PORT))
+        self.service.connections.allow_to(rds_sg, ec2.Port.tcp(db_port))
 
         self.queue.grant_consume_messages(task_def.task_role)
         dlq.grant_send_messages(task_def.task_role)

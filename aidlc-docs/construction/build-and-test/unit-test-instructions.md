@@ -21,7 +21,7 @@ python -m pytest backend/tests/test_novelty.py -q
 
 Observed result:
 
-- 10 passed
+- 14 passed
 
 Coverage focus:
 
