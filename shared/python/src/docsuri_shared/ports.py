@@ -253,7 +253,7 @@ class EvidenceFormationPort(Protocol):
     async def form_evidence(
         self, request: EvidenceRequest, ctx: Any
     ) -> EvidenceResult:
-        """🔒 FROZEN — spec: ``form_evidence(request, ctx) -> EvidenceResult``.
+        """🔒 FROZEN — spec: ``async form_evidence(request, ctx) -> EvidenceResult | EvidenceAbstainResult``.
 
         다논문 교차확인 → 근거 비교·정리 → 출처·기권.
         - 근거 1건 이상: EvidenceResult(state=ok, claims=[...], coverage={...})

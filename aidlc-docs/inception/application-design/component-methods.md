@@ -226,4 +226,4 @@
 | EvidenceSessionRepository | `appendTurn(sessionId: Id, turn: EvidenceTurn) -> void` | 세션 턴 추가 영속 | Id, EvidenceTurn → void |
 | EvidenceSessionRepository | `deleteSession(userId: Id, sessionId: Id) -> boolean` | 소유자 범위 세션 삭제 | Id, Id → boolean(삭제 성공 여부) |
 | EvidenceSessionRepository | `resetAllSessions(userId: Id) -> void` | 소유자 전체 세션 삭제 | Id → void |
-| EvidenceFormationService | `form_evidence(request: EvidenceRequest, ctx: Any) -> EvidenceResult \| EvidenceAbstainResult` | **EvidenceFormationPort(D5) 구현 — U12 Tool 진입점**. EvidenceAgentOrchestrator 라우팅; 긴 분석은 잡 오프로드 | EvidenceRequest, Any → EvidenceResult(state=ok) \| EvidenceAbstainResult(state=abstain) |
+| EvidenceFormationService | `async form_evidence(request: EvidenceRequest, ctx: Any) -> EvidenceResult \| EvidenceAbstainResult` | **EvidenceFormationPort(D5) 구현 — U12 Tool 진입점**. EvidenceAgentOrchestrator 라우팅; 긴 분석은 잡 오프로드 | EvidenceRequest, Any → EvidenceResult(state=ok) \| EvidenceAbstainResult(state=abstain) |
