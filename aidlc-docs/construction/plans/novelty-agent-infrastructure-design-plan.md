@@ -3,7 +3,7 @@
 **단계**: CONSTRUCTION -> Infrastructure Design  
 **유닛**: Novelty Agent  
 **일자**: 2026-06-29  
-**상태**: 질문 답변 대기  
+**상태**: 확정 — `infradesign-answer.md` 답변 반영, Infrastructure Design 산출물 생성 완료
 **근거**: `construction/novelty-agent/functional-design/`, `construction/novelty-agent/nfr-requirements/`, `construction/novelty-agent/nfr-design/`
 
 ## 1. Infrastructure Design 렌즈
@@ -19,13 +19,13 @@
 
 답변 확정 후 아래 산출물을 `aidlc-docs/construction/novelty-agent/infrastructure-design/`에 작성한다.
 
-- [ ] `infrastructure-design.md`
+- [x] `infrastructure-design.md`
   - AWS service mapping
   - storage and encryption mapping
   - queue/DLQ mapping
   - observability and alarms
   - security controls
-- [ ] `deployment-architecture.md`
+- [x] `deployment-architecture.md`
   - API/worker deployment topology
   - network/data flow
   - scaling and rollback notes

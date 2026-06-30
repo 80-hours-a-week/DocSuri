@@ -525,10 +525,10 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - Current gate: Requirements review/approval (PR #170). Next stage (별도 승인): User Stories → Units Generation → Construction.
 - Code generated: no.
 
-## Novelty Agent — NFR Design Complete / Infrastructure Design Question Gate
+## Novelty Agent — Infrastructure Design Complete / Code Generation Plan Ready
 
 - Date: 2026-06-29
-- Stage: CONSTRUCTION / NFR Design + Infrastructure Design question gate
+- Stage: CONSTRUCTION / Infrastructure Design + Code Generation plan gate
 - Trigger: 차별화(novelty) 형성 Agent 구현을 위한 AI-DLC 질문지 답변 반영 및 다음 단계 진행.
 - Branch: `docs/novelty-agent-questionnaire`
 - Inputs:
@@ -537,6 +537,7 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
   - `FD-Answer-1.md`
   - `nfr-answer.md`
   - `nfr-design-review.md`
+  - `infradesign-answer.md`
   - `aidlc-docs/construction/shared/evidence-formation-port.md`
 - Answers reflected:
   - Q1~Q7=A, Q8=B(뉴스 검색 v1 제외), Q9~Q28=A, Q29=C, Q30=A, Q31=A, Q32=B.
@@ -571,11 +572,16 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
   - `aidlc-docs/construction/novelty-agent/nfr-design/nfr-design-patterns.md`
   - `aidlc-docs/construction/novelty-agent/nfr-design/logical-components.md`
 - Infrastructure Design plan created:
-  - `aidlc-docs/construction/plans/novelty-agent-infrastructure-design-plan.md` (Infrastructure Design 질문 10개, 답변 대기)
+  - `aidlc-docs/construction/plans/novelty-agent-infrastructure-design-plan.md` (Infrastructure Design 질문 10개, 답변 반영 완료; 전부 A)
+- Infrastructure Design artifacts generated:
+  - `aidlc-docs/construction/novelty-agent/infrastructure-design/infrastructure-design.md`
+  - `aidlc-docs/construction/novelty-agent/infrastructure-design/deployment-architecture.md`
+- Code Generation plan created:
+  - `aidlc-docs/construction/plans/novelty-agent-code-generation-plan.md` (승인 질문 답변 대기)
 - Scope boundary:
   - novelty Agent consumes EvidenceFormationPort/SourceRef; it does not implement literature/evidence formation internals.
   - v1 external search = GitHub + datasets; news search is next cycle.
   - v1 manuscript upload = PDF/Markdown/TXT; DOCX is next cycle.
   - No novelty score, "newness proven" judgment, paper prose generation, or code skeleton generation.
-- Current gate: `novelty-agent-infrastructure-design-plan.md` Q1~Q10 답변 대기.
+- Current gate: `novelty-agent-code-generation-plan.md` 승인 질문 답변 대기.
 - Code generated: no.
