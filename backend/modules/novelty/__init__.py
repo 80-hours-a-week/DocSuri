@@ -1,0 +1,2 @@
+"""Novelty agent backend module."""
+

@@ -14,6 +14,7 @@ from stacks.compute_stack import ComputeStack
 from stacks.frontend_stack import FrontendStack
 from stacks.ingestion_stack import IngestionStack
 from stacks.network_stack import NetworkStack
+from stacks.novelty_stack import NoveltyStack
 from stacks.search_stack import SearchStack
 from stacks.summarization_stack import SummarizationStack
 
@@ -39,6 +40,13 @@ ingestion = IngestionStack(
 # only; the team owns deploy. Reuses the docsuri-api image + papers bucket (by name).
 summarization = SummarizationStack(
     app, "Docsuri-Summarization",
+    vpc=network.vpc,
+    env=env,
+)
+# Deploy unit ⑪ — novelty formation agent worker. Code/synth only; deploy remains
+# team-owned. The unit is active when deployed (NOVELTY_AGENT_ENABLED=true).
+novelty = NoveltyStack(
+    app, "Docsuri-Novelty",
     vpc=network.vpc,
     env=env,
 )
