@@ -478,6 +478,43 @@ def _mount_personalization(app: FastAPI, settings: Settings, result: MountResult
     result.mounted.append("personalization")
 
 
+def _mount_novelty(app: FastAPI, settings: Settings, result: MountResult) -> None:
+    from backend.modules.novelty import controller as novelty
+    from backend.modules.novelty.repository import (
+        InMemoryNoveltyRepository,
+        SqlNoveltyRepository,
+    )
+
+    if _is_postgres(settings.database_url):
+        from .db import make_engine, make_session_factory
+
+        engine = getattr(app.state, "db_engine", None) or make_engine(settings.database_url)
+        app.state.db_engine = engine
+        session_factory = make_session_factory(engine)
+
+        def get_novelty_repo():
+            session = session_factory()
+            try:
+                yield SqlNoveltyRepository(session)
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
+            finally:
+                session.close()
+    else:
+        repo = InMemoryNoveltyRepository()
+        app.state.novelty_repo = repo
+
+        def get_novelty_repo():
+            return repo
+
+    app.dependency_overrides[novelty.get_repo] = get_novelty_repo
+    for router in novelty.routers:
+        app.include_router(router)
+    result.mounted.append("novelty")
+
+
 # The real registry. Each entry is a `(app, settings, result) -> None` mounter whose name
 # (minus the `_mount_` prefix) labels it in MountResult / `/readyz`.
 _INTEGRATIONS = (
@@ -488,5 +525,6 @@ _INTEGRATIONS = (
     _mount_ops,
     _mount_citation_graph,
     _mount_personalization,
+    _mount_novelty,
     _mount_summarization,
 )

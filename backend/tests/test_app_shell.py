@@ -56,6 +56,7 @@ def test_module_registry_complete_and_disjoint() -> None:
         "ops",
         "citation_graph",
         "personalization",
+        "novelty",
     }
 
 
@@ -124,6 +125,7 @@ def test_mount_modules_never_raises_and_records_reasons() -> None:
         "ops",
         "citation_graph",
         "personalization",
+        "novelty",
     }
 
 

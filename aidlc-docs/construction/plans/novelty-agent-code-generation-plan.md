@@ -68,70 +68,70 @@
 
 ## 6. Code Generation Steps
 
-- [ ] **Step 1 — Module skeleton**
+- [x] **Step 1 — Module skeleton**
   - Create `backend/modules/novelty/` and lightweight `__init__.py`.
   - Keep imports safe for app-shell mounting.
 
-- [ ] **Step 2 — Domain models and state machines**
+- [x] **Step 2 — Domain models and state machines**
   - Create `models.py`.
   - Define job request, progress event, artifacts, export state, degraded reason, validation result.
 
-- [ ] **Step 3 — Repositories and storage seams**
+- [x] **Step 3 — Repositories and storage seams**
   - Create `repository.py`.
   - Implement owner-scoped job/event/artifact/export repository seams.
   - Include S3 artifact store interface and in-memory test implementation.
 
-- [ ] **Step 4 — Output validators**
+- [x] **Step 4 — Output validators**
   - Create `validators.py`.
   - Implement schema/source_ref/abstain/anchor checks.
   - Do not call or clone U6 GroundingEnforcementHook.
 
-- [ ] **Step 5 — Security and egress guard**
+- [x] **Step 5 — Security and egress guard**
   - Create `security.py`.
   - Implement external query minimization, allowlist checks, and SSRF guard seam for fetched URLs.
 
-- [ ] **Step 6 — Service orchestration**
+- [x] **Step 6 — Service orchestration**
   - Create `service.py`.
   - Implement job creation, cancel, stage snapshot persistence, degraded handling, and export approval.
 
-- [ ] **Step 7 — Adapters**
+- [x] **Step 7 — Adapters**
   - Create `adapters.py`.
   - Add seams for EvidenceFormationPort, U2 full search, Agent-Browser, LLM, shared parser/evidence output, Notion export, U6 telemetry/cost.
 
-- [ ] **Step 8 — Worker**
+- [x] **Step 8 — Worker**
   - Create `worker.py`.
   - Implement SQS payload handling, stage loop, bounded retry/degraded behavior, cancel checks, and progress emission.
 
-- [ ] **Step 9 — API controller and SSE**
+- [x] **Step 9 — API controller and SSE**
   - Create `controller.py` and `streaming.py`.
   - Add job create/status/result/cancel/SSE/export preview/export approval routes.
   - SSE uses persisted progress events and polling fallback; no Last-Event-ID replay in v1.
 
-- [ ] **Step 10 — RDS migration**
+- [x] **Step 10 — RDS migration**
   - Create `backend/modules/novelty/migrations/001_create_novelty_tables.sql`.
   - Add `novelty_jobs`, `novelty_progress_events`, `novelty_artifacts`, `novelty_exports`, `notion_connections`.
   - Use custom SQL runner; do not introduce Alembic.
 
-- [ ] **Step 11 — Migration runner and app-shell wiring**
+- [x] **Step 11 — Migration runner and app-shell wiring**
   - Update `backend/migrations/__main__.py`.
   - Update `backend/wiring.py` with `_mount_novelty`.
   - Set deployment activation flag default to enabled (`NOVELTY_AGENT_ENABLED=true`).
 
-- [ ] **Step 12 — Backend tests**
+- [x] **Step 12 — Backend tests**
   - Create `backend/tests/test_novelty.py`.
   - Cover DTO roundtrip, source normalization idempotency, job state transition, owner isolation, export approval invariant, validator abstain behavior, SSRF guard, cancel, SSE read model.
   - Update `backend/tests/test_app_shell.py`.
 
-- [ ] **Step 13 — Infrastructure CDK**
+- [x] **Step 13 — Infrastructure CDK**
   - Add `ops/cdk/stacks/novelty_stack.py`.
   - Add SQS queue/DLQ, Fargate worker, IAM, S3 prefix permissions, env vars, CloudWatch alarms.
   - Register the stack in `ops/cdk/app.py`.
 
-- [ ] **Step 14 — Code summary document**
+- [x] **Step 14 — Code summary document**
   - Create `aidlc-docs/construction/novelty-agent/code/summary.md`.
   - Summarize generated files, routes, tables, worker, CDK, tests, and known deferred items.
 
-- [ ] **Step 15 — Verification commands**
+- [x] **Step 15 — Verification commands**
   - Run the smallest relevant checks:
     - `python -m pytest backend/tests/test_novelty.py backend/tests/test_app_shell.py -q`
     - `python -m ruff check backend/modules/novelty backend/wiring.py backend/tests/test_novelty.py backend/tests/test_app_shell.py`
@@ -166,4 +166,4 @@ B) 코드 생성 전에 계획을 수정한다.
 
 X) 기타 (아래 [Answer]: 태그 뒤에 설명해 주세요)
 
-[Answer]:
+[Answer]: A

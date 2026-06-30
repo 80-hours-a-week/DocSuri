@@ -224,10 +224,15 @@ class ComputeStack(Stack):
             "DOCSURI_SUMMARY_JOB_QUEUE_URL": (  # long-summary async job (BR-S12)
                 f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-summary-job-queue"
             ),
+            "DOCSURI_NOVELTY_JOB_QUEUE_URL": (
+                f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-novelty-agent-job-queue"
+            ),
             # Activation: mounting the U7 read path (summarization_enabled = bool(bucket)). The
             # papers bucket is Ingestion-owned (same name the summary worker carries); the IAM for
             # S3 read/write + Bedrock invoke is already granted to this task role below.
             "DOCSURI_SUMMARY_BUCKET": f"docsuri-papers-fulltext-{self.account}",
+            "DOCSURI_NOVELTY_ARTIFACT_BUCKET": f"docsuri-papers-fulltext-{self.account}",
+            "DOCSURI_NOVELTY_ARTIFACT_PREFIX": "novelty/",
             # doc-model rich view (본문): on a read miss the API enqueues a BUILD_DOC_MODEL job to
             # the ingestion queue (DOCSURI_DOCMODEL_BUILD_QUEUE_URL above) and returns `building`;
             # the ingestion worker builds + caches it. OFF → license_unavailable.
@@ -237,6 +242,7 @@ class ComputeStack(Stack):
             "DOCSURI_MAP_REDUCE_ENABLED": "true",
             "CITATION_GRAPH_ENABLED": "true",
             "PERSONALIZATION_ENABLED": "true",
+            "NOVELTY_AGENT_ENABLED": "true",
             "PERSONALIZATION_RAW_EVENT_RETENTION_DAYS": "90",
             # --- U3 social login (FR-27, Google OIDC) ---
             # client_id is public (embedded in the auth URL) → plain env. The matching
@@ -499,13 +505,20 @@ class ComputeStack(Stack):
                 resources=[f"{_papers_bucket}/summaries/*"],
             )
         )
-        # SendMessage: doc-model build (ingestion queue, boundary B) + long-summary job queue.
+        self.service.task_definition.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["s3:GetObject", "s3:PutObject"],
+                resources=[f"{_papers_bucket}/novelty/*"],
+            )
+        )
+        # SendMessage: doc-model build, long-summary jobs, and novelty-agent jobs.
         self.service.task_definition.task_role.add_to_principal_policy(
             iam.PolicyStatement(
                 actions=["sqs:SendMessage"],
                 resources=[
                     f"arn:aws:sqs:{self.region}:{self.account}:docsuri-ingestion-queue",
                     f"arn:aws:sqs:{self.region}:{self.account}:docsuri-summary-job-queue",
+                    f"arn:aws:sqs:{self.region}:{self.account}:docsuri-novelty-agent-job-queue",
                 ],
             )
         )
