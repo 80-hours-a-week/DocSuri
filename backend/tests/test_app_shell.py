@@ -101,6 +101,7 @@ def test_search_store_outage_maps_to_fail_closed_503() -> None:
     assert resp.status_code == 503
     assert "temporarily unavailable" in resp.json()["message"].lower()
     assert "db-1" not in resp.text and "opensearch" not in resp.text.lower()  # no leak (SEC-9)
+    assert resp.json()["requestId"]  # echoes a correlation id, like the 500 handler (errors.py)
 
 
 def test_paper_metadata_endpoint_is_live() -> None:
