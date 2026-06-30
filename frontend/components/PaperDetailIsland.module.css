@@ -110,3 +110,51 @@
 .link {
   color: var(--color-accent);
 }
+
+/* Desktop: two columns — metadata reads on the left, actions become a sticky right rail.
+   Mirrors the mobile semantics (요약/초록/각주 grouped at the top, 전문 access toward the
+   bottom) while using the wide screen. Grid placement keeps the phone DOM/scroll order. */
+@media (min-width: 768px) {
+  .root {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 240px;
+    grid-template-areas:
+      'meta actions'
+      'cite body';
+    column-gap: 2rem;
+    row-gap: 1.5rem;
+    align-items: start;
+  }
+
+  .meta {
+    grid-area: meta;
+  }
+
+  .citationWrap {
+    grid-area: cite;
+    min-width: 0;
+  }
+
+  /* Action openers stack vertically in the rail (top), staying sticky as the page scrolls. */
+  .actionsBar {
+    grid-area: actions;
+    flex-direction: column;
+    top: 1rem;
+    padding: 0;
+  }
+
+  /* Body access sits at the bottom of the rail (mirrors its bottom placement on phones). */
+  .bodyActions {
+    grid-area: body;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    margin-top: 0;
+  }
+
+  /* In the vertical rail the buttons size to content and stretch to full rail width
+     (override the phone's equal-share row flex). */
+  .actionsBar .action,
+  .bodyActions .action {
+    flex: 0 0 auto;
+  }
+}

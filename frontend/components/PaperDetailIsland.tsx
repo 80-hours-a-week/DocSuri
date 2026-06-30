@@ -91,7 +91,9 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
       </div>
 
       {citationOpen ? (
-        <CitationTreePanel paperId={paperId} onClose={() => setCitationOpen(false)} />
+        <div className={styles.citationWrap}>
+          <CitationTreePanel paperId={paperId} onClose={() => setCitationOpen(false)} />
+        </div>
       ) : null}
 
       {meta.status === 'done' && meta.meta ? (
