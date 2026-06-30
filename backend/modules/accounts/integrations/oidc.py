@@ -17,8 +17,11 @@ SECURITY-DEBT(감사 #9, deferred): 로컬 JWKS(RS256) 검증으로 _fetch_token
 """
 
 import base64
+import binascii
 import hashlib
+import json
 import logging
+import time
 from urllib.parse import urlencode
 
 import httpx
@@ -122,3 +125,149 @@ class GoogleOidcVerifier:
         ev = info.get("email_verified")
         email_verified = ev is True or str(ev).lower() == "true"
         return OidcClaims(subject=subject, email=email, email_verified=email_verified)
+
+
+# ── ORCID OIDC 트랜스포트 (FR-27 / BR-A13) ──────────────────────────────────────
+# ORCID는 Google과 달리 (1) tokeninfo 엔드포인트가 없고 (2) OIDC가 이메일 클레임을 반환하지
+# 않는다(scopes=[openid], claims=[sub, name, given_name, family_name, ...]). id_token은 *서버 대
+# 서버* 토큰 교환으로 ORCID 토큰 엔드포인트에서 직접(HTTPS) 받으므로, 페이로드를 디코드해
+# iss/aud/nonce/exp를 강제하는 것으로 재생·주입을 방어한다(감사 #9의 Google 논리와 동형: 직접
+# 수신한 id_token의 클레임 검증은 우회가 아님).
+# ponytail: 로컬 JWKS/RS256 서명 검증은 새 crypto 의존성(미설치)을 요구 → 방어심층화 항목으로
+#   ORCID_OIDC_VERIFY_MODE env 게이트로 후속(Google의 동일 SECURITY-DEBT와 동형).
+ORCID_BASES = {
+    "prod": ("https://orcid.org", "https://pub.orcid.org/v3.0"),
+    "sandbox": ("https://sandbox.orcid.org", "https://pub.sandbox.orcid.org/v3.0"),
+}
+
+
+def _decode_jwt_payload(token: str) -> dict:
+    """JWT의 페이로드(가운데 세그먼트)를 서명 검증 없이 디코드한다. 직접 수신한 id_token의
+    클레임을 읽기 위함(서명 검증은 상단 주석의 JWKS 후속 항목). 형식 불량 시 거부."""
+    try:
+        payload_b64 = token.split(".")[1]
+        padded = payload_b64 + "=" * (-len(payload_b64) % 4)
+        return json.loads(base64.urlsafe_b64decode(padded))
+    except (IndexError, ValueError, binascii.Error, json.JSONDecodeError) as e:
+        raise DomainException("소셜 로그인 토큰 형식이 올바르지 않습니다.") from e
+
+
+class OrcidOidcVerifier:
+    """ORCID 인가 코드 흐름 트랜스포트. GoogleOidcVerifier와 인터페이스(build_authorization_url·
+    exchange_and_verify)는 같지만 검증은 로컬 클레임 검증(JWKS 후속)이고 이메일을 받지 않는다."""
+
+    def __init__(self, client_id: str, client_secret: str, *, env: str = "prod", timeout: float = 10.0):
+        self._client_id = client_id
+        self._client_secret = client_secret
+        self._base, self._pub_base = ORCID_BASES.get(env, ORCID_BASES["prod"])
+        self._timeout = timeout
+
+    @property
+    def pub_base(self) -> str:
+        return self._pub_base
+
+    def build_authorization_url(
+        self, redirect_uri: str, state: str, nonce: str, code_challenge: str | None = None
+    ) -> str:
+        """ORCID 인가 엔드포인트 URL. ORCID OIDC는 scope=openid만 지원한다."""
+        params = {
+            "client_id": self._client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": "openid",
+            "state": state,
+            "nonce": nonce,
+        }
+        if code_challenge:
+            params["code_challenge"] = code_challenge
+            params["code_challenge_method"] = "S256"
+        return f"{self._base}/oauth/authorize?{urlencode(params)}"
+
+    async def _exchange_code(self, code: str, redirect_uri: str, code_verifier: str | None = None) -> str:
+        data = {
+            "code": code,
+            "client_id": self._client_id,
+            "client_secret": self._client_secret,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+        }
+        if code_verifier:
+            data["code_verifier"] = code_verifier
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            resp = await client.post(
+                f"{self._base}/oauth/token", data=data, headers={"Accept": "application/json"}
+            )
+        if resp.status_code != 200:
+            logger.warning("ORCID token exchange failed: status=%s", resp.status_code)
+            raise DomainException("소셜 로그인 토큰 교환에 실패했습니다.")
+        id_token = resp.json().get("id_token")
+        if not id_token:
+            raise DomainException("소셜 로그인 응답에 id_token이 없습니다.")
+        return id_token
+
+    async def exchange_and_verify(
+        self, code: str, redirect_uri: str, expected_nonce: str, code_verifier: str | None = None
+    ) -> OidcClaims:
+        """code → id_token → 검증된 클레임. aud/iss/nonce/exp 불일치 또는 sub 부재 시 거부.
+        ORCID는 이메일을 제공하지 않으므로 email=None·name만 채운다(BR-A13)."""
+        if not code_verifier:
+            raise DomainException("PKCE 증명(code_verifier)이 누락되었습니다. (보안 정책)")
+        id_token = await self._exchange_code(code, redirect_uri, code_verifier)
+        info = _decode_jwt_payload(id_token)
+        if info.get("aud") != self._client_id:
+            raise DomainException("소셜 로그인 토큰의 대상(aud)이 일치하지 않습니다.")
+        if info.get("iss") != self._base:
+            raise DomainException("소셜 로그인 토큰 발급자(iss)가 올바르지 않습니다.")
+        if not expected_nonce or info.get("nonce") != expected_nonce:
+            raise DomainException("소셜 로그인 검증에 실패했습니다. 다시 시도해 주세요.")
+        exp = info.get("exp")
+        if not isinstance(exp, (int, float)) or exp < time.time():
+            raise DomainException("소셜 로그인 토큰이 만료되었습니다. 다시 시도해 주세요.")
+        subject = info.get("sub")  # ORCID iD (예: 0000-0002-1825-0097)
+        if not subject:
+            raise DomainException("소셜 로그인 토큰에 필수 클레임이 없습니다.")
+        given, family = info.get("given_name"), info.get("family_name")
+        name = info.get("name") or " ".join(p for p in (given, family) if p) or None
+        return OidcClaims(subject=subject, email=None, email_verified=False, name=name)
+
+
+async def fetch_orcid_public_record(
+    orcid_id: str, *, pub_base: str = "https://pub.orcid.org/v3.0", timeout: float = 10.0
+) -> dict:
+    """ORCID Public API(/record, 무료·인증 불요)에서 소속·저작물을 best-effort로 가져온다.
+    반환: {"affiliation": str|None, "works": [{"title": str, "year": int|None}]}. 호출부는 필요한
+    것만 사용(로그인=affiliation 캐시, 마이페이지=works 라이브). 실패 시 빈 결과로 저하."""
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.get(
+                f"{pub_base}/{orcid_id}/record", headers={"Accept": "application/json"}
+            )
+        if resp.status_code != 200:
+            return {"affiliation": None, "works": []}
+        rec = resp.json()
+    except (httpx.HTTPError, ValueError):
+        return {"affiliation": None, "works": []}
+
+    summary = rec.get("activities-summary") or {}
+    affiliation = None
+    try:
+        groups = (summary.get("employments") or {}).get("affiliation-group") or []
+        summaries = (groups[0].get("summaries") or []) if groups else []
+        org = ((summaries[0].get("employment-summary") or {}).get("organization") or {}) if summaries else {}
+        affiliation = org.get("name") or None
+    except (IndexError, AttributeError, TypeError):
+        affiliation = None
+
+    works: list[dict] = []
+    try:
+        for group in (summary.get("works") or {}).get("group") or []:
+            ws = (group.get("work-summary") or [{}])[0]
+            title = (((ws.get("title") or {}).get("title") or {}).get("value")) or None
+            year_raw = (((ws.get("publication-date") or {}).get("year") or {}).get("value"))
+            if title:
+                works.append({"title": title, "year": int(year_raw) if year_raw else None})
+            if len(works) >= 50:  # ponytail: 표시용 상한, 페이지네이션은 필요 시
+                break
+    except (AttributeError, TypeError, ValueError):
+        pass
+    return {"affiliation": affiliation, "works": works}

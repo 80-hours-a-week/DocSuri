@@ -12,7 +12,12 @@ from sqlalchemy.orm import Session
 
 from .guard import AuthorizationGuard, Decision
 from .integrations.email import get_email_client
-from .integrations.oidc import GoogleOidcVerifier, pkce_challenge
+from .integrations.oidc import (
+    GoogleOidcVerifier,
+    OrcidOidcVerifier,
+    fetch_orcid_public_record,
+    pkce_challenge,
+)
 from .integrations.recaptcha import RecaptchaClient
 from .models import (
     DomainException,
@@ -221,6 +226,26 @@ def get_social_verifier() -> GoogleOidcVerifier:
 
 def get_social_login_service(repo: CredentialRepository = Depends(get_credential_repo)) -> SocialLoginService:
     return SocialLoginService(repo)
+
+
+def get_orcid_verifier() -> OrcidOidcVerifier:
+    # client_id/secret = ECS env(시크릿은 Secrets Manager). 미설정 시 토큰 교환 실패 → Fail-Closed.
+    return OrcidOidcVerifier(
+        client_id=os.getenv("ORCID_OIDC_CLIENT_ID", ""),
+        client_secret=os.getenv("ORCID_OIDC_CLIENT_SECRET", ""),
+        env=os.getenv("ORCID_OIDC_ENV", "prod"),
+    )
+
+
+def _orcid_redirect_uri(request: Request) -> str:
+    """ORCID에 등록된 콜백 URI. 명시 env 우선, 없으면 공개 앱/요청 베이스에서 파생."""
+    explicit = os.getenv("ORCID_OIDC_REDIRECT_URI", "").strip()
+    if explicit:
+        return explicit
+    base = _app_base()
+    if base:
+        return f"{base}/auth/social/orcid/callback"
+    return str(request.base_url) + "auth/social/orcid/callback"
 
 
 def _app_base() -> str:
@@ -568,6 +593,84 @@ async def social_google_callback(
     except (ValueError, TypeError):
         role = UserRole.USER
     # 소셜 로그인은 로그인 시점 MFA 미통과(관리자 제어 평면은 별도 TOTP 승격 필요, BR-A7).
+    principal = Principal(user_id=account_id, role=role, mfa_verified=False)
+    try:
+        session = await session_mgr.issue(principal)
+    except SessionStoreUnavailableException as e:
+        raise HTTPException(status_code=503, detail="일시적으로 로그인할 수 없습니다. 잠시 후 다시 시도해 주세요.") from e
+
+    resp = RedirectResponse(_app_base() or "/", status_code=302)
+    resp.set_cookie(
+        key="session_id", value=session.handle, httponly=True, secure=True,
+        samesite="lax", max_age=30 * 24 * 60 * 60,
+    )
+    _clear_oidc_cookies(resp)
+    return resp
+
+
+@router.get("/social/orcid/start")
+async def social_orcid_start(
+    request: Request,
+    verifier: OrcidOidcVerifier = Depends(get_orcid_verifier),
+):
+    """ORCID 소셜 로그인 시작 (FR-27/BR-A13) — state·nonce·PKCE 발급(httpOnly 쿠키) 후 ORCID
+    인가 페이지로 리다이렉트. Google start와 동일 패턴(쿠키 이름 공유)."""
+    state = secrets.token_urlsafe(24)
+    nonce = secrets.token_urlsafe(24)
+    code_verifier = secrets.token_urlsafe(64)
+    auth_url = verifier.build_authorization_url(
+        _orcid_redirect_uri(request), state, nonce, pkce_challenge(code_verifier)
+    )
+    resp = RedirectResponse(auth_url, status_code=302)
+    cookie = {"httponly": True, "secure": True, "samesite": "lax", "max_age": 600}
+    resp.set_cookie("oidc_state", state, **cookie)
+    resp.set_cookie("oidc_nonce", nonce, **cookie)
+    resp.set_cookie("oidc_verifier", code_verifier, **cookie)
+    return resp
+
+
+@router.get("/social/orcid/callback")
+async def social_orcid_callback(
+    request: Request,
+    code: str = Query(...),
+    state: str = Query(...),
+    verifier: OrcidOidcVerifier = Depends(get_orcid_verifier),
+    social_svc: SocialLoginService = Depends(get_social_login_service),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    repo: CredentialRepository = Depends(get_credential_repo),
+    db: Session = Depends(get_db_session),
+):
+    """ORCID 소셜 로그인 콜백 (FR-27/BR-A13) — CSRF(state)·nonce 검증 → 이메일-없는 신원 조정 →
+    ORCID 공개 프로필(이름·소속) 캐시 → 세션 발급 → 앱으로 리다이렉트. ORCID는 이메일이 없어
+    H1(기존 비밀번호 계정 병합) 경로가 발생하지 않는다."""
+    cookie_state = request.cookies.get("oidc_state")
+    cookie_nonce = request.cookies.get("oidc_nonce")
+    cookie_verifier = request.cookies.get("oidc_verifier")
+    if not cookie_state or not secrets.compare_digest(cookie_state, state):
+        raise HTTPException(status_code=400, detail="소셜 로그인 상태 검증에 실패했습니다. 다시 시도해 주세요.")
+    try:
+        claims = await verifier.exchange_and_verify(
+            code, _orcid_redirect_uri(request), cookie_nonce or "", cookie_verifier
+        )
+        account_id = social_svc.reconcile(OidcProvider.ORCID, claims)
+        # ORCID 공개 프로필(소속) best-effort 캐시 — 이름은 id_token, 소속은 Public API.
+        record = await fetch_orcid_public_record(claims.subject, pub_base=verifier.pub_base)
+        repo.update_orcid_profile(claims.subject, claims.name, record.get("affiliation"))
+        db.commit()
+    except DomainException as e:
+        db.rollback()
+        raise HTTPException(status_code=401, detail=str(e)) from e
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="소셜 로그인 처리 중 서버 장애가 발생했습니다. (Fail-Closed)") from None
+
+    account = repo.get_by_id(account_id)
+    if account is None:
+        raise HTTPException(status_code=500, detail="소셜 로그인 계정 조회에 실패했습니다.")
+    try:
+        role = UserRole(account.role)
+    except (ValueError, TypeError):
+        role = UserRole.USER
     principal = Principal(user_id=account_id, role=role, mfa_verified=False)
     try:
         session = await session_mgr.issue(principal)
