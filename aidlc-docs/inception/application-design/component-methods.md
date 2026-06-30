@@ -202,7 +202,7 @@
 
 ## U11 — Evidence Formation Agent
 
-> **스트리밍 주석**: `sendMessage`는 SSE 청크 스트림을 반환(NFR-P5). 긴 분석은 `EvidenceJobService`가 비동기 잡으로 처리하며 `getJobResult`로 폴링.
+> **스트리밍 주석**: `sendMessage`는 SSE 청크 스트림을 반환(NFR-P6). 긴 분석은 `EvidenceJobService`가 비동기 잡으로 처리하며 `getJobResult`로 폴링.
 
 | 컴포넌트 | 시그니처 | 목적 | 입력 → 출력 |
 |---|---|---|---|
