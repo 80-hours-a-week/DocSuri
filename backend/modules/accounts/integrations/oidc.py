@@ -192,6 +192,10 @@ class OrcidOidcVerifier:
     def pub_base(self) -> str:
         return self._pub_base
 
+    @property
+    def is_configured(self) -> bool:
+        return bool(self._client_id and self._client_secret)
+
     def build_authorization_url(
         self, redirect_uri: str, state: str, nonce: str, code_challenge: str | None = None
     ) -> str:

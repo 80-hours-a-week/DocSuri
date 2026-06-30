@@ -368,6 +368,14 @@ def _orcid_redirect_uri(request: Request) -> str:
     return str(request.base_url) + "auth/social/orcid/callback"
 
 
+def _ensure_orcid_configured(verifier: OrcidOidcVerifier) -> None:
+    if not verifier.is_configured:
+        raise HTTPException(
+            status_code=503,
+            detail="ORCID 로그인이 아직 설정되지 않았습니다.",
+        )
+
+
 def _app_base() -> str:
     """공개 앱(프런트) 베이스 URL — 소셜 로그인 후 리다이렉트 대상."""
     return os.getenv("PUBLIC_APP_URL", "").strip().rstrip("/")
@@ -745,6 +753,7 @@ async def social_orcid_start(
 ):
     """ORCID 소셜 로그인 시작 (FR-27/BR-A13) — state·nonce·PKCE 발급(서버 저장) 후 ORCID
     인가 페이지로 리다이렉트. Google start와 동일 패턴(state 쿠키 이름 공유)."""
+    _ensure_orcid_configured(verifier)
     state = secrets.token_urlsafe(24)
     nonce = secrets.token_urlsafe(24)
     code_verifier = secrets.token_urlsafe(64)
@@ -775,6 +784,7 @@ async def social_orcid_callback(
     """ORCID 소셜 로그인 콜백 (FR-27/BR-A13) — CSRF(state)·nonce 검증 → 이메일-없는 신원 조정 →
     ORCID 공개 프로필(이름·소속) 캐시 → 세션 발급 → 앱으로 리다이렉트. ORCID는 이메일이 없어
     H1(기존 비밀번호 계정 병합) 경로가 발생하지 않는다."""
+    _ensure_orcid_configured(verifier)
     state_payload = await _consume_oidc_state(
         request, state, provider=OidcProvider.ORCID, store=state_store
     )
