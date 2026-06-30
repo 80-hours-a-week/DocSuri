@@ -117,10 +117,22 @@ class EventBridgeAccountDeletedPublisher:
 
 
 def build_account_deleted_publisher() -> AccountDeletedPublisher:
-    """환경 기반 발행자 선택: ACCOUNT_EVENTS_BUS 설정 시 EventBridge, 아니면 Logging(기본)."""
+    """환경 기반 발행자 선택: ACCOUNT_EVENTS_BUS 설정 시 EventBridge, 아니면 Logging(로컬 전용).
+
+    S3: 비-local 환경에서 버스가 비면 Logging으로 *조용히* 폴백하던 동작은, 단 하나의 env 누락으로
+    AccountDeleted가 발행되지 않아 U4/U2/U11이 owner-scoped 데이터를 영구히 파기하지 못하게 한다
+    (사일런트 크로스모듈 데이터 고아화·GDPR 파기 누락). 따라서 프로덕션에선 페일패스트한다 — 로컬/
+    테스트(ENV in {local,test,dev})에서만 Logging 발행자를 허용한다."""
     bus = os.getenv("ACCOUNT_EVENTS_BUS", "").strip()
     if bus:
         return EventBridgeAccountDeletedPublisher(event_bus_name=bus, region=os.getenv("AWS_REGION") or None)
+    env = os.getenv("ENV", "local").strip().lower()
+    if env not in {"local", "test", "dev"}:
+        raise RuntimeError(
+            "ACCOUNT_EVENTS_BUS가 설정되지 않았습니다 (ENV=%s). 프로덕션 파기 워커는 AccountDeleted를 "
+            "발행해야 U4/U2/U11이 owner-scoped 데이터를 파기합니다(GDPR). 버스를 설정하거나 ENV=local로 "
+            "실행하세요." % env
+        )
     return LoggingAccountDeletedPublisher()
 
 
