@@ -61,6 +61,7 @@
 - **결정**: Google OIDC Authorization Code 흐름을 `httpx`(기존 reCAPTCHA 아웃바운드 패턴 재사용) + `python-jose`(또는 PyJWT, **JWKS로 `id_token` 서명 검증**)로 구현. **Authlib 등 중량 프레임워크 미채택**(제로-신규-중량-의존 원칙).
 - **근거**: 기존 스택 일관성·의존 표면 최소화. `id_token`(서명·`nonce`·`aud`·`iss`) 검증에만 JWT/JWKS 필요.
 - **시크릿**: Google `client_id`/`client_secret` = ECS env 주입(기존 시크릿 패턴, 비로깅·SEC-3).
+- **ORCID 분기 *(2026-06-30, FR-27 ORCID)***: ORCID는 **tokeninfo 엔드포인트가 없어** Google 검증기(`_fetch_tokeninfo`)를 재사용할 수 없음 → **로컬 JWKS/RS256 검증이 필수**(`jwks_uri=https://orcid.org/oauth/jwks`, `iss=https://orcid.org`). 본 TD가 이미 선정한 `python-jose` 경로로 구현(`oidc.py` docstring의 이연 JWKS 모드를 ORCID에 대해 실현). ORCID OIDC는 `scope=openid`만 지원(이메일·프로필 클레임 없음) → **이름/소속은 ORCID Public API**(`https://pub.orcid.org/v3.0/{id}/record`, 무료·인증 불요)로 별도 취득해 `social_identity.orcid_*`에 캐시(BR-A13·마이페이지). 시크릿 = `ORCID_OIDC_CLIENT_ID`(plain env)·`ORCID_OIDC_CLIENT_SECRET`(Secrets Manager)·`ORCID_OIDC_REDIRECT_URI`(env)·`ORCID_OIDC_ENV`(prod|sandbox 토글).
 
 ## TD-U3-9 — 신규 영속 스키마 + state/nonce 스토어 — FR-26~28
 - **결정**: RDS PostgreSQL에 `password_reset_token`(token_hash·expires_at·used_at)·`email_change_request`·`social_identity`(provider·provider_subject·account_id, **unique**) 테이블 추가 + `account.status`에 `DEACTIVATED` + `account_deletion`(purge_after) 추가. **DB 마이그레이션**은 기존 SQL 러너 패턴. OIDC `state`/`nonce`는 **ElastiCache Redis 단명 키**(콜백 1회용·짧은 TTL).
