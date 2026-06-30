@@ -84,6 +84,25 @@ def test_discovery_search_endpoint_is_live() -> None:
     assert "cards" in resp.json()
 
 
+def test_search_store_outage_maps_to_fail_closed_503() -> None:
+    # A store outage inside discovery raises SearchUnavailable. Mounted via build_router (not the
+    # standalone build_app), the app-shell must map it to a fail-closed, no-leak 503 — otherwise
+    # it falls through to the generic Exception→500 handler and a transient outage looks like a
+    # bug instead of a retryable 503 (INV-3/SEC-15).
+    from discovery.service.orchestrator import SearchUnavailable
+
+    app = create_app(_TEST_SETTINGS)
+
+    def _raise(*_a, **_k):
+        raise SearchUnavailable("opensearch host db-1 connection timeout")
+
+    app.state.discovery_bundle.orchestrator.plan_and_retrieve = _raise  # type: ignore[method-assign]
+    resp = TestClient(app, raise_server_exceptions=False).post("/api/search", json={"query": "x"})
+    assert resp.status_code == 503
+    assert "temporarily unavailable" in resp.json()["message"].lower()
+    assert "db-1" not in resp.text and "opensearch" not in resp.text.lower()  # no leak (SEC-9)
+
+
 def test_paper_metadata_endpoint_is_live() -> None:
     # The mounted discovery router serves GET /api/papers/{id} (paper-detail header metadata,
     # U2-owned corpus data) end-to-end through the mock pipeline. A known fixture id returns the

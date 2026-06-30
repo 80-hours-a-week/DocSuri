@@ -206,6 +206,22 @@ def _mount_discovery(app: FastAPI, settings: Settings, result: MountResult) -> N
     app.state.discovery_bundle = bundle
     app.state.grounding_hook = grounding_hook
 
+    # Map a store outage to a fail-closed, no-leak 503 (INV-3/SEC-15). The standalone build_app
+    # registers this itself; mounted via build_router here, the app-shell must do it — otherwise
+    # SearchUnavailable falls through to the generic Exception→500 handler and a transient outage
+    # looks like a bug instead of a retryable 503 (the value the router/paper_meta docstrings
+    # already promise).
+    from discovery.service.orchestrator import SearchUnavailable
+
+    @app.exception_handler(SearchUnavailable)
+    async def _on_search_unavailable(_request, _exc):  # noqa: ANN202 — FastAPI handler
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            status_code=503,
+            content={"message": "Search is temporarily unavailable. Please try again shortly."},
+        )
+
     # The paper-detail metadata endpoint (GET /api/papers/{id}) is U2-owned (corpus data); both
     # bundles expose a paper_service. getattr keeps this resilient if a bundle predates it.
     app.include_router(
