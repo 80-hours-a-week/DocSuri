@@ -33,6 +33,7 @@ from .session_manager import SessionManager
 logger = logging.getLogger(__name__)
 
 DEFAULT_GRACE_DAYS = 30  # 유예 기간 N (events.md 기본 제안 30일; 운영/법적 요건으로 조정).
+MAX_PURGE_ATTEMPTS = 5  # S2: 파기 반복 실패가 이 횟수에 도달하면 PURGE_FAILED(DLQ)로 격리한다.
 
 # AccountDeleted event_id를 account_id로부터 결정적으로 파생하기 위한 네임스페이스(고정).
 # 재시도 시에도 동일 account_id → 동일 event_id가 되어 구독자가 event_id로 중복 제거할 수 있다.
@@ -205,10 +206,29 @@ class AccountDeletionService:
                 self._repo.mark_deletion_purged(account_id)
                 self._repo.commit()
             except Exception:
+                # 실패한 파기 트랜잭션을 롤백하고, 시도 횟수만 별도 트랜잭션으로 누적한다. 임계 초과 시
+                # PURGE_FAILED(DLQ)로 격리해 무한 재시도를 끊고 운영 경보를 띄운다(S2). 격리된 행은
+                # get_due_deletions(state=DEACTIVATED만)에서 자동 제외되므로 다음 회차부터 건너뛴다.
                 self._repo.rollback()
-                logger.exception(
-                    "Purge failed for one account; left DEACTIVATED for next run (at-least-once)."
-                )
+                try:
+                    attempts = self._repo.increment_deletion_attempts(account_id)
+                    if attempts >= MAX_PURGE_ATTEMPTS:
+                        self._repo.mark_deletion_failed(account_id)
+                        logger.error(
+                            "Purge permanently failing for account after %s attempts; "
+                            "quarantined to PURGE_FAILED (DLQ) — manual reconciliation required.",
+                            attempts,
+                        )
+                    else:
+                        logger.exception(
+                            "Purge failed for one account (attempt %s); left DEACTIVATED for next run "
+                            "(at-least-once).",
+                            attempts,
+                        )
+                    self._repo.commit()
+                except Exception:
+                    self._repo.rollback()
+                    logger.exception("Failed to record purge attempt for account; will retry next run.")
                 continue
             purged += 1
             logger.info({"event": "AccountPurged", "accountId": account_id, "eventId": event_id})
