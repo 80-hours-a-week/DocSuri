@@ -97,7 +97,10 @@ def build_production_runtime(settings: IngestionSettings) -> RuntimeServices:
                 timeout_seconds=settings.request_timeout_seconds,
             )
         if SourceName.OPENALEX in enabled_sources:
-            openalex = OpenAlexCorpusSource(timeout_seconds=settings.request_timeout_seconds)
+            openalex = OpenAlexCorpusSource(
+                timeout_seconds=settings.request_timeout_seconds,
+                mailto=settings.openalex_mailto,
+            )
     corpus_sources = CorpusSourceAdapterSet(
         arxiv=arxiv,
         grobid=grobid,

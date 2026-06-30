@@ -130,6 +130,27 @@ def test_structural_guard_drops_unlinkable_card_and_keeps_the_rest() -> None:
     assert response.root.cards[0].relevance == 1
 
 
+def test_structural_guard_drops_non_http_scheme_source_url() -> None:
+    # FR-5 / SEC-9: a PRESENT but non-http(s) sourceUrl (javascript:/ftp:/data:) is NOT a
+    # resolvable real link — record_has_link's scheme check must reject it so a hostile/malformed
+    # scheme can't ride the card, even when the record otherwise carries a valid arxivUrl (the
+    # non-arXiv projection returns the present sourceUrl, not arxivUrl). The good card survives.
+    good = Candidate(record=RECORDS[0], retrieval_score=1.0)
+    hostile_record = RECORDS[1].model_copy(
+        update={
+            "sourceProvenance": _provenance(
+                source_name="OpenAlex", source_url="javascript:alert(1)"
+            )
+        }
+    )
+    assert hostile_record.arxivUrl  # the record DOES have a valid arxivUrl — yet the card drops
+    hostile = Candidate(record=hostile_record, retrieval_score=0.5)
+    response = _assembler.assemble(GroundedResults(items=(good, hostile)), DegradeMode.NORMAL)
+    assert isinstance(response.root, SearchResultPageDTO)
+    assert response.root.meta.resultCount == 1
+    assert response.root.cards[0].title == RECORDS[0].title
+
+
 def test_structural_guard_all_unlinkable_is_empty_page_not_abstain() -> None:
     # When every candidate is dropped, terminate as an explicit empty page (BR-9), NOT abstain.
     prov = _provenance(source_name="OpenAlex", source_url="", doi="")

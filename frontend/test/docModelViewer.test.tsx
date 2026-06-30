@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { DocModelViewer } from '@/components/DocModelViewer';
 
 // Uses the mock transport (NEXT_PUBLIC_DOCSURI_REAL_API unset) → docModelResponse +
@@ -56,8 +56,13 @@ describe('DocModelViewer', () => {
     // detection-agnostic — it works whichever element actually scrolls (.page / frame / window).
     const scroller = screen.getByTestId('docmodel-viewer');
     Object.defineProperty(scroller, 'scrollTop', { value: 400, configurable: true });
-    fireEvent.scroll(scroller);
-    expect(toTop).toHaveAttribute('aria-hidden', 'false');
+    // Re-fire inside waitFor: the reveal listener is attached in a useEffect, so a single
+    // synchronous scroll can race the effect (the dispatch is missed → button stays inert).
+    // Polling re-dispatches until the listener is live and flips aria-hidden.
+    await waitFor(() => {
+      fireEvent.scroll(scroller);
+      expect(toTop).toHaveAttribute('aria-hidden', 'false');
+    });
     expect(toTop).toHaveAttribute('tabindex', '0');
   });
 

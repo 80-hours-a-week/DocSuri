@@ -850,6 +850,35 @@ class RefreshOrchestrationService:
         finally:
             self._control_plane.release_rebuild_lock(owner)
 
+    def backfill_external_sources(self, since: datetime, until: datetime) -> int:
+        """Bounded one-off backfill of the non-arXiv corpus sources (SS/OpenAlex) over an explicit
+        [since, until] window — the run-scoped path the daily tick can't cover (its watermark
+        starts at now(), so it only harvests forward and queues ~0). arXiv is left untouched: no
+        seed re-harvest, no rebuild lock. Enqueues source-record SEED jobs (exempt from the BR-13
+        incremental fence) that the worker drains into the index; the per-paper watermark advance
+        hands the source off to the daily tick. Idempotent — canonical dedup + chunkId upsert make
+        re-runs safe."""
+        queued = 0
+        for source_name in self._enabled_sources:
+            if source_name is SourceName.ARXIV:
+                continue
+            # Per-source isolation: one source exhausting its retries (e.g. unauthenticated SS
+            # rate-limited to abort) must not drop the others — log + skip and carry on, mirroring
+            # on_schedule_tick. Each source's paged fetch already retries transient blips, so this
+            # only catches a sustained/permanent failure of that whole source.
+            try:
+                queued += self._queue_external_source(
+                    source_name, since=since, until=until, kind=JobKind.SEED_REBUILD
+                )
+            except Exception as exc:  # noqa: BLE001 — defensive boundary around one source
+                self._observability.emit_metric(
+                    "ingestion.backfill.external.failed",
+                    1.0,
+                    {"source": source_name.value, "error": type(exc).__name__},
+                )
+        self._observability.emit_metric("ingestion.backfill.external.queued", float(queued), {})
+        return queued
+
     def on_schedule_tick(self) -> int:
         if self._control_plane.is_rebuild_active():
             self._observability.emit_metric(
@@ -874,7 +903,16 @@ class RefreshOrchestrationService:
         for source_name in self._enabled_sources:
             if source_name is SourceName.ARXIV:
                 continue
-            queued += self._queue_external_incremental(source_name)
+            # Per-source isolation: a single source failing (e.g. an upstream 4xx/timeout)
+            # must not abort the whole tick or crash the worker — skip it and carry on.
+            try:
+                queued += self._queue_external_incremental(source_name)
+            except Exception as exc:  # noqa: BLE001 — defensive boundary around one source
+                self._observability.emit_metric(
+                    "ingestion.source.incremental.failed",
+                    1.0,
+                    {"source": source_name.value, "error": type(exc).__name__},
+                )
         self._observability.emit_metric("ingestion.incremental.queued", float(queued), {})
         return queued
 

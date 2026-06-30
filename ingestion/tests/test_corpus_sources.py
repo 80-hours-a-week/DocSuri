@@ -198,6 +198,72 @@ def test_semantic_scholar_provider_fetches_oa_pdf_records() -> None:
     assert source.fetch_pdf(records[0]) == b"%PDF"
 
 
+def test_semantic_scholar_bulk_request_omits_limit_and_updated_field() -> None:
+    # /paper/search/bulk 400s on `limit` (it paginates by `token`) and on the non-existent
+    # `updated` field — regression guard for the 400 that crashed the live tick.
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "search/bulk" in str(request.url):
+            captured["has_limit"] = "limit" in request.url.params
+            captured["fields"] = request.url.params.get("fields", "")
+        return httpx.Response(200, json={"data": []})
+
+    source = SemanticScholarCorpusSource(
+        base_url="https://example.test",
+        transport=httpx.MockTransport(handler),
+    )
+    source.fetch_incremental(datetime(2026, 1, 1, tzinfo=UTC), ("cs.LG",))
+
+    assert captured["has_limit"] is False
+    assert "updated" not in captured["fields"]
+
+
+def test_paged_harvest_retries_transient_429_then_succeeds(monkeypatch) -> None:
+    # A transient 429 mid-pagination must not discard the whole accumulated run — the failing
+    # page is retried. Regression for the unauthenticated-SS backfill aborting on the first 429.
+    import docsuri_ingestion.adapters.corpus_http as ch
+
+    monkeypatch.setattr(ch, "_RETRY_BACKOFF_SECONDS", 0.0)  # no real sleep in the test
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(429, json={"message": "rate limited"})
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "paperId": "s2-1",
+                        "title": "Paper",
+                        "abstract": "Abstract",
+                        "authors": [{"name": "Ada"}],
+                        "year": 2025,
+                        "publicationDate": "2025-06-01",
+                        "isOpenAccess": True,
+                        "externalIds": {"DOI": "10.1000/x"},
+                        "openAccessPdf": {
+                            "url": "https://example.test/paper.pdf",
+                            "license": "CC-BY",
+                        },
+                    }
+                ]
+            },
+        )
+
+    source = SemanticScholarCorpusSource(
+        base_url="https://example.test",
+        transport=httpx.MockTransport(handler),
+    )
+    records = source.fetch_incremental(datetime(2025, 1, 1, tzinfo=UTC), ("cs.LG",))
+
+    assert calls["n"] == 2  # first 429 retried, second attempt served 200
+    assert len(records) == 1
+    assert records[0].source_id == "s2-1"
+
+
 def test_openalex_provider_reconstructs_abstract_and_pdf_record() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if str(request.url).endswith("paper.pdf"):
@@ -232,10 +298,12 @@ def test_openalex_provider_reconstructs_abstract_and_pdf_record() -> None:
         base_url="https://example.test",
         transport=httpx.MockTransport(handler),
     )
-    records = source.fetch_incremental(datetime(2026, 1, 1, tzinfo=UTC), ("cs.LG",))
+    # Windowed by publication_date (2025-01-01) now, not updated_date — since must precede it.
+    records = source.fetch_incremental(datetime(2024, 12, 31, tzinfo=UTC), ("cs.LG",))
 
     assert len(records) == 1
     assert records[0].source_name is SourceName.OPENALEX
+    assert records[0].updated_at is None  # windows by published_at, uniform with SS
     assert records[0].abstract == "hello world"
     assert records[0].arxiv_id == "2401.00001"
     assert source.fetch_pdf(records[0]) == b"%PDF"
