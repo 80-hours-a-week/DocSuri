@@ -24,14 +24,21 @@ import styles from './ViewModePreview.module.css';
 export function ViewModePreview() {
   const [mounted, setMounted] = useState(false);
   const [mode, setMode] = useState<ViewMode>('web');
+  // Whether this instance is the one rendered INSIDE the preview iframe (the `preview` flag
+  // is in its URL). The iframe shares localStorage with the outer document, so it reads the
+  // same 'phone' mode — without this guard `open` would be true here too, and the effects
+  // below (Esc handler) would run despite the component rendering nothing.
+  const [isPreview, setIsPreview] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
     setMounted(true);
+    setIsPreview(new URLSearchParams(window.location.search).has(PREVIEW_QUERY_FLAG));
     setMode(readStoredViewMode());
   }, []);
 
-  const open = mode === 'phone';
+  // Only the outer document drives the preview; the embedded iframe instance never "opens".
+  const open = mode === 'phone' && !isPreview;
 
   // Esc returns to the web view.
   useEffect(() => {
@@ -48,7 +55,7 @@ export function ViewModePreview() {
 
   if (!mounted) return null;
   // Inside the preview iframe: render no chrome (no toggle, no nested preview).
-  if (new URLSearchParams(window.location.search).has(PREVIEW_QUERY_FLAG)) return null;
+  if (isPreview) return null;
 
   const set = (next: ViewMode) => {
     setMode(next);
