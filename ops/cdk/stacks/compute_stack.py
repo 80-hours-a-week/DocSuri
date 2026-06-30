@@ -242,6 +242,7 @@ class ComputeStack(Stack):
             "DOCSURI_MAP_REDUCE_ENABLED": "true",
             "CITATION_GRAPH_ENABLED": "true",
             "PERSONALIZATION_ENABLED": "true",
+            "RESEARCH_AGENT_ENABLED": "true",
             "NOVELTY_AGENT_ENABLED": "true",
             "PERSONALIZATION_RAW_EVENT_RETENTION_DAYS": "90",
             # --- U3 social login (FR-27, Google OIDC) ---
