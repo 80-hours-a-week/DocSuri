@@ -55,8 +55,13 @@ export function ViewModePreview() {
     storeViewMode(next);
   };
 
-  // Preview the screen the user is actually on; the flag suppresses the embedded chrome.
-  const previewSrc = `${pathname || '/'}?${PREVIEW_QUERY_FLAG}=1`;
+  // Preview the screen the user is actually on — including its query (e.g. /search?q=…),
+  // which usePathname() drops. Safe to read window here (past the mounted gate). The flag
+  // suppresses the embedded chrome.
+  const currentQuery = window.location.search; // "" or "?q=foo"
+  const previewSrc = `${pathname || '/'}?${PREVIEW_QUERY_FLAG}=1${
+    currentQuery ? `&${currentQuery.slice(1)}` : ''
+  }`;
 
   return (
     <>

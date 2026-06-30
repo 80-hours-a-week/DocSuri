@@ -62,8 +62,13 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
     const mq = window.matchMedia('(min-width: 768px)');
     const update = () => setIsDesktop(mq.matches);
     update();
-    mq.addEventListener('change', update);
-    return () => mq.removeEventListener('change', update);
+    // Safari <14 only has the deprecated addListener/removeListener on MediaQueryList.
+    if (typeof mq.addEventListener === 'function') {
+      mq.addEventListener('change', update);
+      return () => mq.removeEventListener('change', update);
+    }
+    mq.addListener(update);
+    return () => mq.removeListener(update);
   }, []);
 
   // 본문 / 본문 번역 are in-app routes (Link). A summary source anchor navigates to the 본문
@@ -119,9 +124,7 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
       </div>
 
       {citationOpen ? (
-        <div className={styles.citationWrap}>
-          <CitationTreePanel paperId={paperId} onClose={() => setCitationOpen(false)} />
-        </div>
+        <CitationTreePanel paperId={paperId} onClose={() => setCitationOpen(false)} />
       ) : null}
 
       {meta.status === 'done' && meta.meta ? (
