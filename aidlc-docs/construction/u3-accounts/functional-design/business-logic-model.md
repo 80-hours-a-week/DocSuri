@@ -119,17 +119,27 @@ U3의 `AuthorizationGuard`는 타 도메인의 데이터 모델에 종속되지 
 
 ---
 
-## 6. 소셜 로그인 OIDC (SocialLoginService) — FR-27 / BR-A9 *(2026-06-24)*
+## 6. 소셜 로그인 OIDC (SocialLoginService) — FR-27 / BR-A9·BR-A13 *(2026-06-24 · ORCID 2026-06-30)*
+
+> 프로바이더 = `GOOGLE`(이메일 제공·BR-A9)·`ORCID`(이메일 미제공·BR-A13). 시작/콜백 트랜스포트는 프로바이더별(검증기·엔드포인트·검증 방식 상이), 신원 재조정(`reconcile`)은 **프로바이더 무관 단일 코어**다.
 
 ### 6.1. 인가 시작 (`start`)
-1. `provider = GOOGLE`. **`state`(CSRF)·`nonce`(replay)** 를 생성·서버측 바인딩 후 프로바이더 authorization endpoint로 리다이렉트.
+1. `provider ∈ {GOOGLE, ORCID}`. **`state`(CSRF)·`nonce`(replay)** 를 생성·서버측 바인딩 후 프로바이더 authorization endpoint로 리다이렉트. ORCID는 `scope=openid`만 요청.
 
-### 6.2. 콜백 처리 (`callback`)
+### 6.2. 콜백 처리 (`callback`) — Google
 1. **입력**: `code`, `state`. **`state` 일치 검증**(불일치 시 거부 — CSRF).
-2. `code`↔토큰 교환 → `id_token` 서명·`nonce`·`aud`·`iss` 검증.
+2. `code`↔토큰 교환 → `id_token` 서명·`nonce`·`aud`·`iss` 검증(Google tokeninfo).
 3. 클레임에서 `email`·`email_verified`·`sub` 추출. **`email_verified=false`면 자동 연결 거부**(명시적 에러).
 4. `(provider, sub)`로 `SocialIdentity` 조회 — 있으면 연결된 계정 사용.
 5. 없으면 정규화 이메일로 계정 조회 — 있고 **사용 가능한 비밀번호 자격증명이 없으면** `SocialIdentity` 자동 연결; 있고 **비밀번호 계정이면 자동 병합 금지 → 명시적 연결 단계**(현 비밀번호 입력/소유 확인) 요구(**H1 pre-hijacking 방어**). 계정이 없으면 **`ACTIVE` 신규 계정 생성**(role=`USER`) + `SocialIdentity` 연결.
+6. `SessionManager.issue(principal)` → 비밀번호 로그인과 **동일한 세션 쿠키** 발급.
+
+### 6.3. 콜백 처리 (`callback`) — ORCID *(2026-06-30, BR-A13)*
+1. **입력**: `code`, `state`. **`state` 일치 검증**(불일치 시 거부 — CSRF).
+2. `code`↔토큰 교환 → `id_token`을 **로컬 JWKS/RS256**으로 검증(`iss=https://orcid.org`·`aud`=client_id·`nonce`·`exp`). ORCID tokeninfo 없음.
+3. 클레임에서 `sub`(=ORCID iD)·`name`(`given_name`/`family_name`) 추출. **이메일 클레임 없음**(검증/매칭 단계 건너뜀).
+4. `reconcile(provider=ORCID, claims)` — 이메일 없는 경로(BR-A13): `(ORCID, sub)`로 `SocialIdentity` 조회 → 있으면 연결 계정 사용, 없으면 **`ACTIVE` 신규 계정 생성**(`email=NULL`·role=`USER`) + `SocialIdentity` 연결. **이메일 매칭·자동 병합 없음**.
+5. **프로필 보강(Q5-A)**: ORCID Public API(`/v3.0/{id}/record`)로 이름·소속을 취득해 `social_identity.orcid_*`에 캐시(실패 시 이름만·소속 None 저하). 마이페이지 `GET /mypage/orcid-profile`이 이를 노출.
 6. `SessionManager.issue(principal)` → 비밀번호 로그인과 **동일한 세션 쿠키** 발급.
 
 ---
