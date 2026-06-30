@@ -26,9 +26,12 @@ interface DocModelViewerProps {
   /** Summary source anchor to scroll to / highlight, if any (matched by label). */
   anchor?: AnchorVM | null;
   arxivUrl?: string;
+  /** Skip the paper-title <h1> — used when embedded inline under a page that already shows
+   *  the title (the desktop detail view), to avoid a duplicate heading. */
+  hideTitle?: boolean;
 }
 
-export function DocModelViewer({ paperId, version, anchor, arxivUrl }: DocModelViewerProps) {
+export function DocModelViewer({ paperId, version, anchor, arxivUrl, hideTitle }: DocModelViewerProps) {
   const { state, load } = useDocModel();
   const { state: assetState, load: loadAssets } = useAssets();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -107,7 +110,7 @@ export function DocModelViewer({ paperId, version, anchor, arxivUrl }: DocModelV
     case 'page':
       return (
         <div ref={containerRef}>
-          {outcome.docModel.meta.title ? (
+          {!hideTitle && outcome.docModel.meta.title ? (
             <h1 className={styles.paperTitle} data-testid="docmodel-title">
               {renderInlineMath(outcome.docModel.meta.title)}
             </h1>
