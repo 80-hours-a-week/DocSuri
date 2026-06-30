@@ -21,7 +21,7 @@ python -m pytest backend/tests/test_novelty.py -q
 
 Observed result:
 
-- 14 passed
+- 15 passed
 
 Coverage focus:
 
@@ -32,6 +32,7 @@ Coverage focus:
 - Notion preview/approval/export invariant
 - SSRF and query minimization guard
 - worker happy path
+- worker failure commit/ack path
 - SSE snapshot encoding
 - API create/status/cancel
 - unsupported manuscript rejection

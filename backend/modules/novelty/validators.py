@@ -69,4 +69,3 @@ def _validate_experiment_plan(payload: dict[str, Any]) -> None:
     missing = sorted(key for key in required if not payload.get(key))
     if missing:
         raise ArtifactValidationError(f"experiment plan missing: {', '.join(missing)}")
-

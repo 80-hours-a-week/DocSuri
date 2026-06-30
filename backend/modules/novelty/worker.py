@@ -21,6 +21,10 @@ class InvalidWorkerPayload(ValueError):
     pass
 
 
+class JobProcessingFailed(RuntimeError):
+    pass
+
+
 class _Message:
     def __init__(self, body: dict[str, Any], receipt_handle: str | None = None) -> None:
         self.body = body
@@ -71,6 +75,11 @@ def run_worker(
                 commit = getattr(repo, "commit", None)
                 if commit is not None:
                     commit()
+            except JobProcessingFailed:  # FAILED state was recorded; commit and ack.
+                commit = getattr(repo, "commit", None)
+                if commit is not None:
+                    commit()
+                log.exception("novelty job failed; committed FAILED state")
             except Exception:  # noqa: BLE001 - leave unacked for retry/DLQ.
                 rollback = getattr(repo, "rollback", None)
                 if rollback is not None:
@@ -233,7 +242,7 @@ def process_job(
             "Novelty analysis failed",
             {"error": str(exc)},
         )
-        raise
+        raise JobProcessingFailed(str(exc)) from exc
 
 
 def _payload_from_bundle(bundle: RetrievalBundle) -> tuple[dict[str, Any], str | None]:

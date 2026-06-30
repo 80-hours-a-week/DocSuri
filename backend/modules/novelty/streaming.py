@@ -12,4 +12,3 @@ def encode_sse(event: ProgressEvent) -> str:
 def sse_snapshot(events: Iterable[ProgressEvent]):
     for event in events:
         yield encode_sse(event)
-

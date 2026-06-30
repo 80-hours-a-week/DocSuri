@@ -226,6 +226,53 @@ def test_worker_loop_acks_successful_message() -> None:
     assert NoveltyService(repo).result(owner_id, job_id).job.state is JobState.DEGRADED
 
 
+def test_worker_loop_commits_and_acks_recorded_failure() -> None:
+    class BrokenCorpus:
+        def full_search(self, owner_id: str, query: str) -> RetrievalBundle:
+            raise RuntimeError("corpus unavailable")
+
+    class CountingRepo(InMemoryNoveltyRepository):
+        def __init__(self) -> None:
+            super().__init__()
+            self.commits = 0
+            self.rollbacks = 0
+
+        def commit(self) -> None:
+            self.commits += 1
+
+        def rollback(self) -> None:
+            self.rollbacks += 1
+
+    class Message:
+        def __init__(self, body):
+            self.body = body
+
+    repo = CountingRepo()
+    _, owner_id, job_id = _service_job(repo)
+    message = Message({"ownerId": owner_id, "jobId": job_id})
+    acked: list[Message] = []
+    calls = 0
+
+    def receive():
+        nonlocal calls
+        calls += 1
+        return [message] if calls == 1 else []
+
+    run_worker(
+        repo_factory=lambda: repo,
+        receive=receive,
+        ack=acked.append,
+        should_stop=lambda: calls > 1,
+        adapters=NoveltyAdapters(corpus=BrokenCorpus()),
+    )
+
+    result = NoveltyService(repo).result(owner_id, job_id)
+    assert result.job.state is JobState.FAILED
+    assert acked == [message]
+    assert repo.commits == 1
+    assert repo.rollbacks == 0
+
+
 def test_sse_snapshot_encodes_progress_event() -> None:
     repo = InMemoryNoveltyRepository()
     _, owner_id, job_id = _service_job(repo)

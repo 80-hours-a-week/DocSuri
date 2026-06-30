@@ -17,8 +17,8 @@
 
 | Category | Command | Result |
 | --- | --- | --- |
-| U11 unit tests | `python -m pytest backend/tests/test_novelty.py -q` | 14 passed |
-| U11 + app-shell | `$env:PYTHONPATH='shared/python/src;ops/src;backend/modules/discovery/src;backend/modules/summarization/src'; python -m pytest backend/tests/test_novelty.py backend/tests/test_app_shell.py -q` | 28 passed |
+| U11 unit tests | `python -m pytest backend/tests/test_novelty.py -q` | 15 passed |
+| U11 + app-shell | `$env:PYTHONPATH='shared/python/src;ops/src;backend/modules/discovery/src;backend/modules/summarization/src'; python -m pytest backend/tests/test_novelty.py backend/tests/test_app_shell.py -q` | 29 passed |
 | Backend tests | `$env:PYTHONPATH='shared/python/src;ops/src;backend/modules/discovery/src;backend/modules/summarization/src'; python -m pytest backend/tests -q` | Passed with 1 skipped test |
 | Lint | `python -m ruff check backend/modules/novelty backend/wiring.py backend/app.py backend/migrations/__main__.py backend/tests/test_novelty.py backend/tests/test_app_shell.py ops/cdk/stacks/novelty_stack.py ops/cdk/stacks/compute_stack.py ops/cdk/app.py` | PASS |
 | Compile | `python -m compileall backend/modules/novelty backend/wiring.py backend/app.py ops/cdk/stacks/novelty_stack.py ops/cdk/stacks/compute_stack.py ops/cdk/app.py` | PASS |
