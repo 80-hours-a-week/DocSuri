@@ -21,13 +21,15 @@ from docsuri_shared.dtos import (
 )
 
 from .models import AbstainResult, Candidate, DegradeMode, GroundedResults, NoMatchResult
-from .source_ref import record_has_link, source_ref
+from .source_ref import record_has_link, safe_url, source_ref
 
 
 def _card(candidate: Candidate, rank: int) -> ResultCardVM:
     """Project a real IndexRecord to the exposed card fields (SEC-9). ``relevance`` = 1-based
     rank (display-only; raw retrieval_score is NOT exposed). Phase 2 (Q2): adds source-neutral
-    ``sourceName``/``sourceUrl`` so non-arXiv results carry a real link (FR-5)."""
+    ``sourceName``/``sourceUrl`` so non-arXiv results carry a real link (FR-5). EVERY exposed
+    link runs through ``safe_url`` — the structural guard keys on the projected ``sourceUrl``,
+    so a non-http(s) ``arxivUrl`` would otherwise ride unchecked on a non-arXiv card (FR-5)."""
     r = candidate.record
     source_name, source_url = source_ref(r)
     return ResultCardVM(
@@ -37,9 +39,9 @@ def _card(candidate: Candidate, rank: int) -> ResultCardVM:
         arxivId=r.arxivId,
         abstractSnippet=r.abstractSnippet,
         relevance=rank,
-        arxivUrl=r.arxivUrl,
+        arxivUrl=safe_url(r.arxivUrl),
         sourceName=source_name,
-        sourceUrl=source_url,
+        sourceUrl=safe_url(source_url),
     )
 
 

@@ -159,3 +159,18 @@ def test_structural_guard_all_unlinkable_is_empty_page_not_abstain() -> None:
     response = _assembler.assemble(GroundedResults(items=items), DegradeMode.NORMAL)
     assert isinstance(response.root, SearchResultPageDTO)
     assert response.root.meta.resultCount == 0
+
+
+def test_card_blanks_non_http_arxiv_url_on_surviving_card() -> None:
+    # FR-5 / SEC-9: the structural guard keys on the PROJECTED sourceUrl. A non-arXiv card whose
+    # sourceUrl is valid http survives — but its separately-exposed arxivUrl is unchecked by the
+    # guard, so a non-http(s) arxivUrl must be blanked by safe_url, never shipped on the card.
+    prov = _provenance(
+        source_name="OpenAlex", source_url="https://openalex.org/W123"
+    )
+    record = RECORDS[1].model_copy(
+        update={"arxivUrl": "javascript:alert(1)", "sourceProvenance": prov}
+    )
+    card = _first_card(record)
+    assert card.sourceUrl == "https://openalex.org/W123"  # the resolvable link survives
+    assert card.arxivUrl == ""  # the hostile-scheme arxivUrl is blanked, not exposed
