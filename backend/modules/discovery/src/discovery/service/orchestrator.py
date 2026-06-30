@@ -73,8 +73,14 @@ class SearchOutcome:
 
 
 def _derive_degradation(budget) -> tuple[DegradeMode, DegradationSignal]:
-    """Map the U6 advisory degrade mode to U2's signal (BR-11). U2 does not judge cost."""
+    """Map the U6 advisory degrade mode to U2's signal (BR-11). U2 does not judge cost.
+
+    ``degrade_mode`` is an opaque port value (BudgetState is PROVISIONAL): unwrap an Enum to its
+    ``.value`` so a plain ``Enum`` (whose ``str()`` is ``"Class.MEMBER"``) maps the same as a
+    ``StrEnum``/``str``. An unrecognized mode falls through to NORMAL (safe default — full
+    functionality, no degrade banner)."""
     raw = getattr(budget, "degrade_mode", None)
+    raw = getattr(raw, "value", raw)  # Enum → wire value; str/StrEnum unchanged
     mode_str = (str(raw) if raw is not None else "normal").lower().replace("_", "-")
     if mode_str == "lexical-only":
         return DegradeMode.LEXICAL_ONLY, DegradationSignal(llm_enabled=False, rerank_enabled=False)
