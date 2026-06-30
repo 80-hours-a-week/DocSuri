@@ -6,10 +6,6 @@ exercises the security-critical decision logic against verified claims.
 """
 
 import pytest
-from fastapi import HTTPException
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
 from backend.modules.accounts.controller import _principal_for_social_account
 from backend.modules.accounts.models import (
     AccountStatus,
@@ -24,6 +20,9 @@ from backend.modules.accounts.repository.credential import (
     CredentialRepository,
 )
 from backend.modules.accounts.services.social_login import OidcClaims, SocialLoginService
+from fastapi import HTTPException
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 
 @pytest.fixture

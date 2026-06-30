@@ -58,6 +58,12 @@ class ArtifactKind(StrEnum):
     EXPORT_STATUS = "export_status"
 
 
+class ChatRole(StrEnum):
+    USER = "user"
+    ASSISTANT = "assistant"
+    SYSTEM = "system"
+
+
 class EvidenceStatus(StrEnum):
     SUPPORTED = "supported"
     UNSUPPORTED = "unsupported"
@@ -104,6 +110,14 @@ class NoveltyJobRequest(BaseModel):
     constraints: dict[str, Any] = Field(default_factory=dict)
     exportToNotion: bool = False
 
+    @field_validator("topic")
+    @classmethod
+    def _strip_topic(cls, value: str) -> str:
+        stripped = value.strip()
+        if len(stripped) < 3:
+            raise ValueError("topic must be at least 3 characters")
+        return stripped
+
     @model_validator(mode="after")
     def _manuscript_required_for_manuscript_input(self):
         if self.inputType is InputType.MANUSCRIPT and self.manuscript is None:
@@ -125,6 +139,16 @@ class NoveltyJob(BaseModel):
     createdAt: datetime = Field(default_factory=utc_now)
     updatedAt: datetime = Field(default_factory=utc_now)
     completedAt: datetime | None = None
+
+
+class NoveltyChatMessage(BaseModel):
+    messageId: str = Field(default_factory=lambda: str(uuid4()))
+    jobId: str
+    ownerId: str
+    role: ChatRole
+    content: str = Field(min_length=1, max_length=12000)
+    attachments: list[dict[str, Any]] = Field(default_factory=list)
+    createdAt: datetime = Field(default_factory=utc_now)
 
 
 class ProgressEvent(BaseModel):
@@ -168,6 +192,22 @@ class CreateJobResponse(BaseModel):
     state: JobState
 
 
+class NoveltyJobSummary(BaseModel):
+    jobId: str
+    inputType: InputType
+    topic: str
+    state: JobState
+    progressPercent: int
+    exportStatus: ExportStatus
+    createdAt: datetime
+    updatedAt: datetime
+    completedAt: datetime | None = None
+
+
+class NoveltyJobListResponse(BaseModel):
+    jobs: list[NoveltyJobSummary] = Field(default_factory=list)
+
+
 class JobStatusResponse(BaseModel):
     job: NoveltyJob
     events: list[ProgressEvent] = Field(default_factory=list)
@@ -193,6 +233,25 @@ class ExportApprovalRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     approved: bool = True
+
+
+class ChatMessageCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    content: str = Field(min_length=1, max_length=12000)
+    attachments: list[dict[str, Any]] = Field(default_factory=list, max_length=8)
+
+    @field_validator("content")
+    @classmethod
+    def _strip_content(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("content is required")
+        return stripped
+
+
+class ChatMessageListResponse(BaseModel):
+    messages: list[NoveltyChatMessage] = Field(default_factory=list)
 
 
 STATE_PROGRESS: dict[JobState, int] = {

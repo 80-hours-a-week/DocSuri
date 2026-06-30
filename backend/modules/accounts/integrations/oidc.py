@@ -12,8 +12,10 @@ aud(우리 client_id)·iss(google)·nonce(재생 방어) 일치를 추가로 강
 토큰 교환으로 직접 받으므로 이는 검증 우회가 아니다(감사 #9: tokeninfo는 우회가 아니라 운영상
 취약점).
 SECURITY-DEBT(감사 #9, deferred): 로컬 JWKS(RS256) 검증으로 _fetch_tokeninfo를 대체하면 로그인당
-구글 RTT/가용성 의존을 없앨 수 있으나 `cryptography` 의존성 추가 + 이미지 재빌드가 필요하다(현
-환경 미설치 → 테스트 불가). `GOOGLE_OIDC_VERIFY_MODE` env 게이트로 도입하는 것을 후속 작업으로 둔다.
+구글 RTT/가용성 의존을 없앨 수 있다. `cryptography`는 이제 backend 의존성으로 설치돼 있고(아래
+ORCID 검증기 `OrcidOidcVerifier`가 로컬 JWKS/RS256으로 이미 사용 중) 새 의존성·재빌드는 더 이상
+필요 없다 — 남은 일은 Google에 동일 방식을 적용하고 `GOOGLE_OIDC_VERIFY_MODE` env로 게이트하는
+것뿐이다(후속 작업).
 """
 
 import base64

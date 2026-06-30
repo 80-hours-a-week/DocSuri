@@ -302,6 +302,32 @@ def test_api_create_status_and_cancel(monkeypatch) -> None:
     assert cancelled.json()["state"] == "degraded"
 
 
+def test_api_lists_jobs_and_persists_chat_messages(monkeypatch) -> None:
+    principal = _principal()
+    repo = InMemoryNoveltyRepository()
+    client = _client(monkeypatch, principal, repo)
+
+    created = client.post(
+        "/api/novelty/jobs",
+        json={"inputType": "natural_language", "topic": "adaptive literature review agent"},
+    )
+    job_id = created.json()["jobId"]
+    added = client.post(
+        f"/api/novelty/jobs/{job_id}/messages",
+        json={"content": "compare against recent RAG evaluation papers"},
+    )
+    listed = client.get("/api/novelty/jobs")
+    messages = client.get(f"/api/novelty/jobs/{job_id}/messages")
+
+    assert created.status_code == 200
+    assert added.status_code == 200
+    assert listed.json()["jobs"][0]["jobId"] == job_id
+    assert [item["content"] for item in messages.json()["messages"]] == [
+        "adaptive literature review agent",
+        "compare against recent RAG evaluation papers",
+    ]
+
+
 def test_api_rejects_unsupported_manuscript(monkeypatch) -> None:
     client = _client(monkeypatch, _principal(), InMemoryNoveltyRepository())
 
@@ -318,3 +344,17 @@ def test_api_rejects_unsupported_manuscript(monkeypatch) -> None:
     )
 
     assert resp.status_code == 422
+
+
+def test_api_rejects_blank_topic_before_job_is_created(monkeypatch) -> None:
+    principal = _principal()
+    repo = InMemoryNoveltyRepository()
+    client = _client(monkeypatch, principal, repo)
+
+    resp = client.post(
+        "/api/novelty/jobs",
+        json={"inputType": "natural_language", "topic": "   "},
+    )
+
+    assert resp.status_code == 422
+    assert repo.list_jobs(principal.user_id) == []

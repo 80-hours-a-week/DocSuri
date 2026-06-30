@@ -2745,5 +2745,45 @@ aidlc 개발 과정을 적용하여 개발하려고 합니다. 질문지를 형�
 **User Input**: "requirement-question-answer.md 의 내용을 반영하여 질문지의 답을 확정해 주세요."
 **AI Response**: "Applied answers from requirement-question-answer.md to the Agent Chat Frontend requirement verification questions. Explicit answers were reflected for Q1, Q2, Q3, Q4, Q5, Q9, Q11, Q12, Q13, and Q16; unanswered items were set to the recommended option A."
 **Context**: INCEPTION / Requirements Analysis — Agent Chat Frontend.
+## U3 Review Findings Remediation
+**Timestamp**: 2026-06-30T04:48:56Z
+**User Input**: "resolve all issues and commit to the PR"
+**AI Response**: "U3 aidlc-unit-review findings remediation requested. Proceeding on PR branch `feat/novelty-agent` / `origin/pr/263` with targeted fixes for social-link confirmation bypass, AccountDeleted cascade consumers, PII-safe account logs, and reCAPTCHA login wiring; will verify and commit to the PR branch."
+**Context**: CONSTRUCTION / Code patch — U3 Accounts review remediation.
+
+---
+## U3 Review Findings Remediation Completion
+**Timestamp**: 2026-06-30T04:58:58Z
+**User Input**: "resolve all issues and commit to the PR"
+**AI Response**: "Resolved U3 review findings: pending social links remain non-authenticating until confirmation, account purge worker now has a same-RDS owner-scoped data purge backstop after AccountDeleted publication, account email logs no longer include recipient/token/link/body values, and frontend login sends reCAPTCHA v3 tokens through the BFF header path with CSP allowances. Validation passed: backend ruff, focused account pytest suite, frontend Vitest API/BFF tests, frontend tsc, diff check, and PII log-pattern scan."
+**Context**: CONSTRUCTION / Code patch completion — U3 Accounts review remediation.
+
+---
+## Research And Novelty Chat Session APIs
+**Timestamp**: 2026-06-30T06:06:49Z
+**User Input**: "좋아요. 문헌탐색&근거형성 (research_jobs) 와, 차별화 (novelty_jobs)의 채팅 세션을 분리하는 것으로, API들을 추가해 주세요."
+**AI Response**: "Adding separated chat session persistence APIs for literature evidence formation (`research_jobs`) and novelty formation (`novelty_jobs`) while keeping storage tables and API prefixes separate."
+**Context**: CONSTRUCTION / Code patch — Research and Novelty chat sessions.
+
+---
+## PR Document And Commit Message
+**Timestamp**: 2026-06-30T06:16:46Z
+**User Input**: "좋아요. pr 문서와 커밋 메시지를 작성해 주세요."
+**AI Response**: "Creating a pull request document from the repository template and preparing a commit message for the staged chat session API changes."
+**Context**: Documentation / PR preparation.
+
+---
+## Cross Review Reflected
+**Timestamp**: 2026-06-30T06:48:11Z
+**User Input**: "Cross-Review.md 를 반영하여, 코드를 수정해 주세요."
+**AI Response**: "Reflected Cross-Review.md cleanup findings: kept novelty_messages creation only in the new 002 migration, collapsed duplicate research chat request DTOs, removed redundant service-level content stripping, and added a boundary test for blank novelty topics."
+**Context**: CONSTRUCTION / Code patch — Research and Novelty chat session API review fixes.
+
+---
+## PR Document And Staged Commit Message
+**Timestamp**: 2026-06-30T06:49:50Z
+**User Input**: "PR 문서와, 스테이징의 커밋 메시지를 작성해 주세요."
+**AI Response**: "Created a PR document for the currently staged Cross-Review cleanup changes and prepared the matching commit message."
+**Context**: Documentation / PR preparation.
 
 ---
