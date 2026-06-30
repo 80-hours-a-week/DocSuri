@@ -232,7 +232,13 @@ ALLOWED_TRANSITIONS: dict[JobState, frozenset[JobState]] = {
         {JobState.PLANNING_EXPERIMENT, JobState.CANCELLED, JobState.FAILED}
     ),
     JobState.PLANNING_EXPERIMENT: frozenset(
-        {JobState.EXPORTING_NOTION, JobState.COMPLETED, JobState.CANCELLED, JobState.FAILED}
+        {
+            JobState.EXPORTING_NOTION,
+            JobState.COMPLETED,
+            JobState.DEGRADED,
+            JobState.CANCELLED,
+            JobState.FAILED,
+        }
     ),
     JobState.EXPORTING_NOTION: frozenset(
         {JobState.COMPLETED, JobState.DEGRADED, JobState.CANCELLED, JobState.FAILED}
@@ -249,4 +255,3 @@ def validate_transition(current: JobState, target: JobState) -> None:
         return
     if target not in ALLOWED_TRANSITIONS.get(current, frozenset()):
         raise InvalidTransitionError(f"invalid transition: {current} -> {target}")
-

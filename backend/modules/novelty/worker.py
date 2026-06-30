@@ -50,8 +50,12 @@ def process_job(
     if job.cancelled or job.state in TERMINAL_STATES:
         return
     try:
+        degraded_reasons: list[str] = []
+
         service.advance_state(owner_id, job_id, JobState.RETRIEVING_CORPUS, "Searching U2 corpus")
         corpus = adapters.corpus.full_search(owner_id, job.topic)
+        if corpus.degradedReason:
+            degraded_reasons.append(corpus.degradedReason)
         service.save_artifact(
             owner_id,
             job_id,
@@ -72,6 +76,8 @@ def process_job(
             "Searching external sources",
         )
         external = adapters.external.search(job.topic)
+        if external.degradedReason:
+            degraded_reasons.append(external.degradedReason)
         service.save_artifact(
             owner_id,
             job_id,
@@ -111,6 +117,8 @@ def process_job(
                 "Checking sentence similarity and AI-style risks",
             )
             similarity = adapters.similarity.check(owner_id, job.manuscript.model_dump())
+            if similarity.degradedReason:
+                degraded_reasons.append(similarity.degradedReason)
             service.save_artifact(
                 owner_id,
                 job_id,
@@ -169,7 +177,16 @@ def process_job(
                 "risks": ["Weak evidence", "dataset mismatch", "unapproved Notion export"],
             },
         )
-        service.advance_state(owner_id, job_id, JobState.COMPLETED, "Novelty analysis complete")
+        if degraded_reasons:
+            service.advance_state(
+                owner_id,
+                job_id,
+                JobState.DEGRADED,
+                "Novelty analysis complete with degraded adapters",
+                {"degradedReasons": degraded_reasons},
+            )
+        else:
+            service.advance_state(owner_id, job_id, JobState.COMPLETED, "Novelty analysis complete")
     except Exception as exc:
         service.advance_state(
             owner_id,

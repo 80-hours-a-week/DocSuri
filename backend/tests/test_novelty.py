@@ -10,6 +10,7 @@ from backend.app import create_app
 from backend.config import Settings
 from backend.modules.accounts.models import Principal, UserRole
 from backend.modules.novelty import controller
+from backend.modules.novelty.adapters import NoveltyAdapters, RetrievalBundle
 from backend.modules.novelty.models import (
     ArtifactKind,
     ArtifactValidationError,
@@ -129,11 +130,33 @@ def test_worker_processes_minimal_job_to_completion() -> None:
     process_job(repo, owner_id, job_id)
 
     result = NoveltyService(repo).result(owner_id, job_id)
-    assert result.job.state is JobState.COMPLETED
+    assert result.job.state is JobState.DEGRADED
     assert {artifact.kind for artifact in result.artifacts} >= {
         ArtifactKind.EVIDENCE,
         ArtifactKind.EXPERIMENT_PLAN,
     }
+
+
+def test_worker_completes_when_adapters_are_not_degraded() -> None:
+    class CleanCorpus:
+        def full_search(self, owner_id: str, query: str) -> RetrievalBundle:
+            return RetrievalBundle(items=[{"title": query}])
+
+    class CleanExternal:
+        def search(self, query: str) -> RetrievalBundle:
+            return RetrievalBundle(items=[{"title": query}])
+
+    repo = InMemoryNoveltyRepository()
+    _, owner_id, job_id = _service_job(repo)
+
+    process_job(
+        repo,
+        owner_id,
+        job_id,
+        adapters=NoveltyAdapters(corpus=CleanCorpus(), external=CleanExternal()),
+    )
+
+    assert NoveltyService(repo).result(owner_id, job_id).job.state is JobState.COMPLETED
 
 
 def test_sse_snapshot_encodes_progress_event() -> None:
