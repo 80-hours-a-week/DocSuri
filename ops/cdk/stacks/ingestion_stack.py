@@ -225,12 +225,21 @@ class IngestionStack(Stack):
         from aws_cdk import aws_applicationautoscaling as appscaling
 
         scaling = self.service.auto_scale_task_count(min_capacity=0, max_capacity=3)
+        # CDK step scaling leaves a "do-nothing" dead zone between the highest scale-in bound and
+        # the lowest scale-out bound. The daily EventBridge rule enqueues exactly ONE schedule_tick
+        # message, so the scale-out threshold MUST be 1: lower=10 left depth=1 stranded in the dead
+        # zone and the scale-to-zero worker never woke (deadlock — the worker that fans the tick out
+        # into a burst is the same worker that never starts). lower=1 matches the summarization and
+        # novelty workers, which wake correctly. ponytail: empty-queue interval is change=0, so the
+        # long-poll worker stays at 1 after a wake-up (never drains to 0). A negative step would fix
+        # that but risks SIGTERM mid-tick on a transient empty read — left as a deliberate, separate
+        # cost decision shared with the sibling stacks, not bundled into this deadlock fix.
         scaling.scale_on_metric(
             "SqsDepth",
             metric=self.queue.metric_approximate_number_of_messages_visible(),
             scaling_steps=[
                 appscaling.ScalingInterval(upper=0, change=0),
-                appscaling.ScalingInterval(lower=10, change=1),
+                appscaling.ScalingInterval(lower=1, change=1),   # was lower=10 — the deadlock
                 appscaling.ScalingInterval(lower=50, change=2),
             ],
             adjustment_type=appscaling.AdjustmentType.CHANGE_IN_CAPACITY,
