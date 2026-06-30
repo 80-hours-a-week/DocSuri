@@ -121,7 +121,7 @@
     grid-template-areas:
       'meta actions'
       'cite body';
-    column-gap: 2rem;
+    column-gap: 2.5rem;
     row-gap: 1.5rem;
     align-items: start;
   }
@@ -134,8 +134,8 @@
   /* The metadata is the focus on desktop — scale the title and abstract up so the wide
      screen reads as a real article header rather than a stretched phone card. */
   .title {
-    font-size: 2rem;
-    line-height: 1.25;
+    font-size: 2.25rem;
+    line-height: 1.2;
   }
 
   .authors {
