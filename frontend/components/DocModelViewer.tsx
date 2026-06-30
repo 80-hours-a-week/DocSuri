@@ -11,7 +11,7 @@
 // id-based anchor contract is a follow-up). Span-precise inline highlight is a follow-up.
 // (KaTeX stylesheet is pulled in by the renderMath import below.)
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { AnchorVM, AssetRef, DocBlock, DocModel, DocSection } from '@/types/generated';
+import type { AnchorVM, AssetRef, DocBlock, DocModel, DocSection, DocTableBlock } from '@/types/generated';
 import { useDocModel } from '@/lib/useDocModel';
 import { useAssets } from '@/lib/useAssets';
 import { createPortal } from 'react-dom';
@@ -136,11 +136,15 @@ export function DocModelBody({
   // Author macros from the e-print preamble (meta.macros) — handed to every KaTeX render so
   // custom commands resolve instead of showing as red unsupported-command errors.
   const macros = docModel.meta.macros;
+  // The abstract is its own surface (초록 / 초록 번역), so it is hidden from the full-text body and
+  // TOC to avoid duplication. U1 emits the abstract as a dedicated section with id "s0" (real
+  // content sections start at "s1"), so dropping "s0" removes only the abstract.
+  const sections = docModel.sections.filter((s) => s.id !== 's0');
   return (
     <div className={styles.root} data-testid="docmodel-viewer">
-      <DocTOC sections={docModel.sections} />
+      <DocTOC sections={sections} />
       <article className={styles.body}>
-        {docModel.sections.map((s) => (
+        {sections.map((s) => (
           <SectionView
             key={s.id}
             section={s}
@@ -408,37 +412,16 @@ function BlockView({
         </div>
       );
     }
-    case 'table': {
-      const table = (
-        <table className={styles.table}>
-          <tbody>
-            {block.rows.map((row, ri) => (
-              <tr key={ri}>
-                {row.cells.map((cell, ci) =>
-                  cell.isHeader ? (
-                    <th key={ci} colSpan={cell.colspan} rowSpan={cell.rowspan}>
-                      {renderInlineMath(cell.text, macros)}
-                    </th>
-                  ) : (
-                    <td key={ci} colSpan={cell.colspan} rowSpan={cell.rowspan}>
-                      {renderInlineMath(cell.text, macros)}
-                    </td>
-                  ),
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      );
+    case 'table':
       return (
-        <figure className={cls} data-block={block.id}>
-          <ZoomTrigger className={styles.tableWrap} onZoom={() => onZoom(table)}>
-            {table}
-          </ZoomTrigger>
-          {caption(block.anchorLabel, block.caption, macros)}
-        </figure>
+        <TableBlockView
+          block={block}
+          assetsById={assetsById}
+          cls={cls}
+          onZoom={onZoom}
+          macros={macros}
+        />
       );
-    }
     case 'figure': {
       const asset = assetsById.get(block.assetRef.assetId);
       const alt = block.caption ?? block.anchorLabel ?? '그림';
@@ -480,6 +463,77 @@ function BlockView({
         </pre>
       );
   }
+}
+
+// A table renders as STRUCTURED DATA (rows/cells) so its numbers stay visible to grounding and
+// the summary LLM (D8). A page-crop image may be carried in `assetRef` as a last-resort fallback
+// (e.g. low-confidence GROBID parse on a PDF source). When both exist the reader can toggle to the
+// original image; when the structured rows are empty we auto-show the image so the table isn't blank.
+function TableBlockView({
+  block,
+  assetsById,
+  cls,
+  onZoom,
+  macros,
+}: {
+  block: DocTableBlock;
+  assetsById: Map<string, AssetRef>;
+  cls: string;
+  onZoom: (node: React.ReactNode) => void;
+  macros?: MathMacros;
+}) {
+  const asset = block.assetRef ? assetsById.get(block.assetRef.assetId) : undefined;
+  const hasRows = block.rows.length > 0;
+  // null = follow the default (structured unless the parse produced no rows); a tap sets it explicitly.
+  const [override, setOverride] = useState<boolean | null>(null);
+  const showImage = (override ?? !hasRows) && Boolean(asset?.url);
+  const image =
+    asset?.url != null ? (
+      // eslint-disable-next-line @next/next/no-img-element -- signed S3 url, not a static asset
+      <img src={asset.url} alt={block.anchorLabel ?? '표 원본 이미지'} loading="lazy" />
+    ) : null;
+  const table = (
+    <table className={styles.table}>
+      <tbody>
+        {block.rows.map((row, ri) => (
+          <tr key={ri}>
+            {row.cells.map((cell, ci) =>
+              cell.isHeader ? (
+                <th key={ci} colSpan={cell.colspan} rowSpan={cell.rowspan}>
+                  {renderInlineMath(cell.text, macros)}
+                </th>
+              ) : (
+                <td key={ci} colSpan={cell.colspan} rowSpan={cell.rowspan}>
+                  {renderInlineMath(cell.text, macros)}
+                </td>
+              ),
+            )}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+  const shown = showImage && image ? image : table;
+  // Only offer the toggle when there is a real choice (both a structured table and an image).
+  const canToggle = hasRows && Boolean(asset?.url);
+  return (
+    <figure className={cls} data-block={block.id}>
+      <ZoomTrigger className={styles.tableWrap} onZoom={() => onZoom(shown)}>
+        {shown}
+      </ZoomTrigger>
+      {canToggle ? (
+        <button
+          type="button"
+          className={styles.originalToggle}
+          aria-pressed={showImage}
+          onClick={() => setOverride(!showImage)}
+        >
+          {showImage ? '구조화 표 보기' : '원본 이미지 보기'}
+        </button>
+      ) : null}
+      {caption(block.anchorLabel, block.caption, macros)}
+    </figure>
+  );
 }
 
 function caption(label?: string, text?: string, macros?: MathMacros) {
