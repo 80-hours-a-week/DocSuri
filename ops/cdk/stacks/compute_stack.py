@@ -2,8 +2,6 @@
 
 infra-design.md §6 (API compute) + U3 infrastructure-design (RDS/Redis/ALB)."""
 
-import secrets
-
 from aws_cdk import (
     CfnOutput,
     Duration,
@@ -82,7 +80,7 @@ from aws_cdk import (
 )
 from constructs import Construct
 
-from ._origin_auth import SOCIAL_ORIGIN_VERIFY_SECRET
+from ._origin_auth import api_origin_verify_secret, social_origin_verify_secret
 
 # Public DNS for the API origin (zone docsuri.org lives in this account's Route53). CloudFront
 # connects to this name over HTTPS so the ACM cert (issued for it) validates — ACM can't issue
@@ -90,13 +88,6 @@ from ._origin_auth import SOCIAL_ORIGIN_VERIFY_SECRET
 _ORIGIN_DOMAIN = "origin.docsuri.org"
 _ZONE_NAME = "docsuri.org"
 _ZONE_ID = "Z0084324NUV4EPLJ7JH9"
-
-# Shared secret proving a request came from OUR CloudFront (not just any CloudFront in the
-# shared origin-facing prefix list — the confused-deputy). Generated per-synth (never in source);
-# CloudFront injects it as a header and the ALB 403s requests without it. Both sides use this same
-# value within a deploy; a re-deploy rotates it harmlessly (header + rule update together).
-_ORIGIN_VERIFY_SECRET = secrets.token_urlsafe(32)
-
 
 class ComputeStack(Stack):
     def __init__(
@@ -109,6 +100,11 @@ class ComputeStack(Stack):
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
+
+        # X-Origin-Verify secrets (api: ApiCdn→ALB; social: shared w/ frontend's /auth/social/*
+        # edge). Read from SSM at deploy time so synth is deterministic — see ._origin_auth.
+        origin_verify = api_origin_verify_secret(self)
+        social_verify = social_origin_verify_secret(self)
 
         # Ops alert recipients — comma-separated so adding teammates later is a deploy-arg change,
         # not a code change: `cdk deploy -c ops_alert_email=a@x.com,b@y.com` (or cdk.json context).
@@ -398,7 +394,7 @@ class ComputeStack(Stack):
                 # (Option A): the frontend CF's /auth/social/* behavior sends the latter. Additive —
                 # existing backend BFF-gateway auth is unchanged.
                 elbv2.ListenerCondition.http_header(
-                    "X-Origin-Verify", [_ORIGIN_VERIFY_SECRET, SOCIAL_ORIGIN_VERIFY_SECRET]
+                    "X-Origin-Verify", [origin_verify, social_verify]
                 )
             ],
             action=elbv2.ListenerAction.forward([self.service.target_group]),
@@ -647,7 +643,7 @@ class ComputeStack(Stack):
                     protocol_policy=cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
                     https_port=443,
                     origin_ssl_protocols=[cloudfront.OriginSslPolicy.TLS_V1_2],
-                    custom_headers={"X-Origin-Verify": _ORIGIN_VERIFY_SECRET},
+                    custom_headers={"X-Origin-Verify": origin_verify},
                 ),
                 # HTTPS_ONLY (not REDIRECT): refuse plaintext outright rather than 301 it —
                 # a redirected POST would still have sent its body over HTTP first.
