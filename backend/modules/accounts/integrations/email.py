@@ -117,6 +117,41 @@ def _render_email_change_notice(new_email: str, revoke_link: str = "") -> tuple[
     return subject, body_text, body_html
 
 
+def _render_account_exists_notice() -> tuple[str, str, str]:
+    """(subject, text, html) — 이미 가입된 주소로 가입이 재시도될 때 기존 소유자에게 보내는 안내
+    (S1/SEC-BR-2 — 계정 열거 방지). 가입 응답은 신규와 동일하게 일반화하고, '계정이 이미 있다'는
+    사실은 오직 등록된 본인 메일함으로만 알린다. 링크는 PUBLIC_APP_URL 설정 시에만 포함한다."""
+    app = os.getenv("PUBLIC_APP_URL", "").strip().rstrip("/")
+    login_text = (
+        f"\n로그인: {app}/login\n비밀번호 재설정: {app}/reset-password\n" if app else ""
+    )
+    login_html = (
+        f'<p><a href="{app}/login">로그인</a> · '
+        f'<a href="{app}/reset-password">비밀번호 재설정</a></p>'
+        if app
+        else ""
+    )
+    subject = "[DocSuri] 이미 가입된 계정이 있습니다"
+    body_text = (
+        "회원님의 이메일 주소로 이미 DocSuri 계정이 등록되어 있습니다.\n"
+        "새로 가입하실 필요 없이 로그인하시거나, 비밀번호가 기억나지 않으면 비밀번호 재설정을 이용해 주세요.\n"
+        "본인이 가입을 시도하지 않으셨다면 이 메일을 무시하셔도 됩니다.\n"
+        f"{login_text}"
+    )
+    body_html = f"""
+        <html>
+            <body>
+                <h3>이미 가입된 계정이 있습니다</h3>
+                <p>회원님의 이메일로 이미 DocSuri 계정이 등록되어 있습니다. 새로 가입하실 필요 없이
+                   로그인하시거나, 비밀번호가 기억나지 않으면 비밀번호 재설정을 이용해 주세요.</p>
+                {login_html}
+                <p>본인이 가입을 시도하지 않으셨다면 이 메일을 무시하셔도 됩니다.</p>
+            </body>
+        </html>
+    """
+    return subject, body_text, body_html
+
+
 def _emit_email_failure(observability_hub, e: Exception, provider: str) -> None:
     """소프트 폴백 실패 신호(EmailDeliveryFailureSignal) 발행 — 공통 헬퍼."""
     if not observability_hub:
@@ -163,6 +198,12 @@ class EmailClientInterface(ABC):
     async def send_email_change_notice_email(self, email: str, new_email: str, revoke_link: str = "") -> bool:
         """현재(기존) 이메일로 변경 시도 알림 + 취소(revoke) 링크를 발송한다 (M2/H5 — 계정 탈취 방어)."""
         subject, text, html = _render_email_change_notice(new_email, revoke_link)
+        return await self._send(email, subject, text, html)
+
+    async def send_account_exists_notice_email(self, email: str) -> bool:
+        """이미 가입된 주소로 가입이 재시도될 때 기존 소유자에게 안내를 보낸다 (S1/SEC-BR-2 — 가입
+        응답을 신규와 동일하게 일반화하면서도 본인에게는 계정 존재를 알린다)."""
+        subject, text, html = _render_account_exists_notice()
         return await self._send(email, subject, text, html)
 
 
@@ -214,8 +255,17 @@ class SESEmailClient(EmailClientInterface):
     def _get_client(self):
         if self._client is None:
             import boto3
-            # 컨테이너에 투과 주입된 IAM Role 또는 기본 자격 증명 사용
-            self._client = boto3.client("ses", region_name=self._region_name)
+            from botocore.config import Config
+
+            # S5: NFR §2.1 SES 3.0s 예산. 기본 botocore 타임아웃(~60s)이면 행이 걸린 SES 엔드포인트가
+            # to_thread 워커를 수십 초 잡아 가용성을 해친다. 연결/읽기를 3s로 죄고 재시도는 끈다
+            # (소프트 폴백이 상위에서 가입 트랜잭션을 보존하므로 boto3 자체 재시도는 불필요).
+            # 컨테이너에 투과 주입된 IAM Role 또는 기본 자격 증명 사용.
+            self._client = boto3.client(
+                "ses",
+                region_name=self._region_name,
+                config=Config(connect_timeout=3, read_timeout=3, retries={"max_attempts": 0}),
+            )
         return self._client
 
     async def send_verification_email(self, email: str, token: str, signup_link: str) -> bool:
@@ -313,7 +363,7 @@ class ResendEmailClient(EmailClientInterface):
         link = f"{signup_link}?token={token}"
         subject, body_text, body_html = _render_verification_email(link)
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=3.0) as client:  # S5: NFR §2.1 메일 발송 예산
                 resp = await client.post(
                     self._ENDPOINT,
                     headers={"Authorization": f"Bearer {self._api_key}"},
@@ -341,7 +391,7 @@ class ResendEmailClient(EmailClientInterface):
         link = f"{reset_link}?token={token}"
         subject, body_text, body_html = _render_password_reset_email(link)
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=3.0) as client:  # S5: NFR §2.1 메일 발송 예산
                 resp = await client.post(
                     self._ENDPOINT,
                     headers={"Authorization": f"Bearer {self._api_key}"},
@@ -366,7 +416,7 @@ class ResendEmailClient(EmailClientInterface):
 
     async def _send(self, to: str, subject: str, text: str, html: str) -> bool:
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=3.0) as client:  # S5: NFR §2.1 메일 발송 예산
                 resp = await client.post(
                     self._ENDPOINT,
                     headers={"Authorization": f"Bearer {self._api_key}"},

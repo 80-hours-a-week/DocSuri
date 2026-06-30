@@ -110,6 +110,8 @@ class AccountDeletionTable(Base):
     requested_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
     purge_after = Column(DateTime, nullable=False, index=True)
     state = Column(String(20), default=AccountStatus.DEACTIVATED.value, nullable=False)
+    # S2: 파기 반복 실패 횟수. 임계 초과 시 state=PURGE_FAILED(DLQ)로 격리해 무한 재시도를 끊는다.
+    purge_attempts = Column(Integer, default=0, nullable=False)
 
 
 class AccountWithdrawalBackupTable(Base):
@@ -465,6 +467,26 @@ class CredentialRepository:
         rec = self.get_account_deletion(account_id)
         if rec is not None:
             rec.state = "PURGED"
+            self._session.add(rec)
+            self._session.flush()
+
+    def increment_deletion_attempts(self, account_id: str) -> int:
+        """파기 시도 횟수를 1 증가시키고 새 값을 반환한다(S2 — 독성 레코드 DLQ 가드용).
+        실패한 파기 트랜잭션을 롤백한 뒤 별도 트랜잭션에서 호출해 시도 횟수를 영속화한다."""
+        rec = self.get_account_deletion(account_id)
+        if rec is None:
+            return 0
+        rec.purge_attempts = (rec.purge_attempts or 0) + 1
+        self._session.add(rec)
+        self._session.flush()
+        return rec.purge_attempts
+
+    def mark_deletion_failed(self, account_id: str) -> None:
+        """반복 실패한 삭제 레코드를 PURGE_FAILED(DLQ)로 격리한다(S2). due 조회는 DEACTIVATED만
+        보므로 격리된 행은 자동 제외되어 무한 재시도가 끊긴다. 운영의 수동 재조정 대상."""
+        rec = self.get_account_deletion(account_id)
+        if rec is not None:
+            rec.state = "PURGE_FAILED"
             self._session.add(rec)
             self._session.flush()
 
