@@ -341,12 +341,77 @@
 
 ---
 
+## 에픽 9 — 차별화(novelty) 형성 Agent *(2026-06-29 편입)*
+
+> 자연어 연구 의도 또는 업로드 원고를 받아 유사 연구를 정리하고, 근거 기반 차별화 후보와 실험 계획을 만든다. 문헌탐색·근거형성 Agent는 별도 유닛이며, 본 Agent는 `EvidenceFormationPort`/`SourceRef` 공유계약만 소비한다. v1 외부 탐색은 GitHub와 데이터셋으로 제한하고 뉴스 검색은 다음 사이클로 둔다.
+
+### US-NV1 — 자연어 연구 의도에서 novelty job 시작
+**As** 연구자(P1), **I want** "~~~를 연구하고 싶다" 같은 자연어로 novelty 분석을 시작하기를, **so that** 아직 원고가 없어도 유사 연구와 차별화 방향을 빠르게 본다.
+- **Given** 로그인한 사용자가 자연어 연구 의도를 입력하면, **When** novelty 분석을 시작하면, **Then** 시스템은 먼저 `EvidenceFormationPort.form_evidence`를 호출해 근거 묶음을 만들고 novelty Agent는 그 결과를 소비한다.
+- **Given** Evidence 결과가 부족하면, **When** novelty Agent가 후속 검색을 수행하면, **Then** U2 `full` 검색으로 내부 Corpus 유사 논문을 보강한다.
+- **Traces**: FR-30, FR-31, NFR-P5
+
+### US-NV2 — 업로드 원고에서 novelty job 시작
+**As** 연구자(P1), **I want** 작성 중인 논문 문서를 올려 novelty 분석을 받기를, **so that** 내 원고와 겹치는 선행 연구와 차별화 지점을 확인한다.
+- **Given** 사용자가 PDF, Markdown, TXT 중 하나를 업로드하면, **When** 분석을 시작하면, **Then** 공통 ingestion/doc-model 또는 문헌탐색·근거형성 경로가 문서를 파싱하고 novelty Agent는 파싱된 Evidence/SourceRef만 소비한다.
+- **Given** 파싱에 실패하면, **When** 결과 화면을 보면, **Then** 파싱 실패 사유를 비기술 메시지로 표시하고 원본이나 내부 오류 상세를 노출하지 않는다.
+- **Traces**: FR-30, SEC-5, SEC-9
+
+### US-NV3 — 유사 연구 표 정리
+**As** 연구자(P1), **I want** 내 아이디어와 유사한 선행 논문을 표로 정리해 보기를, **so that** 이미 완료된 연구와 겹치는 부분을 파악한다.
+- **Given** Evidence와 U2 full 검색 결과가 있으면, **When** 유사 연구 정리를 생성하면, **Then** 논문별 문제정의, 방법, 데이터셋, 결과, 한계, 내 아이디어와 겹치는 점, SourceRef를 표로 제공한다.
+- **Given** 어떤 주장에 충분한 근거가 없으면, **When** 표를 생성하면, **Then** 해당 칸은 추측하지 않고 기권 또는 근거 부족으로 표시한다.
+- **Traces**: FR-31, FR-32, FR-5, QT-10
+
+### US-NV4 — GitHub와 데이터셋 근거 보강
+**As** 연구자(P1), **I want** 관련 구현체와 데이터셋 단서를 함께 보기를, **so that** 차별화 실험이 실제로 수행 가능한지 판단한다.
+- **Given** novelty job이 외부 탐색 단계에 들어가면, **When** Agent-Browser가 검색하면, **Then** 서버 측 Agent Worker에서 익명화된 최소 질의로 GitHub와 데이터셋을 검색한다.
+- **Given** GitHub 결과가 있으면, **When** 결과를 정규화하면, **Then** 관련 구현체, baseline/benchmark 코드, reproduction 단서, license를 추출하되 품질 점수나 재현 가능 판정은 하지 않는다.
+- **Given** 데이터셋 결과가 있으면, **When** 결과를 정규화하면, **Then** 데이터셋 이름, URL, 라이선스/접근성, 태스크, metric 후보를 실험 계획 후보에 연결한다.
+- **Traces**: FR-31, NFR-R3, SEC-3, SEC-9
+
+### US-NV5 — 원고 위험 신호 표시
+**As** 연구자(P1), **I want** 내 원고의 문장 유사도와 AI 어투 위험 신호를 따로 보기를, **so that** 제출 전 검토가 필요한 부분을 알 수 있다.
+- **Given** 업로드 원고가 파싱되면, **When** 원고 위험 신호를 계산하면, **Then** 내부 Corpus 대비 문장/문단 유사도 경고를 법적 표절 판정이 아닌 검토 신호로 표시한다.
+- **Given** AI 어투 위험 신호가 감지되면, **When** 사용자에게 표시하면, **Then** 확정 판정이나 AI 작성 확률 대신 문체 위험 신호와 false positive 가능성을 함께 보여준다.
+- **Given** 위험 신호가 높아도, **When** novelty 분석을 계속하면, **Then** 실험 아이디어 추천과 실험 계획 생성을 차단하지 않는다.
+- **Traces**: FR-34, QT-10
+
+### US-NV6 — 차별화 후보와 실험 계획 생성
+**As** 연구자(P1), **I want** 차별점이 추가된 실험 아이디어와 실행 계획을 받기를, **so that** 다음 실험을 구체적으로 설계한다.
+- **Given** 유사 연구와 외부 보강 근거가 있으면, **When** novelty Agent가 아이디어를 제안하면, **Then** 기존 연구 한계와 코드/데이터셋 근거 안에서 bounded 실험 아이디어 후보를 제안한다.
+- **Given** 사용자가 후보를 검토하면, **When** 실험 계획을 생성하면, **Then** 가설, 차별화 포인트, baseline, 데이터셋, metric, 절차, 리스크, 필요한 구현/리소스, 근거 링크를 포함한다.
+- **Given** 결과를 표시할 때, **Then** "새로움 확정", novelty 점수, 논문화 가능성 판정, 코드 skeleton은 생성하지 않는다.
+- **Traces**: FR-32, FR-33, C-2
+
+### US-NV7 — 탐구 프로세스 진행상태 표시
+**As** 연구자(P1), **I want** 에이전트가 지금 무엇을 하고 있는지 단계별로 보기를, **so that** 긴 분석 중에도 멈춘 것인지 진행 중인지 알 수 있다.
+- **Given** novelty job이 생성되면, **When** 프론트가 상태를 조회하거나 구독하면, **Then** `queued`, `retrieving_corpus`, `searching_external`, `summarizing_prior_work`, `checking_similarity`, `forming_ideas`, `planning_experiment`, `exporting_notion`, `completed`, `failed`, `degraded` 중 하나를 표시한다.
+- **Given** 각 단계가 진행되면, **When** UI가 업데이트되면, **Then** 현재 tool, 검색 질의, 발견한 출처 수, 부분 결과, 실패/저하 상태를 보여준다.
+- **Given** 일부 source가 실패하면, **When** job이 계속 가능하면, **Then** source별 `degraded`를 표시하고 성공한 source만으로 부분 산출물을 제공한다.
+- **Traces**: FR-35, NFR-P5, NFR-R3
+
+### US-NV8 — 내부 저장 후 Notion export
+**As** 연구자(P1), **I want** novelty 결과를 검토한 뒤 Notion에 저장하기를, **so that** 연구 계획을 내 작업 공간으로 옮긴다.
+- **Given** novelty 결과가 완료되면, **When** 저장 상태를 보면, **Then** DocSuri 내부 DB/S3에 owner-scoped 세션, 입력 참조, 단계 이벤트, 최종 결과, export 상태가 저장된다.
+- **Given** 사용자가 Notion 연결을 승인하면, **When** export를 실행하면, **Then** 사용자별 OAuth 또는 명시 연결 토큰을 사용하고 토큰은 암호화 저장된다.
+- **Given** 사용자가 미리보기 후 export를 승인하면, **When** Notion MCP 호출이 성공하면, **Then** Notion 저장 위치와 상태를 표시한다. 자동 export는 하지 않는다.
+- **Traces**: FR-35, SEC-8, SEC-12, SEC-14
+
+### US-NV9 — novelty Agent 운영 관측성과 품질 게이트 *(페르소나 OP)*
+**As** 운영자(OP), **I want** novelty Agent의 비용, 외부 source 장애, 근거 무결성, export 실패를 관측하기를, **so that** 조용한 오답과 비용 폭주를 막는다.
+- **Given** 운영 대시보드, **When** novelty job 지표를 보면, **Then** job 수, 단계별 실패율, U2 full 검색 사용량, Agent-Browser 호출 수, source별 degraded 수, Notion export 실패율, per-job budget 초과를 볼 수 있다.
+- **Given** QT-10이 실행되면, **When** 결과를 확인하면, **Then** SourceRef 무결성, source normalization, job state transition, 실험 계획 필수 필드, Notion export 무결성을 검증한다.
+- **Traces**: NFR-C1, NFR-O1, QT-10, RES-11
+
+---
+
 ## 페르소나 → 스토리 맵
 | 페르소나 | 스토리 |
 |---|---|
-| P1 (박지훈) | US-H1, US-D1..D7, US-A1..A7, US-L1, US-L2, US-L3, US-I2, US-S1..S5, US-CG1..CG5, US-P1..P6 |
-| P2 | US-H1, US-D1, US-A1..A7, US-P4, US-P5, US-P6 |
-| OP | US-I1, US-I2, US-I3, US-R1, US-R2, US-R3, US-R4, US-R5, US-S6, US-CG6, US-P7 |
+| P1 (박지훈) | US-H1, US-D1..D7, US-A1..A7, US-L1, US-L2, US-L3, US-I2, US-S1..S5, US-CG1..CG5, US-P1..P6, US-NV1..US-NV8 |
+| P2 | US-H1, US-D1, US-A1..A7, US-P4, US-P5, US-P6, US-NV1, US-NV3, US-NV6, US-NV7 |
+| OP | US-I1, US-I2, US-I3, US-R1, US-R2, US-R3, US-R4, US-R5, US-S6, US-CG6, US-P7, US-NV9 |
 
 ## FR → 스토리 커버리지
 | 요구사항 | 스토리 |
@@ -403,5 +468,13 @@
 | FR-20 (개인화 적용) [U9] | US-P4, US-P5, US-P6 |
 | NFR-P4 (개인화 비차단) [U9] | US-P1, US-P4, US-P7 |
 | QT-7 (행동/프로필 불변식) [U9] | US-P2, US-P3, US-P7 |
+| FR-30 (novelty 입력·오케스트레이션) | US-NV1, US-NV2 |
+| FR-31 (U2 full 검색·외부 탐색) | US-NV1, US-NV3, US-NV4 |
+| FR-32 (유사 연구·차별화 후보) | US-NV3, US-NV6 |
+| FR-33 (실험 계획) | US-NV6 |
+| FR-34 (원고 위험 신호) | US-NV5 |
+| FR-35 (진행상태·저장·Notion export) | US-NV7, US-NV8 |
+| NFR-P5/R3 (novelty 비동기·source별 저하) | US-NV7, US-NV9 |
+| QT-10 (novelty 품질/불변식) | US-NV3, US-NV5, US-NV9 |
 
 _FR-1..11 전부 커버됨(표 본문 대조 검증). **FR-12..14·NFR-P2·QT-5 = U7 에픽 6(US-S1..S6) 커버(2026-06-18 편입, 팀 합의). FR-15..16·NFR-P3·QT-6 = U8 에픽 7(US-CG1..CG6) 커버(2026-06-19 편입). FR-18·QT-9 = U1 Corpus/DocModel eager 개정(US-I1..I3 + US-S3) 커버(2026-06-26 편입). FR-19..20·NFR-P4·QT-7 = U9 에픽 8(US-P1..P7) 커버(2026-06-23 편입). FR-26..29 = 계정 에픽 2 보강(US-A3..A7) 커버(2026-06-24 편입 — 재설정·소셜 OIDC·라이프사이클·입력 견고화).** SEC/RES의 인프라·설계 단계 항목(SEC-1/2/6/7/10/13/14, RES-1/2/3/4/10/12)은 스토리에 비매핑하고 NFR/Infra Design에서 다룬다. 적대적 비평 패스 완료(2026-06-15, 7/7 critic)._
