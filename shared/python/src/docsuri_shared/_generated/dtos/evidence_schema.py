@@ -18,15 +18,6 @@ class EvidenceScope(StrEnum):
     mixed = 'mixed'
 
 
-class EvidenceState(StrEnum):
-    """
-    근거형성 결과 상태. ok: 근거 1건 이상 추출 성공. abstain: 근거 0건 또는 범위 밖 — 날조 대신 기권(FR-5).
-    """
-
-    ok = 'ok'
-    abstain = 'abstain'
-
-
 class SourceRef(BaseModel):
     """
     단일 출처 핸들 — 기존 계약 재사용. paperId = IndexRecord.arxivId(vector-spec §2). recordRef = IndexRecord 식별자(실재성 검증 핸들). anchor = DocModel Section/Block id(summarization AnchorTarget 동일 방식). quote = 원문 스니펫(근거 인용, 선택). 내부 벡터/청크/점수 미노출(SEC-9). Trace: FR-5, SEC-9, vector-spec §2, summarization.schema.json AnchorTarget.

@@ -14,12 +14,6 @@
       "description": "근거 모을 논문 집합 범위(Q4=A 혼합). auto: 질의 주도 자동 검색. explicit: 사용자 명시 paper 집합만. mixed: 자동 검색 + 명시 집합 병합.",
       "enum"       : ["auto", "explicit", "mixed"]
     },
-    "EvidenceState": {
-      "type"       : "string",
-      "title"      : "EvidenceState",
-      "description": "근거형성 결과 상태. ok: 근거 1건 이상 추출 성공. abstain: 근거 0건 또는 범위 밖 — 날조 대신 기권(FR-5).",
-      "enum"       : ["ok", "abstain"]
-    },
     "SourceRef": {
       "type"        : "object",
       "title"       : "SourceRef",
