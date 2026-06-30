@@ -3,7 +3,7 @@ from __future__ import annotations
 from threading import RLock
 from typing import Any, Protocol
 
-from sqlalchemy import JSON, DateTime, String
+from sqlalchemy import JSON, DateTime, String, Uuid
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from .models import (
@@ -89,8 +89,8 @@ class Base(DeclarativeBase):
 class ResearchJobTable(Base):
     __tablename__ = "research_jobs"
 
-    job_id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    owner_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    job_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(120), nullable=False)
     state: Mapped[str] = mapped_column(String(32), nullable=False)
     created_at: Mapped[Any] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -100,9 +100,9 @@ class ResearchJobTable(Base):
 class ResearchMessageTable(Base):
     __tablename__ = "research_messages"
 
-    message_id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    job_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    owner_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    message_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
+    job_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False, index=True)
+    owner_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False, index=True)
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     content: Mapped[str] = mapped_column(String(12000), nullable=False)
     attachments: Mapped[list] = mapped_column(JSON, nullable=False)
@@ -221,4 +221,3 @@ class SqlResearchRepository:
 
     def close(self) -> None:
         self._s.close()
-

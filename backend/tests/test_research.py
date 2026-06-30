@@ -3,12 +3,14 @@ from __future__ import annotations
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
+from sqlalchemy.dialects import postgresql
 
 from backend.app import create_app
 from backend.config import Settings
 from backend.modules.accounts.models import Principal, UserRole
+from backend.modules.novelty.repository import NoveltyJobTable
 from backend.modules.research import controller
-from backend.modules.research.repository import InMemoryResearchRepository
+from backend.modules.research.repository import InMemoryResearchRepository, ResearchJobTable
 
 
 def _principal(user_id: str | None = None) -> Principal:
@@ -69,3 +71,15 @@ def test_research_sessions_are_owner_scoped(monkeypatch) -> None:
     assert client_b.get(f"/api/research/jobs/{job_id}").status_code == 404
     assert client_b.get("/api/research/jobs").json()["jobs"] == []
 
+
+def test_sql_repositories_bind_postgres_uuid_ids() -> None:
+    dialect = postgresql.dialect()
+
+    for table in (ResearchJobTable, NoveltyJobTable):
+        stmt = table.__table__.select().where(
+            table.owner_id == "00000000-0000-0000-0000-000000000001"
+        )
+        compiled = stmt.compile(dialect=dialect, compile_kwargs={"render_postcompile": True})
+
+        assert table.__table__.c.owner_id.type.compile(dialect=dialect) == "UUID"
+        assert "::UUID" in str(compiled)

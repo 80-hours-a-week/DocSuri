@@ -3,7 +3,7 @@ from __future__ import annotations
 from threading import RLock
 from typing import Any, Protocol
 
-from sqlalchemy import JSON, Boolean, DateTime, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Uuid
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from .models import (
@@ -187,8 +187,8 @@ class Base(DeclarativeBase):
 class NoveltyJobTable(Base):
     __tablename__ = "novelty_jobs"
 
-    job_id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    owner_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    job_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False, index=True)
     input_type: Mapped[str] = mapped_column(String(32), nullable=False)
     topic: Mapped[str] = mapped_column(String(2000), nullable=False)
     manuscript: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -205,9 +205,9 @@ class NoveltyJobTable(Base):
 class ProgressEventTable(Base):
     __tablename__ = "novelty_progress_events"
 
-    event_id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    job_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    owner_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    event_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
+    job_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False, index=True)
+    owner_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False, index=True)
     state: Mapped[str] = mapped_column(String(48), nullable=False)
     message: Mapped[str] = mapped_column(String(1000), nullable=False)
     progress_percent: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -218,9 +218,9 @@ class ProgressEventTable(Base):
 class NoveltyMessageTable(Base):
     __tablename__ = "novelty_messages"
 
-    message_id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    job_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    owner_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    message_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
+    job_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False, index=True)
+    owner_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False, index=True)
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     content: Mapped[str] = mapped_column(String(12000), nullable=False)
     attachments: Mapped[list] = mapped_column(JSON, nullable=False)
@@ -230,9 +230,9 @@ class NoveltyMessageTable(Base):
 class ArtifactTable(Base):
     __tablename__ = "novelty_artifacts"
 
-    artifact_id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    job_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    owner_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    artifact_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
+    job_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False, index=True)
+    owner_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False, index=True)
     kind: Mapped[str] = mapped_column(String(64), nullable=False)
     title: Mapped[str] = mapped_column(String(240), nullable=False)
     object_key: Mapped[str] = mapped_column(String(512), nullable=False)
@@ -243,9 +243,9 @@ class ArtifactTable(Base):
 class NotionExportTable(Base):
     __tablename__ = "novelty_notion_exports"
 
-    export_id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    job_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    owner_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    export_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
+    job_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False, index=True)
+    owner_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(48), nullable=False)
     preview_object_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
     notion_page_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
