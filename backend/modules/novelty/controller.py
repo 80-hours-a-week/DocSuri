@@ -3,13 +3,15 @@ from __future__ import annotations
 import json
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
 from backend.modules.accounts.models import Principal
 
 from .models import (
     CancelJobResponse,
+    ChatMessageCreateRequest,
+    ChatMessageListResponse,
     CreateJobResponse,
     ExportApprovalError,
     ExportApprovalRequest,
@@ -17,6 +19,8 @@ from .models import (
     InvalidTransitionError,
     JobResultResponse,
     JobStatusResponse,
+    NoveltyChatMessage,
+    NoveltyJobListResponse,
     NoveltyJobRequest,
 )
 from .repository import NoveltyRepository
@@ -71,6 +75,16 @@ async def create_job(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.get("/jobs", response_model=NoveltyJobListResponse)
+async def list_jobs(
+    request: Request,
+    limit: int = 50,
+    principal: Principal = PRINCIPAL_DEP,
+    repo: NoveltyRepository = REPO_DEP,
+) -> NoveltyJobListResponse:
+    return NoveltyService(repo, _observability(request)).list_jobs(principal.user_id, limit)
+
+
 @router.get("/jobs/{job_id}", response_model=JobStatusResponse)
 async def get_job(
     job_id: str,
@@ -80,6 +94,20 @@ async def get_job(
 ) -> JobStatusResponse:
     try:
         return NoveltyService(repo, _observability(request)).status(principal.user_id, job_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="job not found") from exc
+
+
+@router.delete("/jobs/{job_id}", status_code=204, response_class=Response)
+async def delete_job(
+    job_id: str,
+    request: Request,
+    principal: Principal = PRINCIPAL_DEP,
+    repo: NoveltyRepository = REPO_DEP,
+) -> Response:
+    try:
+        NoveltyService(repo, _observability(request)).delete_job(principal.user_id, job_id)
+        return Response(status_code=204)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="job not found") from exc
 
@@ -110,6 +138,37 @@ async def get_events(
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="job not found") from exc
     return StreamingResponse(sse_snapshot(events), media_type="text/event-stream")
+
+
+@router.get("/jobs/{job_id}/messages", response_model=ChatMessageListResponse)
+async def get_messages(
+    job_id: str,
+    request: Request,
+    principal: Principal = PRINCIPAL_DEP,
+    repo: NoveltyRepository = REPO_DEP,
+) -> ChatMessageListResponse:
+    try:
+        return NoveltyService(repo, _observability(request)).list_messages(
+            principal.user_id, job_id
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="job not found") from exc
+
+
+@router.post("/jobs/{job_id}/messages", response_model=NoveltyChatMessage)
+async def add_message(
+    job_id: str,
+    dto: ChatMessageCreateRequest,
+    request: Request,
+    principal: Principal = PRINCIPAL_DEP,
+    repo: NoveltyRepository = REPO_DEP,
+) -> NoveltyChatMessage:
+    try:
+        return NoveltyService(repo, _observability(request)).add_message(
+            principal.user_id, job_id, dto
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="job not found") from exc
 
 
 @router.post("/jobs/{job_id}/cancel", response_model=CancelJobResponse)

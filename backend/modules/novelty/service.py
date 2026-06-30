@@ -9,6 +9,9 @@ from .models import (
     ArtifactKind,
     ArtifactRef,
     CancelJobResponse,
+    ChatMessageCreateRequest,
+    ChatMessageListResponse,
+    ChatRole,
     CreateJobResponse,
     ExportApprovalError,
     ExportStatus,
@@ -17,8 +20,11 @@ from .models import (
     JobState,
     JobStatusResponse,
     NotionExport,
+    NoveltyChatMessage,
     NoveltyJob,
+    NoveltyJobListResponse,
     NoveltyJobRequest,
+    NoveltyJobSummary,
     ProgressEvent,
     utc_now,
     validate_transition,
@@ -56,8 +62,37 @@ class NoveltyService:
             )
         )
         self.record_event(job, "Novelty analysis job queued")
+        self.add_message(
+            owner_id,
+            job.jobId,
+            ChatMessageCreateRequest(
+                content=job.topic,
+                attachments=(
+                    [job.manuscript.model_dump(mode="json")] if job.manuscript else []
+                ),
+            ),
+        )
         _emit_metric(self._observability, "novelty.job_created")
         return CreateJobResponse(jobId=job.jobId, state=job.state)
+
+    def list_jobs(self, owner_id: str, limit: int = 50) -> NoveltyJobListResponse:
+        jobs = self._repo.list_jobs(owner_id, max(1, min(limit, 100)))
+        return NoveltyJobListResponse(
+            jobs=[
+                NoveltyJobSummary(
+                    jobId=job.jobId,
+                    inputType=job.inputType,
+                    topic=job.topic,
+                    state=job.state,
+                    progressPercent=job.progressPercent,
+                    exportStatus=job.exportStatus,
+                    createdAt=job.createdAt,
+                    updatedAt=job.updatedAt,
+                    completedAt=job.completedAt,
+                )
+                for job in jobs
+            ]
+        )
 
     def status(self, owner_id: str, job_id: str) -> JobStatusResponse:
         return JobStatusResponse(
@@ -109,6 +144,28 @@ class NoveltyService:
             self.record_event(job, "Novelty analysis cancelled")
             _emit_metric(self._observability, "novelty.job_cancelled")
         return CancelJobResponse(jobId=job.jobId, state=job.state)
+
+    def delete_job(self, owner_id: str, job_id: str) -> None:
+        self._repo.delete_job(owner_id, job_id)
+
+    def add_message(
+        self, owner_id: str, job_id: str, dto: ChatMessageCreateRequest
+    ) -> NoveltyChatMessage:
+        self._repo.get_job(owner_id, job_id)
+        message = self._repo.add_message(
+            NoveltyChatMessage(
+                jobId=job_id,
+                ownerId=owner_id,
+                role=ChatRole.USER,
+                content=dto.content.strip(),
+                attachments=dto.attachments,
+            )
+        )
+        self._repo.update_job(owner_id, job_id)
+        return message
+
+    def list_messages(self, owner_id: str, job_id: str) -> ChatMessageListResponse:
+        return ChatMessageListResponse(messages=self._repo.list_messages(owner_id, job_id))
 
     def save_artifact(
         self,

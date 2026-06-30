@@ -58,6 +58,12 @@ class ArtifactKind(StrEnum):
     EXPORT_STATUS = "export_status"
 
 
+class ChatRole(StrEnum):
+    USER = "user"
+    ASSISTANT = "assistant"
+    SYSTEM = "system"
+
+
 class EvidenceStatus(StrEnum):
     SUPPORTED = "supported"
     UNSUPPORTED = "unsupported"
@@ -127,6 +133,16 @@ class NoveltyJob(BaseModel):
     completedAt: datetime | None = None
 
 
+class NoveltyChatMessage(BaseModel):
+    messageId: str = Field(default_factory=lambda: str(uuid4()))
+    jobId: str
+    ownerId: str
+    role: ChatRole
+    content: str = Field(min_length=1, max_length=12000)
+    attachments: list[dict[str, Any]] = Field(default_factory=list)
+    createdAt: datetime = Field(default_factory=utc_now)
+
+
 class ProgressEvent(BaseModel):
     eventId: str = Field(default_factory=lambda: str(uuid4()))
     jobId: str
@@ -168,6 +184,22 @@ class CreateJobResponse(BaseModel):
     state: JobState
 
 
+class NoveltyJobSummary(BaseModel):
+    jobId: str
+    inputType: InputType
+    topic: str
+    state: JobState
+    progressPercent: int
+    exportStatus: ExportStatus
+    createdAt: datetime
+    updatedAt: datetime
+    completedAt: datetime | None = None
+
+
+class NoveltyJobListResponse(BaseModel):
+    jobs: list[NoveltyJobSummary] = Field(default_factory=list)
+
+
 class JobStatusResponse(BaseModel):
     job: NoveltyJob
     events: list[ProgressEvent] = Field(default_factory=list)
@@ -193,6 +225,25 @@ class ExportApprovalRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     approved: bool = True
+
+
+class ChatMessageCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    content: str = Field(min_length=1, max_length=12000)
+    attachments: list[dict[str, Any]] = Field(default_factory=list, max_length=8)
+
+    @field_validator("content")
+    @classmethod
+    def _strip_content(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("content is required")
+        return stripped
+
+
+class ChatMessageListResponse(BaseModel):
+    messages: list[NoveltyChatMessage] = Field(default_factory=list)
 
 
 STATE_PROGRESS: dict[JobState, int] = {

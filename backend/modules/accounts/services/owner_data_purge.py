@@ -25,6 +25,9 @@ class OwnerScopedTable:
 
 # Child tables first, then parent/summary rows.
 OWNER_SCOPED_TABLES: tuple[OwnerScopedTable, ...] = (
+    OwnerScopedTable("research_messages"),
+    OwnerScopedTable("research_jobs"),
+    OwnerScopedTable("novelty_messages"),
     OwnerScopedTable("novelty_progress_events"),
     OwnerScopedTable("novelty_artifacts"),
     OwnerScopedTable("novelty_notion_exports"),

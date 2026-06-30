@@ -9,10 +9,12 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from .models import (
     ArtifactKind,
     ArtifactRef,
+    ChatRole,
     ExportStatus,
     InputType,
     JobState,
     NotionExport,
+    NoveltyChatMessage,
     NoveltyJob,
     ProgressEvent,
     utc_now,
@@ -22,13 +24,17 @@ from .models import (
 class NoveltyRepository(Protocol):
     def create_job(self, job: NoveltyJob) -> NoveltyJob: ...
     def get_job(self, owner_id: str, job_id: str) -> NoveltyJob: ...
+    def list_jobs(self, owner_id: str, limit: int = 50) -> list[NoveltyJob]: ...
     def update_job(self, owner_id: str, job_id: str, **changes: Any) -> NoveltyJob: ...
+    def delete_job(self, owner_id: str, job_id: str) -> None: ...
     def add_event(self, event: ProgressEvent) -> ProgressEvent: ...
     def list_events(
         self, owner_id: str, job_id: str, after_event_id: str | None = None
     ) -> list[ProgressEvent]: ...
     def save_artifact(self, artifact: ArtifactRef) -> ArtifactRef: ...
     def list_artifacts(self, owner_id: str, job_id: str) -> list[ArtifactRef]: ...
+    def add_message(self, message: NoveltyChatMessage) -> NoveltyChatMessage: ...
+    def list_messages(self, owner_id: str, job_id: str) -> list[NoveltyChatMessage]: ...
     def get_export(self, owner_id: str, job_id: str) -> NotionExport | None: ...
     def save_export(self, export: NotionExport) -> NotionExport: ...
     def commit(self) -> None: ...
@@ -63,6 +69,7 @@ class InMemoryNoveltyRepository:
         self._jobs: dict[str, NoveltyJob] = {}
         self._events: dict[str, list[ProgressEvent]] = {}
         self._artifacts: dict[str, list[ArtifactRef]] = {}
+        self._messages: dict[str, list[NoveltyChatMessage]] = {}
         self._exports: dict[str, NotionExport] = {}
 
     def create_job(self, job: NoveltyJob) -> NoveltyJob:
@@ -70,6 +77,7 @@ class InMemoryNoveltyRepository:
             self._jobs[job.jobId] = job
             self._events.setdefault(job.jobId, [])
             self._artifacts.setdefault(job.jobId, [])
+            self._messages.setdefault(job.jobId, [])
             return job
 
     def get_job(self, owner_id: str, job_id: str) -> NoveltyJob:
@@ -79,12 +87,27 @@ class InMemoryNoveltyRepository:
                 raise KeyError(job_id)
             return job
 
+    def list_jobs(self, owner_id: str, limit: int = 50) -> list[NoveltyJob]:
+        with self._lock:
+            jobs = [job for job in self._jobs.values() if job.ownerId == owner_id]
+            jobs.sort(key=lambda job: (job.updatedAt, job.createdAt), reverse=True)
+            return jobs[:limit]
+
     def update_job(self, owner_id: str, job_id: str, **changes: Any) -> NoveltyJob:
         with self._lock:
             job = self.get_job(owner_id, job_id)
             updated = job.model_copy(update={**changes, "updatedAt": utc_now()})
             self._jobs[job_id] = updated
             return updated
+
+    def delete_job(self, owner_id: str, job_id: str) -> None:
+        with self._lock:
+            self.get_job(owner_id, job_id)
+            self._jobs.pop(job_id, None)
+            self._events.pop(job_id, None)
+            self._artifacts.pop(job_id, None)
+            self._messages.pop(job_id, None)
+            self._exports.pop(job_id, None)
 
     def add_event(self, event: ProgressEvent) -> ProgressEvent:
         with self._lock:
@@ -112,6 +135,19 @@ class InMemoryNoveltyRepository:
         with self._lock:
             self.get_job(owner_id, job_id)
             return list(self._artifacts.get(job_id, []))
+
+    def add_message(self, message: NoveltyChatMessage) -> NoveltyChatMessage:
+        with self._lock:
+            self.get_job(message.ownerId, message.jobId)
+            self._messages.setdefault(message.jobId, []).append(message)
+            return message
+
+    def list_messages(self, owner_id: str, job_id: str) -> list[NoveltyChatMessage]:
+        with self._lock:
+            self.get_job(owner_id, job_id)
+            messages = list(self._messages.get(job_id, []))
+            messages.sort(key=lambda item: (item.createdAt, item.messageId))
+            return messages
 
     def get_export(self, owner_id: str, job_id: str) -> NotionExport | None:
         with self._lock:
@@ -179,6 +215,18 @@ class ProgressEventTable(Base):
     created_at: Mapped[Any] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class NoveltyMessageTable(Base):
+    __tablename__ = "novelty_messages"
+
+    message_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    job_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    owner_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    content: Mapped[str] = mapped_column(String(12000), nullable=False)
+    attachments: Mapped[list] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[Any] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class ArtifactTable(Base):
     __tablename__ = "novelty_artifacts"
 
@@ -235,6 +283,18 @@ def _event_from_row(row: ProgressEventTable) -> ProgressEvent:
         message=row.message,
         progressPercent=row.progress_percent,
         payload=row.payload,
+        createdAt=row.created_at,
+    )
+
+
+def _message_from_row(row: NoveltyMessageTable) -> NoveltyChatMessage:
+    return NoveltyChatMessage(
+        messageId=row.message_id,
+        jobId=row.job_id,
+        ownerId=row.owner_id,
+        role=ChatRole(row.role),
+        content=row.content,
+        attachments=row.attachments,
         createdAt=row.created_at,
     )
 
@@ -299,6 +359,16 @@ class SqlNoveltyRepository:
             raise KeyError(job_id)
         return _job_from_row(row)
 
+    def list_jobs(self, owner_id: str, limit: int = 50) -> list[NoveltyJob]:
+        rows = (
+            self._s.query(NoveltyJobTable)
+            .filter(NoveltyJobTable.owner_id == owner_id)
+            .order_by(NoveltyJobTable.updated_at.desc(), NoveltyJobTable.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return [_job_from_row(row) for row in rows]
+
     def update_job(self, owner_id: str, job_id: str, **changes: Any) -> NoveltyJob:
         row = self._s.get(NoveltyJobTable, job_id)
         if row is None or row.owner_id != owner_id:
@@ -321,6 +391,13 @@ class SqlNoveltyRepository:
         row.updated_at = utc_now()
         self._s.flush()
         return _job_from_row(row)
+
+    def delete_job(self, owner_id: str, job_id: str) -> None:
+        row = self._s.get(NoveltyJobTable, job_id)
+        if row is None or row.owner_id != owner_id:
+            raise KeyError(job_id)
+        self._s.delete(row)
+        self._s.flush()
 
     def add_event(self, event: ProgressEvent) -> ProgressEvent:
         self.get_job(event.ownerId, event.jobId)
@@ -383,6 +460,32 @@ class SqlNoveltyRepository:
             .all()
         )
         return [_artifact_from_row(row) for row in rows]
+
+    def add_message(self, message: NoveltyChatMessage) -> NoveltyChatMessage:
+        self.get_job(message.ownerId, message.jobId)
+        self._s.add(
+            NoveltyMessageTable(
+                message_id=message.messageId,
+                job_id=message.jobId,
+                owner_id=message.ownerId,
+                role=message.role.value,
+                content=message.content,
+                attachments=message.attachments,
+                created_at=message.createdAt,
+            )
+        )
+        self._s.flush()
+        return message
+
+    def list_messages(self, owner_id: str, job_id: str) -> list[NoveltyChatMessage]:
+        self.get_job(owner_id, job_id)
+        rows = (
+            self._s.query(NoveltyMessageTable)
+            .filter(NoveltyMessageTable.owner_id == owner_id, NoveltyMessageTable.job_id == job_id)
+            .order_by(NoveltyMessageTable.created_at.asc(), NoveltyMessageTable.message_id.asc())
+            .all()
+        )
+        return [_message_from_row(row) for row in rows]
 
     def get_export(self, owner_id: str, job_id: str) -> NotionExport | None:
         self.get_job(owner_id, job_id)
