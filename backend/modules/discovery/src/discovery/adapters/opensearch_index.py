@@ -14,12 +14,29 @@ exposed as two adapter objects but share one OpenSearch client via ``OpenSearchC
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from typing import Any
 
 from docsuri_shared.vector_spec import IndexRecord
+from pydantic import ValidationError
 
 from ..ports.search_ports import IndexUnavailable, ScoredRecord
+
+_log = logging.getLogger(__name__)
+
+
+def _hit_id(hit: dict[str, Any]) -> str:
+    """Best-effort identifier for a hit, for drop diagnostics. Uses only id-shaped fields
+    (never title/abstract/body) so a drop log can never leak indexed content (SEC-9/SEC-15)."""
+    source = hit.get("_source") or {}
+    return str(hit.get("_id") or source.get("chunkId") or source.get("paperId") or "<unknown>")
+
+
+def _drift_fields(exc: ValidationError) -> list[str]:
+    """Dotted field paths that failed validation — locations ONLY, never the offending values
+    (a value would carry indexed content). Surfaces WHICH part of the contract drifted."""
+    return sorted({".".join(str(p) for p in err["loc"]) for err in exc.errors()})
 
 
 class OpenSearchClientFactory:
@@ -63,11 +80,43 @@ class OpenSearchClientFactory:
 
 
 def _to_scored(hits: list[dict[str, Any]]) -> list[ScoredRecord]:
-    """Deserialize OpenSearch hits → (IndexRecord, store score), preserving rank order."""
+    """Deserialize OpenSearch hits → (IndexRecord, store score), preserving rank order.
+
+    A hit whose stored ``_source`` no longer satisfies the current ``IndexRecord`` contract
+    (schema drift — e.g. a document indexed under an earlier vector-spec) is DROPPED and logged,
+    NOT allowed to fail the whole query: one stale document must not turn the entire search into
+    a 500 (this mirrors the assembler dropping a single malformed card rather than sinking the
+    page — the read path was previously the only place missing that per-record tolerance). Each
+    drop logs the hit id and the drifted field paths (locations only — never values, so indexed
+    content can't leak); the per-call drop count makes corpus drift observable and falls to zero
+    once a reindex completes. A genuine store/query outage is a separate failure mode the callers
+    already map to ``IndexUnavailable`` (INV-3) before this function runs."""
     scored: list[ScoredRecord] = []
+    dropped = 0
     for hit in hits:
-        record = IndexRecord.model_validate(hit["_source"])
+        try:
+            # ``.get(...) or {}`` — a missing ``_source`` (e.g. a stored_fields/_source-disabled
+            # response) would raise KeyError on subscript, which is NOT a ValidationError and
+            # would escape this guard into the caller's 500. Feeding {} instead routes it through
+            # the SAME drop path (empty dict fails IndexRecord validation), upholding the
+            # "one bad hit must not sink the query" invariant for the malformed-hit case too.
+            record = IndexRecord.model_validate(hit.get("_source") or {})
+        except ValidationError as exc:
+            dropped += 1
+            _log.warning(
+                "discovery.search dropped non-conforming index record id=%s fields=%s",
+                _hit_id(hit),
+                _drift_fields(exc),
+            )
+            continue
         scored.append((record, float(hit.get("_score") or 0.0)))
+    if dropped:
+        _log.warning(
+            "discovery.search dropped %d/%d hit(s) failing IndexRecord validation "
+            "(schema drift — reindex pending)",
+            dropped,
+            len(hits),
+        )
     return scored
 
 
@@ -127,7 +176,18 @@ class OpenSearchPaperLookupAdapter:
             raise IndexUnavailable("OpenSearch paper lookup failed") from exc
         if not hits:
             return None
-        return IndexRecord.model_validate(hits[0]["_source"])
+        # A non-conforming stored record (schema drift) is treated like "not indexed": return
+        # None → the route 404s and the detail page degrades to the arXiv id + link-out, rather
+        # than 500-ing. The drop is logged (field paths only, no values) for drift visibility.
+        try:
+            return IndexRecord.model_validate(hits[0].get("_source") or {})
+        except ValidationError as exc:
+            _log.warning(
+                "discovery.paper_lookup dropped non-conforming record id=%s fields=%s",
+                _hit_id(hits[0]),
+                _drift_fields(exc),
+            )
+            return None
 
 
 class OpenSearchLexicalIndexAdapter:

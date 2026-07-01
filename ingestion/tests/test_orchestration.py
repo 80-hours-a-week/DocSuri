@@ -1038,3 +1038,93 @@ def test_changed_version_replaces_stale_chunks() -> None:
     # across versions, and identical body shape yields the same chunk count (not doubled).
     assert all(record.version == 2 for record in index.records.values())
     assert len(index.records) == v1_count
+
+
+# --- patch #2: ingestion-blockage observability + NUL sanitization -----------------
+
+def _sample_index_record() -> IndexRecord:
+    return IndexRecord(
+        chunkId="2401.00001:0000",
+        paperId="2401.00001",
+        version=1,
+        vector=[0.0] * DIMENSIONS,
+        section="abstract",
+        lexicalTerms="retrieval augmented generation",
+        blockRefs=[],
+        title="A Test Paper",
+        authors=["A. Author"],
+        year=2024,
+        arxivId="2401.00001v1",
+        abstract="Abstract",
+        abstractSnippet="Abstract",
+        arxivUrl="https://arxiv.org/abs/2401.00001",
+        categories=["cs.LG"],
+    )
+
+
+def test_bulk_failure_summary_keeps_fields_and_truncates_reason() -> None:
+    from docsuri_ingestion.adapters.aws import _bulk_failure_summary
+
+    out = _bulk_failure_summary(
+        [{"_id": "p:0", "status": 400,
+          "error": {"type": "mapper_parsing_exception", "reason": "x" * 500}}]
+    )
+    assert out[0]["id"] == "p:0"
+    assert out[0]["status"] == 400
+    assert out[0]["type"] == "mapper_parsing_exception"
+    assert out[0]["reason"].endswith("…") and len(out[0]["reason"]) <= 201
+
+
+def test_bulk_failure_summary_caps_the_list() -> None:
+    from docsuri_ingestion.adapters.aws import _bulk_failure_summary
+
+    failures = [{"_id": f"p:{i}", "status": 400, "error": {}} for i in range(20)]
+    assert len(_bulk_failure_summary(failures)) == 5
+
+
+def test_bulk_upsert_logs_rejection_reason_before_raising(caplog) -> None:
+    import logging
+
+    from docsuri_ingestion.domain.errors import RetriableIngestionError
+    from docsuri_ingestion.domain.models import IndexRecordBatch
+
+    class RejectingClient:
+        def bulk(self, body):  # OpenSearch returns HTTP 200 with per-item failures
+            return {
+                "errors": True,
+                "items": [
+                    {
+                        "index": {
+                            "_id": "2401.00001:0000",
+                            "status": 400,
+                            "error": {
+                                "type": "strict_dynamic_mapping_exception",
+                                "reason": "mapping set to strict, dynamic introduction not allowed",
+                            },
+                        }
+                    }
+                ],
+            }
+
+    index = OpenSearchVectorIndex.__new__(OpenSearchVectorIndex)
+    index._client = RejectingClient()
+    index._index_name = "papers"
+    index._stats_cache = FakeStatsCache()
+    index._last_write_timestamp = None
+
+    batch = IndexRecordBatch(
+        paper_id="2401.00001", version=1, records=(_sample_index_record(),)
+    )
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(RetriableIngestionError):
+            index.bulk_upsert(batch)
+    # The previously-discarded per-item reason is now visible for diagnosis.
+    assert "strict_dynamic_mapping_exception" in caplog.text
+
+
+def test_no_nul_strips_nul_bytes_for_postgres_text() -> None:
+    from docsuri_ingestion.adapters.assets import _no_nul
+
+    assert _no_nul("Figure 1\x00 caption") == "Figure 1 caption"
+    assert _no_nul("") == ""
+    assert _no_nul(None) is None
