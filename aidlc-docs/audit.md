@@ -2809,5 +2809,124 @@ aidlc 개발 과정을 적용하여 개발하려고 합니다. 질문지를 형�
 **User Input**: "go to the feature/u9-search-boost-shadow and fix every finding."
 **AI Response**: "Fixed all PR #300 review findings: BR-P8 boost total normalization, cached-profile-only search shadow reads with PostgreSQL statement_timeout, max-shift/boosted-count shadow metrics, regression tests, AIDLC state/code summary updates, and validation with focused tests, backend+discovery sweep, Ruff, diff check, and merge-tree check."
 **Context**: Review remediation completion / U9 personalization search-boost shadow — PR #300.
+---
+
+## Develop Branch Change Review
+**Timestamp**: 2026-07-01T00:39:04Z
+**User Input**: "죄송해요. 현재 메인 분기인 `develop` 에서 변경사항이 좀 많이 있었어요. 특히 프론트 쪽에서 데스크톱/모바일 뷰 스위칭 기능이 추가되는 등 이런 저런 추가 사항이 있었어요. 먼저 변경사항들을 쭉 검토하세요."
+**AI Response**: "Reviewed the latest develop branch commits, focusing on PR #281 desktop web layout/mobile preview changes and the recent infrastructure drift reconciliation commits. Ran frontend Vitest with pnpm 9.15.9."
+**Context**: Review / Develop branch change inspection before Agent Chat Frontend work.
+
+---
+
+## Agent Chat Frontend Story Questions Translated
+**Timestamp**: 2026-07-01T00:41:01Z
+**User Input**: "질문지를 만든건가요? 질문지를 만든거면, 한국어로 번역해 주세요."
+**AI Response**: "Confirmed that the Agent Chat Frontend story planning questionnaire exists and translated `aidlc-docs/inception/plans/agent-chat-frontend-story-generation-plan.md` into Korean while preserving required [Answer]: tags."
+**Context**: INCEPTION / User Stories planning — Agent Chat Frontend questionnaire localization.
+
+---
+
+## Staged Commit Message
+**Timestamp**: 2026-07-01T00:49:59Z
+**User Input**: "커밋 메시지를 작성해 주세요."
+**AI Response**: "Prepared a commit message for the staged Agent Chat Frontend AI-DLC requirements and story planning documents."
+**Context**: Documentation / Commit message preparation.
+
+---
+
+## Agent Chat Frontend Story Answers Applied
+**Timestamp**: 2026-07-01T01:57:27Z
+**User Input**: "질문지의 답변을 전부 권장으로 확정하고, 다음 질문지까지 쭉 진행해 주세요."
+**AI Response**: "Set all Agent Chat Frontend story planning answers to the recommended option A, generated Epic 11 user stories US-AG1..US-AG7, updated persona/story and FR/story mappings, created a workflow plan, and created the next Application Design questionnaire."
+**Context**: INCEPTION / User Stories generation to Application Design question gate — Agent Chat Frontend.
+
+---
+
+## Agent Chat Frontend Application Design Answers Applied
+**Timestamp**: 2026-07-01T02:21:54Z
+**User Input**: "질문지는 전부 권장으로 확정하고 다음 질문지 출력까지 쭈욱 진행해 주세요!"
+**AI Response**: "Set all Agent Chat Frontend Application Design answers to recommended option A, generated U13 Application Design artifacts, updated application design summary, and created the next Functional Design questionnaire."
+**Context**: INCEPTION Application Design to CONSTRUCTION Functional Design question gate — Agent Chat Frontend.
+
+---
+
+## Agent Chat Frontend Functional Design Answers Applied
+**Timestamp**: 2026-07-01T02:36:00Z
+**User Input**: "질문지의 답변을 전부 권장으로 확정하고 다음 질문지 단계까지 쭉 진행해 주세요."
+**AI Response**: "Set all Agent Chat Frontend Functional Design answers to recommended option A, generated functional design artifacts, and created the next NFR Requirements questionnaire."
+**Context**: CONSTRUCTION / Functional Design to NFR Requirements question gate — Agent Chat Frontend.
+
+---
+
+## Agent Chat Frontend NFR Requirements Answers Applied
+**Timestamp**: 2026-07-01T02:42:06Z
+**User Input**: "질문지의 답변을 전부 권장으로 확정하고 다음 질문지 단계까지 쭉 진행해 주세요."
+**AI Response**: "Set all Agent Chat Frontend NFR Requirements answers to recommended option A, generated NFR requirements artifacts, and created the next NFR Design questionnaire."
+**Context**: CONSTRUCTION / NFR Requirements to NFR Design question gate — Agent Chat Frontend.
+
+---
+
+## Agent Chat Frontend NFR Design Answers Applied
+**Timestamp**: 2026-07-01T02:48:00Z
+**User Input**: "Q5에 대한 답변을 `X) A + E2E 테스트`로, 나머지는 모두 권장으로 답변을 확정하고 다음 단계를 진행해 주세요."
+**AI Response**: "Set Agent Chat Frontend NFR Design answers to Q1~Q4=A and Q5=X with A plus E2E tests, generated NFR Design artifacts, skipped Infrastructure Design because U13 reuses existing frontend deployment, and created the Code Generation approval plan."
+**Context**: CONSTRUCTION / NFR Design to Code Generation planning gate — Agent Chat Frontend.
+
+---
+
+## U4 Library Unit Review Request
+**Timestamp**: 2026-07-01T03:49:52Z
+**User Input**: "Using .claude/skills/aidlc-unit-review, review U4"
+**AI Response**: "Loaded the aidlc-unit-review skill, AI-DLC common rules, enabled extension rules, and U4 review context; proceeding with a U4 implementation review against its unit contract."
+**Context**: Review / aidlc-unit-review — U4 Library.
+
+---
+
+## U4 Library Unit Review Findings
+**Timestamp**: 2026-07-01T03:53:31Z
+**User Input**: "Using .claude/skills/aidlc-unit-review, review U4"
+**AI Response**: "Completed the U4 review. Findings: blocking NFR-R2/SEC-15 rerun failures are converted to successful empty results; blocking BR-L7/INV-L3 contract drift between requestId-based dedupe in U4 docs and timestamp-only SearchExecutedEvent/code; should-fix BR-L5 PaperRetractedEvent/retracted metadata propagation is specified but not implemented; should-fix U4 root tests fail ruff when linted."
+**Context**: Review / aidlc-unit-review — U4 Library.
+
+---
+
+## U4 Library Unit Review Findings Fix
+**Timestamp**: 2026-07-01T04:09:15Z
+**User Input**: "Good. Now fix all your findings and commit them."
+**AI Response**: "Implemented the U4 review findings: fail-closed 503 rerun gateway errors, requestId-backed SearchExecutedEvent dedupe, PaperRetractedEvent/retracted metadata propagation, focused regression coverage, and Ruff/test validation."
+**Context**: Review remediation / aidlc-unit-review — U4 Library.
+
+---
+
+## PR 302 Asset IAM Fix Request
+**Timestamp**: 2026-07-01T05:02:12Z
+**User Input**: "Add s3:GetObject for assets/* to the API task role"
+**AI Response**: "Fast-forwarded local develop to current origin/develop, loaded AI-DLC common rules, and added the papers bucket assets/* read grant to the API task role."
+**Context**: Direct infra remediation / PR #302 follow-up — ComputeStack API task IAM.
+
+---
+
+## PR 302 Asset IAM Commit Request
+**Timestamp**: 2026-07-01T05:05:18Z
+**User Input**: "commit it and push to origin"
+**AI Response**: "Preparing to commit the API task role assets/* read grant and push the develop branch to origin."
+**Context**: Direct infra remediation / PR #302 follow-up — commit and push.
+
+---
+
+## PR 302 Asset IAM Deploy Request
+**Timestamp**: 2026-07-01T05:12:49Z
+**User Input**: "now do the deploy"
+**AI Response**: "Verified production AWS identity with AdministratorAccess-028317349537 and preparing a scoped Docsuri-Compute CDK diff/deploy for the API task role assets/* read grant."
+**Context**: Direct infra remediation / PR #302 follow-up — production CDK deploy.
+
+---
+
+## PR 302 Asset IAM Deploy Completion
+**Timestamp**: 2026-07-01T05:19:21Z
+**User Input**: "now do the deploy"
+**AI Response**: "Deployed Docsuri-Compute to production. CloudFormation reached UPDATE_COMPLETE, ECS docsuri-api stabilized on task definition revision 20, DOCSURI_MULTIMODAL_ASSETS_ENABLED=true is present, /healthz returned ok, and the API task role inline policy now grants s3:GetObject on doc-model/* and assets/*."
+**Context**: Direct infra remediation / PR #302 follow-up — production deploy completion and validation.
 
 ---

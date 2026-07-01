@@ -62,6 +62,7 @@ class GroundingPending:
     ranked: RankedResults
     degrade_mode: DegradeMode
     user_id: str
+    request_id: str
     query: str
 
 
@@ -162,7 +163,7 @@ class SearchOrchestrationService:
             # zero-result query no longer inflates the hallucination/abstain rate. Zero-result
             # visibility comes from the SearchExecuted event (resultCount=0) below. (US-R4)
             response = self._assembler.assemble(NoMatchResult(), degrade_mode)
-            self._publish(ctx.auth_session.user_id, request.query, 0)
+            self._publish(ctx.auth_session.user_id, ctx.request_id, request.query, 0)
             return SearchOutcome(response=response)
 
         ranked = self._ranker.rank(candidates, plan, degradation, self._top_n)
@@ -177,6 +178,7 @@ class SearchOrchestrationService:
                 ranked=ranked,
                 degrade_mode=degrade_mode,
                 user_id=ctx.auth_session.user_id,
+                request_id=ctx.request_id,
                 query=request.query,
             )
         )
@@ -186,7 +188,7 @@ class SearchOrchestrationService:
         result = self._grounding_adapter.map_decision(decision, pending.ranked)
         response = self._assembler.assemble(result, pending.degrade_mode)
         self._emit_grounding_health(getattr(decision, "verdict", "unknown"))
-        self._publish(pending.user_id, pending.query, result_count(response))
+        self._publish(pending.user_id, pending.request_id, pending.query, result_count(response))
         return response
 
     def _emit_rerank_shadow(self, user_id: str, ranked: RankedResults) -> None:
@@ -231,17 +233,16 @@ class SearchOrchestrationService:
         Must NOT raise — observability is advisory and off the response-correctness path.
         """
         try:
-            self._observability.emit_metric(
-                "discovery.search.grounding", 1.0, {"verdict": verdict}
-            )
+            self._observability.emit_metric("discovery.search.grounding", 1.0, {"verdict": verdict})
         except Exception:  # noqa: BLE001
             pass
 
-    def _publish(self, user_id: str, query: str, count: int) -> None:
+    def _publish(self, user_id: str, request_id: str, query: str, count: int) -> None:
         """Fire-and-forget SearchExecuted (BR-14). Failure MUST NOT affect the response."""
         try:
             event = SearchExecutedEvent(
                 userId=user_id,
+                requestId=request_id,
                 query=query,
                 timestamp=datetime.now(UTC),
                 resultCount=count,
