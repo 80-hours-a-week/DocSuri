@@ -7,6 +7,7 @@ from docsuri_shared.vector_spec import DIMENSIONS
 
 from discovery.adapters.opensearch_index import (
     OpenSearchLexicalIndexAdapter,
+    OpenSearchPaperLookupAdapter,
     OpenSearchVectorStoreAdapter,
 )
 from discovery.mocks import fixtures
@@ -74,6 +75,23 @@ def test_bm25_failure_raises_index_unavailable() -> None:
     )
     with pytest.raises(IndexUnavailable):
         adapter.bm25_search(["x"], 10)
+
+
+def test_fetch_paper_matches_version_stripped_id_so_off_version_request_resolves() -> None:
+    # Regression: paperId is stored version-less; a request for one version (…v1) must still
+    # resolve a paper indexed at another (…v3) instead of 404-ing on an exact-version miss.
+    rec = fixtures.RECORDS[0]
+    fake = FakeSearchClient(hits=[_hit(rec, 1.0)])
+    adapter = OpenSearchPaperLookupAdapter(fake, "docsuri-corpus")
+
+    out = adapter.fetch_paper("2503.18888v1")
+
+    assert out is not None and out.paperId == rec.paperId
+    _, body = fake.last
+    should = body["query"]["bool"]["should"]
+    # Includes the version-stripped paperId term (the fix) alongside the raw id + arxivId terms.
+    assert {"term": {"paperId": "2503.18888"}} in should
+    assert {"term": {"arxivId": "2503.18888v1"}} in should
 
 
 def _bad_hit(record, score: float) -> dict:
