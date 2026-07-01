@@ -19,6 +19,7 @@ The shell owns this file (CODEOWNERS ``/backend/``); module owners change only t
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -205,6 +206,19 @@ def _mount_discovery(app: FastAPI, settings: Settings, result: MountResult) -> N
     grounding_hook = GroundingEnforcementHook()
     app.state.discovery_bundle = bundle
     app.state.grounding_hook = grounding_hook
+
+    # US-P4 (SHADOW): let the orchestrator ask U9 for bounded category boosts. Resolved from
+    # app.state at request time so mount order is irrelevant; missing/failed → no boost (BR-P13).
+    def _personalization_boosts(user_id: str) -> dict[str, float]:
+        provider = getattr(app.state, "personalization_search_boosts", None)
+        if provider is None:
+            return {}
+        try:
+            return provider(user_id)
+        except Exception:  # noqa: BLE001 — personalization is best-effort, never fails search
+            return {}
+
+    bundle.orchestrator._search_boosts = _personalization_boosts
 
     # Map a store outage to a fail-closed, no-leak 503 (INV-3/SEC-15). The standalone build_app
     # registers this itself; mounted via build_router here, the app-shell must do it too —
@@ -484,6 +498,36 @@ def _mount_personalization(app: FastAPI, settings: Settings, result: MountResult
     for router in personalization.routers:
         app.include_router(router)
     result.mounted.append("personalization")
+
+    # US-P4 (SHADOW): expose bounded search boosts for the discovery orchestrator. Gated by the
+    # same flag as the endpoints; a fresh read-port + session per call so the singleton
+    # orchestrator never holds a request-scoped DB session. Errors bubble to discovery's
+    # fail-open wrapper (BR-P13).
+    if os.getenv("PERSONALIZATION_ENABLED", "false").lower() in {"1", "true", "yes", "on"}:
+        from backend.modules.personalization.service import PersonalizationReadPort
+
+        observability = getattr(app.state, "observability", None)
+
+        if _is_postgres(settings.database_url):
+
+            def _search_boosts(user_id: str) -> dict[str, float]:
+                session = session_factory()
+                try:
+                    port = PersonalizationReadPort(
+                        SqlPersonalizationRepository(session), observability=observability
+                    )
+                    decision = port.search_decision(user_id)
+                    return dict(decision.searchBoosts) if decision.enabled else {}
+                finally:
+                    session.close()
+        else:
+
+            def _search_boosts(user_id: str) -> dict[str, float]:
+                port = PersonalizationReadPort(repo, observability=observability)
+                decision = port.search_decision(user_id)
+                return dict(decision.searchBoosts) if decision.enabled else {}
+
+        app.state.personalization_search_boosts = _search_boosts
 
 
 def _mount_novelty(app: FastAPI, settings: Settings, result: MountResult) -> None:

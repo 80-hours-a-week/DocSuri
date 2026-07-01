@@ -111,6 +111,26 @@ def _bounded(values: dict[str, float]) -> dict[str, float]:
     }
 
 
+# BR-P8 search-boost contract: each category boost ∈ [-0.1, +0.1], Σ|boost| ≤ 0.2. Enforced
+# HERE (at the read port) so every consumer gets contract-compliant values — the ranker never
+# has to re-clamp. Category weights are stored in [0,1]; the decision maps them to boosts.
+_BOOST_CEILING = 0.1
+_BOOST_TOTAL = 0.2
+
+
+def _to_search_boosts(weights: dict[str, float]) -> dict[str, float]:
+    boosts = {
+        key: max(-_BOOST_CEILING, min(_BOOST_CEILING, value * _BOOST_CEILING))
+        for key, value in weights.items()
+        if value
+    }
+    total = sum(abs(b) for b in boosts.values())
+    if total > _BOOST_TOTAL:
+        scale = _BOOST_TOTAL / total
+        boosts = {key: b * scale for key, b in boosts.items()}
+    return {key: round(b, 4) for key, b in boosts.items()}
+
+
 class PersonalizationReadPort:
     def __init__(
         self,
@@ -146,7 +166,7 @@ class PersonalizationReadPort:
                 self._repo.save_profile(profile)
             return PersonalizationDecision(
                 enabled=True,
-                searchBoosts=profile.categoryWeights if include_search else {},
+                searchBoosts=_to_search_boosts(profile.categoryWeights) if include_search else {},
                 summaryDefaults=profile.summaryDefaults,
                 translationDefaults=profile.translationDefaults,
                 reason="profile_available",

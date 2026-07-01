@@ -204,7 +204,18 @@ def test_api_records_and_returns_decision(monkeypatch) -> None:
     assert resp.status_code == 200
     assert resp.json()["recorded"] is True
     assert decision["reason"] == "profile_available"
-    assert decision["searchBoosts"]["cs.AI"] == 1.0
+    # BR-P8: raw weight 1.0 maps to the +0.1 boost ceiling, not 1.0.
+    assert decision["searchBoosts"]["cs.AI"] == 0.1
+
+
+def test_search_boosts_respect_brp8_bounds() -> None:
+    from backend.modules.personalization.service import _to_search_boosts
+
+    # Many maxed-out categories must still each stay ≤ 0.1 and sum ≤ 0.2 (BR-P8).
+    boosts = _to_search_boosts({f"cat.{i}": 1.0 for i in range(10)})
+    assert boosts
+    assert all(abs(b) <= 0.1 + 1e-9 for b in boosts.values())
+    assert sum(abs(b) for b in boosts.values()) <= 0.2 + 1e-9
 
 
 def test_api_settings_disable_recording(monkeypatch) -> None:
