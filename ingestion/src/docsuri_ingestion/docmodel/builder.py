@@ -46,17 +46,26 @@ _MIN_BODY_TEXT_CHARS = 500
 
 def _non_abstract_body_len(doc: DocModel) -> int:
     """Character count of the doc-model body EXCLUDING the abstract section — the signal that
-    separates a complete conversion from an abstract-only truncation."""
-    data = doc.model_dump(mode="json")
-    total = 0
-    for section in data.get("sections") or []:
-        label = str(section.get("title") or section.get("heading") or "").strip().lower()
-        if label == "abstract":
-            continue
-        for block in section.get("blocks") or []:
-            if isinstance(block, dict):
-                total += len(block.get("text") or "")
-    return total
+    separates a complete conversion from an abstract-only truncation.
+
+    Recurses into nested subsections: the parser builds a nested section tree (ltx_section →
+    ltx_subsection → …) and a normal paper's body prose often lives entirely in subsections, so
+    counting only the top-level sections' direct blocks would read 0 and wrongly degrade a
+    complete paper (mirrors ``_project_full_text``, which walks the same tree)."""
+
+    def _count(sections: object) -> int:
+        total = 0
+        for section in sections or []:
+            label = str(section.get("title") or section.get("heading") or "").strip().lower()
+            if label == "abstract":
+                continue  # skip the abstract subtree at any depth
+            for block in section.get("blocks") or []:
+                if isinstance(block, dict):
+                    total += len(block.get("text") or "")
+            total += _count(section.get("sections"))
+        return total
+
+    return _count(doc.model_dump(mode="json").get("sections"))
 
 
 @runtime_checkable

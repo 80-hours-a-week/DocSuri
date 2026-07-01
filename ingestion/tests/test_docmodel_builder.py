@@ -20,6 +20,18 @@ _HTML = (
     f'<div class="ltx_para"><p class="ltx_p">{_BODY_PARAGRAPH}</p></div></section></article>'
 )
 
+# A COMPLETE paper whose body prose lives entirely in a SUBSECTION (nested section tree). The
+# top-level section has no direct blocks — the completeness gate must recurse into child sections.
+_NESTED_BODY_HTML = (
+    '<article class="ltx_document"><section class="ltx_section" id="S1">'
+    '<h2 class="ltx_title ltx_title_section">Intro</h2>'
+    '<section class="ltx_subsection" id="S1.SS1">'
+    '<h3 class="ltx_title ltx_title_subsection">Sub</h3>'
+    f'<div class="ltx_para"><p class="ltx_p">{_BODY_PARAGRAPH}</p></div>'
+    '</section></section></article>'
+)
+
+
 # ar5iv (LaTeXML) conversion failed: HTTP 200 but the body is a single sentence (abstract-only).
 _TRUNCATED_HTML = (
     '<article class="ltx_document"><section class="ltx_section" id="S1">'
@@ -230,6 +242,18 @@ def test_build_degrades_to_source_unavailable_when_conversion_is_truncated() -> 
     result = _builder(source, store).build(sample_metadata("2401.00001v1"))
     assert isinstance(result, SourceUnavailableDTO)
     assert store.put_calls == []  # nothing cached
+
+
+def test_build_counts_body_in_nested_subsections() -> None:
+    # Regression: a complete paper's body prose can live entirely in a subsection. The
+    # completeness gate must recurse into child sections — otherwise the top-level section has no
+    # direct blocks, body length reads 0, and the paper is wrongly degraded to source_unavailable
+    # (throwing away a valid structured HTML doc-model for the flat PDF fallback).
+    store = _FakeStore(cached=None)
+    source = _FakeSource((_NESTED_BODY_HTML, SourceTier.ar5iv))
+    result = _builder(source, store).build(sample_metadata("2401.00001v1"))
+    assert isinstance(result, DocModelResultDTO)  # NOT degraded
+    assert len(store.put_calls) == 1
 
 
 def test_invalidate_drops_cached_versions() -> None:
