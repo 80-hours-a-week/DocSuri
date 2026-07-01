@@ -11,6 +11,7 @@ Stacks are split by lifecycle/blast-radius so a network change doesn't redeploy 
 import aws_cdk as cdk
 from stacks.access_stack import AccessStack
 from stacks.compute_stack import ComputeStack
+from stacks.evidence_stack import EvidenceStack
 from stacks.frontend_stack import FrontendStack
 from stacks.ingestion_stack import IngestionStack
 from stacks.network_stack import NetworkStack
@@ -60,6 +61,18 @@ novelty = NoveltyStack(
     db_port=int(_required_context("novelty_db_port")),
     db_security_group_id=_required_context("novelty_db_security_group_id"),
     db_secret_arn=_required_context("novelty_db_secret_arn"),
+    env=env,
+)
+# Deploy unit ④ — U11 evidence formation agent worker. Code/synth only; deploy remains
+# team-owned. The unit is active when DOCSURI_EVIDENCE_ASYNC_ENABLED=true is configured.
+evidence = EvidenceStack(
+    app, 'Docsuri-Evidence',
+    vpc=network.vpc,
+    db_endpoint=_required_context('evidence_db_endpoint'),
+    db_port=int(_required_context('evidence_db_port')),
+    db_security_group_id=_required_context('evidence_db_security_group_id'),
+    db_secret_arn=_required_context('evidence_db_secret_arn'),
+    docmodel_bucket=_required_context('evidence_docmodel_bucket'),
     env=env,
 )
 # Deploy unit ④ — U5 frontend. The BFF (server-side) calls the backend gateway over its

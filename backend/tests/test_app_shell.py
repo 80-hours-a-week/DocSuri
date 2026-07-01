@@ -58,6 +58,7 @@ def test_module_registry_complete_and_disjoint() -> None:
         "personalization",
         "research",
         "novelty",
+        "evidence",
     }
 
 
@@ -148,6 +149,7 @@ def test_mount_modules_never_raises_and_records_reasons() -> None:
         "personalization",
         "research",
         "novelty",
+        "evidence",
     }
 
 
