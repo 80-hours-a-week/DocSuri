@@ -8,10 +8,10 @@
 
 ## 산출 계획
 
-- [ ] `aidlc-docs/construction/agent-chat-frontend/functional-design/domain-entities.md`를 생성한다.
-- [ ] `aidlc-docs/construction/agent-chat-frontend/functional-design/business-logic-model.md`를 생성한다.
-- [ ] `aidlc-docs/construction/agent-chat-frontend/functional-design/business-rules.md`를 생성한다.
-- [ ] `aidlc-docs/construction/agent-chat-frontend/functional-design/frontend-components.md`를 생성한다.
+- [x] `aidlc-docs/construction/agent-chat-frontend/functional-design/domain-entities.md`를 생성한다.
+- [x] `aidlc-docs/construction/agent-chat-frontend/functional-design/business-logic-model.md`를 생성한다.
+- [x] `aidlc-docs/construction/agent-chat-frontend/functional-design/business-rules.md`를 생성한다.
+- [x] `aidlc-docs/construction/agent-chat-frontend/functional-design/frontend-components.md`를 생성한다.
 
 ## Functional Design 질문
 
@@ -26,7 +26,7 @@ C) backend 응답에만 맡긴다.
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: A
 
 ### 질문 2
 timeline event ordering은 어떤 기준으로 처리할까요?
@@ -39,7 +39,7 @@ C) 단계 이름의 고정 순서로 정렬한다.
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: A
 
 ### 질문 3
 첨부 검증 실패는 어떻게 다룰까요?
@@ -52,7 +52,7 @@ C) backend 검증 실패 응답만 표시한다.
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: A
 
 ### 질문 4
 failed와 degraded 상태는 어떻게 구분할까요?
@@ -65,7 +65,7 @@ C) 사용자에게는 completed/failed만 보여주고 degraded는 숨긴다.
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: A
 
 ### 질문 5
 mock transport는 어느 수준까지 구현할까요?
@@ -78,7 +78,7 @@ C) mock은 만들지 않고 실제 API만 연결한다.
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: A
 
 ### 질문 6
 채팅 입력 보존은 어떻게 처리할까요?
@@ -91,7 +91,7 @@ C) browser localStorage에 draft를 항상 저장한다.
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: A
 
 ## Extension 준수 요약
 

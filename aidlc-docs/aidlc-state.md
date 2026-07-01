@@ -509,10 +509,10 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
   - `$env:JSII_NODE="$env:USERPROFILE\scoop\apps\nodejs-lts\current\node.exe"; cdk synth` from `ops/cdk` -> pass, synthesized to `ops/cdk/cdk.out`
 - Current gate: Build and Test review/approval. Next stage per AI-DLC is Operations placeholder.
 
-## Agent Chat Frontend — Application Design Complete / Functional Design Questions Ready
+## Agent Chat Frontend — Functional Design Complete / NFR Requirements Questions Ready
 
 - Date: 2026-07-01
-- Stage: INCEPTION / Application Design complete; CONSTRUCTION Functional Design question gate
+- Stage: CONSTRUCTION / Functional Design complete; NFR Requirements question gate
 - Branch: `docs/novelty-agent-fe`
 - Inputs:
   - `aidlc-docs/inception/requirements/requirement-verification-questions-agent-chat-frontend.md`
@@ -529,7 +529,7 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - Workflow plan created:
   - `aidlc-docs/inception/plans/agent-chat-frontend-workflow-plan.md`
 - Next question file:
-  - `aidlc-docs/construction/plans/agent-chat-frontend-functional-design-plan.md`
+  - `aidlc-docs/construction/plans/agent-chat-frontend-nfr-requirements-plan.md`
 - Application Design answers:
   - Q1=A, Q2=A, Q3=A, Q4=A, Q5=A.
 - Application Design artifacts:
@@ -538,10 +538,17 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
   - `aidlc-docs/inception/application-design/agent-chat-frontend-services.md`
   - `aidlc-docs/inception/application-design/agent-chat-frontend-component-dependency.md`
   - `aidlc-docs/inception/application-design/application-design.md`
+- Functional Design answers:
+  - Q1=A, Q2=A, Q3=A, Q4=A, Q5=A, Q6=A.
+- Functional Design artifacts:
+  - `aidlc-docs/construction/agent-chat-frontend/functional-design/domain-entities.md`
+  - `aidlc-docs/construction/agent-chat-frontend/functional-design/business-logic-model.md`
+  - `aidlc-docs/construction/agent-chat-frontend/functional-design/business-rules.md`
+  - `aidlc-docs/construction/agent-chat-frontend/functional-design/frontend-components.md`
 - Scope boundary:
   - v1 frontend uses `/agent` single route, existing responsive + phone preview structure, and a mock/real transport seam.
   - No new backend API or infrastructure code is generated in this stage.
-- Current gate: Functional Design questions Q1~Q6 awaiting answers.
+- Current gate: NFR Requirements questions Q1~Q5 awaiting answers.
 - Code generated: no.
 
 ## Research Agent — Requirements Registered
