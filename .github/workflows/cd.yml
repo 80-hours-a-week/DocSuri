@@ -6,11 +6,14 @@ name: CD
 
 on:
   push:
-    branches: [main]
+    tags: ["v*"] # git-flow releases are v* tags — deploy the tagged release, not every main push
 
-# Kept on `push: main` (not workflow_run) on purpose: the OIDC token's ref claim then stays
-# refs/heads/main, matching the CD role's trust policy. workflow_run would flip the ref to the
-# default branch and could break the assume-role.
+# Trigger is the release TAG (not push:main / workflow_run) so a deploy maps 1:1 to a git-flow
+# release. PREREQUISITE (verified 2026-07-01): the GitHub OIDC provider and this CD role do NOT yet
+# exist in account 028317349537 — CD has never authenticated (fully dormant). Whoever provisions
+# them must scope the role's trust `sub` to `repo:80-hours-a-week/DocSuri:ref:refs/tags/v*` (the
+# token ref on a tag push). There is no pre-existing main-scoped policy to conflict with, so
+# tag-triggering is safe to adopt now.
 permissions:
   contents: read
   id-token: write # OIDC for AWS assume-role (no long-lived keys)
@@ -21,10 +24,10 @@ env:
   ECR_REGISTRY: ${{ vars.ECR_REGISTRY }} # e.g. 028317349537.dkr.ecr.ap-northeast-2.amazonaws.com
   IMAGE_SHA: ${{ github.sha }}
 
-# Serialize deploys on main (never cancel an in-flight rollout) so two rapid merges can't race
-# each other's ECS deployments. (audit Low #8)
+# Serialize ALL prod deploys (fixed group, never cancel an in-flight rollout) so two releases
+# tagged in quick succession can't race each other's ECS deployments. (audit Low #8)
 concurrency:
-  group: cd-${{ github.ref }}
+  group: cd-production
   cancel-in-progress: false
 
 jobs:
@@ -33,9 +36,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      # Gate: CD and CI both start on the push, so wait for CI to finish for THIS sha and refuse
-      # to deploy unless it succeeded. Uses the preinstalled gh CLI (no third-party action) and
-      # fails closed on any non-success conclusion or timeout. (audit High #3)
+      # Gate: require CI green for THIS commit before deploying. The tagged commit was already
+      # built on its push to main/develop, so this usually finds a completed CI run immediately; it
+      # still polls (and fails closed on non-success/timeout) in case the tag was pushed with
+      # --follow-tags before that run finished. Uses the preinstalled gh CLI. (audit High #3)
       - name: Wait for CI to succeed
         env:
           GH_TOKEN: ${{ github.token }}
