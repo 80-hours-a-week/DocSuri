@@ -95,7 +95,12 @@ def _to_scored(hits: list[dict[str, Any]]) -> list[ScoredRecord]:
     dropped = 0
     for hit in hits:
         try:
-            record = IndexRecord.model_validate(hit["_source"])
+            # ``.get(...) or {}`` — a missing ``_source`` (e.g. a stored_fields/_source-disabled
+            # response) would raise KeyError on subscript, which is NOT a ValidationError and
+            # would escape this guard into the caller's 500. Feeding {} instead routes it through
+            # the SAME drop path (empty dict fails IndexRecord validation), upholding the
+            # "one bad hit must not sink the query" invariant for the malformed-hit case too.
+            record = IndexRecord.model_validate(hit.get("_source") or {})
         except ValidationError as exc:
             dropped += 1
             _log.warning(
@@ -175,7 +180,7 @@ class OpenSearchPaperLookupAdapter:
         # None → the route 404s and the detail page degrades to the arXiv id + link-out, rather
         # than 500-ing. The drop is logged (field paths only, no values) for drift visibility.
         try:
-            return IndexRecord.model_validate(hits[0]["_source"])
+            return IndexRecord.model_validate(hits[0].get("_source") or {})
         except ValidationError as exc:
             _log.warning(
                 "discovery.paper_lookup dropped non-conforming record id=%s fields=%s",

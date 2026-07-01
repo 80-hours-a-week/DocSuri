@@ -456,9 +456,16 @@ def _bulk_failure_summary(
     failures: list[dict[str, Any]], *, limit: int = 5
 ) -> list[dict[str, Any]]:
     """Compact, log-safe view of bulk per-item failures: id + status + error type + a TRUNCATED
-    reason. The reason is truncated because an OpenSearch mapper error can echo the offending
-    field value (indexed content) — the error ``type`` and the field it names are what diagnosis
-    needs, not the value. Caps the list so one bad batch can't flood the log."""
+    reason.
+
+    DECISION (records the review tradeoff): unlike the U2 read path — which logs field paths ONLY,
+    never values (SEC-9) — the write path deliberately keeps a truncated ``reason``. An OpenSearch
+    mapper error names the failing field ONLY inside ``reason`` (there is no separate structured
+    field for it), so dropping the reason would collapse diagnosis to a bare error type and defeat
+    the whole point of surfacing the rejection. The value a reason may echo is public arXiv corpus
+    metadata (non-sensitive) and this is an internal ops log — so the asymmetry is an accepted,
+    bounded tradeoff: capped at 200 chars (keeps the leading ``field [X] of type [Y]`` prefix,
+    trims long value previews) and to the first few items so one bad batch can't flood the log."""
     summary: list[dict[str, Any]] = []
     for operation in failures[:limit]:
         error = operation.get("error") or {}

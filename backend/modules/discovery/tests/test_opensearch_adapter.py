@@ -104,3 +104,16 @@ def test_search_with_only_non_conforming_hits_returns_empty_not_error() -> None:
 
     # A drifted corpus degrades to an empty page, never a ValidationError escaping to a 500.
     assert adapter.bm25_search(["x"], 10) == []
+
+
+def test_search_drops_hit_missing_source_without_raising() -> None:
+    # A hit with no `_source` key (e.g. an `_source`-disabled / stored_fields response) must be
+    # absorbed by the same drop path — the `_source` subscript would otherwise raise KeyError
+    # (not ValidationError) and escape to a 500, breaking the per-record tolerance invariant.
+    good = fixtures.RECORDS[0]
+    fake = FakeSearchClient(hits=[{"_score": 0.9}, _hit(good, 0.8)])
+    adapter = OpenSearchVectorStoreAdapter(fake, "docsuri-corpus-v1")
+
+    out = adapter.knn_search([0.0] * DIMENSIONS, 20)
+
+    assert [r.paperId for r, _ in out] == [good.paperId]
