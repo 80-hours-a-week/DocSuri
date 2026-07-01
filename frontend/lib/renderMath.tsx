@@ -135,3 +135,68 @@ export function renderInlineMath(text: string, macros?: MathMacros): React.React
   if (last < text.length) nodes.push(<Fragment key={key++}>{text.slice(last)}</Fragment>);
   return nodes;
 }
+
+// **bold** spans (non-greedy). Bold may wrap math, so each part is still run through
+// renderInlineMath. Used inside renderRichText for LLM summary prose.
+const BOLD = /\*\*([\s\S]+?)\*\*/g;
+
+/** Inline render: `**bold**` + math, no block structure. For short single-line fields and list
+ * items (already inside an <li>). */
+export function renderInlineRich(text: string, macros?: MathMacros): React.ReactNode {
+  if (!text.includes('**')) return renderInlineMath(text, macros);
+  const nodes: React.ReactNode[] = [];
+  let last = 0;
+  let key = 0;
+  for (const m of text.matchAll(BOLD)) {
+    const idx = m.index ?? 0;
+    if (idx > last) {
+      nodes.push(<Fragment key={key++}>{renderInlineMath(text.slice(last, idx), macros)}</Fragment>);
+    }
+    nodes.push(<strong key={key++}>{renderInlineMath(m[1], macros)}</strong>);
+    last = idx + m[0].length;
+  }
+  if (last < text.length) {
+    nodes.push(<Fragment key={key++}>{renderInlineMath(text.slice(last), macros)}</Fragment>);
+  }
+  return nodes;
+}
+
+/** Render an LLM summary field as lightweight markdown + math: blank-line paragraphs, `-`/`*`
+ * bullet lists, `**bold**`, and inline/display math. Also normalizes literal `\n`/`\t` escape
+ * artifacts (left by re-escaping math-heavy JSON) into real breaks/space — but NOT when they start
+ * a LaTeX command (`\nabla`, `\theta`, `\times`), so math survives. Returns block elements, so the
+ * caller must place it in a block container (a <div>, not a <p>). */
+export function renderRichText(text: string, macros?: MathMacros): React.ReactNode {
+  if (!text) return null;
+  const normalized = text.replace(/\\n(?![a-zA-Z])/g, '\n').replace(/\\t(?![a-zA-Z])/g, ' ');
+  const blocks = normalized
+    .split(/\n{2,}/)
+    .map((b) => b.trim())
+    .filter(Boolean);
+  if (blocks.length === 0) return null;
+  return blocks.map((block, bi) => {
+    const lines = block.split('\n').map((l) => l.trimEnd());
+    const nonEmpty = lines.filter((l) => l.trim());
+    const isBullets = nonEmpty.length > 0 && nonEmpty.every((l) => /^\s*[-*•]\s+/.test(l));
+    if (isBullets) {
+      const items = nonEmpty.map((l) => l.replace(/^\s*[-*•]\s+/, ''));
+      return (
+        <ul key={bi}>
+          {items.map((it, ii) => (
+            <li key={ii}>{renderInlineRich(it, macros)}</li>
+          ))}
+        </ul>
+      );
+    }
+    return (
+      <p key={bi}>
+        {lines.map((l, li) => (
+          <Fragment key={li}>
+            {li > 0 ? <br /> : null}
+            {renderInlineRich(l, macros)}
+          </Fragment>
+        ))}
+      </p>
+    );
+  });
+}
