@@ -465,6 +465,13 @@ def _list_block(el: Tag, sec_ctx: _SectionCtx) -> dict | None:
 
 
 def _code_block(el: Tag, sec_ctx: _SectionCtx) -> dict | None:
+    # A <math> inside a listing/algorithm line carries BOTH its presentation MathML (rendered as
+    # unicode glyphs) AND a <annotation encoding="application/x-tex"> LaTeX source. A raw
+    # get_text() emits both, duplicating every symbol — e.g. the algorithm line renders as
+    # "𝐱←𝗓𝖾𝗋𝗈𝖾𝗌(n)\bm{\mathrm{x}}\leftarrow\mathsf{zeroes}(n)". Code blocks are shown verbatim (no
+    # KaTeX), so drop the TeX annotation and keep only the readable unicode presentation.
+    for annotation in el.find_all("annotation"):
+        annotation.decompose()
     lines = el.find_all(class_="ltx_listingline")
     if lines:
         text = "\n".join(line.get_text() for line in lines)

@@ -350,3 +350,25 @@ def test_text_fallback_docmodel_has_stable_paragraph_block_ref() -> None:
     assert block.id == "s1.p1"
     assert block.text == "First line. Second line."
     assert doc.meta.provenance.sourceTier is SourceTier.pdf
+
+
+def test_code_block_drops_duplicate_math_annotation() -> None:
+    # A <math> inside an algorithm listing carries both presentation MathML (unicode) and a TeX
+    # <annotation> LaTeX source. The code text must keep only the readable unicode, not both
+    # concatenated (regression: "𝐱←𝗓𝖾𝗋𝗈𝖾𝗌(n)\bm{\mathrm{x}}\leftarrow\mathsf{zeroes}(n)").
+    html = (
+        '<article class="ltx_document">'
+        '<section class="ltx_section" id="S1">'
+        '<h2 class="ltx_title ltx_title_section">Algorithm</h2>'
+        '<div class="ltx_listing"><div class="ltx_listingline">1: '
+        '<math alttext="\\bm{x}"><semantics><mrow><mi>\U0001d431</mi></mrow>'
+        '<annotation encoding="application/x-tex">'
+        '\\bm{\\mathrm{x}}\\leftarrow\\mathsf{zeroes}(n)</annotation>'
+        '</semantics></math></div></div>'
+        '</section></article>'
+    )
+    doc = _parse(html)
+    code = next(b for b in _blocks(_body_sections(doc)[0]) if isinstance(b, CodeBlock))
+    assert "\U0001d431" in code.text  # unicode presentation kept (readable)
+    assert "\\mathsf{zeroes}" not in code.text  # TeX annotation dropped — no duplication
+    assert "\\leftarrow" not in code.text
