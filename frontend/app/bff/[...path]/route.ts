@@ -17,10 +17,13 @@ import type { Transport, TransportMethod } from '@/lib/api/transport';
 // principal (request.state.principal) for /library/* and /api/search; that gateway
 // auth-injection is tracked separately (backend coordination zone, system-infra step).
 
-function buildTransport(req: NextRequest): Transport {
+function buildTransport(req: NextRequest): Transport | null {
   const baseUrl = process.env.DOCSURI_GATEWAY_URL;
   if (baseUrl) {
     return new HttpTransport({ baseUrl, cookieHeader: req.headers.get('cookie') ?? undefined });
+  }
+  if (process.env.NODE_ENV === 'production' && process.env.DOCSURI_BFF_ALLOW_MOCK !== '1') {
+    return null;
   }
   return new MockTransport();
 }
@@ -46,7 +49,15 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
     }
   }
 
-  const res = await buildTransport(req).send({
+  const transport = buildTransport(req);
+  if (!transport) {
+    return NextResponse.json(
+      { message: '일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' },
+      { status: 503 },
+    );
+  }
+
+  const res = await transport.send({
     method,
     path: upstreamPath,
     body,

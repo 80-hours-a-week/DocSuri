@@ -110,3 +110,27 @@ Covered contracts:
 Future contract tests should be added when real U2 full-search, Agent-Browser, and Notion adapters replace the no-op seams.
 
 ---
+
+# Agent Chat Frontend Contract Test Instructions — 2026-07-01
+
+Agent Chat Frontend v1 uses a frontend API seam that mirrors the planned backend session APIs.
+The real backend adapter is not implemented in this frontend slice.
+
+Current contract checks:
+
+```powershell
+corepack pnpm@9.15.9 --dir frontend exec -- tsc --noEmit
+corepack pnpm@9.15.9 --dir frontend exec -- vitest run test/agentChatReducer.test.ts test/agentChatScreen.test.tsx --reporter=dot
+```
+
+Covered contracts:
+
+- `AgentMode` accepts `evidence` and `novelty`.
+- `ApiClient` exposes `listAgentSessions`, `loadAgentSession`, `deleteAgentSession`, and `sendAgentMessage`.
+- `MockTransport` implements the frontend seam through `/api/research/jobs` and `/api/novelty/jobs`.
+- frontend send payload carries `mode`, `content`, and attachment metadata.
+- timeline and assistant responses remain typed through `AgentSendMessageResult`.
+
+Future contract tests should be added when backend research/novelty session APIs replace the mock transport.
+
+---

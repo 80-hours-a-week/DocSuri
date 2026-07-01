@@ -53,12 +53,25 @@ import {
   mockGetConsents,
   mockUpdateConsent,
 } from '@/mocks/mypageFixtures';
+import {
+  mockDeleteAgentSession,
+  mockListAgentSessions,
+  mockLoadAgentSession,
+  mockSendAgentMessage,
+} from '@/mocks/agentFixtures';
 import type {
   SavedSearchCreateDTO,
   LibraryItemCreateDTO,
 } from '@/types/generated';
 import type { CitationNode } from '@/types/citationGraph';
 import type { BehaviorEventCreate } from '@/types/personalization';
+import type {
+  AgentAttachment,
+  AgentMessage,
+  AgentSessionSnapshot,
+  AgentSessionSummary,
+  AgentTimelineEvent,
+} from '@/lib/agentChat/types';
 
 function matches(q: string, ...needles: string[]): boolean {
   const lower = q.toLowerCase();
@@ -82,6 +95,9 @@ export class MockTransport implements Transport {
 
     const mypageRes = this.routeMypage(req, path);
     if (mypageRes) return mypageRes;
+
+    const agentRes = this.routeAgent(req, path);
+    if (agentRes) return agentRes;
 
     if (path === '/api/personalization/events' && req.method === 'POST') {
       void (req.body as BehaviorEventCreate);
@@ -306,4 +322,210 @@ export class MockTransport implements Transport {
     }
     return null;
   }
+
+  private routeAgent(req: TransportRequest, path: string): TransportResponse | null {
+    if (path === '/api/research/jobs' && req.method === 'GET') {
+      return { status: 200, body: { jobs: mockListAgentSessions('evidence').map(researchJob) } };
+    }
+    if (path === '/api/novelty/jobs' && req.method === 'GET') {
+      return { status: 200, body: { jobs: mockListAgentSessions('novelty').map(noveltyJob) } };
+    }
+    if (path === '/api/research/jobs' && req.method === 'POST') {
+      const body = req.body as { content?: string; attachments?: AgentAttachment[] };
+      const result = mockSendAgentMessage(`agent-evidence-${Date.now()}`, {
+        content: String(body.content ?? ''),
+        mode: 'evidence',
+        attachments: body.attachments,
+      });
+      return { status: 201, body: { jobId: result.session.id, state: 'active' } };
+    }
+    if (path === '/api/novelty/jobs' && req.method === 'POST') {
+      const body = req.body as {
+        topic?: string;
+      };
+      const result = mockSendAgentMessage(`agent-novelty-${Date.now()}`, {
+        content: String(body.topic ?? ''),
+        mode: 'novelty',
+      });
+      return { status: 201, body: { jobId: result.session.id, state: 'queued' } };
+    }
+    const research = path.match(/^\/api\/research\/jobs\/([^/]+)$/);
+    if (research && req.method === 'GET') {
+      const snapshot = mockLoadAgentSession(decodeURIComponent(research[1]));
+      return snapshot
+        ? {
+            status: 200,
+            body: {
+              job: researchJob(snapshot.session),
+              messages: snapshot.messages.map(backendMessage),
+            },
+          }
+        : { status: 404, body: null };
+    }
+    if (research && req.method === 'DELETE') {
+      return mockDeleteAgentSession(decodeURIComponent(research[1]))
+        ? { status: 204, body: null }
+        : { status: 404, body: null };
+    }
+    const researchMessage = path.match(/^\/api\/research\/jobs\/([^/]+)\/messages$/);
+    if (researchMessage && req.method === 'POST') {
+      const body = req.body as { content?: string; attachments?: AgentAttachment[] };
+      const result = mockSendAgentMessage(decodeURIComponent(researchMessage[1]), {
+        content: String(body.content ?? ''),
+        mode: 'evidence',
+        attachments: body.attachments,
+      });
+      return { status: 201, body: backendMessage(result.messages.at(-1)!) };
+    }
+    const novelty = path.match(/^\/api\/novelty\/jobs\/([^/]+)$/);
+    if (novelty && req.method === 'GET') {
+      const snapshot = mockLoadAgentSession(decodeURIComponent(novelty[1]));
+      return snapshot
+        ? {
+            status: 200,
+            body: {
+              job: noveltyJob(snapshot.session),
+              events: snapshot.events.map(noveltyEvent),
+            },
+          }
+        : { status: 404, body: null };
+    }
+    if (novelty && req.method === 'DELETE') {
+      return mockDeleteAgentSession(decodeURIComponent(novelty[1]))
+        ? { status: 204, body: null }
+        : { status: 404, body: null };
+    }
+    const noveltyResult = path.match(/^\/api\/novelty\/jobs\/([^/]+)\/result$/);
+    if (noveltyResult && req.method === 'GET') {
+      const snapshot = mockLoadAgentSession(decodeURIComponent(noveltyResult[1]));
+      return {
+        status: snapshot ? 200 : 404,
+        body: snapshot
+          ? {
+              job: noveltyJob(snapshot.session),
+              artifacts: noveltyArtifacts(snapshot),
+            }
+          : null,
+      };
+    }
+    const noveltyMessages = path.match(/^\/api\/novelty\/jobs\/([^/]+)\/messages$/);
+    if (noveltyMessages && req.method === 'GET') {
+      const snapshot = mockLoadAgentSession(decodeURIComponent(noveltyMessages[1]));
+      return {
+        status: snapshot ? 200 : 404,
+        body: snapshot ? { messages: snapshot.messages.map(backendMessage) } : null,
+      };
+    }
+    if (noveltyMessages && req.method === 'POST') {
+      const body = req.body as { content?: string; attachments?: AgentAttachment[] };
+      const result = mockSendAgentMessage(decodeURIComponent(noveltyMessages[1]), {
+        content: String(body.content ?? ''),
+        mode: 'novelty',
+        attachments: body.attachments,
+      });
+      return { status: 201, body: backendMessage(result.messages.at(-1)!) };
+    }
+    return null;
+  }
+}
+
+function researchJob(session: AgentSessionSummary) {
+  return {
+    jobId: session.id,
+    title: session.title,
+    state:
+      session.state === 'completed' || session.state === 'failed' ? session.state : 'active',
+    updatedAt: session.updatedAt,
+    createdAt: session.updatedAt,
+  };
+}
+
+function noveltyJob(session: AgentSessionSummary) {
+  return {
+    jobId: session.id,
+    inputType: 'natural_language',
+    topic: session.title,
+    state: session.state === 'idle' ? 'queued' : session.state,
+    progressPercent: session.state === 'completed' || session.state === 'degraded' ? 100 : 0,
+    exportStatus: 'not_requested',
+    updatedAt: session.updatedAt,
+    createdAt: session.updatedAt,
+    completedAt: null,
+  };
+}
+
+function backendMessage(message: AgentMessage) {
+  return {
+    messageId: message.id,
+    role: message.role === 'agent' ? 'assistant' : message.role,
+    content: message.content,
+    attachments: message.attachments ?? [],
+    createdAt: message.createdAt,
+  };
+}
+
+function noveltyEvent(event: AgentTimelineEvent) {
+  return {
+    eventId: event.id,
+    state: event.stage,
+    message: event.label,
+    progressPercent: event.sequence ? event.sequence * 25 : 0,
+    payload: eventPayload(event),
+    createdAt: '2026-07-01T00:00:00Z',
+  };
+}
+
+function eventPayload(event: AgentTimelineEvent) {
+  const payload: Record<string, unknown> = event.detail ? { detail: event.detail } : {};
+  if (event.stage === 'corpus') {
+    return { ...payload, source: 'corpus', query: 'RAG 평가 자동화', resultCount: 3 };
+  }
+  if (event.stage === 'external') {
+    return {
+      ...payload,
+      source: 'github,dataset',
+      query: 'RAG evaluation automation',
+      resultCount: 2,
+      degradedReasons: event.state === 'degraded' ? ['dataset adapter degraded'] : undefined,
+    };
+  }
+  return payload;
+}
+
+function noveltyArtifacts(snapshot: AgentSessionSnapshot) {
+  const now = snapshot.session.updatedAt;
+  return [
+    {
+      artifactId: `${snapshot.session.id}-ideas`,
+      jobId: snapshot.session.id,
+      kind: 'novelty_candidates',
+      title: 'Novelty candidates',
+      objectKey: `mock/${snapshot.session.id}/ideas.json`,
+      payload: {
+        items: [
+          {
+            title: '도메인 지식 기반 실패 유형 분해',
+            evidenceStatus: 'supported',
+            sourceRefs: ['mock:corpus'],
+          },
+        ],
+      },
+      createdAt: now,
+    },
+    {
+      artifactId: `${snapshot.session.id}-plan`,
+      jobId: snapshot.session.id,
+      kind: 'experiment_plan',
+      title: 'Experiment plan',
+      objectKey: `mock/${snapshot.session.id}/plan.json`,
+      payload: {
+        researchQuestion: snapshot.session.title,
+        hypotheses: ['실패 유형 분해가 RAG 평가 재현성을 높인다.'],
+        datasets: ['도메인별 공개 QA 데이터셋'],
+        metrics: ['Novelty score', 'baseline delta'],
+        risks: ['dataset mismatch'],
+      },
+      createdAt: now,
+    },
+  ];
 }

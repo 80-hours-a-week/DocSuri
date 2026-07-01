@@ -64,35 +64,35 @@
 
 ## 6. Code Generation Steps
 
-- [ ] **Step 1 — Agent route shell**
+- [x] **Step 1 — Agent route shell**
   - Create `/agent` page.
   - Reuse existing screen layout, `AppHeader`, route guard pattern, and `BottomNav`.
 
-- [ ] **Step 2 — Navigation entries**
+- [x] **Step 2 — Navigation entries**
   - Add `에이전트` to desktop `AppHeader` nav.
   - Add centered `에이전트` tab to mobile `BottomNav`.
 
-- [ ] **Step 3 — Domain helpers and reducer**
+- [x] **Step 3 — Domain helpers and reducer**
   - Create `frontend/lib/agentChat/` helper/reducer files.
   - Implement mode lock, event ordering, attachment allowlist, and classifier helpers.
 
-- [ ] **Step 4 — Transport seam and mocks**
+- [x] **Step 4 — Transport seam and mocks**
   - Add mock session/message/timeline fixtures.
   - Add normalized send/list/load/delete functions following existing API patterns.
 
-- [ ] **Step 5 — UI components**
+- [x] **Step 5 — UI components**
   - Create `AgentChatScreen`, `AgentModePicker`, `AgentSessionDrawer`, `AgentMessageList`, `AgentProgressTimeline`, `AgentComposer`, `AgentAttachmentDrawer`.
   - Add stable `data-testid` values for interactive elements.
 
-- [ ] **Step 6 — Unit and UI tests**
+- [x] **Step 6 — Unit and UI tests**
   - Add reducer/helper tests.
   - Add UI tests for route/nav, mode picker, drawer, composer, timeline.
 
-- [ ] **Step 7 — E2E smoke tests**
+- [x] **Step 7 — E2E smoke tests**
   - Add authenticated `/agent` navigation smoke.
   - Cover desktop/mobile or preview-relevant path at smoke level.
 
-- [ ] **Step 8 — Code summary**
+- [x] **Step 8 — Code summary**
   - Create `aidlc-docs/construction/agent-chat-frontend/code/summary.md`.
 
 ## 7. Approval Question
@@ -105,4 +105,4 @@ B) 아직 진행하지 않습니다. 계획을 수정한 뒤 다시 확인합니
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: A
