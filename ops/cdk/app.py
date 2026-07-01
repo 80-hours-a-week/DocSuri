@@ -10,6 +10,7 @@ Stacks are split by lifecycle/blast-radius so a network change doesn't redeploy 
 
 import aws_cdk as cdk
 from stacks.access_stack import AccessStack
+from stacks.cicd_stack import CicdStack
 from stacks.compute_stack import ComputeStack
 from stacks.frontend_stack import FrontendStack
 from stacks.ingestion_stack import IngestionStack
@@ -75,5 +76,8 @@ frontend = FrontendStack(
 # 부여/회수 = 목록 수정 + PR + cdk deploy Docsuri-Access.
 TEAM_ACCOUNT_IDS = ["997784789037", "416963226971", "143495498927"]
 AccessStack(app, "Docsuri-Access", account_ids=TEAM_ACCOUNT_IDS, env=env)
+
+# GitHub Actions OIDC 프로바이더 + CD 역할(cd.yml 태그 트리거 배포). 감사에서 부재 확인 → IaC로 신설.
+CicdStack(app, "Docsuri-CICD", env=env)
 
 app.synth()
