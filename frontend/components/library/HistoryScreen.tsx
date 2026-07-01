@@ -11,7 +11,7 @@ import styles from './Library.module.css';
 
 // HistoryScreen (US-L3, FR-10) — recent searches (async-recorded). Rerun renders
 // the live result inline; "이력 비우기" clears all (BR-U5). Cursor "더 보기".
-export function HistoryScreen() {
+export function HistoryScreen({ showTabs = true }: { showTabs?: boolean } = {}) {
   const fetchPage = useCallback((cursor?: string) => getApiClient().listHistory({ cursor }), []);
   const { items, status, error, hasMore, loadMore, reload } =
     usePaginatedList<HistoryEntry>(fetchPage);
@@ -52,7 +52,7 @@ export function HistoryScreen() {
 
   return (
     <section className={styles.screen} data-testid="history-screen">
-      <LibraryTabs active="history" />
+      {showTabs ? <LibraryTabs active="history" /> : null}
 
       {items.length > 0 ? (
         <div className={styles.actions}>
