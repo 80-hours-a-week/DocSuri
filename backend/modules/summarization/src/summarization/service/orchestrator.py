@@ -35,6 +35,7 @@ from ..domain.models import (
     GroundingInput,
     PendingDTO,
     RequestContext,
+    Scope,
     SourceUnavailableDTO,
     SummaryRequest,
     SummaryResponse,
@@ -59,6 +60,12 @@ logger = logging.getLogger(__name__)
 _BUILD_POLL_BACKOFF_MS = 2000
 # Client poll backoff hint after a long summary was enqueued as a background job (BR-S6/BR-S8).
 _SUMMARY_POLL_BACKOFF_MS = 3000
+# Full-text translations above this input size are dispatched to the async job (pending → poll)
+# instead of running inline: a translation is output-bounded so a body this large is several LLM
+# chunks (tens of seconds), which would exceed the gateway timeout (504) synchronously. Sized to
+# ~one translate chunk so abstracts and short bodies stay inline (fast) and real multi-chunk
+# bodies go async — the summary-worker (idle summary-job-queue) then runs them off the request path.
+_TRANSLATE_INLINE_MAX_TOKENS = 8_000
 
 
 def _is_cost_degraded(budget) -> bool:
@@ -174,6 +181,21 @@ class SummarizationOrchestrationService:
                 self._summary_job_queue.enqueue(request, user_id)
                 self._emit("u7.job.pending", 1.0, request)
                 return PendingDTO(retry_after_ms=_SUMMARY_POLL_BACKOFF_MS)
+
+        # Full-text TRANSLATE is multi-chunk even in the single-call band → dispatch a non-trivial
+        # one to the async job (pending → poll) so the synchronous request never 504s. Abstracts
+        # (scope != FULL) and short bodies stay inline. The worker re-runs with allow_enqueue=False.
+        if (
+            request.task == Task.TRANSLATE
+            and request.scope == Scope.FULL
+            and allow_enqueue
+            and self._summary_job_queue is not None
+            and self._translator is not None
+            and refined.token_count > _TRANSLATE_INLINE_MAX_TOKENS
+        ):
+            self._summary_job_queue.enqueue(request, user_id)
+            self._emit("u7.job.pending", 1.0, request)
+            return PendingDTO(retry_after_ms=_SUMMARY_POLL_BACKOFF_MS)
 
         # 4. glossary
         glossary = self._glossary.resolve(user_id)

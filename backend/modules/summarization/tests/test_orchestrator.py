@@ -235,3 +235,29 @@ def test_orchestrator_translate_enqueues_pending_on_long_input() -> None:
     out = orch.run(req, _ctx()).to_dict()
     assert out["status"] == "pending"
     assert queue.calls == [("2401.1", "u1")]
+
+
+def test_orchestrator_full_translate_dispatches_async_when_multichunk() -> None:
+    # SINGLE-CALL band (< 40K) but a large full-text translate is multi-chunk (output-bounded), so
+    # inline it would exceed the gateway timeout (504). It must be dispatched to the async job
+    # (pending → poll) instead — the worker runs it off the request path.
+    from summarization.domain.models import Scope
+
+    queue = _SpyQueue()
+    # ~11K tokens: single-call band, but above the inline translate threshold (8K).
+    orch = make_orchestrator(full_text=StubFullText(text="word " * 9000), summary_job_queue=queue)
+
+    req = SummaryRequest(paper_id="2401.1", version=1, task=Task.TRANSLATE, scope=Scope.FULL)
+    out = orch.run(req, _ctx()).to_dict()
+    assert out["status"] == "pending"
+    assert queue.calls == [("2401.1", "u1")]
+
+
+def test_orchestrator_abstract_translate_stays_inline() -> None:
+    # An abstract translate (small, scope != FULL) is NOT dispatched async — it runs inline and
+    # returns a result directly, even with a job queue wired.
+    queue = _SpyQueue()
+    orch = make_orchestrator(summary_job_queue=queue)
+    out = orch.run(_req(Task.TRANSLATE, abstract="An abstract about BERT."), _ctx()).to_dict()
+    assert out["status"] == "ok"
+    assert queue.calls == []
