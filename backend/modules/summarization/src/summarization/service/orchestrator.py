@@ -15,6 +15,7 @@ API/presentation concern; the domain returns a complete, validated result.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import replace
 
 from docsuri_shared.dtos import DocModel
@@ -34,6 +35,7 @@ from ..domain.models import (
     GroundingInput,
     PendingDTO,
     RequestContext,
+    Scope,
     SourceUnavailableDTO,
     SummaryRequest,
     SummaryResponse,
@@ -52,10 +54,19 @@ from ..ports.ports import (
     SummaryStorePort,
 )
 
+logger = logging.getLogger(__name__)
+
 # Client poll backoff hint after a lazy build was (re)triggered on a miss (BR-30/D6).
 _BUILD_POLL_BACKOFF_MS = 2000
 # Client poll backoff hint after a long summary was enqueued as a background job (BR-S6/BR-S8).
 _SUMMARY_POLL_BACKOFF_MS = 3000
+# Generation above this input size is dispatched to the async job (pending → poll) instead of
+# running inline: a full-paper summary is one big LLM call and a full translation is several
+# output-bounded chunks — both take tens of seconds, well past the sync client/gateway budget (the
+# request 504s while the backend keeps generating and caches). Small inputs (abstract source /
+# abstract translate) stay inline (fast). The summary-worker (idle summary-job-queue) runs the
+# dispatched job off the request path.
+_ASYNC_GENERATION_MIN_TOKENS = 6_000
 
 
 def _is_cost_degraded(budget) -> bool:
@@ -172,6 +183,28 @@ class SummarizationOrchestrationService:
                 self._emit("u7.job.pending", 1.0, request)
                 return PendingDTO(retry_after_ms=_SUMMARY_POLL_BACKOFF_MS)
 
+        # Large single-call-band generation (a full-paper summary, or a full-text translation that
+        # is several output-bounded chunks) still runs tens of seconds — beyond the sync gateway
+        # budget, so the request would 504 while the backend keeps generating. Dispatch it to the
+        # async job (pending → client polls); the worker re-runs with allow_enqueue=False and
+        # caches. Abstract-source summaries and abstract translations stay inline (fast).
+        if (
+            allow_enqueue
+            and self._summary_job_queue is not None
+            and refined.token_count > _ASYNC_GENERATION_MIN_TOKENS
+            and (
+                request.task == Task.SUMMARY
+                or (
+                    request.task == Task.TRANSLATE
+                    and request.scope == Scope.FULL
+                    and self._translator is not None
+                )
+            )
+        ):
+            self._summary_job_queue.enqueue(request, user_id)
+            self._emit("u7.job.pending", 1.0, request)
+            return PendingDTO(retry_after_ms=_SUMMARY_POLL_BACKOFF_MS)
+
         # 4. glossary
         glossary = self._glossary.resolve(user_id)
 
@@ -226,11 +259,28 @@ class SummarizationOrchestrationService:
                 draft = self._translator.translate(doc, request, glossary)
             except LlmUnavailable:
                 if attempt == 2:
+                    # Distinct from empty_translation: the LLM call itself failed after a retry
+                    # (Bedrock circuit / repeated errors — e.g. a math-heavy batch whose raw-LaTeX
+                    # JSON could not be parsed). Log it so this abstain mode is diagnosable, not
+                    # only a metric — otherwise it is invisible on the API request path.
+                    logger.warning(
+                        "translate abstain generation_unavailable: paper=%s v=%s scope=%s",
+                        request.paper_id, request.version, request.scope,
+                    )
                     self._emit("u7.llm.unavailable", 1.0, request)
                     return AbstainDTO(reason="generation_unavailable")
                 continue
             if not _has_translated_text(draft, doc):
                 if attempt == 2:
+                    # Distinct from ``generation_unavailable`` (LlmUnavailable above): here the
+                    # model responded but produced no usable Korean. The translator already logged
+                    # the per-chunk breakdown (returned/applied/truncated); record the terminal
+                    # abstain with paper context + a metric so the two failure modes are separable.
+                    logger.warning(
+                        "translate abstain empty_translation: paper=%s v=%s scope=%s attempts=%d",
+                        request.paper_id, request.version, request.scope, attempt,
+                    )
+                    self._emit("u7.translate.empty", 1.0, request)
                     return AbstainDTO(reason="empty_translation")
                 continue
             result = self._assembler.assemble_translation(draft, glossary, source)

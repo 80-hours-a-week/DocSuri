@@ -509,6 +509,113 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
   - `$env:JSII_NODE="$env:USERPROFILE\scoop\apps\nodejs-lts\current\node.exe"; cdk synth` from `ops/cdk` -> pass, synthesized to `ops/cdk/cdk.out`
 - Current gate: Build and Test review/approval. Next stage per AI-DLC is Operations placeholder.
 
+## Agent Chat Frontend — Code Generation Complete
+
+- Date: 2026-07-01
+- Stage: CONSTRUCTION / Code Generation
+- Branch: `docs/novelty-agent-fe`
+- Inputs:
+  - `aidlc-docs/inception/requirements/requirement-verification-questions-agent-chat-frontend.md`
+  - `requirement-question-answer.md`
+  - `aidlc-docs/inception/plans/agent-chat-frontend-story-generation-plan.md`
+- Story planning answers:
+  - Q1=A, Q2=A, Q3=A, Q4=A, Q5=A.
+- Requirements covered:
+  - FR-40, FR-41, FR-42, FR-43, NFR-P7, QT-11.
+- User stories updated:
+  - `aidlc-docs/inception/user-stories/stories.md`
+  - Added Epic 11 with US-AG1..US-AG7.
+  - Updated persona/story and FR/story coverage maps.
+- Workflow plan created:
+  - `aidlc-docs/inception/plans/agent-chat-frontend-workflow-plan.md`
+- Next question file:
+  - `aidlc-docs/construction/plans/agent-chat-frontend-code-generation-plan.md`
+- Application Design answers:
+  - Q1=A, Q2=A, Q3=A, Q4=A, Q5=A.
+- Application Design artifacts:
+  - `aidlc-docs/inception/application-design/agent-chat-frontend-components.md`
+  - `aidlc-docs/inception/application-design/agent-chat-frontend-component-methods.md`
+  - `aidlc-docs/inception/application-design/agent-chat-frontend-services.md`
+  - `aidlc-docs/inception/application-design/agent-chat-frontend-component-dependency.md`
+  - `aidlc-docs/inception/application-design/application-design.md`
+- Functional Design answers:
+  - Q1=A, Q2=A, Q3=A, Q4=A, Q5=A, Q6=A.
+- Functional Design artifacts:
+  - `aidlc-docs/construction/agent-chat-frontend/functional-design/domain-entities.md`
+  - `aidlc-docs/construction/agent-chat-frontend/functional-design/business-logic-model.md`
+  - `aidlc-docs/construction/agent-chat-frontend/functional-design/business-rules.md`
+  - `aidlc-docs/construction/agent-chat-frontend/functional-design/frontend-components.md`
+- NFR Requirements answers:
+  - Q1=A, Q2=A, Q3=A, Q4=A, Q5=A.
+- NFR Requirements artifacts:
+  - `aidlc-docs/construction/agent-chat-frontend/nfr-requirements/nfr-requirements.md`
+  - `aidlc-docs/construction/agent-chat-frontend/nfr-requirements/tech-stack-decisions.md`
+- NFR Design answers:
+  - Q1=A, Q2=A, Q3=A, Q4=A, Q5=`X) A + E2E 테스트`.
+- NFR Design artifacts:
+  - `aidlc-docs/construction/agent-chat-frontend/nfr-design/nfr-design-patterns.md`
+  - `aidlc-docs/construction/agent-chat-frontend/nfr-design/logical-components.md`
+- Infrastructure Design:
+  - Skipped. U13 reuses existing frontend deployment and adds no new infrastructure.
+- Completed plan:
+  - `aidlc-docs/construction/plans/agent-chat-frontend-code-generation-plan.md`
+- Created application code:
+  - `frontend/app/agent/page.tsx`
+  - `frontend/app/agent/agent.module.css`
+  - `frontend/components/agent/AgentChatScreen.tsx`
+  - `frontend/components/agent/AgentChatScreen.module.css`
+  - `frontend/lib/agentChat/types.ts`
+  - `frontend/lib/agentChat/state.ts`
+  - `frontend/mocks/agentFixtures.ts`
+- Modified application code:
+  - `frontend/components/AppHeader.tsx`
+  - `frontend/components/BottomNav.tsx`
+  - `frontend/lib/api/apiClient.ts`
+  - `frontend/lib/api/mockTransport.ts`
+  - `frontend/playwright.config.ts`
+- Tests and summary:
+  - `frontend/test/agentChatReducer.test.ts`
+  - `frontend/test/agentChatScreen.test.tsx`
+  - `frontend/e2e/agent-chat.spec.ts`
+  - `aidlc-docs/construction/agent-chat-frontend/code/summary.md`
+- Verification:
+  - `corepack pnpm@9.15.9 --dir frontend exec -- tsc --noEmit` -> passed
+  - `corepack pnpm@9.15.9 --dir frontend run test -- test/agentChatReducer.test.ts test/agentChatScreen.test.tsx` -> passed; Vitest executed the current frontend suite, 41 files / 175 tests passed
+  - `corepack pnpm@9.15.9 --dir frontend build` -> passed; `/agent` included in route output
+  - `corepack pnpm@9.15.9 --dir frontend exec playwright test e2e/agent-chat.spec.ts` -> attempted; blocked because local Playwright WebKit binary is not installed
+- Scope boundary:
+  - v1 frontend uses `/agent` single route, existing responsive + phone preview structure, and a mock/real transport seam.
+  - No new backend API or infrastructure code is generated in this stage.
+- Current gate: Code Generation review/approval. Next recommended stage: Build and Test after approval.
+- Code generated: yes.
+
+## Agent Chat Frontend — Build and Test Complete
+
+- Date: 2026-07-01
+- Stage: CONSTRUCTION / Build and Test
+- Code Generation approval:
+  - User approved: "좋아요. 이제 빌드와 테스트를 진행해 주세요."
+- Build/test documents updated:
+  - `aidlc-docs/construction/build-and-test/build-instructions.md`
+  - `aidlc-docs/construction/build-and-test/unit-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/integration-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/performance-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/contract-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/security-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/e2e-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/build-and-test-summary.md`
+- Verification:
+  - `corepack pnpm@9.15.9 --dir frontend exec -- tsc --noEmit` -> passed
+  - `corepack pnpm@9.15.9 --dir frontend exec -- vitest run test/agentChatReducer.test.ts test/agentChatScreen.test.tsx --reporter=dot` -> 2 files passed, 9 tests passed
+  - `corepack pnpm@9.15.9 --dir frontend build` -> passed; `/agent` route included
+  - `corepack pnpm@9.15.9 --dir frontend exec -- playwright install webkit` -> passed
+  - `corepack pnpm@9.15.9 --dir frontend exec -- playwright test e2e/agent-chat.spec.ts --reporter=line` -> 1 passed
+  - `git diff --check` -> passed; line-ending warnings only
+- E2E adjustment:
+  - Agent Chat E2E now injects the mock session directly and starts from `/agent`, because auth form coverage belongs to existing auth E2E tests.
+  - Playwright webServer now copies static assets into `.next/standalone` and runs the standalone server for local E2E hydration after `next build`.
+- Current gate: Build and Test review/approval. Next stage per AI-DLC is Operations placeholder.
+
 ## Research Agent — Requirements Registered
 
 - Date: 2026-06-24
@@ -715,3 +822,32 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
   - `./backend/.venv/bin/python -m compileall backend/modules/evidence/ backend/wiring.py ops/cdk/stacks/evidence_stack.py ops/cdk/app.py` → PASS
   - `PYTHONPATH='...' ./backend/.venv/bin/pytest backend/tests/test_evidence.py backend/tests/test_app_shell.py -v` → 26 passed, 1 failed (pre-existing cryptography 환경 제약)
 - Construction 완료: Code Generation 전 범위(코어 모듈 + AgentWorker + CDK IaC) 모두 작성됨
+
+## U9 Personalization — Search-Boost Application (Shadow) Increment
+
+- Date: 2026-07-01
+- Stage: CONSTRUCTION / U9 Code Generation (follow-on increment)
+- Trigger: audit found the U9 decision path inert — `/decision/search` + `/decision/summary-defaults` had zero consumers and zero prod calls in 7d (CloudWatch `DocSuri/Production`), while collection was healthy (944 events/7d, 0 failures). Decision: build the deferred **application** path for US-P4 (search boost), **shadow-first** (measure, don't reorder).
+- Design delta (folded here, no new FD round — US-P4/FR-20/BR-P8/BR-P9 already exist):
+  - BR-P8 boost contract enforced at the read port (each ∈ [-0.1,+0.1], Σ≤0.2).
+  - Relative (multiplicative) boost over the top-30% band only — nudge, never flip.
+  - Cross-unit seam: plain injected `search_boosts` callable (no new `shared/ports` Protocol — one consumer), cached-profile-only in the search path, fail-open (BR-P13).
+- Files:
+  - `backend/modules/personalization/service.py` (BR-P8 clamp `_to_search_boosts`)
+  - `backend/modules/discovery/src/discovery/domain/ranker.py` (pure `shadow_rerank_diff` + `ShadowDiff`)
+  - `backend/modules/discovery/src/discovery/service/orchestrator.py` (`_emit_rerank_shadow`, injected `search_boosts`)
+  - `backend/wiring.py` (in-process U9 read-port provider, `PERSONALIZATION_ENABLED`-gated)
+  - `backend/tests/test_personalization.py`, `backend/modules/discovery/tests/test_ranker_pbt.py`
+- Code summary: `aidlc-docs/construction/u9-personalization/code/summary.md` (§ Search-Boost Application — Shadow Mode)
+- Metrics: `personalization.rerank_shadow` (positions changed), `personalization.rerank_shadow.max_shift`, `personalization.rerank_shadow.boosted_count` (dim `scope=search`).
+- Verification (backend `.venv`, py3.13):
+  - `pytest test_personalization.py test_ranker_pbt.py test_orchestrator.py -q` -> 25 passed
+  - `pytest backend/modules/discovery/tests -q` -> passed (3 pre-existing skips)
+  - `pytest backend/tests -q` -> passed (1 pre-existing skip); `test_app_shell.py` -> passed
+  - `ruff check` on the 6 changed files -> All checks passed
+- Rollout: SHADOW — user-visible ranking unchanged. Go-live = return `shadow_rerank_diff`'s `reordered` (one line) after observing the metric.
+- Deferred: summary/translation defaults (US-P5), `keywordWeights` surfacing.
+- Delivery: PR #300 (`feature/u9-search-boost-shadow` → develop).
+- Review remediation (2026-07-01): fixed BR-P8 post-normalization total-budget drift, changed U2 shadow reads to cached-profile-only `cached_search_boosts` with PostgreSQL `statement_timeout`, added max-shift/boosted-count shadow metrics, and added regressions for the counterexamples.
+- Remediation verification: focused personalization/discovery tests passed; app-shell/orchestrator tests passed; backend+discovery sweep passed with the existing skip; touched-file Ruff passed; `git diff --check` passed; `git merge-tree origin/develop HEAD` produced a clean merge tree.
+- Current gate: PR review/approval.

@@ -32,10 +32,25 @@ def main(argv: list[str] | None = None) -> int:
 
     runtime = build_production_runtime(IngestionSettings.from_env())
     queue = runtime.queue
+    docmodel_queue = runtime.docmodel_queue
     log.info("worker started — polling queue")
     while not _shutdown_event.is_set():
+        # Priority: drain reader-triggered doc-model builds first so the viewer/citation-tree are
+        # never starved behind a bulk backfill on the main queue. The doc-model SqsQueue short-polls
+        # (wait_time_seconds=0), so an empty one returns immediately and we fall through to the
+        # backfill queue; a non-empty one loops back here before touching the backfill queue.
+        if docmodel_queue is not None:
+            docmodel_messages = docmodel_queue.receive_messages(max_messages=10)
+            if docmodel_messages:
+                for message in docmodel_messages:
+                    process_message(runtime, message, docmodel_queue)
+                    if _shutdown_event.is_set():
+                        break
+                continue
+        if _shutdown_event.is_set():
+            break
         for message in queue.receive_messages(max_messages=10):
-            process_message(runtime, message)
+            process_message(runtime, message, queue)
             if _shutdown_event.is_set():
                 break
         _shutdown_event.wait(timeout=1.0)
@@ -43,8 +58,10 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def process_message(runtime, message) -> None:
-    queue = runtime.queue
+def process_message(runtime, message, queue=None) -> None:
+    # ack/DLQ must target the queue the message came from (main backfill queue or the priority
+    # doc-model queue). Defaults to the main queue so existing 2-arg callers are unaffected.
+    queue = queue if queue is not None else runtime.queue
 
     message_type = message_type_from_payload(message.body)
 

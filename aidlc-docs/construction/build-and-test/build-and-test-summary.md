@@ -248,3 +248,39 @@ Last observed results:
 - **Ready for Operations**: Yes for review.
 
 ---
+
+# Agent Chat Frontend Build and Test Summary — 2026-07-01
+
+## Build Status
+
+- **Build tool**: Next.js 15, TypeScript, Vitest, Playwright WebKit.
+- **Build status**: PASS for `/agent` frontend route, mock API seam, focused unit/UI tests, and browser E2E smoke.
+- **Route output**: `/agent` generated as a static route, size `6.18 kB`, first-load JS `131 kB`.
+
+## Test Execution Summary
+
+| Category | Command | Result |
+| --- | --- | --- |
+| Type check | `corepack pnpm@9.15.9 --dir frontend exec -- tsc --noEmit` | PASS |
+| Focused unit/UI tests | `corepack pnpm@9.15.9 --dir frontend exec -- vitest run test/agentChatReducer.test.ts test/agentChatScreen.test.tsx --reporter=dot` | 2 files passed, 9 tests passed |
+| Production build | `corepack pnpm@9.15.9 --dir frontend build` | PASS |
+| Browser E2E | `corepack pnpm@9.15.9 --dir frontend exec -- playwright test e2e/agent-chat.spec.ts --reporter=line` | 1 passed |
+| Diff hygiene | `git diff --check` | PASS; line-ending warnings only |
+
+## Agent Chat Coverage
+
+- `/agent` protected route renders for an authenticated mock session.
+- Mode selection locks the session to `Novelty` after start.
+- Multi-turn send path calls the mock transport and appends assistant output.
+- Exploration timeline is visible in the chat surface.
+- Rejected attachment behavior is covered by UI tests.
+- Prior session loading is covered by UI tests.
+
+## Overall Status
+
+- **Build**: PASS for frontend production build.
+- **Tests**: PASS for focused unit/UI and E2E smoke.
+- **E2E note**: WebKit was installed locally during this pass. Playwright webServer builds, copies static assets into `.next/standalone`, and runs `node .next/standalone/server.js`.
+- **Ready for Operations**: Yes for review; no deployment was performed.
+
+---

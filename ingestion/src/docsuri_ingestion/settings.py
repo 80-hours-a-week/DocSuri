@@ -28,6 +28,11 @@ class IngestionSettings(BaseModel):
     control_plane_dsn: str | None = Field(default=None, alias="DOCSURI_CONTROL_PLANE_DSN")
     sqs_queue_url: str | None = Field(default=None, alias="DOCSURI_SQS_QUEUE_URL")
     sqs_dlq_url: str | None = Field(default=None, alias="DOCSURI_SQS_DLQ_URL")
+    # Priority doc-model build queue (BR-30/D6). Separate from the bulk ingestion queue so
+    # reader-triggered BUILD_DOC_MODEL jobs (viewer/citation tree) are not starved behind a large
+    # backfill. Optional — unset → worker polls only the main queue (backward compatible).
+    docmodel_queue_url: str | None = Field(default=None, alias="DOCSURI_DOCMODEL_QUEUE_URL")
+    docmodel_dlq_url: str | None = Field(default=None, alias="DOCSURI_DOCMODEL_DLQ_URL")
     corpus_sources: str = Field(
         default="ARXIV,SEMANTIC_SCHOLAR,OPENALEX", alias="DOCSURI_CORPUS_SOURCES"
     )

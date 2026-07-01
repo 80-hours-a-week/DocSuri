@@ -102,6 +102,25 @@ class IngestionStack(Stack):
             dead_letter_queue=sqs.DeadLetterQueue(max_receive_count=3, queue=dlq),
         )
 
+        # --- SQS: priority doc-model build queue (BR-30/D6) ---
+        # Reader-triggered BUILD_DOC_MODEL jobs (viewer/citation-tree cache misses) land here,
+        # isolated from the bulk backfill on the main queue. The same worker drains this FIRST
+        # (priority poll), so a large backfill can no longer starve the on-demand doc-model builds.
+        docmodel_dlq = sqs.Queue(
+            self, "DocModelDlq",
+            queue_name="docsuri-docmodel-dlq",
+            retention_period=Duration.days(14),
+            encryption=sqs.QueueEncryption.SQS_MANAGED,
+        )
+        self.docmodel_queue = sqs.Queue(
+            self, "DocModelQueue",
+            queue_name="docsuri-docmodel-queue",
+            visibility_timeout=Duration.seconds(300),
+            retention_period=Duration.days(14),
+            encryption=sqs.QueueEncryption.SQS_MANAGED,
+            dead_letter_queue=sqs.DeadLetterQueue(max_receive_count=3, queue=docmodel_dlq),
+        )
+
         # --- S3: full-text storage (infra-design §4) ---
         self.bucket = s3.Bucket(
             self, "FulltextBucket",
@@ -194,6 +213,10 @@ class IngestionStack(Stack):
                 "DOCSURI_CONTROL_PLANE_DSN": control_plane_dsn,
                 "DOCSURI_SQS_QUEUE_URL": self.queue.queue_url,
                 "DOCSURI_SQS_DLQ_URL": dlq.queue_url,
+                # Priority doc-model build queue — the worker drains this first (BR-30/D6). Set →
+                # the runtime wires a second SqsQueue (short poll); unset would fall back to main.
+                "DOCSURI_DOCMODEL_QUEUE_URL": self.docmodel_queue.queue_url,
+                "DOCSURI_DOCMODEL_DLQ_URL": docmodel_dlq.queue_url,
                 # FR-17 multimodal figure/table assets ON (Pillow/pypdfium2/pdfplumber baked
                 # into the image via the [assets] extra).
                 "DOCSURI_MULTIMODAL_ASSETS_ENABLED": "true",
@@ -224,7 +247,12 @@ class IngestionStack(Stack):
         # Autoscaling: min 0 — max 3 (SQS-driven step scaling)
         from aws_cdk import aws_applicationautoscaling as appscaling
 
-        scaling = self.service.auto_scale_task_count(min_capacity=0, max_capacity=3)
+        # max_capacity=1 (was 3): a bulk arXiv backfill on 3 tasks blew past arXiv's ~1-req/3s
+        # limit (503/429 retry-storms → DLQ) AND saturated OpenSearch, timing out live k-NN search
+        # (2.0s read) and starving lazy BUILD_DOC_MODEL jobs behind the backlog. One worker stays
+        # under the arXiv limit and off the read path. ponytail: single-writer throttle; raise back
+        # only once bulk backfills run on a separate queue from lazy doc-model builds.
+        scaling = self.service.auto_scale_task_count(min_capacity=0, max_capacity=1)
         # CDK step scaling leaves a "do-nothing" dead zone between the highest scale-in bound and
         # the lowest scale-out bound. The daily EventBridge rule enqueues exactly ONE schedule_tick
         # message, so the scale-out threshold MUST be 1: lower=10 left depth=1 stranded in the dead
@@ -241,6 +269,19 @@ class IngestionStack(Stack):
                 appscaling.ScalingInterval(upper=0, change=0),
                 appscaling.ScalingInterval(lower=1, change=1),   # was lower=10 — the deadlock
                 appscaling.ScalingInterval(lower=50, change=2),
+            ],
+            adjustment_type=appscaling.AdjustmentType.CHANGE_IN_CAPACITY,
+        )
+        # Second trigger: wake the scale-to-zero worker when a reader enqueues a doc-model build,
+        # independent of the backfill queue depth — otherwise a priority build could sit unserved
+        # until the next backfill message happened to wake the worker. App Auto Scaling takes the
+        # max desired across both policies, so either queue having depth ≥1 brings up the 1 worker.
+        scaling.scale_on_metric(
+            "DocModelDepth",
+            metric=self.docmodel_queue.metric_approximate_number_of_messages_visible(),
+            scaling_steps=[
+                appscaling.ScalingInterval(upper=0, change=0),
+                appscaling.ScalingInterval(lower=1, change=1),
             ],
             adjustment_type=appscaling.AdjustmentType.CHANGE_IN_CAPACITY,
         )
@@ -262,6 +303,9 @@ class IngestionStack(Stack):
         # ClientError. Grant send too.
         self.queue.grant_send_messages(task_def.task_role)
         dlq.grant_send_messages(task_def.task_role)
+        # Priority doc-model queue: worker consumes (receive/delete) it and DLQs poison builds.
+        self.docmodel_queue.grant_consume_messages(task_def.task_role)
+        docmodel_dlq.grant_send_messages(task_def.task_role)
         self.bucket.grant_read_write(task_def.task_role)
         task_def.add_to_task_role_policy(
             iam.PolicyStatement(

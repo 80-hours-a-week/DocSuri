@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MyPageLibraryScreen } from '@/components/mypage/MyPageLibraryScreen';
 import { mockLogin } from '@/mocks/accountFixtures';
 import { resetMypageFixtures } from '@/mocks/mypageFixtures';
@@ -23,7 +24,8 @@ beforeEach(() => {
 });
 
 describe('MyPageLibraryScreen (U10)', () => {
-  it('renders the 관심 논문/최근 tabs with the interest tab active by default, plus a link out to saved searches', async () => {
+  it('renders all library tabs and switches saved searches/history in-page', async () => {
+    const user = userEvent.setup();
     render(<MyPageLibraryScreen active="interest" />);
     expect(await screen.findByTestId('mypage-library-tab-interest')).toHaveAttribute(
       'aria-current',
@@ -31,10 +33,16 @@ describe('MyPageLibraryScreen (U10)', () => {
     );
     expect(screen.getByTestId('mypage-library-tab-interest')).toHaveTextContent('관심 논문');
     expect(screen.getByTestId('mypage-library-tab-recent')).not.toHaveAttribute('aria-current');
-    expect(screen.getByTestId('mypage-library-saved-history')).toHaveAttribute(
-      'href',
-      '/library/saved',
-    );
+    expect(screen.getByTestId('mypage-library-tab-saved')).toHaveTextContent('저장한 검색');
+    expect(screen.getByTestId('mypage-library-tab-history')).toHaveTextContent('검색 이력');
+
+    await user.click(screen.getByTestId('mypage-library-tab-saved'));
+    expect(await screen.findByTestId('saved-screen')).toBeInTheDocument();
+    expect(screen.queryByTestId('tab-saved')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('mypage-library-tab-history'));
+    expect(await screen.findByTestId('history-screen')).toBeInTheDocument();
+    expect(screen.queryByTestId('tab-history')).not.toBeInTheDocument();
   });
 
   it('renders the recently-viewed list on the recent tab', async () => {

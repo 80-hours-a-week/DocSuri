@@ -114,15 +114,15 @@ export function SummaryModal({ paperId, version, view, onClose, onAnchor }: Summ
       case 'translation':
         return <TranslationView translation={outcome.translation} cached={outcome.cached} />;
       case 'pending': {
-        // Long summary running as a background job (BR-S6/BR-S8): the hook is polling.
-        const hint = outcome.retryAfterMs
-          ? ` (~${Math.ceil(outcome.retryAfterMs / 1000)}초 후 재시도)`
-          : '';
+        // Generation runs as a background job (BR-S6/BR-S8) and the hook keeps polling. Set the
+        // expectation up front (it can take 1–2 min for a long paper) so the wait doesn't read as
+        // a failure — the result appears automatically when ready.
+        const noun = view === 'summary' ? '요약' : '번역';
         return (
           <StateView
             kind="loading"
-            title="요약 준비 중…"
-            message={`긴 논문이라 요약을 만들고 있어요. 잠시만 기다려 주세요.${hint}`}
+            title={`${noun} 생성 중…`}
+            message={`AI가 논문을 읽고 ${noun}을 만들고 있어요. 논문이 길면 1~2분 걸릴 수 있어요. 이 화면을 열어두면 완료되는 대로 표시돼요.`}
           />
         );
       }

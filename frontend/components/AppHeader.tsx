@@ -10,6 +10,7 @@ import { useSession } from './session/SessionContext';
 // hidden. Kept here so the desktop bar reads like an ordinary web app nav.
 const NAV_LINKS = [
   { href: '/search', label: '검색', isActive: (p: string) => p.startsWith('/search') || p.startsWith('/paper') },
+  { href: '/agent', label: '에이전트', isActive: (p: string) => p.startsWith('/agent') },
   { href: '/mypage', label: '마이페이지', isActive: (p: string) => p.startsWith('/mypage') },
 ];
 

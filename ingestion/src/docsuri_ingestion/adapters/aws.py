@@ -383,12 +383,23 @@ class SqsMessage:
 
 
 class SqsQueue:
-    def __init__(self, *, queue_url: str, dlq_url: str, region_name: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        queue_url: str,
+        dlq_url: str,
+        region_name: str | None = None,
+        wait_time_seconds: int = 20,
+    ) -> None:
         import boto3
 
         self._client = boto3.client("sqs", region_name=region_name)
         self._queue_url = queue_url
         self._dlq_url = dlq_url
+        # Per-instance long-poll window. The main ingestion queue keeps the 20s default; the
+        # priority doc-model queue is built with 0 (short poll) so an empty doc-model queue never
+        # blocks the loop from getting back to the backfill queue (worker.py polls doc-model first).
+        self._wait_time_seconds = wait_time_seconds
 
     def send_job(self, job) -> None:
         self._client.send_message(
@@ -402,7 +413,7 @@ class SqsQueue:
         response = self._client.receive_message(
             QueueUrl=self._queue_url,
             MaxNumberOfMessages=max_messages,
-            WaitTimeSeconds=20,
+            WaitTimeSeconds=self._wait_time_seconds,
         )
         messages = []
         for message in response.get("Messages", []):

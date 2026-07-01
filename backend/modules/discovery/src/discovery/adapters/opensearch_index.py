@@ -15,6 +15,8 @@ exposed as two adapter objects but share one OpenSearch client via ``OpenSearchC
 from __future__ import annotations
 
 import logging
+import re
+import time
 from collections.abc import Sequence
 from typing import Any
 
@@ -24,6 +26,71 @@ from pydantic import ValidationError
 from ..ports.search_ports import IndexUnavailable, ScoredRecord
 
 _log = logging.getLogger(__name__)
+
+# Bounded transient-retry for the single OpenSearch store. Search is a read (idempotent), and
+# under heavy concurrent indexing (e.g. a corpus rebuild) the cluster returns brief transient
+# failures — a shard relocating, a GC pause, a momentary timeout. A short retry absorbs most of
+# those so one unlucky moment does not surface to the user as a 503; repeated failure still
+# fail-closes (INV-3). Kept small so an added retry never blows the P50<3s search budget.
+#
+# Two guards keep the retry inside that budget on the slow/outage path the client's 10s connect-
+# and-read ``timeout`` would otherwise stretch across three attempts (~30s):
+#   1. Only *known-transient* failures are retried (see ``_is_transient``). A non-transient error
+#      — a 4xx query error, an unexpected response shape — fail-closes on the first attempt rather
+#      than burning three attempts on something a retry can't fix.
+#   2. Retried searches carry a per-request timeout well below the client default, so even a
+#      genuine ConnectionTimeout fails its attempt fast; worst-case fail-close is bounded to
+#      ~MAX_ATTEMPTS * this + backoff instead of ~30s.
+_SEARCH_MAX_ATTEMPTS = 3
+_SEARCH_RETRY_BACKOFF_S = (0.1, 0.25)  # sleeps before attempt 2 and attempt 3
+_SEARCH_REQUEST_TIMEOUT_S = 2.0  # per-attempt cap; bounds the fail-close tail (P50<3s budget)
+
+
+def _is_transient(exc: BaseException) -> bool:
+    """Whether an OpenSearch failure is a transient store blip a short retry can absorb (vs. a
+    permanent error a retry can't fix). Classifies by the opensearch-py exception's own
+    ``status_code`` — duck-typed, so this module still imports without the ``real`` extra:
+    connection errors (``"N/A"``), read timeouts (``"TIMEOUT"``), and 5xx server errors (e.g. a
+    503 for a relocating shard) are transient; a 4xx (bad query, auth, not-found) or any exception
+    with no store status_code (an unexpected response shape, a programming bug) is not."""
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, int):
+        return status >= 500  # 5xx — server-side transient
+    return status in ("N/A", "TIMEOUT")  # connection error / read timeout
+
+
+def _search_hits(
+    client: Any, index: str, body: dict[str, Any], *, message: str
+) -> list[dict[str, Any]]:
+    """Run a search and return its hits, retrying transient store failures before fail-closing to
+    ``IndexUnavailable``. Only known-transient failures are retried (``_is_transient``); anything
+    else fail-closes on the first attempt. Each attempt carries a bounded ``request_timeout`` so a
+    stuck call can't stretch the retry past the search latency budget.
+
+    The raised ``IndexUnavailable`` chains ``from`` the underlying store error and records which
+    query and how many attempts failed in its message, so the request-aware 503 handler logs the
+    real cause correlated to the request id in one self-contained line (no timestamp join to a
+    separate adapter log). The bare ``raise ... from exc`` previously discarded that cause, making
+    a real outage indistinguishable from a transient blip."""
+    last_exc: Exception | None = None
+    attempt = 0
+    for attempt in range(_SEARCH_MAX_ATTEMPTS):
+        try:
+            response = client.search(
+                index=index, body=body, request_timeout=_SEARCH_REQUEST_TIMEOUT_S
+            )
+            return response["hits"]["hits"]
+        except Exception as exc:  # noqa: BLE001 — one store; transient-tolerant then fail-closed
+            last_exc = exc
+            if not _is_transient(exc) or attempt == _SEARCH_MAX_ATTEMPTS - 1:
+                break
+            time.sleep(_SEARCH_RETRY_BACKOFF_S[attempt])
+    raise IndexUnavailable(f"{message} after {attempt + 1} attempt(s)") from last_exc
+# arXiv version suffix ("v3"). paperId is stored version-less, so stripping the requested id's
+# version lets the detail lookup resolve a paper indexed at a *different* version than the one
+# asked for. Mirrors ingestion's normalize_arxiv_ref (ingestion/.../domain/ids.py); cross-module
+# id parsing isn't shared yet, so this small strip is duplicated.
+_VERSION_SUFFIX_RE = re.compile(r"v[1-9][0-9]*$", re.IGNORECASE)
 
 
 def _hit_id(hit: dict[str, Any]) -> str:
@@ -138,11 +205,9 @@ class OpenSearchVectorStoreAdapter:
             "size": top_k,
             "query": {"knn": {"vector": knn}},
         }
-        try:
-            response = self._client.search(index=self._index, body=body)
-            hits = response["hits"]["hits"]
-        except Exception as exc:  # noqa: BLE001 — one store; any failure → fail-closed (INV-3)
-            raise IndexUnavailable("OpenSearch k-NN query failed") from exc
+        hits = _search_hits(
+            self._client, self._index, body, message="OpenSearch k-NN query failed"
+        )
         return _to_scored(hits)
 
 
@@ -155,25 +220,27 @@ class OpenSearchPaperLookupAdapter:
         self._index = index_name
 
     def fetch_paper(self, paper_id: str) -> IndexRecord | None:
-        # Match either the version-less paperId or the display arxivId (the detail route id is
-        # the arxivId). size=1: any chunk carries the paper-level metadata.
+        # Match the version-less paperId, the exact display arxivId, OR the version-stripped id
+        # against paperId — so a request for one version (e.g. ...v1) still resolves a paper
+        # indexed at another (...v3), instead of 404-ing on an exact-version miss. size=1: any
+        # chunk carries the paper-level metadata.
+        bare_id = _VERSION_SUFFIX_RE.sub("", paper_id)
         body = {
             "size": 1,
             "query": {
                 "bool": {
                     "should": [
                         {"term": {"paperId": paper_id}},
+                        {"term": {"paperId": bare_id}},
                         {"term": {"arxivId": paper_id}},
                     ],
                     "minimum_should_match": 1,
                 }
             },
         }
-        try:
-            response = self._client.search(index=self._index, body=body)
-            hits = response["hits"]["hits"]
-        except Exception as exc:  # noqa: BLE001 — one store; any failure → fail-closed (INV-3)
-            raise IndexUnavailable("OpenSearch paper lookup failed") from exc
+        hits = _search_hits(
+            self._client, self._index, body, message="OpenSearch paper lookup failed"
+        )
         if not hits:
             return None
         # A non-conforming stored record (schema drift) is treated like "not indexed": return
@@ -212,9 +279,7 @@ class OpenSearchLexicalIndexAdapter:
                 }
             },
         }
-        try:
-            response = self._client.search(index=self._index, body=body)
-            hits = response["hits"]["hits"]
-        except Exception as exc:  # noqa: BLE001 — one store; any failure → fail-closed (INV-3)
-            raise IndexUnavailable("OpenSearch BM25 query failed") from exc
+        hits = _search_hits(
+            self._client, self._index, body, message="OpenSearch BM25 query failed"
+        )
         return _to_scored(hits)

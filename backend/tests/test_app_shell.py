@@ -60,6 +60,18 @@ def test_module_registry_complete_and_disjoint() -> None:
         "novelty",
         "evidence",
     }
+    assert readyz["blocking"] == []
+
+
+def test_readyz_fails_when_required_module_is_skipped() -> None:
+    app = create_app(_TEST_SETTINGS)
+    app.state.mount_result = MountResult(skipped=[("novelty", "mount error")])
+
+    resp = TestClient(app).get("/readyz")
+
+    assert resp.status_code == 503
+    assert resp.json()["status"] == "not_ready"
+    assert resp.json()["blocking"] == ["novelty"]
 
 
 def test_discovery_and_accounts_actually_mount() -> None:
