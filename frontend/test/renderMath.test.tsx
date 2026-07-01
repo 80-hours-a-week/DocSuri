@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
+import fc from 'fast-check';
 import { MathDisplay, renderInlineMath, renderInlineRich, renderRichText } from '@/lib/renderMath';
 
 // renderInlineMath turns TeX delimiters in plain text into KaTeX markup. The arXiv abstract
@@ -37,6 +38,30 @@ describe('renderInlineMath', () => {
     const c = html(renderInlineMath('costs $5 and $10 total'));
     expect(c.querySelector('.katex')).toBeNull();
     expect(c.textContent).toBe('costs $5 and $10 total');
+  });
+
+  it('scans escaped characters in dollar math without regex backtracking', () => {
+    const escaped = Array.from({ length: 200 }, () => '\\#').join('');
+    const c = html(renderInlineMath(`noise $a ${escaped} b$ done`));
+    expect(c.querySelector('.katex')).not.toBeNull();
+    expect(c.textContent).toContain('done');
+  });
+
+  it('keeps bounded escaped dollar math renderable across generated inputs', () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.constantFrom('\\#', '\\$', '\\_', 'x', ' ', '+'), {
+          maxLength: 80,
+        }),
+        (parts) => {
+          const c = html(renderInlineMath(`before $a${parts.join('')}b$ after`));
+          expect(c.querySelector('.katex')).not.toBeNull();
+          expect(c.textContent).toContain('after');
+          expect(c.textContent).not.toContain('$a');
+        },
+      ),
+      { numRuns: 50 },
+    );
   });
 
   it('returns plain text when there is no math', () => {

@@ -106,13 +106,52 @@ export function MathDisplay({ latex, macros }: { latex: string; macros?: MathMac
   return <span dangerouslySetInnerHTML={{ __html: toHtml(latex, true, macros) }} />;
 }
 
+type MathToken = { start: number; end: number; latex: string; display: boolean };
+
+function isWhitespace(char: string | undefined): boolean {
+  return char === undefined || /\s/.test(char);
+}
+
+function findClosingDollar(text: string, from: number): number {
+  for (let i = from; i < text.length; i += 1) {
+    if (text[i] === '$' && text[i - 1] !== '\\' && !isWhitespace(text[i - 1])) return i;
+  }
+  return -1;
+}
+
 // Math delimiters, in match-priority order: display `$$…$$` / `\[…\]`, then inline `\(…\)`
-// / `$…$`. arXiv abstracts use TeX `$…$` (e.g. "$K$", "$\beta\leq 1$"), the doc-model uses
-// `\(…\)` — both are supported. The `$…$` arm forbids whitespace just inside the delimiters
-// (`(?!\s)` / `(?<!\s)`) so prose prices like "$5 and $10" don't get parsed as math.
-// Group: 1=$$ display, 2=\[ display, 3=\( inline, 4=$ inline.
-const MATH =
-  /\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|\$(?!\s)((?:\\.|[^$])+?)(?<!\s)\$/g;
+// / `$…$`. Scanning avoids regex backtracking on LaTeX-heavy strings with many escaped chars.
+function findNextMath(text: string, from: number): MathToken | null {
+  for (let i = from; i < text.length; i += 1) {
+    if (text.startsWith('$$', i)) {
+      const end = text.indexOf('$$', i + 2);
+      if (end !== -1)
+        return { start: i, end: end + 2, latex: text.slice(i + 2, end), display: true };
+      i += 1;
+      continue;
+    }
+    if (text.startsWith('\\[', i)) {
+      const end = text.indexOf('\\]', i + 2);
+      if (end !== -1)
+        return { start: i, end: end + 2, latex: text.slice(i + 2, end), display: true };
+      i += 1;
+      continue;
+    }
+    if (text.startsWith('\\(', i)) {
+      const end = text.indexOf('\\)', i + 2);
+      if (end !== -1)
+        return { start: i, end: end + 2, latex: text.slice(i + 2, end), display: false };
+      i += 1;
+      continue;
+    }
+    if (text[i] === '$' && !isWhitespace(text[i + 1])) {
+      const end = findClosingDollar(text, i + 1);
+      if (end !== -1)
+        return { start: i, end: end + 1, latex: text.slice(i + 1, end), display: false };
+    }
+  }
+  return null;
+}
 
 /** Render text that may contain inline/display math (`$…$`, `$$…$$`, `\(…\)`, `\[…\]`) into
  * React nodes. Prose segments stay React-escaped; only the math segments become KaTeX markup. */
@@ -121,15 +160,18 @@ export function renderInlineMath(text: string, macros?: MathMacros): React.React
   const nodes: React.ReactNode[] = [];
   let last = 0;
   let key = 0;
-  for (const m of text.matchAll(MATH)) {
-    const idx = m.index ?? 0;
-    if (idx > last) nodes.push(<Fragment key={key++}>{text.slice(last, idx)}</Fragment>);
-    const display = m[1] !== undefined || m[2] !== undefined;
-    const latex = m[1] ?? m[2] ?? m[3] ?? m[4] ?? '';
+  while (last < text.length) {
+    const token = findNextMath(text, last);
+    if (!token) break;
+    if (token.start > last)
+      nodes.push(<Fragment key={key++}>{text.slice(last, token.start)}</Fragment>);
     nodes.push(
-      <span key={key++} dangerouslySetInnerHTML={{ __html: toHtml(latex, display, macros) }} />,
+      <span
+        key={key++}
+        dangerouslySetInnerHTML={{ __html: toHtml(token.latex, token.display, macros) }}
+      />,
     );
-    last = idx + m[0].length;
+    last = token.end;
   }
   if (last === 0) return text; // no delimiter actually matched (e.g. a lone `$`)
   if (last < text.length) nodes.push(<Fragment key={key++}>{text.slice(last)}</Fragment>);
