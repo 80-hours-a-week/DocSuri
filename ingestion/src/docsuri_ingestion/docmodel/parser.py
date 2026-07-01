@@ -360,6 +360,14 @@ def _table_block(figure_el: Tag, sec_ctx: _SectionCtx) -> dict | None:
         return None
     rows: list[dict] = []
     for tr in table.find_all("tr"):
+        # A stacked/rotated column header can itself be a NESTED <table> (LaTeXML renders a
+        # two-line "Name / ↑" header as a mini table inside the header cell). find_all("tr")
+        # descends into those and would pull their rows up as phantom single-cell main rows
+        # (the observed "column headers spill into the first column" breakage). Keep only rows
+        # whose nearest ancestor table is THIS one — the nested content already lives in the
+        # parent header cell's flattened text.
+        if tr.find_parent("table") is not table:
+            continue
         cells = []
         in_thead = tr.find_parent("thead") is not None
         for cell in tr.find_all(["td", "th"], recursive=False):

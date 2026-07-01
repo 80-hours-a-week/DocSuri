@@ -372,3 +372,29 @@ def test_code_block_drops_duplicate_math_annotation() -> None:
     assert "\U0001d431" in code.text  # unicode presentation kept (readable)
     assert "\\mathsf{zeroes}" not in code.text  # TeX annotation dropped — no duplication
     assert "\\leftarrow" not in code.text
+
+
+def test_table_ignores_nested_header_table_rows() -> None:
+    # A stacked column header "Relevance Rank / ↑" is a NESTED <table> inside the header cell.
+    # The parser must NOT pull the nested rows up as phantom single-cell main rows (which made the
+    # column headers spill down the first column). Only the real header + data rows survive.
+    html = (
+        '<article class="ltx_document">'
+        '<section class="ltx_section" id="S1">'
+        '<h2 class="ltx_title ltx_title_section">Results</h2>'
+        '<figure class="ltx_table"><table class="ltx_tabular">'
+        '<tr class="ltx_tr"><th class="ltx_th">Model</th>'
+        '<th class="ltx_th"><table class="ltx_tabular">'
+        '<tr class="ltx_tr"><td class="ltx_td">Relevance Rank</td></tr>'
+        '<tr class="ltx_tr"><td class="ltx_td">up</td></tr></table></th></tr>'
+        '<tr class="ltx_tr"><td class="ltx_td">Supervised</td><td class="ltx_td">0.478</td></tr>'
+        '</table></figure>'
+        '</section></article>'
+    )
+    doc = _parse(html)
+    table = next(b for b in _blocks(_body_sections(doc)[0]) if isinstance(b, TableBlock))
+    assert len(table.rows) == 2  # header + data only — no phantom nested rows
+    # every row has the full column count (2); no stray single-cell row
+    assert all(len(r.cells) == 2 for r in table.rows)
+    # nested header content is flattened into the parent header cell
+    assert "Relevance Rank" in table.rows[0].cells[1].text
