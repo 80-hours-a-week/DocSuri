@@ -256,6 +256,48 @@ def test_build_counts_body_in_nested_subsections() -> None:
     assert len(store.put_calls) == 1
 
 
+def test_completeness_gate_counts_non_paragraph_body_blocks() -> None:
+    # Regression: body prose can live in list items / table cells, not only paragraphs. The gate
+    # summed only block["text"], so a complete paper whose non-abstract body is mostly a list/table
+    # (little direct paragraph text) read ~0 and was wrongly degraded. Every text-bearing block
+    # type must contribute to the length signal.
+    from docsuri_ingestion.docmodel.builder import _non_abstract_body_len
+
+    item = {"text": "A substantial bulleted contribution describing the method in detail. "}
+    doc = DocModel.model_validate(
+        {
+            "meta": {
+                "paperId": "2401.00001",
+                "version": 1,
+                "title": "T",
+                "provenance": {
+                    "sourceTier": "ar5iv",
+                    "parserVersion": DOCMODEL_PARSER_VERSION,
+                    "schemaVersion": DOCMODEL_SCHEMA_VERSION,
+                    "generatedAt": "1970-01-01T00:00:00Z",
+                },
+            },
+            "fullText": "x",
+            "sections": [
+                {  # abstract excluded from the body signal
+                    "id": "s0",
+                    "title": "Abstract",
+                    "blocks": [{"id": "s0.p1", "type": "paragraph", "text": "Short abstract."}],
+                },
+                {  # body carried entirely by a list — no direct paragraph text
+                    "id": "s1",
+                    "title": "Method",
+                    "blocks": [
+                        {"id": "s1.l1", "type": "list", "ordered": False, "items": [item] * 10}
+                    ],
+                },
+            ],
+        }
+    )
+    # 10 items × ~68 chars ≈ 680 > the 500 floor; the old paragraph-only count would read 0.
+    assert _non_abstract_body_len(doc) >= 500
+
+
 def test_invalidate_drops_cached_versions() -> None:
     store = _FakeStore()
     _builder(_FakeSource(None), store).invalidate("2401.00001")
