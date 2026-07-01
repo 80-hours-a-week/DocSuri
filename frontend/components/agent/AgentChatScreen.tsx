@@ -13,6 +13,7 @@ import {
 } from '@/lib/agentChat/state';
 import type {
   AgentAttachment,
+  AgentJobState,
   AgentMessage,
   AgentMode,
   AgentSessionSummary,
@@ -23,6 +24,15 @@ import styles from './AgentChatScreen.module.css';
 const MODE_LABEL: Record<AgentMode, string> = {
   evidence: 'Research',
   novelty: 'Novelty',
+};
+
+const JOB_STATE_LABEL: Record<AgentJobState, string> = {
+  idle: '대기',
+  queued: '대기',
+  running: '진행 중',
+  completed: '완료',
+  failed: '실패',
+  degraded: '저하',
 };
 
 export function AgentChatScreen() {
@@ -249,7 +259,10 @@ function AgentSessionDrawer({
             <div key={session.id} className={styles.sessionRow} data-active={session.id === activeId}>
               <button type="button" onClick={() => onLoad(session)}>
                 <span>{session.title}</span>
-                <small>{MODE_LABEL[session.mode]}</small>
+                <small>
+                  {MODE_LABEL[session.mode]} · {JOB_STATE_LABEL[session.state]} ·{' '}
+                  {formatSessionUpdatedAt(session.updatedAt)}
+                </small>
               </button>
               <button
                 type="button"
@@ -357,4 +370,15 @@ function MenuIcon() {
       <path d="M4 17h16" />
     </svg>
   );
+}
+
+function formatSessionUpdatedAt(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
 }

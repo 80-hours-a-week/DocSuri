@@ -179,7 +179,7 @@ corepack pnpm@9.15.9 --dir frontend exec -- vitest run test/agentChatReducer.tes
 Observed result:
 
 - 2 test files passed.
-- 7 tests passed.
+- 9 tests passed.
 
 Coverage focus:
 
@@ -187,6 +187,6 @@ Coverage focus:
 - Novelty mode session start and multi-turn send
 - previous session loading from the drawer
 - rejected attachment state and send blocking
-- mock transport interaction for `/api/agent/sessions`
+- mock transport interaction through `/api/research/jobs` and `/api/novelty/jobs`
 
 ---

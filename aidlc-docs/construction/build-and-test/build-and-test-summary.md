@@ -214,7 +214,7 @@ Last observed results:
 | Category | Command | Result |
 | --- | --- | --- |
 | Type check | `corepack pnpm@9.15.9 --dir frontend exec -- tsc --noEmit` | PASS |
-| Focused unit/UI tests | `corepack pnpm@9.15.9 --dir frontend exec -- vitest run test/agentChatReducer.test.ts test/agentChatScreen.test.tsx --reporter=dot` | 2 files passed, 7 tests passed |
+| Focused unit/UI tests | `corepack pnpm@9.15.9 --dir frontend exec -- vitest run test/agentChatReducer.test.ts test/agentChatScreen.test.tsx --reporter=dot` | 2 files passed, 9 tests passed |
 | Production build | `corepack pnpm@9.15.9 --dir frontend build` | PASS |
 | Browser E2E | `corepack pnpm@9.15.9 --dir frontend exec -- playwright test e2e/agent-chat.spec.ts --reporter=line` | 1 passed |
 | Diff hygiene | `git diff --check` | PASS; line-ending warnings only |

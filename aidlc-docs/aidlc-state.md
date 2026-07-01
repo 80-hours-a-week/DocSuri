@@ -606,7 +606,7 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
   - `aidlc-docs/construction/build-and-test/build-and-test-summary.md`
 - Verification:
   - `corepack pnpm@9.15.9 --dir frontend exec -- tsc --noEmit` -> passed
-  - `corepack pnpm@9.15.9 --dir frontend exec -- vitest run test/agentChatReducer.test.ts test/agentChatScreen.test.tsx --reporter=dot` -> 2 files passed, 7 tests passed
+  - `corepack pnpm@9.15.9 --dir frontend exec -- vitest run test/agentChatReducer.test.ts test/agentChatScreen.test.tsx --reporter=dot` -> 2 files passed, 9 tests passed
   - `corepack pnpm@9.15.9 --dir frontend build` -> passed; `/agent` route included
   - `corepack pnpm@9.15.9 --dir frontend exec -- playwright install webkit` -> passed
   - `corepack pnpm@9.15.9 --dir frontend exec -- playwright test e2e/agent-chat.spec.ts --reporter=line` -> 1 passed

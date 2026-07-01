@@ -127,7 +127,7 @@ Covered contracts:
 
 - `AgentMode` accepts `evidence` and `novelty`.
 - `ApiClient` exposes `listAgentSessions`, `loadAgentSession`, `deleteAgentSession`, and `sendAgentMessage`.
-- `MockTransport` implements `/api/agent/sessions` list/load/delete/message endpoints.
+- `MockTransport` implements the frontend seam through `/api/research/jobs` and `/api/novelty/jobs`.
 - frontend send payload carries `mode`, `content`, and attachment metadata.
 - timeline and assistant responses remain typed through `AgentSendMessageResult`.
 

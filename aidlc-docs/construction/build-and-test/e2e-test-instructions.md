@@ -1,7 +1,7 @@
 # E2E Test Instructions — Agent Chat Frontend
 
-**Stage**: CONSTRUCTION → Build and Test  
-**Unit**: Agent Chat Frontend  
+**Stage**: CONSTRUCTION → Build and Test
+**Unit**: Agent Chat Frontend
 **Date**: 2026-07-01
 
 ## Prerequisites

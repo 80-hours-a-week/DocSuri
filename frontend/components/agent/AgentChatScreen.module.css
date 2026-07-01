@@ -335,7 +335,8 @@
   cursor: pointer;
 }
 
-.sessionRow span {
+.sessionRow span,
+.sessionRow small {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -55,11 +55,14 @@ import type {
 } from '@/types/personalization';
 import type {
   AgentMode,
+  AgentAttachment,
+  AgentJobState,
+  AgentMessage,
   AgentSendMessageRequest,
   AgentSendMessageResult,
-  AgentSessionListResponse,
   AgentSessionSnapshot,
   AgentSessionSummary,
+  AgentTimelineEvent,
 } from '@/lib/agentChat/types';
 
 export interface ApiClientOptions {
@@ -75,6 +78,140 @@ export interface PageQuery {
 }
 
 const DEFAULT_PAGE_LIMIT = 20;
+const AGENT_ID_SEP = ':';
+
+type BackendResearchJob = {
+  jobId: string;
+  title: string;
+  state: 'active' | 'completed' | 'failed' | 'cancelled';
+  updatedAt: string;
+};
+type BackendResearchMessage = {
+  messageId: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  attachments?: unknown[];
+  createdAt: string;
+};
+type BackendNoveltyJob = {
+  jobId: string;
+  topic: string;
+  state: string;
+  updatedAt: string;
+};
+type BackendNoveltyMessage = BackendResearchMessage;
+type BackendNoveltyEvent = {
+  eventId: string;
+  state: string;
+  message: string;
+  createdAt: string;
+};
+
+function encodeAgentSessionId(mode: AgentMode, rawId: string): string {
+  return `${mode}${AGENT_ID_SEP}${rawId}`;
+}
+
+function parseAgentSessionId(
+  id: string,
+  fallback: AgentMode = 'evidence',
+): { mode: AgentMode; rawId: string } {
+  const [mode, rawId] = id.split(AGENT_ID_SEP, 2);
+  if ((mode === 'evidence' || mode === 'novelty') && rawId) return { mode, rawId };
+  if (id.startsWith('agent-novelty-')) return { mode: 'novelty', rawId: id };
+  if (id.startsWith('agent-evidence-')) return { mode: 'evidence', rawId: id };
+  return { mode: fallback, rawId: id };
+}
+
+function mapResearchJob(job: BackendResearchJob): AgentSessionSummary {
+  return {
+    id: encodeAgentSessionId('evidence', job.jobId),
+    title: job.title,
+    mode: 'evidence',
+    state: mapResearchState(job.state),
+    updatedAt: job.updatedAt,
+  };
+}
+
+function mapNoveltyJob(job: BackendNoveltyJob): AgentSessionSummary {
+  return {
+    id: encodeAgentSessionId('novelty', job.jobId),
+    title: job.topic,
+    mode: 'novelty',
+    state: mapNoveltyState(job.state),
+    updatedAt: job.updatedAt,
+  };
+}
+
+function mapResearchState(state: BackendResearchJob['state']): AgentJobState {
+  if (state === 'active') return 'running';
+  if (state === 'cancelled') return 'failed';
+  return state;
+}
+
+function mapNoveltyState(state: string): AgentJobState {
+  if (state === 'queued') return 'queued';
+  if (state === 'completed' || state === 'failed' || state === 'degraded') return state;
+  if (state === 'cancelled') return 'failed';
+  return 'running';
+}
+
+function mapTimelineState(state: AgentJobState): AgentTimelineEvent['state'] {
+  if (state === 'failed') return 'failed';
+  if (state === 'degraded') return 'degraded';
+  if (state === 'completed') return 'completed';
+  return 'running';
+}
+
+function mapAgentMessage(message: BackendResearchMessage): AgentMessage {
+  const role = message.role === 'user' ? 'user' : 'agent';
+  return {
+    id: message.messageId,
+    role,
+    content: message.content,
+    createdAt: message.createdAt,
+    attachments: message.attachments as AgentAttachment[] | undefined,
+    status: 'sent' as const,
+  };
+}
+
+function mapNoveltyEvent(event: BackendNoveltyEvent, index: number): AgentTimelineEvent {
+  const state = mapNoveltyState(event.state);
+  return {
+    id: event.eventId,
+    stage: event.state,
+    label: event.message,
+    state: mapTimelineState(state),
+    sequence: index + 1,
+  };
+}
+
+function toResearchBody(req: AgentSendMessageRequest) {
+  return { content: req.content, attachments: req.attachments ?? [] };
+}
+
+function toNoveltyBody(req: AgentSendMessageRequest, created: boolean) {
+  if (!created) return toResearchBody(req);
+  const manuscript = req.attachments?.[0];
+  return {
+    inputType: manuscript ? 'manuscript' : 'natural_language',
+    topic: req.content,
+    manuscript: manuscript
+      ? {
+          fileName: manuscript.name,
+          contentType: contentTypeFor(manuscript),
+          objectKey: null,
+        }
+      : null,
+    constraints: {},
+    exportToNotion: false,
+  };
+}
+
+function contentTypeFor(attachment: AgentAttachment): string {
+  if (attachment.kind === 'pdf') return 'application/pdf';
+  if (attachment.kind === 'markdown') return 'text/markdown';
+  return 'text/plain';
+}
 
 function pageQuery(params?: PageQuery): string {
   const sp = new URLSearchParams({ limit: String(params?.limit ?? DEFAULT_PAGE_LIMIT) });
@@ -283,45 +420,124 @@ export class ApiClient {
   // ---- agent chat frontend seam (U11/U12) -------------------------------
 
   async listAgentSessions(mode?: AgentMode): Promise<AgentSessionSummary[]> {
-    const sp = new URLSearchParams({ limit: '20' });
-    if (mode) sp.set('mode', mode);
+    const modes: AgentMode[] = mode ? [mode] : ['evidence', 'novelty'];
+    const sessions = await Promise.all(modes.map((item) => this.listAgentSessionsForMode(item)));
+    return sessions.flat().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+
+  private async listAgentSessionsForMode(mode: AgentMode): Promise<AgentSessionSummary[]> {
+    const path = mode === 'evidence' ? '/api/research/jobs?limit=20' : '/api/novelty/jobs?limit=20';
     const res = await this.request({
       method: 'GET',
-      path: `/api/agent/sessions?${sp.toString()}`,
+      path,
       idempotent: true,
     });
-    if (res.status === 200) return (res.body as AgentSessionListResponse).sessions ?? [];
+    if (res.status === 200) {
+      const jobs = (res.body as { jobs?: unknown[] }).jobs ?? [];
+      return jobs.map((job) =>
+        mode === 'evidence'
+          ? mapResearchJob(job as BackendResearchJob)
+          : mapNoveltyJob(job as BackendNoveltyJob),
+      );
+    }
     throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
   async loadAgentSession(id: string): Promise<AgentSessionSnapshot> {
+    const target = parseAgentSessionId(id);
+    if (target.mode === 'novelty') return this.loadNoveltySession(target.rawId);
+    return this.loadResearchSession(target.rawId);
+  }
+
+  private async loadResearchSession(id: string): Promise<AgentSessionSnapshot> {
     const res = await this.request({
       method: 'GET',
-      path: `/api/agent/sessions/${encodeURIComponent(id)}`,
+      path: `/api/research/jobs/${encodeURIComponent(id)}`,
       idempotent: true,
     });
-    if (res.status === 200) return res.body as AgentSessionSnapshot;
+    if (res.status === 200) {
+      const body = res.body as { job: BackendResearchJob; messages?: BackendResearchMessage[] };
+      return {
+        session: mapResearchJob(body.job),
+        messages: (body.messages ?? []).map((message) => mapAgentMessage(message)),
+        events: [],
+      };
+    }
     throw normalizeHttpError(res.status, serverMessage(res.body));
+  }
+
+  private async loadNoveltySession(id: string): Promise<AgentSessionSnapshot> {
+    const [jobRes, messageRes] = await Promise.all([
+      this.request({
+        method: 'GET',
+        path: `/api/novelty/jobs/${encodeURIComponent(id)}`,
+        idempotent: true,
+      }),
+      this.request({
+        method: 'GET',
+        path: `/api/novelty/jobs/${encodeURIComponent(id)}/messages`,
+        idempotent: true,
+      }),
+    ]);
+    if (jobRes.status !== 200) throw normalizeHttpError(jobRes.status, serverMessage(jobRes.body));
+    if (messageRes.status !== 200) {
+      throw normalizeHttpError(messageRes.status, serverMessage(messageRes.body));
+    }
+    const jobBody = jobRes.body as { job: BackendNoveltyJob; events?: BackendNoveltyEvent[] };
+    const messageBody = messageRes.body as { messages?: BackendNoveltyMessage[] };
+    return {
+      session: mapNoveltyJob(jobBody.job),
+      messages: (messageBody.messages ?? []).map((message) => mapAgentMessage(message)),
+      events: (jobBody.events ?? []).map((event, index) => mapNoveltyEvent(event, index)),
+    };
   }
 
   async sendAgentMessage(
     sessionId: string,
     req: AgentSendMessageRequest,
   ): Promise<AgentSendMessageResult> {
+    const target = parseAgentSessionId(sessionId, req.mode);
+    const created = sessionId.startsWith(`agent-${req.mode}-`);
+    const path =
+      target.mode === 'evidence'
+        ? created
+          ? '/api/research/jobs'
+          : `/api/research/jobs/${encodeURIComponent(target.rawId)}/messages`
+        : created
+          ? '/api/novelty/jobs'
+          : `/api/novelty/jobs/${encodeURIComponent(target.rawId)}/messages`;
     const res = await this.request({
       method: 'POST',
-      path: `/api/agent/sessions/${encodeURIComponent(sessionId)}/messages`,
-      body: req,
+      path,
+      body: target.mode === 'evidence' ? toResearchBody(req) : toNoveltyBody(req, created),
       idempotent: false,
     });
-    if (res.status === 200 || res.status === 201) return res.body as AgentSendMessageResult;
-    throw normalizeHttpError(res.status, serverMessage(res.body));
+    if (res.status !== 200 && res.status !== 201) {
+      throw normalizeHttpError(res.status, serverMessage(res.body));
+    }
+    const nextId =
+      created && target.mode === 'evidence'
+        ? encodeAgentSessionId('evidence', (res.body as { jobId: string }).jobId)
+        : created && target.mode === 'novelty'
+          ? encodeAgentSessionId('novelty', (res.body as { jobId: string }).jobId)
+          : sessionId;
+    const snapshot = await this.loadAgentSession(nextId);
+    return {
+      session: snapshot.session,
+      messages: snapshot.messages,
+      events: snapshot.events,
+      outcome: snapshot.session.state === 'failed' ? 'failed' : snapshot.session.state,
+    };
   }
 
   async deleteAgentSession(id: string): Promise<void> {
+    const target = parseAgentSessionId(id);
     const res = await this.request({
       method: 'DELETE',
-      path: `/api/agent/sessions/${encodeURIComponent(id)}`,
+      path:
+        target.mode === 'evidence'
+          ? `/api/research/jobs/${encodeURIComponent(target.rawId)}`
+          : `/api/novelty/jobs/${encodeURIComponent(target.rawId)}`,
       idempotent: false,
     });
     if (res.status === 200 || res.status === 204) return;

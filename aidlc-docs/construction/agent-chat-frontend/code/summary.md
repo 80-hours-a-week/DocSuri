@@ -43,7 +43,7 @@
 
 - Security: no new persistence, secret handling, or infrastructure was added. User inputs are bounded at the client, attachment types are allowlisted, and failed/degraded responses use generic user-facing messages.
 - Resiliency: the UI exposes failed/degraded states and keeps transport calls behind the existing timeout/retry policy in `ApiClient`.
-- PBT: no new PBT dependency was added. Reducer/helper invariants are covered by deterministic unit tests; TypeScript PBT remains a candidate per TD-AG-7.
+- PBT: `fast-check` was added for reducer/helper property coverage. The current property test covers unsequenced timeline event ordering; deterministic tests cover retry state preservation and attachment allowlist behavior.
 
 ## Boundary
 

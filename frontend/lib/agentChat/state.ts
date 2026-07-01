@@ -101,8 +101,6 @@ export function agentReducer(state: AgentChatState, action: AgentChatAction): Ag
       return {
         ...state,
         messages: [...state.messages, action.message],
-        draft: '',
-        attachments: [],
         jobState: 'running',
         submitting: true,
         error: null,
@@ -114,6 +112,8 @@ export function agentReducer(state: AgentChatState, action: AgentChatAction): Ag
         sessions: sortSessions(upsertSession(state.sessions, action.result.session)),
         messages: action.result.messages,
         events: mergeTimelineEvents(state.events, action.result.events),
+        draft: '',
+        attachments: [],
         jobState: action.result.outcome,
         submitting: false,
         error: resultMessage(action.result),
@@ -195,12 +195,18 @@ export function mergeTimelineEvents(
 }
 
 export function sortTimelineEvents(events: AgentTimelineEvent[]): AgentTimelineEvent[] {
-  return [...events].sort((a, b) => {
-    const aSeq = a.sequence ?? Number.MAX_SAFE_INTEGER;
-    const bSeq = b.sequence ?? Number.MAX_SAFE_INTEGER;
-    if (aSeq !== bSeq) return aSeq - bSeq;
-    return a.id.localeCompare(b.id);
-  });
+  return events
+    .map((event, index) => ({ event, index }))
+    .sort((a, b) => {
+      const aSeq = a.event.sequence;
+      const bSeq = b.event.sequence;
+      if (aSeq == null && bSeq == null) return a.index - b.index;
+      if (aSeq == null) return 1;
+      if (bSeq == null) return -1;
+      if (aSeq !== bSeq) return aSeq - bSeq;
+      return a.index - b.index;
+    })
+    .map(({ event }) => event);
 }
 
 export function createAttachmentFromFile(file: { name: string; size?: number }, index = 0) {

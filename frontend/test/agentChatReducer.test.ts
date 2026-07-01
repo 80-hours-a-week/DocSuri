@@ -1,12 +1,15 @@
+import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import {
   agentReducer,
   canSend,
   createAttachmentFromFile,
+  createUserMessage,
   initialAgentChatState,
   mergeTimelineEvents,
+  sortTimelineEvents,
 } from '@/lib/agentChat/state';
-import type { AgentSessionSummary } from '@/lib/agentChat/types';
+import type { AgentSessionSummary, AgentTimelineEvent } from '@/lib/agentChat/types';
 
 const evidenceSession: AgentSessionSummary = {
   id: 's-evidence',
@@ -59,6 +62,41 @@ describe('agent chat reducer/helpers', () => {
 
     expect(merged.map((event) => event.id)).toEqual(['a', 'b', 'c']);
     expect(merged[1].label).toBe('B done');
+  });
+
+  it('keeps unsequenced timeline events in received order', () => {
+    fc.assert(
+      fc.property(fc.uniqueArray(fc.string({ minLength: 1 }), { minLength: 1 }), (ids) => {
+        const events: AgentTimelineEvent[] = ids.map((id) => ({
+          id,
+          stage: id,
+          label: id,
+          state: 'running',
+        }));
+
+        expect(sortTimelineEvents(events).map((event) => event.id)).toEqual(ids);
+      }),
+    );
+  });
+
+  it('keeps draft and attachments available when send fails', () => {
+    const attachment = createAttachmentFromFile({ name: 'draft.pdf', size: 1024 });
+    const ready = agentReducer(
+      agentReducer(
+        agentReducer(initialAgentChatState, { type: 'startSession', session: evidenceSession }),
+        { type: 'setDraft', draft: '다시 시도할 메시지' },
+      ),
+      { type: 'addAttachment', attachment },
+    );
+    const sending = agentReducer(ready, {
+      type: 'sendStart',
+      message: createUserMessage(ready.draft, ready.attachments),
+    });
+    const failed = agentReducer(sending, { type: 'sendFailure', message: '실패' });
+
+    expect(failed.draft).toBe('다시 시도할 메시지');
+    expect(failed.attachments).toEqual([attachment]);
+    expect(failed.messages.at(-1)?.status).toBe('failed');
   });
 
   it('requires a mode, draft, session, and valid attachments before sending', () => {

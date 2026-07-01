@@ -63,7 +63,7 @@ export interface AgentSendMessageResult {
   session: AgentSessionSummary;
   messages: AgentMessage[];
   events: AgentTimelineEvent[];
-  outcome: 'completed' | 'failed' | 'degraded';
+  outcome: AgentJobState;
   retryable?: boolean;
   errorMessage?: string;
 }
