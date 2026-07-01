@@ -97,7 +97,8 @@
   box-shadow: 0 0 0 0.25rem var(--color-warn-bg);
 }
 
-/* Display formula — fits the width (no horizontal scrollbar); tap to enlarge. */
+/* Display formula — a wide equation that exceeds the mobile width scrolls horizontally within its
+   own box (never clipped/cut off); tap still enlarges it to a fit-to-viewport overlay. */
 .formula {
   display: flex;
   align-items: center;
@@ -109,7 +110,9 @@
 .formulaInner {
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .eqno {
