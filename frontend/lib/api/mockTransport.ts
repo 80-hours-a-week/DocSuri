@@ -53,12 +53,19 @@ import {
   mockGetConsents,
   mockUpdateConsent,
 } from '@/mocks/mypageFixtures';
+import {
+  mockDeleteAgentSession,
+  mockListAgentSessions,
+  mockLoadAgentSession,
+  mockSendAgentMessage,
+} from '@/mocks/agentFixtures';
 import type {
   SavedSearchCreateDTO,
   LibraryItemCreateDTO,
 } from '@/types/generated';
 import type { CitationNode } from '@/types/citationGraph';
 import type { BehaviorEventCreate } from '@/types/personalization';
+import type { AgentMode, AgentSendMessageRequest } from '@/lib/agentChat/types';
 
 function matches(q: string, ...needles: string[]): boolean {
   const lower = q.toLowerCase();
@@ -82,6 +89,9 @@ export class MockTransport implements Transport {
 
     const mypageRes = this.routeMypage(req, path);
     if (mypageRes) return mypageRes;
+
+    const agentRes = this.routeAgent(req, path, sp);
+    if (agentRes) return agentRes;
 
     if (path === '/api/personalization/events' && req.method === 'POST') {
       void (req.body as BehaviorEventCreate);
@@ -303,6 +313,45 @@ export class MockTransport implements Transport {
         const body = (req.body ?? {}) as { nightlyPushAgreed?: unknown };
         return { status: 200, body: mockUpdateConsent(Boolean(body.nightlyPushAgreed)) };
       }
+    }
+    return null;
+  }
+
+  private routeAgent(
+    req: TransportRequest,
+    path: string,
+    sp: URLSearchParams,
+  ): TransportResponse | null {
+    if (path === '/api/agent/sessions' && req.method === 'GET') {
+      const mode = sp.get('mode');
+      return {
+        status: 200,
+        body: {
+          sessions: mockListAgentSessions(
+            mode === 'evidence' || mode === 'novelty' ? (mode as AgentMode) : undefined,
+          ),
+        },
+      };
+    }
+    const message = path.match(/^\/api\/agent\/sessions\/([^/]+)\/messages$/);
+    if (message && req.method === 'POST') {
+      return {
+        status: 201,
+        body: mockSendAgentMessage(
+          decodeURIComponent(message[1]),
+          req.body as AgentSendMessageRequest,
+        ),
+      };
+    }
+    const session = path.match(/^\/api\/agent\/sessions\/([^/]+)$/);
+    if (session && req.method === 'GET') {
+      const snapshot = mockLoadAgentSession(decodeURIComponent(session[1]));
+      return snapshot ? { status: 200, body: snapshot } : { status: 404, body: null };
+    }
+    if (session && req.method === 'DELETE') {
+      return mockDeleteAgentSession(decodeURIComponent(session[1]))
+        ? { status: 204, body: null }
+        : { status: 404, body: null };
     }
     return null;
   }

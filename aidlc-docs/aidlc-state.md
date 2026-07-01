@@ -509,10 +509,10 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
   - `$env:JSII_NODE="$env:USERPROFILE\scoop\apps\nodejs-lts\current\node.exe"; cdk synth` from `ops/cdk` -> pass, synthesized to `ops/cdk/cdk.out`
 - Current gate: Build and Test review/approval. Next stage per AI-DLC is Operations placeholder.
 
-## Agent Chat Frontend — NFR Design Complete / Code Generation Plan Ready
+## Agent Chat Frontend — Code Generation Complete
 
 - Date: 2026-07-01
-- Stage: CONSTRUCTION / NFR Design complete; Code Generation plan gate
+- Stage: CONSTRUCTION / Code Generation
 - Branch: `docs/novelty-agent-fe`
 - Inputs:
   - `aidlc-docs/inception/requirements/requirement-verification-questions-agent-chat-frontend.md`
@@ -557,11 +557,64 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
   - `aidlc-docs/construction/agent-chat-frontend/nfr-design/logical-components.md`
 - Infrastructure Design:
   - Skipped. U13 reuses existing frontend deployment and adds no new infrastructure.
+- Completed plan:
+  - `aidlc-docs/construction/plans/agent-chat-frontend-code-generation-plan.md`
+- Created application code:
+  - `frontend/app/agent/page.tsx`
+  - `frontend/app/agent/agent.module.css`
+  - `frontend/components/agent/AgentChatScreen.tsx`
+  - `frontend/components/agent/AgentChatScreen.module.css`
+  - `frontend/lib/agentChat/types.ts`
+  - `frontend/lib/agentChat/state.ts`
+  - `frontend/mocks/agentFixtures.ts`
+- Modified application code:
+  - `frontend/components/AppHeader.tsx`
+  - `frontend/components/BottomNav.tsx`
+  - `frontend/lib/api/apiClient.ts`
+  - `frontend/lib/api/mockTransport.ts`
+  - `frontend/playwright.config.ts`
+- Tests and summary:
+  - `frontend/test/agentChatReducer.test.ts`
+  - `frontend/test/agentChatScreen.test.tsx`
+  - `frontend/e2e/agent-chat.spec.ts`
+  - `aidlc-docs/construction/agent-chat-frontend/code/summary.md`
+- Verification:
+  - `corepack pnpm@9.15.9 --dir frontend exec -- tsc --noEmit` -> passed
+  - `corepack pnpm@9.15.9 --dir frontend run test -- test/agentChatReducer.test.ts test/agentChatScreen.test.tsx` -> passed; Vitest executed the current frontend suite, 41 files / 175 tests passed
+  - `corepack pnpm@9.15.9 --dir frontend build` -> passed; `/agent` included in route output
+  - `corepack pnpm@9.15.9 --dir frontend exec playwright test e2e/agent-chat.spec.ts` -> attempted; blocked because local Playwright WebKit binary is not installed
 - Scope boundary:
   - v1 frontend uses `/agent` single route, existing responsive + phone preview structure, and a mock/real transport seam.
   - No new backend API or infrastructure code is generated in this stage.
-- Current gate: Code Generation approval question awaiting answer.
-- Code generated: no.
+- Current gate: Code Generation review/approval. Next recommended stage: Build and Test after approval.
+- Code generated: yes.
+
+## Agent Chat Frontend — Build and Test Complete
+
+- Date: 2026-07-01
+- Stage: CONSTRUCTION / Build and Test
+- Code Generation approval:
+  - User approved: "좋아요. 이제 빌드와 테스트를 진행해 주세요."
+- Build/test documents updated:
+  - `aidlc-docs/construction/build-and-test/build-instructions.md`
+  - `aidlc-docs/construction/build-and-test/unit-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/integration-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/performance-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/contract-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/security-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/e2e-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/build-and-test-summary.md`
+- Verification:
+  - `corepack pnpm@9.15.9 --dir frontend exec -- tsc --noEmit` -> passed
+  - `corepack pnpm@9.15.9 --dir frontend exec -- vitest run test/agentChatReducer.test.ts test/agentChatScreen.test.tsx --reporter=dot` -> 2 files passed, 7 tests passed
+  - `corepack pnpm@9.15.9 --dir frontend build` -> passed; `/agent` route included
+  - `corepack pnpm@9.15.9 --dir frontend exec -- playwright install webkit` -> passed
+  - `corepack pnpm@9.15.9 --dir frontend exec -- playwright test e2e/agent-chat.spec.ts --reporter=line` -> 1 passed
+  - `git diff --check` -> passed; line-ending warnings only
+- E2E adjustment:
+  - Agent Chat E2E now injects the mock session directly and starts from `/agent`, because auth form coverage belongs to existing auth E2E tests.
+  - Playwright webServer now copies static assets into `.next/standalone` and runs the standalone server for local E2E hydration after `next build`.
+- Current gate: Build and Test review/approval. Next stage per AI-DLC is Operations placeholder.
 
 ## Research Agent — Requirements Registered
 

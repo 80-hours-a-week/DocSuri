@@ -237,3 +237,27 @@ Acceptance:
 - U9 failure produces degraded/default behavior, not primary feature failure.
 
 ---
+
+# Agent Chat Frontend Performance Test Instructions — 2026-07-01
+
+No standalone load test was executed for Agent Chat Frontend in this local Build & Test pass.
+
+Observed build budget:
+
+- `/agent` route size: `6.18 kB`.
+- `/agent` first-load JS: `131 kB`.
+
+Suggested staging validation:
+
+```powershell
+corepack pnpm@9.15.9 --dir frontend build
+corepack pnpm@9.15.9 --dir frontend exec -- playwright test e2e/agent-chat.spec.ts --reporter=line
+```
+
+Acceptance:
+
+- `/agent` remains within the same first-load JS class as adjacent authenticated screens.
+- Chat message send keeps visible loading/progress state during adapter latency.
+- Attachment chips remain compact and do not push the composer off-screen on mobile.
+
+---

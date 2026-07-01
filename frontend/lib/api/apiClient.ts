@@ -53,6 +53,14 @@ import type {
   PersonalizationSettings,
   ResetPersonalizationProfileResult,
 } from '@/types/personalization';
+import type {
+  AgentMode,
+  AgentSendMessageRequest,
+  AgentSendMessageResult,
+  AgentSessionListResponse,
+  AgentSessionSnapshot,
+  AgentSessionSummary,
+} from '@/lib/agentChat/types';
 
 export interface ApiClientOptions {
   timeoutMs?: number;
@@ -269,6 +277,54 @@ export class ApiClient {
       idempotent: false,
     });
     if (res.status === 200) return res.body as ResetPersonalizationProfileResult;
+    throw normalizeHttpError(res.status, serverMessage(res.body));
+  }
+
+  // ---- agent chat frontend seam (U11/U12) -------------------------------
+
+  async listAgentSessions(mode?: AgentMode): Promise<AgentSessionSummary[]> {
+    const sp = new URLSearchParams({ limit: '20' });
+    if (mode) sp.set('mode', mode);
+    const res = await this.request({
+      method: 'GET',
+      path: `/api/agent/sessions?${sp.toString()}`,
+      idempotent: true,
+    });
+    if (res.status === 200) return (res.body as AgentSessionListResponse).sessions ?? [];
+    throw normalizeHttpError(res.status, serverMessage(res.body));
+  }
+
+  async loadAgentSession(id: string): Promise<AgentSessionSnapshot> {
+    const res = await this.request({
+      method: 'GET',
+      path: `/api/agent/sessions/${encodeURIComponent(id)}`,
+      idempotent: true,
+    });
+    if (res.status === 200) return res.body as AgentSessionSnapshot;
+    throw normalizeHttpError(res.status, serverMessage(res.body));
+  }
+
+  async sendAgentMessage(
+    sessionId: string,
+    req: AgentSendMessageRequest,
+  ): Promise<AgentSendMessageResult> {
+    const res = await this.request({
+      method: 'POST',
+      path: `/api/agent/sessions/${encodeURIComponent(sessionId)}/messages`,
+      body: req,
+      idempotent: false,
+    });
+    if (res.status === 200 || res.status === 201) return res.body as AgentSendMessageResult;
+    throw normalizeHttpError(res.status, serverMessage(res.body));
+  }
+
+  async deleteAgentSession(id: string): Promise<void> {
+    const res = await this.request({
+      method: 'DELETE',
+      path: `/api/agent/sessions/${encodeURIComponent(id)}`,
+      idempotent: false,
+    });
+    if (res.status === 200 || res.status === 204) return;
     throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
