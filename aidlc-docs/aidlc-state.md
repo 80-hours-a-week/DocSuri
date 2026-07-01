@@ -637,3 +637,30 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
   - `python -m compileall backend/modules/novelty backend/wiring.py backend/app.py ops/cdk/stacks/novelty_stack.py ops/cdk/stacks/compute_stack.py ops/cdk/app.py` -> passed
   - `cd ops/cdk; cdk synth` -> passed with existing CDK warnings
 - Current gate: Build and Test review/approval. Next stage per AI-DLC is Operations placeholder.
+
+## U9 Personalization — Search-Boost Application (Shadow) Increment
+
+- Date: 2026-07-01
+- Stage: CONSTRUCTION / U9 Code Generation (follow-on increment)
+- Trigger: audit found the U9 decision path inert — `/decision/search` + `/decision/summary-defaults` had zero consumers and zero prod calls in 7d (CloudWatch `DocSuri/Production`), while collection was healthy (944 events/7d, 0 failures). Decision: build the deferred **application** path for US-P4 (search boost), **shadow-first** (measure, don't reorder).
+- Design delta (folded here, no new FD round — US-P4/FR-20/BR-P8/BR-P9 already exist):
+  - BR-P8 boost contract enforced at the read port (each ∈ [-0.1,+0.1], Σ≤0.2).
+  - Relative (multiplicative) boost over the top-30% band only — nudge, never flip.
+  - Cross-unit seam: plain injected `search_boosts` callable (no new `shared/ports` Protocol — one consumer), fail-open (BR-P13).
+- Files:
+  - `backend/modules/personalization/service.py` (BR-P8 clamp `_to_search_boosts`)
+  - `backend/modules/discovery/src/discovery/domain/ranker.py` (pure `shadow_rerank_diff` + `ShadowDiff`)
+  - `backend/modules/discovery/src/discovery/service/orchestrator.py` (`_emit_rerank_shadow`, injected `search_boosts`)
+  - `backend/wiring.py` (in-process U9 read-port provider, `PERSONALIZATION_ENABLED`-gated)
+  - `backend/tests/test_personalization.py`, `backend/modules/discovery/tests/test_ranker_pbt.py`
+- Code summary: `aidlc-docs/construction/u9-personalization/code/summary.md` (§ Search-Boost Application — Shadow Mode)
+- Metric: `personalization.rerank_shadow` (value=positions that would move, dim `scope=search`).
+- Verification (backend `.venv`, py3.13):
+  - `pytest test_personalization.py test_ranker_pbt.py test_orchestrator.py -q` -> 25 passed
+  - `pytest backend/modules/discovery/tests -q` -> passed (3 pre-existing skips)
+  - `pytest backend/tests -q` -> passed (1 pre-existing skip); `test_app_shell.py` -> passed
+  - `ruff check` on the 6 changed files -> All checks passed
+- Rollout: SHADOW — user-visible ranking unchanged. Go-live = return `shadow_rerank_diff`'s `reordered` (one line) after observing the metric.
+- Deferred: summary/translation defaults (US-P5), `keywordWeights` surfacing.
+- Delivery: PR #300 (`feature/u9-search-boost-shadow` → develop).
+- Current gate: PR review/approval.
