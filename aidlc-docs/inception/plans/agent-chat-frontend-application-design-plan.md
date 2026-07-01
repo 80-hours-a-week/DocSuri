@@ -13,11 +13,11 @@
 
 ## 설계 산출 계획
 
-- [ ] `aidlc-docs/inception/application-design/agent-chat-frontend-components.md`를 생성한다.
-- [ ] `aidlc-docs/inception/application-design/agent-chat-frontend-component-methods.md`를 생성한다.
-- [ ] `aidlc-docs/inception/application-design/agent-chat-frontend-services.md`를 생성한다.
-- [ ] `aidlc-docs/inception/application-design/agent-chat-frontend-component-dependency.md`를 생성한다.
-- [ ] 기존 application-design 요약 문서에 U13 링크를 추가한다.
+- [x] `aidlc-docs/inception/application-design/agent-chat-frontend-components.md`를 생성한다.
+- [x] `aidlc-docs/inception/application-design/agent-chat-frontend-component-methods.md`를 생성한다.
+- [x] `aidlc-docs/inception/application-design/agent-chat-frontend-services.md`를 생성한다.
+- [x] `aidlc-docs/inception/application-design/agent-chat-frontend-component-dependency.md`를 생성한다.
+- [x] 기존 application-design 요약 문서에 U13 링크를 추가한다.
 
 ## Application Design 질문
 
@@ -32,7 +32,7 @@ C) U11/U12 모드별로 별도 화면 컴포넌트를 만든다.
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: A
 
 ### 질문 2
 채팅 상태 관리는 어디에 둘까요?
@@ -45,7 +45,7 @@ C) URL query와 localStorage 중심으로 관리한다.
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: A
 
 ### 질문 3
 mock/real backend 전송 경계는 어떻게 설계할까요?
@@ -58,7 +58,7 @@ C) novelty와 evidence 전송 계층을 완전히 분리해 서로 다른 view m
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: A
 
 ### 질문 4
 데스크톱/모바일 preview 대응은 어떻게 할까요?
@@ -71,7 +71,7 @@ C) 모바일 preview에서는 일부 기능을 숨긴다.
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: A
 
 ### 질문 5
 Application Design에서 테스트 경계는 어디까지 고정할까요?
@@ -84,7 +84,7 @@ C) 테스트는 Functional Design 이후로 전부 미룬다.
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: A
 
 ## Extension 준수 요약
 
