@@ -129,19 +129,23 @@
 
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 4px;
 }
 
 .tab {
-  flex: 1;
+  flex: 1 1 calc(50% - 4px);
   text-align: center;
   padding: 8px 10px;
+  border: 0;
   border-radius: 8px;
   font-size: 14px;
+  font-family: inherit;
   text-decoration: none;
   color: var(--color-text);
   background: var(--color-surface);
+  cursor: pointer;
   min-height: 40px;
   line-height: 24px;
 }

@@ -224,7 +224,12 @@ class IngestionStack(Stack):
         # Autoscaling: min 0 — max 3 (SQS-driven step scaling)
         from aws_cdk import aws_applicationautoscaling as appscaling
 
-        scaling = self.service.auto_scale_task_count(min_capacity=0, max_capacity=3)
+        # max_capacity=1 (was 3): a bulk arXiv backfill on 3 tasks blew past arXiv's ~1-req/3s
+        # limit (503/429 retry-storms → DLQ) AND saturated OpenSearch, timing out live k-NN search
+        # (2.0s read) and starving lazy BUILD_DOC_MODEL jobs behind the backlog. One worker stays
+        # under the arXiv limit and off the read path. ponytail: single-writer throttle; raise back
+        # only once bulk backfills run on a separate queue from lazy doc-model builds.
+        scaling = self.service.auto_scale_task_count(min_capacity=0, max_capacity=1)
         # CDK step scaling leaves a "do-nothing" dead zone between the highest scale-in bound and
         # the lowest scale-out bound. The daily EventBridge rule enqueues exactly ONE schedule_tick
         # message, so the scale-out threshold MUST be 1: lower=10 left depth=1 stranded in the dead
