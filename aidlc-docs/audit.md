@@ -2908,4 +2908,58 @@ aidlc 개발 과정을 적용하여 개발하려고 합니다. 질문지를 형�
 **AI Response**: "Completed Agent Chat Frontend Build and Test. TypeScript, focused Vitest unit/UI tests, Next.js production build, Playwright WebKit install, Agent Chat E2E smoke, and git diff hygiene checks passed. Updated build-and-test instructions, summary, E2E instructions, and AI-DLC state."
 **Context**: CONSTRUCTION / Build and Test completion — Agent Chat Frontend.
 
+## U4 Library Unit Review Request
+**Timestamp**: 2026-07-01T03:49:52Z
+**User Input**: "Using .claude/skills/aidlc-unit-review, review U4"
+**AI Response**: "Loaded the aidlc-unit-review skill, AI-DLC common rules, enabled extension rules, and U4 review context; proceeding with a U4 implementation review against its unit contract."
+**Context**: Review / aidlc-unit-review — U4 Library.
+
+---
+
+## U4 Library Unit Review Findings
+**Timestamp**: 2026-07-01T03:53:31Z
+**User Input**: "Using .claude/skills/aidlc-unit-review, review U4"
+**AI Response**: "Completed the U4 review. Findings: blocking NFR-R2/SEC-15 rerun failures are converted to successful empty results; blocking BR-L7/INV-L3 contract drift between requestId-based dedupe in U4 docs and timestamp-only SearchExecutedEvent/code; should-fix BR-L5 PaperRetractedEvent/retracted metadata propagation is specified but not implemented; should-fix U4 root tests fail ruff when linted."
+**Context**: Review / aidlc-unit-review — U4 Library.
+
+---
+
+## U4 Library Unit Review Findings Fix
+**Timestamp**: 2026-07-01T04:09:15Z
+**User Input**: "Good. Now fix all your findings and commit them."
+**AI Response**: "Implemented the U4 review findings: fail-closed 503 rerun gateway errors, requestId-backed SearchExecutedEvent dedupe, PaperRetractedEvent/retracted metadata propagation, focused regression coverage, and Ruff/test validation."
+**Context**: Review remediation / aidlc-unit-review — U4 Library.
+
+---
+
+## PR 302 Asset IAM Fix Request
+**Timestamp**: 2026-07-01T05:02:12Z
+**User Input**: "Add s3:GetObject for assets/* to the API task role"
+**AI Response**: "Fast-forwarded local develop to current origin/develop, loaded AI-DLC common rules, and added the papers bucket assets/* read grant to the API task role."
+**Context**: Direct infra remediation / PR #302 follow-up — ComputeStack API task IAM.
+
+---
+
+## PR 302 Asset IAM Commit Request
+**Timestamp**: 2026-07-01T05:05:18Z
+**User Input**: "commit it and push to origin"
+**AI Response**: "Preparing to commit the API task role assets/* read grant and push the develop branch to origin."
+**Context**: Direct infra remediation / PR #302 follow-up — commit and push.
+
+---
+
+## PR 302 Asset IAM Deploy Request
+**Timestamp**: 2026-07-01T05:12:49Z
+**User Input**: "now do the deploy"
+**AI Response**: "Verified production AWS identity with AdministratorAccess-028317349537 and preparing a scoped Docsuri-Compute CDK diff/deploy for the API task role assets/* read grant."
+**Context**: Direct infra remediation / PR #302 follow-up — production CDK deploy.
+
+---
+
+## PR 302 Asset IAM Deploy Completion
+**Timestamp**: 2026-07-01T05:19:21Z
+**User Input**: "now do the deploy"
+**AI Response**: "Deployed Docsuri-Compute to production. CloudFormation reached UPDATE_COMPLETE, ECS docsuri-api stabilized on task definition revision 20, DOCSURI_MULTIMODAL_ASSETS_ENABLED=true is present, /healthz returned ok, and the API task role inline policy now grants s3:GetObject on doc-model/* and assets/*."
+**Context**: Direct infra remediation / PR #302 follow-up — production deploy completion and validation.
+
 ---
