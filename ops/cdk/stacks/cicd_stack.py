@@ -1,0 +1,101 @@
+"""GitHub Actions OIDC 프로바이더 + CD 역할 (배포 유닛 ①②④).
+
+감사에서 확인(2026-07-01): 계정 028317349537에 GitHub OIDC 프로바이더도 CD 역할도 부재 →
+cd.yml이 한 번도 AWS에 인증하지 못했음(완전 휴면의 근본 원인). 이 스택이 그 공백을 IaC로 메운다.
+
+- OIDC 프로바이더: token.actions.githubusercontent.com (audience = sts.amazonaws.com), 계정당 1개.
+- CD 역할: 신뢰를 **이 repo의 v* 릴리스 태그**로 한정(cd.yml이 태그 트리거). 다른 브랜치/포크/repo는
+  assume 불가. 권한 = ECR 로그인 + 3개 리포 push + ECS 3개 서비스 update/describe(강제 새 배포·
+  안정화 대기)만. register-task-definition을 하지 않으므로 iam:PassRole 불필요.
+
+배포:
+    cdk deploy Docsuri-CICD
+배포 후(파일 밖): 출력된 역할 ARN을 GitHub org 변수 CD_ROLE_ARN 에 설정(cd.yml이 vars.CD_ROLE_ARN
+사용). 신뢰 sub가 refs/tags/v* 라 태그 트리거 CD와 정합."""
+
+from aws_cdk import CfnOutput, Stack
+from aws_cdk import aws_iam as iam
+from constructs import Construct
+
+# 이 repo만 신뢰하고, sub를 릴리스 태그로 한정한다(least privilege).
+_GITHUB_REPO = "80-hours-a-week/DocSuri"
+_TRUSTED_SUB = f"repo:{_GITHUB_REPO}:ref:refs/tags/v*"
+_ECR_REPOS = ["docsuri-api", "docsuri-ingestion", "docsuri-frontend"]
+_ECS_CLUSTER = "docsuri"
+_ECS_SERVICES = ["docsuri-api", "docsuri-ingestion", "docsuri-frontend"]
+
+
+class CicdStack(Stack):
+    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+        super().__init__(scope, construct_id, **kwargs)
+
+        # 계정당 1개. 최신 GitHub 발급자라 aws-cdk-lib가 thumbprint를 자동 처리한다.
+        provider = iam.OpenIdConnectProvider(
+            self, "GithubOidcProvider",
+            url="https://token.actions.githubusercontent.com",
+            client_ids=["sts.amazonaws.com"],
+        )
+
+        # 신뢰: 이 provider + aud=sts + sub가 이 repo의 v* 태그일 때만 assume 허용.
+        principal = iam.OpenIdConnectPrincipal(
+            provider,
+            conditions={
+                "StringEquals": {
+                    "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+                },
+                "StringLike": {
+                    "token.actions.githubusercontent.com:sub": _TRUSTED_SUB,
+                },
+            },
+        )
+
+        role = iam.Role(
+            self, "GithubActionsCdRole",
+            role_name="docsuri-github-actions-cd",
+            assumed_by=principal,
+            # IAM description must be ASCII (regex [\t\n\r\x20-\x7E\xA1-\xFF]*): Korean/em-dash
+            # are rejected. Keep plain ASCII; the Korean rationale lives in the docstring.
+            description="GitHub Actions (cd.yml) OIDC deploy role - v* tags, ECR + ECS.",
+        )
+
+        # ECR 로그인 토큰은 계정 전역이라 리소스 스코프 불가.
+        role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["ecr:GetAuthorizationToken"],
+                resources=["*"],
+            )
+        )
+        # 이미지 push/pull은 3개 리포로 한정.
+        role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:InitiateLayerUpload",
+                    "ecr:UploadLayerPart",
+                    "ecr:CompleteLayerUpload",
+                    "ecr:PutImage",
+                    "ecr:BatchGetImage",
+                    "ecr:GetDownloadUrlForLayer",
+                ],
+                resources=[
+                    f"arn:aws:ecr:{self.region}:{self.account}:repository/{repo}"
+                    for repo in _ECR_REPOS
+                ],
+            )
+        )
+        # 배포: 강제 새 배포 + 안정화 대기. 태스크 정의를 새로 등록하지 않으므로 PassRole 불필요.
+        role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["ecs:UpdateService", "ecs:DescribeServices"],
+                resources=[
+                    f"arn:aws:ecs:{self.region}:{self.account}:service/{_ECS_CLUSTER}/{svc}"
+                    for svc in _ECS_SERVICES
+                ],
+            )
+        )
+
+        CfnOutput(
+            self, "CdRoleArn",
+            value=role.role_arn,
+            description="Role ARN cd.yml assumes (inlined in cd.yml env; no GitHub var needed).",
+        )
