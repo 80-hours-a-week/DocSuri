@@ -218,8 +218,11 @@ class ComputeStack(Stack):
             # DOCSURI_REDIS_URL] to mount the real path (summarization_enabled = bool(bucket)); the
             # OA-license + map-reduce gates stay OFF by default. Referenced by name to avoid a
             # cross-stack export coupling deploys (repo pattern).
-            "DOCSURI_DOCMODEL_BUILD_QUEUE_URL": (  # doc-model lazy build (BR-30, boundary B)
-                f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-ingestion-queue"
+            "DOCSURI_DOCMODEL_BUILD_QUEUE_URL": (
+                # doc-model lazy build (BR-30, boundary B) → dedicated PRIORITY queue, isolated from
+                # the bulk ingestion/backfill queue so reader-triggered builds (viewer/citation
+                # tree) are not starved behind a large backfill. Worker drains this queue first.
+                f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-docmodel-queue"
             ),
             "DOCSURI_SUMMARY_JOB_QUEUE_URL": (  # long-summary async job (BR-S12)
                 f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-summary-job-queue"
@@ -543,6 +546,7 @@ class ComputeStack(Stack):
             iam.PolicyStatement(
                 actions=["sqs:SendMessage"],
                 resources=[
+                    f"arn:aws:sqs:{self.region}:{self.account}:docsuri-docmodel-queue",
                     f"arn:aws:sqs:{self.region}:{self.account}:docsuri-ingestion-queue",
                     f"arn:aws:sqs:{self.region}:{self.account}:docsuri-summary-job-queue",
                     f"arn:aws:sqs:{self.region}:{self.account}:docsuri-novelty-agent-job-queue",
