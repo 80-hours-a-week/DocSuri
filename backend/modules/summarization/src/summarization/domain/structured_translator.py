@@ -27,7 +27,7 @@ from typing import Any
 
 from docsuri_shared.dtos import DocModel
 
-from ..ports.ports import LlmGatewayPort
+from ..ports.ports import LlmGatewayPort, LlmUnavailable
 from .models import Glossary, SummaryRequest, TranslationDraft, TranslationSegment
 from .token_estimate import estimate_tokens
 
@@ -37,14 +37,6 @@ logger = logging.getLogger(__name__)
 # its input), not the much larger single-call *input* budget used for summary. Conservative
 # defaults; runtime-tunable (NFR).
 _DEFAULT_CHUNK_BUDGET_TOKENS = 6_000
-
-# Max recursive re-splits of a chunk that the model truncated at its output cap. Token estimates
-# under-count LaTeX-dense (math-heavy) text, so an "in-budget" chunk can still overflow the
-# output cap and come back partial → the missing segments fall back to the source (English) and
-# the orchestrator abstains 'empty_translation'. Re-splitting a truncated chunk and retrying the
-# halves recovers those segments; the bound stops a pathological single oversized segment from
-# recursing forever (it is translated once, truncation logged, and its partial text accepted).
-_MAX_SPLIT_DEPTH = 2
 
 # Human-readable seg-id suffixes (BR-S18). NOTE: these descriptive ids are NOT used as the LLM
 # segment key — translate() keys segments by reading-order index, so correctness does not depend
@@ -82,9 +74,25 @@ class StructuredTranslator:
 
         translations: dict[str, str] = {}
         kept: list[str] = []
-        truncated_chunks = 0
+        unresolved_truncations = 0
         for chunk in self._chunk(segments):
-            truncated_chunks += self._translate_chunk(chunk, request, glossary, translations, kept)
+            unresolved_truncations += self._translate_chunk(
+                chunk, request, glossary, translations, kept
+            )
+
+        if unresolved_truncations:
+            # A single oversized segment hit the model's output cap and cannot be split further, so
+            # its translation is truncated (partial). Do NOT assemble/cache a known-truncated
+            # translation as success (QT-5 HARD fail; FR-13/BR-S18 require a complete structured
+            # doc-model). Fail closed → the orchestrator retries then abstains
+            # (generation_unavailable), instead of caching a partial doc-model that every later
+            # request would then be served.
+            logger.warning(
+                "structured translate truncated (unresolved leaf) — fail-closed: "
+                "paper=%s v=%s scope=%s segments=%d",
+                request.paper_id, request.version, request.scope, len(segments),
+            )
+            raise LlmUnavailable("translation output truncated at the model cap")
 
         # Re-inject by index (map-only concat — no reduce). A missing/blank entry keeps the
         # source text; the orchestrator's empty-translation gate catches an all-untranslated draft.
@@ -97,17 +105,15 @@ class StructuredTranslator:
             setter(use)
         doc_dict["fullText"] = project_full_text(doc_dict)
 
-        # Observability (Part 2-A): when few/no fields were actually translated the orchestrator
-        # will abstain 'empty_translation'. Log the breakdown so the cause is diagnosable from
-        # logs — no model output vs verbatim-only vs a truncated (math-heavy) chunk — instead of
-        # only a metric. Emitted at WARNING on a low/zero yield or any truncation, INFO otherwise.
+        # Observability (Part 2-A): an all-unchanged draft makes the orchestrator abstain
+        # 'empty_translation' (no model output vs verbatim-only). Log the breakdown so the cause is
+        # diagnosable from logs, not only a metric. (Truncation already failed closed above.)
         total = len(fields)
-        if applied == 0 or truncated_chunks:
+        if applied == 0:
             logger.warning(
                 "structured translate low-yield: paper=%s v=%s scope=%s fields=%d "
-                "translations_returned=%d applied=%d truncated_chunks=%d",
-                request.paper_id, request.version, request.scope,
-                total, len(translations), applied, truncated_chunks,
+                "translations_returned=%d applied=0",
+                request.paper_id, request.version, request.scope, total, len(translations),
             )
         else:
             logger.info(
@@ -126,30 +132,26 @@ class StructuredTranslator:
         glossary: Glossary,
         translations: dict[str, str],
         kept: list[str],
-        *,
-        depth: int = 0,
     ) -> int:
         """Translate one chunk (map), folding results into ``translations``/``kept`` in place.
 
-        Returns the number of leaf calls that came back truncated (for the caller's log). On a
-        truncated multi-segment chunk (the model hit its output cap mid-batch → partial JSON) the
-        chunk is split in half and each half retried (bounded by ``_MAX_SPLIT_DEPTH``), so a
-        LaTeX-dense batch that under-estimated its output size still yields full translations
-        rather than silently dropping its tail segments back to the source text.
+        Returns the number of leaf chunks that remained truncated after splitting as far as
+        possible. A truncated MULTI-segment chunk (the model hit its output cap mid-batch → partial
+        JSON) is split in half and each half retried — recursively, down to single segments — so a
+        LaTeX-dense batch that under-estimated its output size still yields full translations. A
+        SINGLE segment that still truncates cannot be split further; its partial result is folded in
+        (the field is not silently lost) but it is reported UNRESOLVED so the caller fails closed
+        rather than caching a known-truncated translation (QT-5).
         """
         result = self._llm.translate_segments(chunk, request, glossary)
-        if result.truncated and len(chunk) > 1 and depth < _MAX_SPLIT_DEPTH:
+        if result.truncated and len(chunk) > 1:
             mid = len(chunk) // 2
             logger.warning(
-                "translate chunk truncated (%d segs, depth=%d); re-splitting into %d+%d",
-                len(chunk), depth, mid, len(chunk) - mid,
+                "translate chunk truncated (%d segs); re-splitting into %d+%d",
+                len(chunk), mid, len(chunk) - mid,
             )
-            left = self._translate_chunk(
-                chunk[:mid], request, glossary, translations, kept, depth=depth + 1
-            )
-            right = self._translate_chunk(
-                chunk[mid:], request, glossary, translations, kept, depth=depth + 1
-            )
+            left = self._translate_chunk(chunk[:mid], request, glossary, translations, kept)
+            right = self._translate_chunk(chunk[mid:], request, glossary, translations, kept)
             return left + right
         translations.update(result.translations)
         for term in result.kept_terms:

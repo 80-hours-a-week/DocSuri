@@ -220,3 +220,21 @@ def test_missing_translation_falls_back_to_original_text() -> None:
     texts = [t for _id, t, _s in iter_text_fields(draft.doc_model.model_dump(mode="json"))]
     assert "번역됨" in texts
     assert "We propose a model." in texts  # untranslated segment preserved verbatim
+
+
+def test_unresolvable_truncation_fails_closed() -> None:
+    # A leaf (single segment) that still truncates at the model's output cap cannot be split
+    # further. The translator must NOT accept/cache a known-truncated (partial) translation as
+    # success — it fails closed (raises LlmUnavailable → orchestrator abstains). QT-5 HARD fail.
+    import pytest
+
+    from summarization.ports.ports import LlmUnavailable
+
+    class _AlwaysTruncate:
+        def translate_segments(self, segments, request, glossary) -> TranslationSegmentsResult:
+            return TranslationSegmentsResult(
+                translations={s.id: f"번역:{s.text}" for s in segments}, truncated=True
+            )
+
+    with pytest.raises(LlmUnavailable):
+        StructuredTranslator(_AlwaysTruncate()).translate(_rich_doc(), _req(), Glossary())
