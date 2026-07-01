@@ -250,4 +250,24 @@ describe('ApiClient agent chat mapping', () => {
       else process.env.NEXT_PUBLIC_DOCSURI_REAL_API = previous;
     }
   });
+
+  it('blocks real novelty follow-up sends until the backend can re-dispatch jobs', async () => {
+    const previous = process.env.NEXT_PUBLIC_DOCSURI_REAL_API;
+    process.env.NEXT_PUBLIC_DOCSURI_REAL_API = '1';
+    const t = transportOf(async () => ({ status: 200, body: null }));
+    try {
+      await expect(
+        new ApiClient(t, fast).sendAgentMessage('novelty:n1', {
+          content: 'follow up',
+          mode: 'novelty',
+        }),
+      ).rejects.toMatchObject({
+        message: 'Novelty 후속 대화는 아직 실배포에서 사용할 수 없습니다.',
+      });
+      expect(t.calls).toBe(0);
+    } finally {
+      if (previous === undefined) delete process.env.NEXT_PUBLIC_DOCSURI_REAL_API;
+      else process.env.NEXT_PUBLIC_DOCSURI_REAL_API = previous;
+    }
+  });
 });

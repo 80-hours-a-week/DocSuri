@@ -342,7 +342,15 @@ function toChatBody(req: AgentSendMessageRequest) {
 }
 
 function toNoveltyBody(req: AgentSendMessageRequest, created: boolean) {
-  if (!created) return toChatBody(req);
+  if (!created) {
+    if (process.env.NEXT_PUBLIC_DOCSURI_REAL_API) {
+      throw new UserFacingError(
+        'unknown',
+        'Novelty 후속 대화는 아직 실배포에서 사용할 수 없습니다.',
+      );
+    }
+    return toChatBody(req);
+  }
   const manuscript = req.attachments?.[0];
   if (manuscript && process.env.NEXT_PUBLIC_DOCSURI_REAL_API) {
     throw new UserFacingError(
