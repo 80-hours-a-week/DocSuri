@@ -509,10 +509,10 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
   - `$env:JSII_NODE="$env:USERPROFILE\scoop\apps\nodejs-lts\current\node.exe"; cdk synth` from `ops/cdk` -> pass, synthesized to `ops/cdk/cdk.out`
 - Current gate: Build and Test review/approval. Next stage per AI-DLC is Operations placeholder.
 
-## Agent Chat Frontend — NFR Requirements Complete / NFR Design Questions Ready
+## Agent Chat Frontend — NFR Design Complete / Code Generation Plan Ready
 
 - Date: 2026-07-01
-- Stage: CONSTRUCTION / NFR Requirements complete; NFR Design question gate
+- Stage: CONSTRUCTION / NFR Design complete; Code Generation plan gate
 - Branch: `docs/novelty-agent-fe`
 - Inputs:
   - `aidlc-docs/inception/requirements/requirement-verification-questions-agent-chat-frontend.md`
@@ -529,7 +529,7 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - Workflow plan created:
   - `aidlc-docs/inception/plans/agent-chat-frontend-workflow-plan.md`
 - Next question file:
-  - `aidlc-docs/construction/plans/agent-chat-frontend-nfr-design-plan.md`
+  - `aidlc-docs/construction/plans/agent-chat-frontend-code-generation-plan.md`
 - Application Design answers:
   - Q1=A, Q2=A, Q3=A, Q4=A, Q5=A.
 - Application Design artifacts:
@@ -550,10 +550,17 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - NFR Requirements artifacts:
   - `aidlc-docs/construction/agent-chat-frontend/nfr-requirements/nfr-requirements.md`
   - `aidlc-docs/construction/agent-chat-frontend/nfr-requirements/tech-stack-decisions.md`
+- NFR Design answers:
+  - Q1=A, Q2=A, Q3=A, Q4=A, Q5=`X) A + E2E 테스트`.
+- NFR Design artifacts:
+  - `aidlc-docs/construction/agent-chat-frontend/nfr-design/nfr-design-patterns.md`
+  - `aidlc-docs/construction/agent-chat-frontend/nfr-design/logical-components.md`
+- Infrastructure Design:
+  - Skipped. U13 reuses existing frontend deployment and adds no new infrastructure.
 - Scope boundary:
   - v1 frontend uses `/agent` single route, existing responsive + phone preview structure, and a mock/real transport seam.
   - No new backend API or infrastructure code is generated in this stage.
-- Current gate: NFR Design questions Q1~Q5 awaiting answers.
+- Current gate: Code Generation approval question awaiting answer.
 - Code generated: no.
 
 ## Research Agent — Requirements Registered

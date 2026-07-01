@@ -8,8 +8,8 @@
 
 ## 산출 계획
 
-- [ ] `aidlc-docs/construction/agent-chat-frontend/nfr-design/nfr-design-patterns.md`를 생성한다.
-- [ ] `aidlc-docs/construction/agent-chat-frontend/nfr-design/logical-components.md`를 생성한다.
+- [x] `aidlc-docs/construction/agent-chat-frontend/nfr-design/nfr-design-patterns.md`를 생성한다.
+- [x] `aidlc-docs/construction/agent-chat-frontend/nfr-design/logical-components.md`를 생성한다.
 
 ## NFR Design 질문
 
@@ -24,7 +24,7 @@ C) 실패는 전역 error boundary에만 맡긴다.
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: A
 
 ### 질문 2
 성능 pattern은 어떻게 설계할까요?
@@ -37,7 +37,7 @@ C) 성능 최적화는 Code Generation 이후로 미룬다.
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: A
 
 ### 질문 3
 보안 pattern은 어떻게 설계할까요?
@@ -50,7 +50,7 @@ C) 첨부 allowlist만 logical component로 둔다.
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: A
 
 ### 질문 4
 responsive/accessibility pattern은 어떻게 설계할까요?
@@ -63,7 +63,7 @@ C) 데스크톱 UI만 먼저 설계한다.
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: A
 
 ### 질문 5
 테스트 logical component는 어떻게 둘까요?
@@ -76,7 +76,7 @@ C) 모든 테스트를 E2E 중심으로 설계한다.
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: X) A + E2E 테스트
 
 ## Extension 준수 요약
 
