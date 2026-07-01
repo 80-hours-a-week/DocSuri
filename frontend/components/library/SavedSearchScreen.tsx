@@ -11,7 +11,7 @@ import styles from './Library.module.css';
 
 // SavedSearchScreen (US-L1, FR-8) — list/delete/rerun saved searches. Rerun goes
 // through the gateway (U6 -> U2) and renders the live result inline (BR-U5-9).
-export function SavedSearchScreen() {
+export function SavedSearchScreen({ showTabs = true }: { showTabs?: boolean } = {}) {
   const fetchPage = useCallback((cursor?: string) => getApiClient().listSavedSearches({ cursor }), []);
   const { items, status, error, hasMore, loadMore, reload, removeLocal } =
     usePaginatedList<SavedSearchDTO>(fetchPage);
@@ -52,7 +52,7 @@ export function SavedSearchScreen() {
 
   return (
     <section className={styles.screen} data-testid="saved-screen">
-      <LibraryTabs active="saved" />
+      {showTabs ? <LibraryTabs active="saved" /> : null}
       {status === 'loading' ? <StateView kind="loading" /> : null}
       {status === 'error' ? (
         <StateView kind="error" message={error ?? undefined} onRetry={() => void reload()} />
