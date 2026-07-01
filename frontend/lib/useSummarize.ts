@@ -51,9 +51,15 @@ export function useSummarize() {
       if (outcome.kind === 'pending') {
         pollCount.current += 1;
         if (pollCount.current >= MAX_SUMMARY_POLLS) {
+          // Full translate now also polls here, so the timeout message must match the task —
+          // otherwise a translate that runs past the poll budget ends with a "요약" message.
+          const noun = req.task === 'translate' ? '번역' : '요약';
           setState({
             status: 'done',
-            outcome: { kind: 'error', message: '요약을 준비 중이에요. 잠시 후 다시 시도해 주세요.' },
+            outcome: {
+              kind: 'error',
+              message: `${noun} 생성이 예상보다 오래 걸려요. 잠시 후 다시 시도해 주세요.`,
+            },
           });
           return;
         }
