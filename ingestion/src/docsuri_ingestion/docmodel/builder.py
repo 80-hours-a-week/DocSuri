@@ -33,6 +33,31 @@ _SOURCE_UNAVAILABLE_REASON = (
     "We could not find a rich-renderable source (arXiv HTML) for this paper version."
 )
 
+# Some arXiv papers have a broken ar5iv (LaTeXML) conversion — the HTML returns 200 but the body
+# is truncated to the abstract + a sentence or two (the rest of the LaTeX failed to convert). The
+# parser faithfully extracts the little that is there, so a truncated conversion would otherwise be
+# stored as a "complete" doc-model. Gate on the non-abstract body length: a real paper has
+# thousands of characters of body prose, so a floor this low never trips a genuinely complete paper
+# but reliably catches the abstract-only truncations. A tripped gate degrades to source_unavailable
+# (arXiv link-out) — honest — rather than shipping a fragment as the full text. (A PDF→GROBID
+# fallback that actually recovers the body is a separate follow-up.)
+_MIN_BODY_TEXT_CHARS = 500
+
+
+def _non_abstract_body_len(doc: DocModel) -> int:
+    """Character count of the doc-model body EXCLUDING the abstract section — the signal that
+    separates a complete conversion from an abstract-only truncation."""
+    data = doc.model_dump(mode="json")
+    total = 0
+    for section in data.get("sections") or []:
+        label = str(section.get("title") or section.get("heading") or "").strip().lower()
+        if label == "abstract":
+            continue
+        for block in section.get("blocks") or []:
+            if isinstance(block, dict):
+                total += len(block.get("text") or "")
+    return total
+
 
 @runtime_checkable
 class ClockPort(Protocol):
@@ -111,6 +136,14 @@ class DocModelBuilder:
             macros=self._extract_macros(metadata),
             figure_specs=figure_specs,
         )
+        if _non_abstract_body_len(doc) < _MIN_BODY_TEXT_CHARS:
+            # Broken ar5iv conversion (HTML 200 but abstract-only) — do NOT cache a truncated
+            # doc-model as "complete"; degrade to source_unavailable so the viewer links out to
+            # arXiv instead of showing a fragment. Observed so the truncation rate is trackable.
+            self._emit("ingestion.docmodel.truncated_source", 1.0)
+            return SourceUnavailableDTO(
+                status="source_unavailable", reason=_SOURCE_UNAVAILABLE_REASON
+            )
         self._store.put(doc)
         return DocModelResultDTO(status="ok", cached=False, docModel=doc)
 

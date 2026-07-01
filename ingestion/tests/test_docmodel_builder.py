@@ -11,10 +11,20 @@ from docsuri_ingestion.adapters.local import sample_metadata
 from docsuri_ingestion.docmodel.builder import DocModelBuilder
 from docsuri_ingestion.docmodel.parser import parse_html_to_docmodel
 
+# A body long enough (non-abstract text ≥ the builder's completeness floor) to represent a
+# COMPLETE conversion — a truncated ar5iv conversion is exercised separately by _TRUNCATED_HTML.
+_BODY_PARAGRAPH = "This is a full paragraph of body prose. " * 20  # ~800 chars
 _HTML = (
     '<article class="ltx_document"><section class="ltx_section" id="S1">'
     '<h2 class="ltx_title ltx_title_section">Intro</h2>'
-    '<div class="ltx_para"><p class="ltx_p">Body.</p></div></section></article>'
+    f'<div class="ltx_para"><p class="ltx_p">{_BODY_PARAGRAPH}</p></div></section></article>'
+)
+
+# ar5iv (LaTeXML) conversion failed: HTTP 200 but the body is a single sentence (abstract-only).
+_TRUNCATED_HTML = (
+    '<article class="ltx_document"><section class="ltx_section" id="S1">'
+    '<h2 class="ltx_title ltx_title_section">Preliminaries</h2>'
+    '<div class="ltx_para"><p class="ltx_p">Let us start.</p></div></section></article>'
 )
 
 
@@ -209,6 +219,17 @@ def test_source_unavailable_when_no_html() -> None:
     assert isinstance(result, SourceUnavailableDTO)
     assert result.status == "source_unavailable"
     assert store.put_calls == []
+
+
+def test_build_degrades_to_source_unavailable_when_conversion_is_truncated() -> None:
+    # A broken ar5iv conversion returns HTML 200 but only a sentence of body (the rest of the
+    # LaTeX failed to convert). It must NOT be cached as a complete doc-model — degrade to
+    # source_unavailable (arXiv link-out) instead of shipping a fragment as the full text.
+    store = _FakeStore(cached=None)
+    source = _FakeSource((_TRUNCATED_HTML, SourceTier.ar5iv))
+    result = _builder(source, store).build(sample_metadata("2401.00001v1"))
+    assert isinstance(result, SourceUnavailableDTO)
+    assert store.put_calls == []  # nothing cached
 
 
 def test_invalidate_drops_cached_versions() -> None:
