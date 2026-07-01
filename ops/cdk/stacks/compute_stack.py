@@ -237,6 +237,12 @@ class ComputeStack(Stack):
             # the ingestion queue (DOCSURI_DOCMODEL_BUILD_QUEUE_URL above) and returns `building`;
             # the ingestion worker builds + caches it. OFF → license_unavailable.
             "DOCSURI_DOCMODEL_VIEWER_ENABLED": "true",
+            # Figure/table images (본문 그림): the API presigns the S3 assets written by ingestion
+            # (which already sets this flag) and joins them to the doc-model FigureBlocks by
+            # assetId. Only OA papers are stored so rendering is license-safe (BR-SF-11). Without
+            # this the /assets manifest returns license_unavailable and figures never render even
+            # though the webp objects exist in S3.
+            "DOCSURI_MULTIMODAL_ASSETS_ENABLED": "true",
             # Long-input summaries: map-reduce band enqueues to the summary-job queue (async worker)
             # and returns `pending`; without this the MAP_REDUCE band abstains (input_too_long).
             "DOCSURI_MAP_REDUCE_ENABLED": "true",
