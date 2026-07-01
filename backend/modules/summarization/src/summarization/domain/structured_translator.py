@@ -21,14 +21,17 @@ gateway's ``translate_segments`` (id → 번역텍스트), invoked once per chun
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+import logging
+from collections.abc import Callable, Iterator, Sequence
 from typing import Any
 
 from docsuri_shared.dtos import DocModel
 
-from ..ports.ports import LlmGatewayPort
+from ..ports.ports import LlmGatewayPort, LlmUnavailable
 from .models import Glossary, SummaryRequest, TranslationDraft, TranslationSegment
 from .token_estimate import estimate_tokens
+
+logger = logging.getLogger(__name__)
 
 # Per-chunk budget: bounded by the model's *output* token cap (a translation is ~ the size of
 # its input), not the much larger single-call *input* budget used for summary. Conservative
@@ -71,23 +74,90 @@ class StructuredTranslator:
 
         translations: dict[str, str] = {}
         kept: list[str] = []
+        unresolved_truncations = 0
         for chunk in self._chunk(segments):
-            result = self._llm.translate_segments(chunk, request, glossary)  # map
-            translations.update(result.translations)
-            for term in result.kept_terms:
-                if term not in kept:
-                    kept.append(term)
+            unresolved_truncations += self._translate_chunk(
+                chunk, request, glossary, translations, kept
+            )
+
+        if unresolved_truncations:
+            # A single oversized segment hit the model's output cap and cannot be split further, so
+            # its translation is truncated (partial). Do NOT assemble/cache a known-truncated
+            # translation as success (QT-5 HARD fail; FR-13/BR-S18 require a complete structured
+            # doc-model). Fail closed → the orchestrator retries then abstains
+            # (generation_unavailable), instead of caching a partial doc-model that every later
+            # request would then be served.
+            logger.warning(
+                "structured translate truncated (unresolved leaf) — fail-closed: "
+                "paper=%s v=%s scope=%s segments=%d",
+                request.paper_id, request.version, request.scope, len(segments),
+            )
+            raise LlmUnavailable("translation output truncated at the model cap")
 
         # Re-inject by index (map-only concat — no reduce). A missing/blank entry keeps the
         # source text; the orchestrator's empty-translation gate catches an all-untranslated draft.
+        applied = 0
         for i, (_sid, original, setter) in enumerate(fields):
             ko = translations.get(str(i))
-            setter(ko if ko and ko.strip() else original)
+            use = ko if ko and ko.strip() else original
+            if use != original:
+                applied += 1
+            setter(use)
         doc_dict["fullText"] = project_full_text(doc_dict)
+
+        # Observability (Part 2-A): an all-unchanged draft makes the orchestrator abstain
+        # 'empty_translation' (no model output vs verbatim-only). Log the breakdown so the cause is
+        # diagnosable from logs, not only a metric. (Truncation already failed closed above.)
+        total = len(fields)
+        if applied == 0:
+            logger.warning(
+                "structured translate low-yield: paper=%s v=%s scope=%s fields=%d "
+                "translations_returned=%d applied=0",
+                request.paper_id, request.version, request.scope, total, len(translations),
+            )
+        else:
+            logger.info(
+                "structured translate: paper=%s v=%s fields=%d applied=%d",
+                request.paper_id, request.version, total, applied,
+            )
 
         return TranslationDraft(
             doc_model=DocModel.model_validate(doc_dict), kept_terms=tuple(kept)
         )
+
+    def _translate_chunk(
+        self,
+        chunk: Sequence[TranslationSegment],
+        request: SummaryRequest,
+        glossary: Glossary,
+        translations: dict[str, str],
+        kept: list[str],
+    ) -> int:
+        """Translate one chunk (map), folding results into ``translations``/``kept`` in place.
+
+        Returns the number of leaf chunks that remained truncated after splitting as far as
+        possible. A truncated MULTI-segment chunk (the model hit its output cap mid-batch → partial
+        JSON) is split in half and each half retried — recursively, down to single segments — so a
+        LaTeX-dense batch that under-estimated its output size still yields full translations. A
+        SINGLE segment that still truncates cannot be split further; its partial result is folded in
+        (the field is not silently lost) but it is reported UNRESOLVED so the caller fails closed
+        rather than caching a known-truncated translation (QT-5).
+        """
+        result = self._llm.translate_segments(chunk, request, glossary)
+        if result.truncated and len(chunk) > 1:
+            mid = len(chunk) // 2
+            logger.warning(
+                "translate chunk truncated (%d segs); re-splitting into %d+%d",
+                len(chunk), mid, len(chunk) - mid,
+            )
+            left = self._translate_chunk(chunk[:mid], request, glossary, translations, kept)
+            right = self._translate_chunk(chunk[mid:], request, glossary, translations, kept)
+            return left + right
+        translations.update(result.translations)
+        for term in result.kept_terms:
+            if term not in kept:
+                kept.append(term)
+        return 1 if result.truncated else 0
 
     def _chunk(
         self, segments: list[TranslationSegment]

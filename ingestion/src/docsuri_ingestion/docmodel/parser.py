@@ -360,6 +360,14 @@ def _table_block(figure_el: Tag, sec_ctx: _SectionCtx) -> dict | None:
         return None
     rows: list[dict] = []
     for tr in table.find_all("tr"):
+        # A stacked/rotated column header can itself be a NESTED <table> (LaTeXML renders a
+        # two-line "Name / ↑" header as a mini table inside the header cell). find_all("tr")
+        # descends into those and would pull their rows up as phantom single-cell main rows
+        # (the observed "column headers spill into the first column" breakage). Keep only rows
+        # whose nearest ancestor table is THIS one — the nested content already lives in the
+        # parent header cell's flattened text.
+        if tr.find_parent("table") is not table:
+            continue
         cells = []
         in_thead = tr.find_parent("thead") is not None
         for cell in tr.find_all(["td", "th"], recursive=False):
@@ -465,6 +473,13 @@ def _list_block(el: Tag, sec_ctx: _SectionCtx) -> dict | None:
 
 
 def _code_block(el: Tag, sec_ctx: _SectionCtx) -> dict | None:
+    # A <math> inside a listing/algorithm line carries BOTH its presentation MathML (rendered as
+    # unicode glyphs) AND a <annotation encoding="application/x-tex"> LaTeX source. A raw
+    # get_text() emits both, duplicating every symbol — e.g. the algorithm line renders as
+    # "𝐱←𝗓𝖾𝗋𝗈𝖾𝗌(n)\bm{\mathrm{x}}\leftarrow\mathsf{zeroes}(n)". Code blocks are shown verbatim (no
+    # KaTeX), so drop the TeX annotation and keep only the readable unicode presentation.
+    for annotation in el.find_all("annotation"):
+        annotation.decompose()
     lines = el.find_all(class_="ltx_listingline")
     if lines:
         text = "\n".join(line.get_text() for line in lines)

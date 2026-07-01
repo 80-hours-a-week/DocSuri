@@ -24,7 +24,9 @@ const CSP = [
   "default-src 'self'",
   `script-src ${scriptSrc}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
+  // Figure/table images are short-lived presigned S3 GET URLs (SEC-9): the object host must be
+  // whitelisted or the browser blocks them (broken-image icons). Scoped to the region's S3 hosts.
+  "img-src 'self' data: https://*.s3.ap-northeast-2.amazonaws.com https://s3.ap-northeast-2.amazonaws.com",
   "connect-src 'self' https://www.google.com/recaptcha/",
   "frame-src 'self' https://www.google.com/recaptcha/",
   "object-src 'none'",

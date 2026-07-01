@@ -157,12 +157,20 @@ class ArxivHttpSource:
             return RawDocument(metadata=metadata, text=html_text, source_url=html_url)
 
         pdf_url = f"{self._pdf_base_url}/{arxiv_id}"
-        pdf = self._get_bytes(pdf_url, params=None, stage="fetch_full_text")
         try:
+            pdf = self._get_bytes(pdf_url, params=None, stage="fetch_full_text")
             text = pdf_to_text(pdf)
-        except FullTextExtractionError as exc:
-            if html_text:  # PDF unparseable — a truncated HTML body beats failing the paper.
+        except (PermanentIngestionError, FullTextExtractionError) as exc:
+            # The PDF is PERMANENTLY unavailable (404/4xx from _get_bytes) or unparseable
+            # (FullTextExtractionError): a truncated HTML body beats failing the paper — keep the
+            # short HTML "only if the PDF is unavailable too" (better a fragment than nothing).
+            # RetriableIngestionError (429/5xx/timeout) is deliberately NOT caught here: it
+            # propagates so a later retry can still recover the full PDF instead of prematurely
+            # settling for the fragment.
+            if html_text:
                 return RawDocument(metadata=metadata, text=html_text, source_url=html_url)
+            if isinstance(exc, PermanentIngestionError):
+                raise
             raise PermanentIngestionError(
                 "full text extraction could not parse the PDF payload",
                 reason=FailureReason.PARSE_FAILURE,
