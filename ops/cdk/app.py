@@ -77,7 +77,8 @@ frontend = FrontendStack(
 TEAM_ACCOUNT_IDS = ["997784789037", "416963226971", "143495498927"]
 AccessStack(app, "Docsuri-Access", account_ids=TEAM_ACCOUNT_IDS, env=env)
 
-# GitHub Actions OIDC 프로바이더 + CD 역할(cd.yml 태그 트리거 배포). 감사에서 부재 확인 → IaC로 신설.
+# GitHub Actions OIDC 프로바이더 + CD 역할(cd.yml 태그 트리거 배포).
+# 감사에서 부재 확인 → IaC로 신설.
 CicdStack(app, "Docsuri-CICD", env=env)
 
 app.synth()

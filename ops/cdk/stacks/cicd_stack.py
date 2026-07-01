@@ -53,9 +53,9 @@ class CicdStack(Stack):
             self, "GithubActionsCdRole",
             role_name="docsuri-github-actions-cd",
             assumed_by=principal,
-            # IAM description must be ASCII (regex [\t\n\r\x20-\x7E\xA1-\xFF]*) — Korean/em-dash
-            # are rejected, so keep this line plain ASCII; the Korean rationale lives in the docstring.
-            description="GitHub Actions (cd.yml) OIDC deploy role - v* tags only, ECR push + ECS rollout.",
+            # IAM description must be ASCII (regex [\t\n\r\x20-\x7E\xA1-\xFF]*): Korean/em-dash
+            # are rejected. Keep plain ASCII; the Korean rationale lives in the docstring.
+            description="GitHub Actions (cd.yml) OIDC deploy role - v* tags, ECR + ECS.",
         )
 
         # ECR 로그인 토큰은 계정 전역이라 리소스 스코프 불가.
@@ -97,5 +97,5 @@ class CicdStack(Stack):
         CfnOutput(
             self, "CdRoleArn",
             value=role.role_arn,
-            description="Role ARN for cd.yml to assume; set GitHub org variable CD_ROLE_ARN to this.",
+            description="Role ARN cd.yml assumes (inlined in cd.yml env; no GitHub var needed).",
         )
