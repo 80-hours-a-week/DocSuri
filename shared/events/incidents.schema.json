@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docsuri.dev/shared/events/incidents.schema.json",
+  "title": "U6 AI Incident Events",
+  "description": "🟡 PROVISIONAL (events.md §5 — refined in U6 FD). RES-11 three incident classes (a=cost explosion / b=hallucination / c=half-baked result) detected, classified, and published. Entirely asynchronous (services.md AiIncidentResponseService, separate worker DQ1). Contains: ClassifiedIncident (via publishIncident) and OpsAlert (via publishAlert). Use $defs root selection to validate a specific shape.",
+  "$defs": {
+    "ClassifiedIncident": {
+      "title": "ClassifiedIncident",
+      "description": "Producer: U6.IncidentEventPublisher.publishIncident(incident: ClassifiedIncident) -> void — publishes AiIncidentDetectorSuite.classify results to a standard schema + audit record. Per-class detectors: CostExplosionDetector(a) / HallucinationDetector(b) / PartialResultDetector(c). Consumer: Event Backbone → IR/COE routing + OpsDashboardService (status consume, listIncidents). Delivery: at-least-once → idempotent dedup correlated by requestId (prevents duplicate page/COE for the same incident). No secrets/PII (SEC-3). Trace: RES-11(a/b/c), NFR-O1, US-R1/R2/R3/R4.",
+      "type": "object",
+      "properties": {
+        "class": {
+          "type": "string",
+          "enum": ["a", "b", "c"],
+          "description": "RES-11 incident class — a=cost explosion / b=hallucination / c=half-baked result. Trace: events.md §5.1, RES-11."
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity",
+          "description": "Incident severity level. Trace: events.md §5.1."
+        },
+        "requestId": {
+          "type": "string",
+          "description": "Request correlation identifier (correlation key — links trace/audit; idempotency dedup boundary). Trace: events.md §5.1."
+        }
+      },
+      "required": ["class", "severity", "requestId"],
+      "additionalProperties": false
+    },
+    "OpsAlert": {
+      "title": "OpsAlert",
+      "description": "Producer: U6.IncidentEventPublisher.publishAlert(alert: OpsAlert) -> void — operational alert for threshold violations/incidents. Consumer: Event Backbone → IR/COE routing. Delivery: at-least-once → consumer idempotently suppresses duplicate alerts. NO secrets/PII exposed (SEC-3). Shape PROVISIONAL — U6 FD refines. Trace: RES-7, RES-11, US-R4.",
+      "type": "object",
+      "properties": {
+        "severity": {
+          "$ref": "#/$defs/Severity",
+          "description": "Alert severity level. Trace: events.md §5.2."
+        },
+        "requestId": {
+          "type": "string",
+          "description": "Request correlation identifier (correlation/idempotency key; no PII/secrets — SEC-3). Trace: events.md §5.2."
+        }
+      },
+      "required": ["severity"],
+      "additionalProperties": false
+    },
+    "Severity": {
+      "title": "Severity",
+      "description": "Incident/alert severity level (enum/level — PROVISIONAL, U6 FD finalizes the level set). Trace: events.md §5.",
+      "type": "string",
+      "enum": ["info", "warning", "critical"]
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/ClassifiedIncident" },
+    { "$ref": "#/$defs/OpsAlert" }
+  ]
+}

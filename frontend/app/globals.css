@@ -1,0 +1,131 @@
+:root {
+  --color-bg: #ffffff;
+  --color-mockup-bg: #eceef1;
+  --color-surface: #f7f8fa;
+  --color-text: #16181d;
+  --color-text-muted: #6b7280;
+  --color-border: #d9dde3;
+  --color-accent: #2f6df6;
+  --color-accent-contrast: #ffffff;
+  --color-accent-soft-bg: #eaf1ff;
+  --color-danger: #c0362c;
+  --color-danger-bg: #fdecea;
+  --color-warn-bg: #fff4e0;
+  --color-warn-text: #8a5a00;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #131519;
+    --color-mockup-bg: #0b0c0e;
+    --color-surface: #1c1f25;
+    --color-text: #f1f3f6;
+    --color-text-muted: #9aa3b0;
+    --color-border: #2c313a;
+    --color-accent: #5b8bff;
+    --color-accent-contrast: #0b0c0e;
+    --color-accent-soft-bg: #1b2742;
+    --color-danger: #ff7a70;
+    --color-danger-bg: #3a1d1a;
+    --color-warn-bg: #3a2e16;
+    --color-warn-text: #ffd98a;
+  }
+}
+
+/* Manual override (U10 마이페이지 설정 — 다크모드 토글). `[data-theme]`의 속성 선택자는 위
+   미디어 쿼리 안의 `:root`보다 명시도가 높아, OS 설정과 무관하게 항상 우선한다. 마이페이지
+   설정에서 고르지 않았으면 `data-theme`이 아예 없어서 위 OS 설정 분기를 그대로 따른다. */
+:root[data-theme='light'] {
+  --color-bg: #ffffff;
+  --color-mockup-bg: #eceef1;
+  --color-surface: #f7f8fa;
+  --color-text: #16181d;
+  --color-text-muted: #6b7280;
+  --color-border: #d9dde3;
+  --color-accent: #2f6df6;
+  --color-accent-contrast: #ffffff;
+  --color-accent-soft-bg: #eaf1ff;
+  --color-danger: #c0362c;
+  --color-danger-bg: #fdecea;
+  --color-warn-bg: #fff4e0;
+  --color-warn-text: #8a5a00;
+}
+
+:root[data-theme='dark'] {
+  --color-bg: #131519;
+  --color-mockup-bg: #0b0c0e;
+  --color-surface: #1c1f25;
+  --color-text: #f1f3f6;
+  --color-text-muted: #9aa3b0;
+  --color-border: #2c313a;
+  --color-accent: #5b8bff;
+  --color-accent-contrast: #0b0c0e;
+  --color-accent-soft-bg: #1b2742;
+  --color-danger: #ff7a70;
+  --color-danger-bg: #3a1d1a;
+  --color-warn-bg: #3a2e16;
+  --color-warn-text: #ffd98a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Apple SD Gothic Neo',
+    'Noto Sans KR',
+    sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+a {
+  color: inherit;
+}
+
+/* Browsers repaint autofilled inputs with their own light background, which
+   breaks dark mode (white box on type/fill). Repaint to the theme surface via
+   the inset box-shadow hack; covers search + auth forms app-wide. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--color-text);
+  -webkit-box-shadow: 0 0 0 1000px var(--color-surface) inset;
+  box-shadow: 0 0 0 1000px var(--color-surface) inset;
+  caret-color: var(--color-text);
+  /* long delay keeps the override from flashing back to the UA color */
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Phone-first: hide the scrollbar chrome on phones (and inside the phone-width preview
+   iframe). On desktop web the native scrollbar stays, so the page is obviously scrollable
+   on the right edge. Scoped by width so the desktop view and the phone preview differ. */
+@media (max-width: 767px) {
+  html,
+  body {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+}

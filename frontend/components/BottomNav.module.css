@@ -1,0 +1,52 @@
+/* Bottom tab bar — a sticky footer rendered as a direct flex child of the phone frame
+   (sibling of the scrolling .screen). Sticky (not fixed) pins it to the bottom of the phone
+   frame's scroll viewport on desktop instead of the whole browser window; on mobile it pins
+   to the viewport bottom the same way. `flex: 0 0 auto` keeps its height while the flex:1
+   .screen fills the frame and pushes it to the bottom when content is short. */
+.nav {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  flex: 0 0 auto;
+  display: flex;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Desktop owns navigation via the top bar (AppHeader nav); hide the phone tab bar. */
+@media (min-width: 768px) {
+  .nav {
+    display: none;
+  }
+}
+
+.tab {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 56px;
+  text-decoration: none;
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.tab[data-active='true'] {
+  color: var(--color-accent);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.icon {
+  display: inline-flex;
+}
+
+.label {
+  font-weight: 600;
+}

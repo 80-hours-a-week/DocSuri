@@ -1,0 +1,13 @@
+# U3 accounts lane lint config (modules self-lint; the backend app-shell ruff excludes modules/).
+# Mirrors the backend/discovery + library select set, with two scoped, documented deferrals so
+# the lane goes from FULLY-EXCLUDED to gated on the substantive rules (F/B/I/UP/most-E):
+#   - B008: FastAPI `param: T = Depends(...)` DI idiom is intentional (as in the other lanes).
+#   - E501: legacy long Korean docstrings/comments predate this gate; a style pass is deferred
+#     (not a correctness issue) — keep new code <=100 by habit.
+#   - UP042: (str, Enum) -> StrEnum migration is deferred to avoid a JSON-serialization behavior
+#     change on the account/role enums; revisit with explicit serialization tests.
+line-length = 100
+
+[lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["B008", "E501", "UP042"]

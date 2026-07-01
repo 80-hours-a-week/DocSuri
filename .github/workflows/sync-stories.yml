@@ -1,0 +1,27 @@
+name: Sync stories to issues
+
+# Keeps GitHub issues in sync with the AI-DLC source of truth (aidlc-docs).
+# Runs the idempotent stories -> issues upsert whenever stories.md changes on
+# develop, or on manual dispatch. Create/update only -- never closes an issue
+# (closing a shipped story stays a human decision).
+
+on:
+  push:
+    branches: [develop]
+    paths: ['aidlc-docs/inception/user-stories/stories.md']
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Upsert issues from stories.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 aidlc-docs/scripts/sync_stories_to_issues.py --apply

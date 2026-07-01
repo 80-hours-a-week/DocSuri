@@ -1,0 +1,43 @@
+# shared/vector-spec — Embedding Contract (language-neutral source of truth)
+#
+# Status:  FROZEN (frozen with U1 FD/NFR completion, 2026-06-16)
+# Trace:   vector-spec.md §1 (Embedding Contract), U1 nfr-requirements TD-3 (embedding),
+#          U1 functional-design (IndexRecord), component-dependency.md (writer <-> reader same space)
+#
+# INVARIANT (vector-spec.md §4):
+#   A single writer (U1.VectorIndexWriter, via U1.EmbeddingGatewayAdapter.embedBatch)
+#   and a single reader (U2.HybridRetriever, via U2.QueryUnderstandingExpander.expand)
+#   share ONE embedding space. Both MUST consume the SAME specVersion / model /
+#   dimensions / distanceMetric. Mismatch => index inconsistency (search invalid).
+#
+# CHANGE POLICY:
+#   Any change to specVersion, model, or dimensions is a ONE-WAY (irreversible) change
+#   that requires a FULL RE-EMBED of the corpus. Writer and reader specVersion equality
+#   SHOULD be verified in CI / deploy (Infra/NFR Design).
+
+specVersion: v2            # vector-spec.md §1 — change => full re-embed (one-way); v1→v2 = Cohere v3→v4 re-embed
+
+model: "Cohere Embed v4 (Bedrock)"
+                           # vector-spec.md §1, TD-3 — cross-lingual
+                           # (Korean query <-> English corpus)
+
+dimensions: 1024           # vector-spec.md §1 — MUST equal OpenSearch k-NN index
+                           # dimension (ANN compatibility gate)
+
+distanceMetric: cosine     # vector-spec.md §1 — normalized embeddings;
+                           # OpenSearch space_type: cosinesimil
+
+normalize: true            # vector-spec.md §1 — Cohere returns normalized vectors
+
+# inputType ASYMMETRY (vector-spec.md §1) — REQUIRED Cohere v3 parameter.
+#   writer (U1) embeds DOCUMENTS  => search_document
+#   reader (U2) embeds the QUERY  => search_query
+# Same model, but mismatched inputType degrades retrieval quality. The two sides
+# MUST use these exact values respectively; do NOT use one value for both.
+inputType:
+  writer: search_document  # U1 document embedding (IndexRecord.vector)
+  reader: search_query     # U2 query embedding (HybridRetriever)
+
+# DEGRADED MODE (vector-spec.md §1 note; NFR-C1 / US-R2):
+#   When the cost circuit is OPEN, U2 skips embedding and falls back to lexical-only
+#   (BM25 over IndexRecord.lexicalTerms). The embedding space itself is unchanged.

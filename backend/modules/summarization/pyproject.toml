@@ -1,0 +1,39 @@
+[project]
+name = "docsuri-summarization"
+version = "0.1.0"
+description = "U7 Summarization — on-demand summary/translation read path (real-first). Single track."
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    # Shared contracts (ports = U6 single authority; never forked).
+    "docsuri-shared",
+    "pydantic>=2.7,<3",
+]
+
+[project.optional-dependencies]
+# Thin FastAPI router (SummarizationController). The backend web framework is a
+# backend-shared (app-shell) decision; the domain core runs without FastAPI.
+api = ["fastapi>=0.110"]
+# Real-first adapters (TD-S12): Bedrock streaming (Sonnet/Haiku), S3 + Redis store,
+# RDS glossary. No Production Mock Adapter ships — unit tests use test-only Fixtures/Stubs;
+# integration tests self-skip when boto3 / redis / psycopg or live deps are absent.
+real = ["boto3>=1.34", "redis>=5.0", "psycopg[binary]>=3.1", "psycopg_pool>=3.1"]
+
+[dependency-groups]
+dev = ["pytest>=8.0", "hypothesis>=6.100", "ruff>=0.6"]
+
+# Module-local path dep so the unit is testable standalone. The backend integration
+# packaging/workspace is app-shell's domain.
+[tool.uv.sources]
+docsuri-shared = { path = "../../../shared/python", editable = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/summarization"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

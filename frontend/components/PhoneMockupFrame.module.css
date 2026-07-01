@@ -1,0 +1,28 @@
+.stage {
+  min-height: 100dvh;
+  display: flex;
+  justify-content: center;
+  background: var(--color-bg);
+}
+
+.frame {
+  width: 100%;
+  min-height: 100dvh;
+  background: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Tablet and up: the app fills the window like an ordinary website, with the
+   phone-first content capped to a readable column and centered. This is step 1 — a
+   single column; per-screen multi-column desktop layouts come later. The faithful
+   phone view is a separate iframe preview (components/ViewModePreview), not a layout
+   branch here, so building real desktop layouts above never leaks into the phone view. */
+@media (min-width: 768px) {
+  .frame {
+    /* Full window width on desktop (no side gutter). Inner screens that need a tighter
+       measure — reading / forms / mypage / the search box — set their own narrower
+       max-width, so only the wide layouts (search grid, paper detail) span the screen. */
+    max-width: none;
+  }
+}

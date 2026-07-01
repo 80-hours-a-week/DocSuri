@@ -1,0 +1,81 @@
+[project]
+name = "docsuri-backend"
+version = "0.1.0"
+description = "DocSuri backend modular monolith — app-shell (bootstrap·router·DI·middleware wiring). Deploy unit ①. Track 2 (@revenantonthemission)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    # Shared contracts (DTOs/events/vector-spec/ports) — single source of truth, never forked.
+    "docsuri-shared",
+    # U2 search domain — mounted by _mount_discovery (was graceful-skipped while undeclared).
+    "docsuri-discovery",
+    # U7 summarization/translation domain — mounted by _mount_summarization (real-first: mounts
+    # only when the S3 store is configured, else skips). Its real-extra deps (boto3/redis/psycopg)
+    # are already in this closure below, so no new third-party packages are pulled.
+    "docsuri-summarization",
+    # U6 reliability/ops — the real GroundingEnforcementHook (INV-1 single authority) injected
+    # into discovery + the ObservabilityHub the gateway emits error logs to. Replaces the stub.
+    "docsuri-ops",
+    # CG-1: backend web framework = FastAPI (app-shell decision, owner @revenantonthemission).
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    # Runtime for the in-tree accounts (U3) module — modules share the shell's stack (§5-A).
+    # accounts has no pyproject of its own, so deploy unit ① declares its third-party deps:
+    #   argon2-cffi → password hashing · httpx → reCAPTCHA/OIDC HTTP · cryptography → ORCID JWKS
+    #   verification · pyotp → admin TOTP MFA.
+    "sqlalchemy>=2.0,<3",
+    # psycopg 3 — SQLAlchemy Postgres driver (db.py) + the migration runner. binary wheel.
+    "psycopg[binary]>=3.1",
+    "redis>=5.0",
+    "pydantic>=2.7,<3",
+    "argon2-cffi>=23.0",
+    "httpx>=0.27",
+    "cryptography>=42",
+    "pyotp>=2.9",
+    # boto3 → SES (verification email) + CloudWatch observability adapter.
+    "boto3>=1.34",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+    # accounts (U3) + library (U4) ship property-based + async tests: deploy unit ① declares
+    # these so the suite is reproducible (previously installed ad-hoc — rebaseline gap).
+    "hypothesis>=6.100",
+    "pytest-asyncio>=0.23",
+]
+
+# In-repo path sources. discovery + ops are on develop (PRs #48, #45), so the app-shell
+# installs them directly: `_mount_discovery` resolves and injects the real U6 grounding hook
+# instead of graceful-skipping / using StubGroundingHook — see u6-integration-proposal.md.
+[tool.uv.sources]
+docsuri-shared = { path = "../shared/python", editable = true }
+docsuri-discovery = { path = "modules/discovery", editable = true }
+docsuri-summarization = { path = "modules/summarization", editable = true }
+docsuri-ops = { path = "../ops", editable = true }
+
+# The backend is an APPLICATION, not a distributed library: its import root is the repo ROOT
+# (accounts is imported as `backend.modules.accounts`), so uv installs only its dependencies
+# and the `backend` package is imported via PYTHONPATH (run from the repo root). This avoids a
+# double-import (editable install + path) and the matching no build-system is needed.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+# Put the repo ROOT on sys.path so `backend.*` (and in-tree `backend.modules.*`) import the
+# same way they do under uvicorn run from the repo root.
+pythonpath = [".."]
+
+[tool.ruff]
+line-length = 100
+# Module lanes (modules/*) are self-owned and self-linted (discovery ships its own ruff
+# config; accounts lints within its own lane). The app-shell ruff config governs only the
+# shell's own files, so `ruff check .` here doesn't fail on another track's lint debt.
+extend-exclude = ["modules"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

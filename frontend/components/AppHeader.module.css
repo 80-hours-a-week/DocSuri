@@ -1,0 +1,90 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px; /* consistent header height across all screens (login/signup ↔ detail/body) */
+  padding: 2px 0 6px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--color-text);
+}
+
+.brandLogo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
+/* Left zone: brand link, or back arrow + page title (back mode). */
+.lead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
+  margin-inline-start: -8px;
+  padding: 0 8px;
+  border: none;
+  background: none;
+  color: var(--color-text);
+  font-size: 22px;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.titleText {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Inline desktop nav — hidden on phones (the BottomNav tab bar owns navigation there). */
+.nav {
+  display: none;
+  align-items: center;
+  gap: 18px;
+}
+
+@media (min-width: 768px) {
+  .nav {
+    display: flex;
+  }
+}
+
+.navLink {
+  font-size: 14px;
+  text-decoration: none;
+  color: var(--color-text-muted);
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.navLink:hover {
+  color: var(--color-text);
+}
+
+.navLink[data-active='true'] {
+  color: var(--color-accent);
+  font-weight: 600;
+}
