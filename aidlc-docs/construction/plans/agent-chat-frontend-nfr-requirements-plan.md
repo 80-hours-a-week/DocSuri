@@ -7,8 +7,8 @@
 
 ## 산출 계획
 
-- [ ] `aidlc-docs/construction/agent-chat-frontend/nfr-requirements/nfr-requirements.md`를 생성한다.
-- [ ] `aidlc-docs/construction/agent-chat-frontend/nfr-requirements/tech-stack-decisions.md`를 생성한다.
+- [x] `aidlc-docs/construction/agent-chat-frontend/nfr-requirements/nfr-requirements.md`를 생성한다.
+- [x] `aidlc-docs/construction/agent-chat-frontend/nfr-requirements/tech-stack-decisions.md`를 생성한다.
 
 ## NFR Requirements 질문
 
@@ -23,7 +23,7 @@ C) 성능 기준은 Code Generation 이후 측정으로 미룬다.
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: A
 
 ### 질문 2
 보안 경계는 어디까지 NFR로 고정할까요?
@@ -36,7 +36,7 @@ C) 첨부 allowlist만 NFR로 둔다.
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: A
 
 ### 질문 3
 resiliency 기준은 어떻게 둘까요?
@@ -49,7 +49,7 @@ C) 실패 시 새로고침 안내만 제공한다.
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: A
 
 ### 질문 4
 접근성과 responsive 기준은 어떻게 둘까요?
@@ -62,7 +62,7 @@ C) 데스크톱만 우선 지원한다.
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: A
 
 ### 질문 5
 테스트 NFR은 어떻게 둘까요?
@@ -75,7 +75,7 @@ C) 테스트 기준은 Code Generation에서만 정한다.
 
 X) 기타. 아래 [Answer]: 태그 뒤에 설명해 주세요.
 
-[Answer]:
+[Answer]: A
 
 ## Extension 준수 요약
 
