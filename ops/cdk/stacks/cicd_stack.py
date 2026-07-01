@@ -22,7 +22,13 @@ _GITHUB_REPO = "80-hours-a-week/DocSuri"
 _TRUSTED_SUB = f"repo:{_GITHUB_REPO}:ref:refs/tags/v*"
 _ECR_REPOS = ["docsuri-api", "docsuri-ingestion", "docsuri-frontend"]
 _ECS_CLUSTER = "docsuri"
-_ECS_SERVICES = ["docsuri-api", "docsuri-ingestion", "docsuri-frontend"]
+# (cluster, service). Frontend runs on its OWN cluster (frontend_stack.py), not `docsuri`;
+# scoping it to `docsuri` builds service/docsuri/docsuri-frontend and ecs:UpdateService is denied.
+_ECS_SERVICES = [
+    (_ECS_CLUSTER, "docsuri-api"),
+    (_ECS_CLUSTER, "docsuri-ingestion"),
+    ("docsuri-frontend", "docsuri-frontend"),
+]
 
 
 class CicdStack(Stack):
@@ -88,8 +94,8 @@ class CicdStack(Stack):
             iam.PolicyStatement(
                 actions=["ecs:UpdateService", "ecs:DescribeServices"],
                 resources=[
-                    f"arn:aws:ecs:{self.region}:{self.account}:service/{_ECS_CLUSTER}/{svc}"
-                    for svc in _ECS_SERVICES
+                    f"arn:aws:ecs:{self.region}:{self.account}:service/{cluster}/{svc}"
+                    for cluster, svc in _ECS_SERVICES
                 ],
             )
         )
