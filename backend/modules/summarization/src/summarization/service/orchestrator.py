@@ -229,6 +229,14 @@ class SummarizationOrchestrationService:
                 draft = self._translator.translate(doc, request, glossary)
             except LlmUnavailable:
                 if attempt == 2:
+                    # Distinct from empty_translation: the LLM call itself failed after a retry
+                    # (Bedrock circuit / repeated errors — e.g. a math-heavy batch whose raw-LaTeX
+                    # JSON could not be parsed). Log it so this abstain mode is diagnosable, not
+                    # only a metric — otherwise it is invisible on the API request path.
+                    logger.warning(
+                        "translate abstain generation_unavailable: paper=%s v=%s scope=%s",
+                        request.paper_id, request.version, request.scope,
+                    )
                     self._emit("u7.llm.unavailable", 1.0, request)
                     return AbstainDTO(reason="generation_unavailable")
                 continue
