@@ -21,6 +21,12 @@ env:
   ECR_REGISTRY: ${{ vars.ECR_REGISTRY }} # e.g. 028317349537.dkr.ecr.ap-northeast-2.amazonaws.com
   IMAGE_SHA: ${{ github.sha }}
 
+# Serialize deploys on main (never cancel an in-flight rollout) so two rapid merges can't race
+# each other's ECS deployments. (audit Low #8)
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   require-ci:
     name: Require CI green for this commit
@@ -56,12 +62,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
         with:
           role-to-assume: ${{ vars.CD_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - uses: aws-actions/amazon-ecr-login@v2
+      - uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2
       - name: Build and push
         run: |
           REPO="$ECR_REGISTRY/docsuri-api"
@@ -80,12 +86,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
         with:
           role-to-assume: ${{ vars.CD_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - uses: aws-actions/amazon-ecr-login@v2
+      - uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2
       - name: Build and push
         run: |
           REPO="$ECR_REGISTRY/docsuri-ingestion"
@@ -100,12 +106,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
         with:
           role-to-assume: ${{ vars.CD_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - uses: aws-actions/amazon-ecr-login@v2
+      - uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2
       - name: Build and push
         run: |
           REPO="$ECR_REGISTRY/docsuri-frontend"
@@ -118,9 +124,13 @@ jobs:
     name: Deploy to ECS (rolling update)
     needs: [build-push-api, build-push-ingestion, build-push-frontend]
     runs-on: ubuntu-latest
+    # Bind the prod deploy to a GitHub Environment so the team can attach required-reviewer /
+    # wait-timer protection in repo settings (Settings → Environments → production). Harmless
+    # until configured. (audit Med #7)
+    environment: production
     timeout-minutes: 30
     steps:
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
         with:
           role-to-assume: ${{ vars.CD_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
