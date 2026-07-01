@@ -108,3 +108,40 @@ def test_fetch_full_text_classifies_unparseable_pdf_as_permanent(monkeypatch) ->
         src.fetch_full_text(sample_metadata())
     assert excinfo.value.reason == FailureReason.PARSE_FAILURE
     assert excinfo.value.stage == "fetch_full_text"
+
+
+def test_fetch_full_text_prefers_pdf_when_html_conversion_is_truncated(monkeypatch) -> None:
+    # A truncated ar5iv conversion returns HTTP 200 but only a sentence of body — worse than the
+    # PDF text, so fetch_full_text must fall through to the PDF rather than storing the fragment.
+    from docsuri_ingestion.adapters import arxiv as arxiv_mod
+    from docsuri_ingestion.adapters.arxiv import ArxivHttpSource
+
+    src = ArxivHttpSource()
+    monkeypatch.setattr(
+        src, "_try_get_html", lambda arxiv_id: ("<p>Abstract. Let us start.</p>", "html://x")
+    )
+    monkeypatch.setattr(src, "_get_bytes", lambda url, *, params, stage: b"%PDF-stub")
+    monkeypatch.setattr(arxiv_mod, "pdf_to_text", lambda pdf: "Full recovered PDF body. " * 200)
+
+    raw = src.fetch_full_text(sample_metadata())
+    assert "Full recovered PDF body." in raw.text
+    assert "/pdf/" in raw.source_url  # took the PDF rung, not the truncated HTML
+
+
+def test_fetch_full_text_keeps_complete_html_conversion(monkeypatch) -> None:
+    # A complete HTML conversion (body well above the floor) stays the preferred source and the
+    # PDF is never fetched.
+    from docsuri_ingestion.adapters.arxiv import ArxivHttpSource
+
+    src = ArxivHttpSource()
+    long_html = "<p>" + ("Complete body paragraph. " * 300) + "</p>"
+
+    def _no_pdf(*_a, **_k):
+        raise AssertionError("PDF must not be fetched when HTML is complete")
+
+    monkeypatch.setattr(src, "_try_get_html", lambda arxiv_id: (long_html, "html://x"))
+    monkeypatch.setattr(src, "_get_bytes", _no_pdf)
+
+    raw = src.fetch_full_text(sample_metadata())
+    assert raw.source_url == "html://x"
+    assert "Complete body paragraph." in raw.text
