@@ -13,8 +13,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getApiClient, type SummarizeOutcome } from '@/lib/api';
 import type { SummarizeRequest } from '@/types/generated';
 
-// Long summaries (3-5 LLM calls) take longer than a doc-model build, so the cap is generous.
-const MAX_SUMMARY_POLLS = 20;
+// A full-paper summary (one long LLM call) or a multi-chunk full translation runs tens of
+// seconds — and a very long paper can take past a minute. At the 3s server backoff, ~50 polls
+// covers ~2.5 min, matching the "1~2분 걸릴 수 있어요" the UI promises, so the surface doesn't
+// give up while the job is still legitimately running.
+const MAX_SUMMARY_POLLS = 50;
 const DEFAULT_POLL_BACKOFF_MS = 3000;
 
 export type SummarizeState =

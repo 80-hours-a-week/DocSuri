@@ -253,6 +253,25 @@ def test_orchestrator_full_translate_dispatches_async_when_multichunk() -> None:
     assert queue.calls == [("2401.1", "u1")]
 
 
+def test_orchestrator_large_summary_dispatches_async() -> None:
+    # A full-paper summary is one long LLM call (tens of seconds) → dispatch to the async job
+    # (pending → poll) rather than block the request until it times out. Small sources stay inline.
+    queue = _SpyQueue()
+    orch = make_orchestrator(full_text=StubFullText(text="word " * 9000), summary_job_queue=queue)
+    out = orch.run(_req(Task.SUMMARY), _ctx()).to_dict()
+    assert out["status"] == "pending"
+    assert queue.calls == [("2401.1", "u1")]
+
+
+def test_orchestrator_small_summary_stays_inline() -> None:
+    # A short source (below the async threshold) summarizes inline — no job, direct result.
+    queue = _SpyQueue()
+    orch = make_orchestrator(summary_job_queue=queue)
+    out = orch.run(_req(Task.SUMMARY, abstract="A short abstract about BERT."), _ctx()).to_dict()
+    assert out["status"] == "ok"
+    assert queue.calls == []
+
+
 def test_orchestrator_abstract_translate_stays_inline() -> None:
     # An abstract translate (small, scope != FULL) is NOT dispatched async — it runs inline and
     # returns a result directly, even with a job queue wired.

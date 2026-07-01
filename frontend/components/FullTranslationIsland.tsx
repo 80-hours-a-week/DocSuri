@@ -57,8 +57,15 @@ export function FullTranslationIsland({ paperId, version }: { paperId: string; v
     case 'summary':
       return <StateView kind="error" message="예상치 못한 결과예요." onRetry={retry} />;
     case 'pending':
-      // Translate does not map-reduce in this scope (PR-2); the hook polls if it ever occurs.
-      return <StateView kind="loading" title="번역 준비 중…" message="잠시만 기다려 주세요." />;
+      // A full-text translation runs as a background job (multi-chunk, tens of seconds); the hook
+      // polls until it's ready. Set the expectation so the wait doesn't read as a failure.
+      return (
+        <StateView
+          kind="loading"
+          title="번역 생성 중…"
+          message="AI가 논문을 번역하고 있어요. 논문이 길면 1~2분 걸릴 수 있어요. 이 화면을 열어두면 완료되는 대로 표시돼요."
+        />
+      );
     case 'abstain':
       return <StateView kind="abstain" message="근거가 부족해 번역을 보류했어요." />;
     case 'degraded':
