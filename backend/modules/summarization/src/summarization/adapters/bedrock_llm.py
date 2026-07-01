@@ -123,6 +123,9 @@ class BedrockLlmGateway:
         return TranslationSegmentsResult(
             translations=translations,
             kept_terms=tuple(str(t) for t in payload.get("keptTerms", [])),
+            # Surface an output-cap truncation so the translator can re-split + retry, and so a
+            # partial batch is diagnosable rather than silently degrading to an empty translation.
+            truncated=bool(payload.get("_truncated", False)),
         )
 
     # --- bedrock plumbing ----------------------------------------------------

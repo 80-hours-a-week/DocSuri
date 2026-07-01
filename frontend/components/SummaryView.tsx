@@ -1,10 +1,16 @@
 import type { SummaryVM, AnchorVM } from '@/types/generated';
+import { renderInlineMath } from '@/lib/renderMath';
 import styles from './SummaryView.module.css';
 
 // SummaryView (+AnchorChip) — renders the 6 structured §3 fields with per-claim
 // "출처 보기" anchor chips. External text is escaped by React (BR-SF-9). Display is
 // not post-processed — only grounded backend output is shown (BR-SF-10). Anchor
 // click → full-text viewer highlight (Q5=C, BR-SF-8) via onAnchor.
+//
+// Math: the summary prompt emits formulas/symbols as LaTeX ($…$ / $$…$$), so each text
+// field is rendered through renderInlineMath (KaTeX) — the same delimiter grammar the
+// doc-model viewer uses. Prose stays React-escaped; only the math spans become KaTeX markup
+// (the summary carries no per-paper macros, so the default macro set applies).
 
 interface SummaryViewProps {
   summary: SummaryVM;
@@ -48,7 +54,7 @@ export function SummaryView({ summary, onAnchor }: SummaryViewProps) {
     <div className={styles.root} data-testid="summary-view">
       <section className={styles.field}>
         <h4 className={styles.label}>한 줄 요약</h4>
-        <p className={styles.body}>{summary.tldr}</p>
+        <p className={styles.body}>{renderInlineMath(summary.tldr)}</p>
         <AnchorChips field="tldr" anchors={anchors} onAnchor={onAnchor} />
       </section>
 
@@ -56,7 +62,7 @@ export function SummaryView({ summary, onAnchor }: SummaryViewProps) {
         <h4 className={styles.label}>핵심 기여</h4>
         <ul className={styles.list}>
           {summary.contributions.map((c, i) => (
-            <li key={i}>{c}</li>
+            <li key={i}>{renderInlineMath(c)}</li>
           ))}
         </ul>
         <AnchorChips field="contributions" anchors={anchors} onAnchor={onAnchor} />
@@ -64,29 +70,29 @@ export function SummaryView({ summary, onAnchor }: SummaryViewProps) {
 
       <section className={styles.field}>
         <h4 className={styles.label}>연구 방법</h4>
-        <p className={styles.body}>{summary.method}</p>
+        <p className={styles.body}>{renderInlineMath(summary.method)}</p>
         <AnchorChips field="method" anchors={anchors} onAnchor={onAnchor} />
       </section>
 
       <section className={styles.field}>
         <h4 className={styles.label}>주요 결과</h4>
-        <p className={styles.body}>{summary.results}</p>
+        <p className={styles.body}>{renderInlineMath(summary.results)}</p>
         <AnchorChips field="results" anchors={anchors} onAnchor={onAnchor} />
       </section>
 
       <section className={styles.field}>
         <h4 className={styles.label}>한계</h4>
-        <p className={styles.body}>{summary.limitations}</p>
+        <p className={styles.body}>{renderInlineMath(summary.limitations)}</p>
         <AnchorChips field="limitations" anchors={anchors} onAnchor={onAnchor} />
       </section>
 
       <section className={styles.field}>
         <h4 className={styles.label}>재현성</h4>
         <p className={styles.body}>
-          <span className={styles.repLabel}>코드</span> {summary.reproducibility.code}
+          <span className={styles.repLabel}>코드</span> {renderInlineMath(summary.reproducibility.code)}
         </p>
         <p className={styles.body}>
-          <span className={styles.repLabel}>데이터</span> {summary.reproducibility.data}
+          <span className={styles.repLabel}>데이터</span> {renderInlineMath(summary.reproducibility.data)}
         </p>
         <AnchorChips field="reproducibility" anchors={anchors} onAnchor={onAnchor} />
       </section>

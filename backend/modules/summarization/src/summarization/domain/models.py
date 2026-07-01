@@ -235,10 +235,15 @@ class TranslationSegment:
 @dataclass(frozen=True, slots=True)
 class TranslationSegmentsResult:
     """Gateway translation result: ``translations`` maps segment id → Korean text;
-    ``kept_terms`` are terms left untranslated (BR-S4)."""
+    ``kept_terms`` are terms left untranslated (BR-S4). ``truncated`` is set when the model
+    hit its output-token cap mid-batch, so the returned JSON may be partial (fewer segments
+    than requested) — the translator re-splits such a chunk and retries the halves, and it is
+    logged so a math-heavy 'empty_translation' can be traced to output truncation, not a
+    genuinely blank response."""
 
     translations: dict[str, str]
     kept_terms: tuple[str, ...] = ()
+    truncated: bool = False
 
 
 # --- Grounding (Q4 — U7-owned deterministic gate) ----------------------------

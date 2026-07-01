@@ -15,6 +15,7 @@ API/presentation concern; the domain returns a complete, validated result.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import replace
 
 from docsuri_shared.dtos import DocModel
@@ -51,6 +52,8 @@ from ..ports.ports import (
     SummaryJobQueuePort,
     SummaryStorePort,
 )
+
+logger = logging.getLogger(__name__)
 
 # Client poll backoff hint after a lazy build was (re)triggered on a miss (BR-30/D6).
 _BUILD_POLL_BACKOFF_MS = 2000
@@ -231,6 +234,15 @@ class SummarizationOrchestrationService:
                 continue
             if not _has_translated_text(draft, doc):
                 if attempt == 2:
+                    # Distinct from ``generation_unavailable`` (LlmUnavailable above): here the
+                    # model responded but produced no usable Korean. The translator already logged
+                    # the per-chunk breakdown (returned/applied/truncated); record the terminal
+                    # abstain with paper context + a metric so the two failure modes are separable.
+                    logger.warning(
+                        "translate abstain empty_translation: paper=%s v=%s scope=%s attempts=%d",
+                        request.paper_id, request.version, request.scope, attempt,
+                    )
+                    self._emit("u7.translate.empty", 1.0, request)
                     return AbstainDTO(reason="empty_translation")
                 continue
             result = self._assembler.assemble_translation(draft, glossary, source)
