@@ -99,6 +99,33 @@ describe('agent chat reducer/helpers', () => {
     expect(failed.messages.at(-1)?.status).toBe('failed');
   });
 
+  it('refreshes an active session without clearing the next draft', () => {
+    const attachment = createAttachmentFromFile({ name: 'next.pdf', size: 1024 });
+    const editing = agentReducer(
+      agentReducer(
+        agentReducer(initialAgentChatState, {
+          type: 'startSession',
+          session: { ...noveltySession, state: 'running' },
+        }),
+        { type: 'setDraft', draft: '다음 질문' },
+      ),
+      { type: 'addAttachment', attachment },
+    );
+
+    const refreshed = agentReducer(editing, {
+      type: 'refreshSession',
+      snapshot: {
+        session: { ...noveltySession, state: 'completed' },
+        messages: [],
+        events: [{ id: 'done', stage: 'done', label: '완료', state: 'completed' }],
+      },
+    });
+
+    expect(refreshed.draft).toBe('다음 질문');
+    expect(refreshed.attachments).toEqual([attachment]);
+    expect(refreshed.jobState).toBe('completed');
+  });
+
   it('requires a mode, draft, session, and valid attachments before sending', () => {
     const withMode = agentReducer(initialAgentChatState, {
       type: 'startSession',

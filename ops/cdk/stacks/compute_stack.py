@@ -78,6 +78,9 @@ from aws_cdk import (
 from aws_cdk import (
     aws_sns_subscriptions as subs,
 )
+from aws_cdk import (
+    aws_sqs as sqs,
+)
 from constructs import Construct
 
 from ._origin_auth import api_origin_verify_secret, social_origin_verify_secret
@@ -140,6 +143,32 @@ class ComputeStack(Stack):
             removal_policy=RemovalPolicy.RETAIN,
             credentials=rds.Credentials.from_generated_secret("docsuri_admin"),
             database_name="docsuri",
+        )
+
+        novelty_dlq = sqs.Queue(
+            self,
+            "NoveltyJobDlq",
+            queue_name="docsuri-novelty-agent-job-dlq",
+            retention_period=Duration.days(14),
+            encryption=sqs.QueueEncryption.SQS_MANAGED,
+        )
+        self.novelty_queue = sqs.Queue(
+            self,
+            "NoveltyJobQueue",
+            queue_name="docsuri-novelty-agent-job-queue",
+            visibility_timeout=Duration.seconds(900),
+            retention_period=Duration.days(14),
+            encryption=sqs.QueueEncryption.SQS_MANAGED,
+            dead_letter_queue=sqs.DeadLetterQueue(max_receive_count=3, queue=novelty_dlq),
+        )
+        novelty_dlq.metric_approximate_number_of_messages_visible().create_alarm(
+            self,
+            "NoveltyDlqAlarm",
+            threshold=0,
+            evaluation_periods=1,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+            alarm_description="Novelty agent worker messages are landing in the DLQ",
         )
 
         # --- ElastiCache Redis (U3 spec: cache.t4g.micro, 2-node Multi-AZ) ---
@@ -224,9 +253,7 @@ class ComputeStack(Stack):
             "DOCSURI_SUMMARY_JOB_QUEUE_URL": (  # long-summary async job (BR-S12)
                 f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-summary-job-queue"
             ),
-            "DOCSURI_NOVELTY_JOB_QUEUE_URL": (
-                f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-novelty-agent-job-queue"
-            ),
+            "DOCSURI_NOVELTY_JOB_QUEUE_URL": self.novelty_queue.queue_url,
             # Activation: mounting the U7 read path (summarization_enabled = bool(bucket)). The
             # papers bucket is Ingestion-owned (same name the summary worker carries); the IAM for
             # S3 read/write + Bedrock invoke is already granted to this task role below.
@@ -248,7 +275,9 @@ class ComputeStack(Stack):
             "DOCSURI_MAP_REDUCE_ENABLED": "true",
             "CITATION_GRAPH_ENABLED": "true",
             "PERSONALIZATION_ENABLED": "true",
-            "RESEARCH_AGENT_ENABLED": "true",
+            # Research backend is session storage only today; keep it off in prod until a worker
+            # lands so users do not get a forever-running chat.
+            "RESEARCH_AGENT_ENABLED": "false",
             "NOVELTY_AGENT_ENABLED": "true",
             "PERSONALIZATION_RAW_EVENT_RETENTION_DAYS": "90",
             # --- U3 social login (FR-27, Google OIDC) ---
@@ -444,9 +473,7 @@ class ComputeStack(Stack):
 
         # ALB health check: the API serves no `GET /`, so the default `/` probe returns
         # 404 → target marked unhealthy → deployment circuit breaker rolls the stack back.
-        # ponytail: /healthz is the cheap liveness route (no DB/Redis dep); use /readyz only
-        # if you want readiness gating once downstream deps are wired.
-        self.service.target_group.configure_health_check(path="/healthz")
+        self.service.target_group.configure_health_check(path="/readyz")
 
         # Grant the task role permission to read the RDS secret (for runtime DB connection)
         if self.db.secret:
@@ -538,17 +565,18 @@ class ComputeStack(Stack):
                 resources=[f"{_papers_bucket}/novelty/*"],
             )
         )
-        # SendMessage: doc-model build, long-summary jobs, and novelty-agent jobs.
+        # SendMessage: doc-model build and long-summary jobs. Novelty uses the real queue object
+        # below so CloudFormation owns the dependency instead of a hand-built ARN string.
         self.service.task_definition.task_role.add_to_principal_policy(
             iam.PolicyStatement(
                 actions=["sqs:SendMessage"],
                 resources=[
                     f"arn:aws:sqs:{self.region}:{self.account}:docsuri-ingestion-queue",
                     f"arn:aws:sqs:{self.region}:{self.account}:docsuri-summary-job-queue",
-                    f"arn:aws:sqs:{self.region}:{self.account}:docsuri-novelty-agent-job-queue",
                 ],
             )
         )
+        self.novelty_queue.grant_send_messages(self.service.task_definition.task_role)
         # Bedrock InvokeModel for the U7 summary/translate models (Anthropic on Bedrock). Sonnet
         # 4.6 / Haiku 4.5 are invoked via global inference profiles — the bare foundation-model ids
         # aren't on-demand invokable; a global profile can route the FM to any region, so grant the

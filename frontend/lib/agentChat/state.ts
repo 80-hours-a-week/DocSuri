@@ -44,6 +44,7 @@ export type AgentChatAction =
   | { type: 'sessionsLoaded'; sessions: AgentSessionSummary[] }
   | { type: 'startSession'; session: AgentSessionSummary }
   | { type: 'loadSession'; snapshot: AgentSessionSnapshot }
+  | { type: 'refreshSession'; snapshot: AgentSessionSnapshot }
   | { type: 'newChat' }
   | { type: 'setDraft'; draft: string }
   | { type: 'addAttachment'; attachment: AgentAttachment }
@@ -81,6 +82,17 @@ export function agentReducer(state: AgentChatState, action: AgentChatAction): Ag
         attachments: [],
         jobState: action.snapshot.session.state,
         error: null,
+      };
+    case 'refreshSession':
+      if (state.session?.id !== action.snapshot.session.id) return state;
+      return {
+        ...state,
+        session: action.snapshot.session,
+        sessions: sortSessions(upsertSession(state.sessions, action.snapshot.session)),
+        messages: action.snapshot.messages,
+        events: mergeTimelineEvents(state.events, action.snapshot.events),
+        jobState: action.snapshot.session.state,
+        error: jobStateMessage(action.snapshot.session.state),
       };
     case 'newChat':
       return { ...initialAgentChatState, sessions: state.sessions };
@@ -269,10 +281,14 @@ function markLastPendingFailed(messages: AgentMessage[]): AgentMessage[] {
 }
 
 function resultMessage(result: AgentSendMessageResult): string | null {
-  if (result.outcome === 'failed') {
-    return result.errorMessage ?? '에이전트 응답 생성에 실패했습니다.';
+  return jobStateMessage(result.outcome, result.errorMessage);
+}
+
+function jobStateMessage(state: AgentJobState, errorMessage?: string): string | null {
+  if (state === 'failed') {
+    return errorMessage ?? '에이전트 응답 생성에 실패했습니다.';
   }
-  if (result.outcome === 'degraded') {
+  if (state === 'degraded') {
     return '일부 외부 근거 소스가 응답하지 않아 가능한 범위에서 답변했습니다.';
   }
   return null;

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { getApiClient } from '@/lib/api';
+import { UserFacingError, getApiClient } from '@/lib/api';
 import {
   agentReducer,
   canSend,
@@ -34,12 +34,17 @@ const JOB_STATE_LABEL: Record<AgentJobState, string> = {
   failed: '실패',
   degraded: '저하',
 };
+const AGENT_REFRESH_MS = 2000;
+const RESEARCH_MODE_ENABLED =
+  !process.env.NEXT_PUBLIC_DOCSURI_REAL_API ||
+  process.env.NEXT_PUBLIC_DOCSURI_RESEARCH_AGENT_ENABLED === '1';
 
 export function AgentChatScreen() {
   const api = useMemo(() => getApiClient(), []);
   const [state, dispatch] = useReducer(agentReducer, initialAgentChatState);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const activeSessionId = state.session?.id;
 
   useEffect(() => {
     let alive = true;
@@ -60,6 +65,33 @@ export function AgentChatScreen() {
       alive = false;
     };
   }, [api]);
+
+  useEffect(() => {
+    if (
+      !activeSessionId ||
+      state.submitting ||
+      (state.jobState !== 'queued' && state.jobState !== 'running')
+    ) {
+      return;
+    }
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refresh = async () => {
+      try {
+        const snapshot = await api.loadAgentSession(activeSessionId);
+        if (alive) dispatch({ type: 'refreshSession', snapshot });
+      } catch {
+        // Keep the last known snapshot; the next user action can retry explicitly.
+      } finally {
+        if (alive) timer = setTimeout(refresh, AGENT_REFRESH_MS);
+      }
+    };
+    timer = setTimeout(refresh, AGENT_REFRESH_MS);
+    return () => {
+      alive = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [activeSessionId, api, state.jobState, state.submitting]);
 
   function startMode(mode: AgentMode) {
     dispatch({ type: 'startSession', session: createDraftSession(mode) });
@@ -100,8 +132,14 @@ export function AgentChatScreen() {
         attachments,
       });
       dispatch({ type: 'sendSuccess', result });
-    } catch {
-      dispatch({ type: 'sendFailure', message: '에이전트 요청을 처리하지 못했습니다.' });
+    } catch (error) {
+      dispatch({
+        type: 'sendFailure',
+        message:
+          error instanceof UserFacingError
+            ? error.message
+            : '에이전트 요청을 처리하지 못했습니다.',
+      });
     }
   }
 
@@ -131,12 +169,14 @@ export function AgentChatScreen() {
         <div className={styles.status}>
           <span>{state.mode ? MODE_LABEL[state.mode] : '에이전트'}</span>
           {state.jobState !== 'idle' ? (
-            <small data-state={state.jobState}>{state.jobState}</small>
+            <small data-state={state.jobState}>{JOB_STATE_LABEL[state.jobState]}</small>
           ) : null}
         </div>
       </div>
 
-      {!state.mode ? <AgentModePicker onSelect={startMode} /> : null}
+      {!state.mode ? (
+        <AgentModePicker onSelect={startMode} researchEnabled={RESEARCH_MODE_ENABLED} />
+      ) : null}
 
       <AgentMessageList messages={state.messages} />
       <AgentProgressTimeline events={state.events} />
@@ -209,12 +249,20 @@ export function AgentChatScreen() {
   );
 }
 
-function AgentModePicker({ onSelect }: { onSelect: (mode: AgentMode) => void }) {
+function AgentModePicker({
+  onSelect,
+  researchEnabled,
+}: {
+  onSelect: (mode: AgentMode) => void;
+  researchEnabled: boolean;
+}) {
   return (
     <div className={styles.modePicker} data-testid="agent-mode-picker">
       <button
         type="button"
         onClick={() => onSelect('evidence')}
+        disabled={!researchEnabled}
+        aria-label={researchEnabled ? 'Research' : 'Research 준비 중'}
         data-testid="agent-mode-evidence"
       >
         <strong>Research</strong>
@@ -312,21 +360,28 @@ function AgentProgressTimeline({ events }: { events: AgentTimelineEvent[] }) {
   return (
     <section className={styles.timeline} aria-label="탐구 프로세스" data-testid="agent-timeline">
       {events.map((event) => (
-        <details
-          key={event.id}
-          className={styles.timelineEvent}
-          data-state={event.state}
-          data-testid="agent-timeline-event"
-          open={event.state === 'running' || event.state === 'degraded'}
-        >
-          <summary>
-            <span>{event.label}</span>
-            <small>{event.state}</small>
-          </summary>
-          {event.detail ? <p>{event.detail}</p> : null}
-        </details>
+        <AgentTimelineItem key={event.id} event={event} />
       ))}
     </section>
+  );
+}
+
+function AgentTimelineItem({ event }: { event: AgentTimelineEvent }) {
+  const [open, setOpen] = useState(event.state === 'running' || event.state === 'degraded');
+  return (
+    <details
+      className={styles.timelineEvent}
+      data-state={event.state}
+      data-testid="agent-timeline-event"
+      open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+    >
+      <summary>
+        <span>{event.label}</span>
+        <small>{JOB_STATE_LABEL[event.state]}</small>
+      </summary>
+      {event.detail ? <p>{event.detail}</p> : null}
+    </details>
   );
 }
 

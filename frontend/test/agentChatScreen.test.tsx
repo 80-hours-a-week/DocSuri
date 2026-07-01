@@ -20,6 +20,8 @@ describe('AgentChatScreen', () => {
     expect(screen.getByTestId('agent-timeline')).toBeInTheDocument();
     expect(screen.getAllByTestId('agent-timeline-event').length).toBeGreaterThan(0);
     expect(screen.getByText(/소스: corpus/)).toBeInTheDocument();
+    expect(screen.getAllByText('완료').length).toBeGreaterThan(0);
+    expect(screen.queryByText('completed')).not.toBeInTheDocument();
   });
 
   it('loads a previous session from the drawer', async () => {

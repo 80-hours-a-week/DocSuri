@@ -23,13 +23,6 @@ app = cdk.App()
 env = cdk.Environment(account="028317349537", region="ap-northeast-2")
 
 
-def _required_context(name: str) -> str:
-    value = app.node.try_get_context(name)
-    if value is None or str(value).strip() == "":
-        raise ValueError(f"Missing CDK context value: {name}")
-    return str(value)
-
-
 network = NetworkStack(app, "Docsuri-Network", env=env)
 search = SearchStack(app, "Docsuri-Search", vpc=network.vpc, env=env)
 compute = ComputeStack(
@@ -56,10 +49,8 @@ summarization = SummarizationStack(
 novelty = NoveltyStack(
     app, "Docsuri-Novelty",
     vpc=network.vpc,
-    db_endpoint=_required_context("novelty_db_endpoint"),
-    db_port=int(_required_context("novelty_db_port")),
-    db_security_group_id=_required_context("novelty_db_security_group_id"),
-    db_secret_arn=_required_context("novelty_db_secret_arn"),
+    db=compute.db,
+    queue=compute.novelty_queue,
     env=env,
 )
 # Deploy unit ④ — U5 frontend. The BFF (server-side) calls the backend gateway over its

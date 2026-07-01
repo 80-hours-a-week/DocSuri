@@ -56,6 +56,8 @@ import type {
 import type {
   AgentMode,
   AgentAttachment,
+  AgentAttachmentKind,
+  AgentAttachmentStatus,
   AgentJobState,
   AgentMessage,
   AgentSendMessageRequest,
@@ -177,9 +179,27 @@ function mapAgentMessage(message: BackendResearchMessage): AgentMessage {
     role,
     content: message.content,
     createdAt: message.createdAt,
-    attachments: message.attachments as AgentAttachment[] | undefined,
+    attachments: mapAgentAttachments(message.attachments),
     status: 'sent' as const,
   };
+}
+
+function mapAgentAttachments(attachments?: unknown[]): AgentAttachment[] | undefined {
+  if (!attachments?.length) return undefined;
+  return attachments.map((item, index) => {
+    const record = item && typeof item === 'object' ? (item as Record<string, unknown>) : {};
+    const name =
+      stringValue(record.name) ?? stringValue(record.fileName) ?? stringValue(record.filename);
+    const kind = attachmentKind(record.kind, stringValue(record.contentType), name);
+    return {
+      id: stringValue(record.id) ?? stringValue(record.attachmentId) ?? `attachment-${index}`,
+      name: name ?? `첨부 ${index + 1}`,
+      kind,
+      sizeBytes: numberValue(record.sizeBytes) ?? numberValue(record.size) ?? 0,
+      status: attachmentStatus(record.status),
+      error: stringValue(record.error),
+    };
+  });
 }
 
 function mapNoveltyEvent(event: BackendNoveltyEvent, index: number): AgentTimelineEvent {
@@ -235,9 +255,9 @@ function timelineDetail(payload?: Record<string, unknown>): string | undefined {
   const parts = [
     labeled('소스', payload.source ?? payload.sourceType ?? payload.type),
     labeled('쿼리', payload.query),
-    labeled('요약', payload.outputSummary ?? payload.summary ?? payload.detail),
+    labeled('요약', payload.outputSummary),
     countFromPayload(payload) ? `결과 ${countFromPayload(payload)}건` : undefined,
-    reasons(payload.degradedReasons ?? payload.reason ?? payload.error),
+    safeReason(payload),
   ];
   return parts.filter(Boolean).join(' · ') || undefined;
 }
@@ -247,18 +267,49 @@ function labeled(label: string, value: unknown): string | undefined {
   return text ? `${label}: ${text}` : undefined;
 }
 
-function reasons(value: unknown): string | undefined {
-  const text = Array.isArray(value) ? value.map(stringValue).filter(Boolean).join(', ') : stringValue(value);
-  return text ? `사유: ${text}` : undefined;
+function safeReason(payload: Record<string, unknown>): string | undefined {
+  if (hasValue(payload.error)) return '사유: 처리 중 오류가 발생했습니다.';
+  if (hasValue(payload.degradedReasons) || hasValue(payload.reason)) {
+    return '사유: 일부 연동이 저하되어 가능한 결과만 표시합니다.';
+  }
+  return undefined;
 }
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+function numberValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function hasValue(value: unknown): boolean {
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'string') return value.trim().length > 0;
+  return value !== null && value !== undefined;
+}
+
 function listValue(value: unknown): string | undefined {
   if (!Array.isArray(value)) return undefined;
   return value.map(stringValue).filter(Boolean).slice(0, 2).join(', ') || undefined;
+}
+
+function attachmentStatus(value: unknown): AgentAttachmentStatus {
+  return value === 'rejected' ? 'rejected' : 'ready';
+}
+
+function attachmentKind(
+  value: unknown,
+  contentType?: string,
+  name?: string,
+): AgentAttachmentKind {
+  if (value === 'pdf' || value === 'markdown' || value === 'text') return value;
+  const lowerName = name?.toLowerCase() ?? '';
+  const lowerType = contentType?.toLowerCase() ?? '';
+  if (lowerType.includes('pdf') || lowerName.endsWith('.pdf')) return 'pdf';
+  if (lowerType.includes('markdown') || lowerName.endsWith('.md')) return 'markdown';
+  if (lowerType.includes('text') || lowerName.endsWith('.txt')) return 'text';
+  return 'unknown';
 }
 
 function countFromPayload(payload: Record<string, unknown>): number | undefined {
@@ -277,12 +328,28 @@ function firstItemTitle(payload: Record<string, unknown>): string | undefined {
 }
 
 function toResearchBody(req: AgentSendMessageRequest) {
+  if (
+    process.env.NEXT_PUBLIC_DOCSURI_REAL_API &&
+    process.env.NEXT_PUBLIC_DOCSURI_RESEARCH_AGENT_ENABLED !== '1'
+  ) {
+    throw new UserFacingError('unknown', 'Research는 아직 실배포에서 사용할 수 없습니다.');
+  }
+  return toChatBody(req);
+}
+
+function toChatBody(req: AgentSendMessageRequest) {
   return { content: req.content, attachments: req.attachments ?? [] };
 }
 
 function toNoveltyBody(req: AgentSendMessageRequest, created: boolean) {
-  if (!created) return toResearchBody(req);
+  if (!created) return toChatBody(req);
   const manuscript = req.attachments?.[0];
+  if (manuscript && process.env.NEXT_PUBLIC_DOCSURI_REAL_API) {
+    throw new UserFacingError(
+      'unknown',
+      '파일 업로드 연동 전에는 Novelty 첨부 분석을 사용할 수 없습니다.',
+    );
+  }
   return {
     inputType: manuscript ? 'manuscript' : 'natural_language',
     topic: req.content,
@@ -512,8 +579,19 @@ export class ApiClient {
 
   async listAgentSessions(mode?: AgentMode): Promise<AgentSessionSummary[]> {
     const modes: AgentMode[] = mode ? [mode] : ['evidence', 'novelty'];
-    const sessions = await Promise.all(modes.map((item) => this.listAgentSessionsForMode(item)));
-    return sessions.flat().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    const results = await Promise.allSettled(
+      modes.map((item) => this.listAgentSessionsForMode(item)),
+    );
+    const fulfilled = results.filter(
+      (result): result is PromiseFulfilledResult<AgentSessionSummary[]> =>
+        result.status === 'fulfilled',
+    );
+    if (!fulfilled.length) {
+      throw (results.find((result) => result.status === 'rejected') as PromiseRejectedResult)
+        .reason;
+    }
+    const sessions = fulfilled.flatMap((result) => result.value);
+    return sessions.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
   private async listAgentSessionsForMode(mode: AgentMode): Promise<AgentSessionSummary[]> {
@@ -579,7 +657,9 @@ export class ApiClient {
     if (messageRes.status !== 200) {
       throw normalizeHttpError(messageRes.status, serverMessage(messageRes.body));
     }
-    if (resultRes.status !== 200) throw normalizeHttpError(resultRes.status, serverMessage(resultRes.body));
+    if (![200, 404, 409].includes(resultRes.status)) {
+      throw normalizeHttpError(resultRes.status, serverMessage(resultRes.body));
+    }
     const jobBody = jobRes.body as { job: BackendNoveltyJob; events?: BackendNoveltyEvent[] };
     const messageBody = messageRes.body as { messages?: BackendNoveltyMessage[] };
     const resultBody = resultRes.body as {
@@ -587,7 +667,7 @@ export class ApiClient {
     };
     const messages = (messageBody.messages ?? []).map((message) => mapAgentMessage(message));
     const resultMessage = mapNoveltyResultMessage(
-      resultBody.artifacts ?? [],
+      resultRes.status === 200 ? (resultBody.artifacts ?? []) : [],
       jobBody.job.updatedAt,
     );
     return {
