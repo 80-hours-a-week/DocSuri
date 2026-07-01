@@ -107,6 +107,10 @@ class SummarizationStack(Stack):
                 "DOCSURI_SUMMARY_BUCKET": f"docsuri-papers-fulltext-{account}",
                 "DOCSURI_SUMMARY_JOB_QUEUE_URL": self.queue.queue_url,
                 "DOCSURI_MAP_REDUCE_ENABLED": "true",  # worker must hold the map-reduce summarizer
+                # Full-text translation runs on THIS worker and must read the structured doc-model;
+                # without this flag the reader is unwired and translation degrades to a plain-text
+                # head-only fallback. Mirrors the API service flag (compute stack).
+                "DOCSURI_DOCMODEL_VIEWER_ENABLED": "true",
                 "DATABASE_URL": database_url,  # personal glossary (no Redis — S3-only store here)
                 "CLOUDWATCH_NAMESPACE": "DocSuri/Production",
                 "CLOUDWATCH_LOG_GROUP": "/docsuri/ops",
