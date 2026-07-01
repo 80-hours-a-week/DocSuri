@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
-import { MathDisplay, renderInlineMath, renderRichText } from '@/lib/renderMath';
+import { MathDisplay, renderInlineMath, renderInlineRich, renderRichText } from '@/lib/renderMath';
 
 // renderInlineMath turns TeX delimiters in plain text into KaTeX markup. The arXiv abstract
 // convention is `$…$` (inline) / `$$…$$` (display); the doc-model also uses `\(…\)`.
@@ -125,5 +125,24 @@ describe('renderRichText (summary fields: markdown + math)', () => {
     const c = html(renderRichText('**핵심**: $\\lambda_E=5$'));
     expect(c.querySelector('strong')).not.toBeNull();
     expect(c.querySelector('.katex')).not.toBeNull();
+  });
+});
+
+describe('renderInlineRich (inline summary fields)', () => {
+  it('normalizes a literal \\n into a real break (not shown as text)', () => {
+    const c = html(renderInlineRich('첫 줄\\n둘째 줄'));
+    expect(c.textContent).not.toContain('\\n');
+    expect(c.textContent).toContain('둘째 줄');
+  });
+
+  it('preserves LaTeX commands and renders inline math (\\nabla)', () => {
+    const c = html(renderInlineRich('기울기 $\\nabla f$ 사용'));
+    expect(c.querySelector('.katex')).not.toBeNull();
+    expect(c.textContent).not.toContain('$\\nabla');
+  });
+
+  it('renders **bold** inline', () => {
+    const c = html(renderInlineRich('코드 **공개**'));
+    expect(c.querySelector('strong')?.textContent).toBe('공개');
   });
 });

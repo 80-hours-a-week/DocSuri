@@ -140,23 +140,34 @@ export function renderInlineMath(text: string, macros?: MathMacros): React.React
 // renderInlineMath. Used inside renderRichText for LLM summary prose.
 const BOLD = /\*\*([\s\S]+?)\*\*/g;
 
+/** Normalize the literal `\n`/`\t` escape artifacts that the backend's JSON re-escaping leaves in
+ * math-heavy fields, back into a real newline / space — but NOT when the backslash starts a LaTeX
+ * command (`\nabla`, `\theta`, `\times`), so math survives. Shared by both summary renderers so an
+ * inline field (tldr, contributions, reproducibility) restores its line breaks the same way the
+ * block renderer does — without this, a legitimately-escaped `\n` shows as a literal in the inline
+ * fields. `.body`'s `white-space: pre-wrap` then renders the real newline as a break. */
+function normalizeEscapeArtifacts(text: string): string {
+  return text.replace(/\\n(?![a-zA-Z])/g, '\n').replace(/\\t(?![a-zA-Z])/g, ' ');
+}
+
 /** Inline render: `**bold**` + math, no block structure. For short single-line fields and list
  * items (already inside an <li>). */
 export function renderInlineRich(text: string, macros?: MathMacros): React.ReactNode {
-  if (!text.includes('**')) return renderInlineMath(text, macros);
+  const t = normalizeEscapeArtifacts(text);
+  if (!t.includes('**')) return renderInlineMath(t, macros);
   const nodes: React.ReactNode[] = [];
   let last = 0;
   let key = 0;
-  for (const m of text.matchAll(BOLD)) {
+  for (const m of t.matchAll(BOLD)) {
     const idx = m.index ?? 0;
     if (idx > last) {
-      nodes.push(<Fragment key={key++}>{renderInlineMath(text.slice(last, idx), macros)}</Fragment>);
+      nodes.push(<Fragment key={key++}>{renderInlineMath(t.slice(last, idx), macros)}</Fragment>);
     }
     nodes.push(<strong key={key++}>{renderInlineMath(m[1], macros)}</strong>);
     last = idx + m[0].length;
   }
-  if (last < text.length) {
-    nodes.push(<Fragment key={key++}>{renderInlineMath(text.slice(last), macros)}</Fragment>);
+  if (last < t.length) {
+    nodes.push(<Fragment key={key++}>{renderInlineMath(t.slice(last), macros)}</Fragment>);
   }
   return nodes;
 }
@@ -168,7 +179,7 @@ export function renderInlineRich(text: string, macros?: MathMacros): React.React
  * caller must place it in a block container (a <div>, not a <p>). */
 export function renderRichText(text: string, macros?: MathMacros): React.ReactNode {
   if (!text) return null;
-  const normalized = text.replace(/\\n(?![a-zA-Z])/g, '\n').replace(/\\t(?![a-zA-Z])/g, ' ');
+  const normalized = normalizeEscapeArtifacts(text);
   const blocks = normalized
     .split(/\n{2,}/)
     .map((b) => b.trim())

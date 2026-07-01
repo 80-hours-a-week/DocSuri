@@ -244,7 +244,7 @@ def test_orchestrator_full_translate_dispatches_async_when_multichunk() -> None:
     from summarization.domain.models import Scope
 
     queue = _SpyQueue()
-    # ~11K tokens: single-call band, but above the inline translate threshold (8K).
+    # ~11K tokens: single-call band, but above the async-dispatch threshold (6K).
     orch = make_orchestrator(full_text=StubFullText(text="word " * 9000), summary_job_queue=queue)
 
     req = SummaryRequest(paper_id="2401.1", version=1, task=Task.TRANSLATE, scope=Scope.FULL)
