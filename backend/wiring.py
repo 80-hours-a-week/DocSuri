@@ -146,7 +146,7 @@ def _mount_discovery(app: FastAPI, settings: Settings, result: MountResult) -> N
     # the real read path: if it is configured but its `real` extra (opensearch-py/boto3) is not
     # installed, the import raises ModuleNotFoundError → skip (no silent mock fallback).
     from discovery.adapters.settings import DiscoverySettings
-    from discovery.api.router import build_router
+    from discovery.api.router import build_router, register_search_unavailable_handler
     from docsuri_ops.grounding import GroundingEnforcementHook
 
     # Read path selection (U2 real adapters, critical path ⑥): when the shared OpenSearch
@@ -205,6 +205,14 @@ def _mount_discovery(app: FastAPI, settings: Settings, result: MountResult) -> N
     grounding_hook = GroundingEnforcementHook()
     app.state.discovery_bundle = bundle
     app.state.grounding_hook = grounding_hook
+
+    # Map a store outage to a fail-closed, no-leak 503 (INV-3/SEC-15). The standalone build_app
+    # registers this itself; mounted via build_router here, the app-shell must do it too —
+    # otherwise SearchUnavailable falls through to the generic Exception→500 handler and a
+    # transient outage looks like a bug instead of a retryable 503 (the value the router/
+    # paper_meta docstrings already promise). Reuse discovery's own handler so the SEC-9 message
+    # stays single-sourced (no dev/app-shell drift).
+    register_search_unavailable_handler(app)
 
     # The paper-detail metadata endpoint (GET /api/papers/{id}) is U2-owned (corpus data); both
     # bundles expose a paper_service. getattr keeps this resilient if a bundle predates it.
@@ -478,6 +486,80 @@ def _mount_personalization(app: FastAPI, settings: Settings, result: MountResult
     result.mounted.append("personalization")
 
 
+def _mount_novelty(app: FastAPI, settings: Settings, result: MountResult) -> None:
+    from backend.modules.novelty import controller as novelty
+    from backend.modules.novelty.repository import (
+        InMemoryNoveltyRepository,
+        SqlNoveltyRepository,
+    )
+
+    if _is_postgres(settings.database_url):
+        from .db import make_engine, make_session_factory
+
+        engine = getattr(app.state, "db_engine", None) or make_engine(settings.database_url)
+        app.state.db_engine = engine
+        session_factory = make_session_factory(engine)
+
+        def get_novelty_repo():
+            session = session_factory()
+            try:
+                yield SqlNoveltyRepository(session)
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
+            finally:
+                session.close()
+    else:
+        repo = InMemoryNoveltyRepository()
+        app.state.novelty_repo = repo
+
+        def get_novelty_repo():
+            return repo
+
+    app.dependency_overrides[novelty.get_repo] = get_novelty_repo
+    for router in novelty.routers:
+        app.include_router(router)
+    result.mounted.append("novelty")
+
+
+def _mount_research(app: FastAPI, settings: Settings, result: MountResult) -> None:
+    from backend.modules.research import controller as research
+    from backend.modules.research.repository import (
+        InMemoryResearchRepository,
+        SqlResearchRepository,
+    )
+
+    if _is_postgres(settings.database_url):
+        from .db import make_engine, make_session_factory
+
+        engine = getattr(app.state, "db_engine", None) or make_engine(settings.database_url)
+        app.state.db_engine = engine
+        session_factory = make_session_factory(engine)
+
+        def get_research_repo():
+            session = session_factory()
+            try:
+                yield SqlResearchRepository(session)
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
+            finally:
+                session.close()
+    else:
+        repo = InMemoryResearchRepository()
+        app.state.research_repo = repo
+
+        def get_research_repo():
+            return repo
+
+    app.dependency_overrides[research.get_repo] = get_research_repo
+    for router in research.routers:
+        app.include_router(router)
+    result.mounted.append("research")
+
+
 # The real registry. Each entry is a `(app, settings, result) -> None` mounter whose name
 # (minus the `_mount_` prefix) labels it in MountResult / `/readyz`.
 _INTEGRATIONS = (
@@ -488,5 +570,7 @@ _INTEGRATIONS = (
     _mount_ops,
     _mount_citation_graph,
     _mount_personalization,
+    _mount_research,
+    _mount_novelty,
     _mount_summarization,
 )

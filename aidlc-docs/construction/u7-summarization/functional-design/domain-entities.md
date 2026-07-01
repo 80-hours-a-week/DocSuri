@@ -130,6 +130,11 @@
 `{ field, target: enum{section, table, figure}, label?, span }`
 - `span`(문자 offset)은 **필수 보증**; `label`은 도출 성공 시 부여(실패 시 span-only로 저하). 라벨·span 모두 없으면 해당 주장 **기권**.
 
+> ⚠️ **앵커 모델 충돌 (미해결) — 2026-06-30 · `aidlc-suite-review` PR #280**
+> 본 `Anchor`(레거시 **`{ target ∈ enum{section,table,figure}, quote-span(span), regex-label(label) }`**)는 배포된 U7 요약 경로·`summarization.schema.json`과 일치하며 **U7 백엔드 무변경**이다. 그러나 FROZEN `docmodel.md §3`은 결정적 Section/Block **id 앵커**를 강제하고, `evidence-formation-port.md §3.6`은 id 기반 앵커를 전제한다.
+> 명시적 결정(U7/스키마가 id 앵커로 이행하거나 `docmodel.md §3`을 공식 개정·동결해제)으로 셋을 정렬하기 전까지, novelty/근거형성 에이전트의 앵커 실재성 검증은 id 앵커에 의존할 수 없다. **해결 책임자: TBD.**
+> 교차 참조: `docmodel.md §3` · `shared/dtos/summarization.schema.json`(Anchor/AnchorTarget) · 본 `domain-entities.md`(Anchor) · `evidence-formation-port.md §3.6`.
+
 ### `TranslationDraft` (번역 산출물, 소유) — **개정 (PR-2, BR-S18)**
 `{ docModel: DocModel, keptTerms[] }` — **번역본 doc-model**(본문과 동일 구조; 섹션 제목·문단·리스트·표/그림 캡션은 한국어, 표 셀·수식 LaTeX·코드·블록 id·그림 assetRef는 원본 verbatim) + 미번역 유지 용어 목록. 평문 `koreanText` 한 덩어리에서 전환. `summarization.schema.json`이 `docmodel.schema.json#/$defs/DocModel`을 **크로스파일 `$ref`**(복제 회피). 생성: `StructuredTranslator`가 소스 doc-model에서 번역 유닛(id→text)을 추출→게이트웨이 `translate_segments`(id→번역텍스트, 청크별 map-only)→소스 구조에 재주입해 결정적 재조립. doc-model 부재(초록/레거시)는 단일-문단 doc-model로 감싸 계약 통일.
 

@@ -74,3 +74,46 @@ def test_bm25_failure_raises_index_unavailable() -> None:
     )
     with pytest.raises(IndexUnavailable):
         adapter.bm25_search(["x"], 10)
+
+
+def _bad_hit(record, score: float) -> dict:
+    """A hit whose stored _source violates the current IndexRecord contract (schema drift):
+    a required field is absent, exactly as a document indexed under an earlier vector-spec
+    would read back."""
+    source = record.model_dump(mode="json")
+    source.pop("title")
+    return {"_score": score, "_source": source}
+
+
+def test_knn_search_drops_non_conforming_hits_and_keeps_valid_ones_in_order() -> None:
+    good1, bad, good2 = fixtures.RECORDS[0], fixtures.RECORDS[1], fixtures.RECORDS[2]
+    fake = FakeSearchClient(
+        hits=[_hit(good1, 0.9), _bad_hit(bad, 0.8), _hit(good2, 0.7)]
+    )
+    adapter = OpenSearchVectorStoreAdapter(fake, "docsuri-corpus-v1")
+
+    out = adapter.knn_search([0.0] * DIMENSIONS, 20)
+
+    # The stale hit is dropped (not a 500); the two valid hits survive in rank order.
+    assert [r.paperId for r, _ in out] == [good1.paperId, good2.paperId]
+
+
+def test_search_with_only_non_conforming_hits_returns_empty_not_error() -> None:
+    fake = FakeSearchClient(hits=[_bad_hit(fixtures.RECORDS[0], 0.9)])
+    adapter = OpenSearchLexicalIndexAdapter(fake, "docsuri-corpus-v1")
+
+    # A drifted corpus degrades to an empty page, never a ValidationError escaping to a 500.
+    assert adapter.bm25_search(["x"], 10) == []
+
+
+def test_search_drops_hit_missing_source_without_raising() -> None:
+    # A hit with no `_source` key (e.g. an `_source`-disabled / stored_fields response) must be
+    # absorbed by the same drop path — the `_source` subscript would otherwise raise KeyError
+    # (not ValidationError) and escape to a 500, breaking the per-record tolerance invariant.
+    good = fixtures.RECORDS[0]
+    fake = FakeSearchClient(hits=[{"_score": 0.9}, _hit(good, 0.8)])
+    adapter = OpenSearchVectorStoreAdapter(fake, "docsuri-corpus-v1")
+
+    out = adapter.knn_search([0.0] * DIMENSIONS, 20)
+
+    assert [r.paperId for r, _ in out] == [good.paperId]

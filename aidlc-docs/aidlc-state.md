@@ -4,7 +4,7 @@
 - **프로젝트명**: DocSuri (연구 지원 애플리케이션)
 - **프로젝트 유형**: Greenfield(그린필드)
 - **시작일**: 2026-06-15T04:36:30Z
-- **현재 단계**: OPERATIONS - 재인셉션 페이즈 1 / U1 Corpus Operations placeholder 확인 완료. 현 AI-DLC 워크플로우 종료.
+- **현재 단계**: OPERATIONS — U1 Corpus 운영 진입 이후에도 재인셉션 페이즈 4 **U11(문헌탐색·근거형성)** 및 **U12(novelty) 에이전트** 사이클이 이어짐(요구사항 FR-30~38·스토리 US-NV/US-EV·설계/코드 `construction/novelty-agent/`·배포 `Docsuri-Novelty`). _(구 "U1 Corpus에서 AI-DLC 워크플로우 종료" 표기는 이후 U11/U12 작업 수행으로 정정 — 2026-06-30, `aidlc-suite-review` PR #280.)_
 - **문서 언어**: 한국어(`aidlc-docs/` 산출물). 업스트림 룰셋(`AGENTS.md`, `.aidlc-rule-details/`)은 영어 유지.
 
 ## ⚠️ 검증 재기준선 (Verification Re-baseline) — 2026-06-16
@@ -585,3 +585,55 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
   - No novelty score, "newness proven" judgment, paper prose generation, or code skeleton generation.
 - Current gate: `novelty-agent-code-generation-plan.md` 승인 질문 답변 대기.
 - Code generated: no.
+
+## Novelty Agent — Code Generation Complete
+
+- Date: 2026-06-30
+- Stage: CONSTRUCTION / Code Generation
+- Completed plan:
+  - `aidlc-docs/construction/plans/novelty-agent-code-generation-plan.md`
+- Created application code:
+  - `backend/modules/novelty/`
+  - `backend/modules/novelty/migrations/001_create_novelty_tables.sql`
+  - `backend/tests/test_novelty.py`
+- Modified application/infrastructure code:
+  - `backend/app.py`
+  - `backend/migrations/__main__.py`
+  - `backend/wiring.py`
+  - `backend/tests/test_app_shell.py`
+  - `ops/cdk/app.py`
+  - `ops/cdk/stacks/compute_stack.py`
+  - `ops/cdk/stacks/novelty_stack.py`
+- Code summary:
+  - `aidlc-docs/construction/novelty-agent/code/summary.md`
+- Verification:
+  - `python -m pytest backend/tests/test_novelty.py -q` -> 10 passed
+  - `python -m ruff check backend/modules/novelty backend/wiring.py backend/app.py backend/migrations/__main__.py backend/tests/test_novelty.py backend/tests/test_app_shell.py ops/cdk/stacks/novelty_stack.py ops/cdk/stacks/compute_stack.py ops/cdk/app.py` -> passed
+  - `python -m compileall backend/modules/novelty backend/wiring.py ops/cdk/stacks/novelty_stack.py ops/cdk/app.py` -> passed
+  - `cd ops/cdk; cdk synth` -> passed with existing CDK warnings
+  - Combined `backend/tests/test_novelty.py backend/tests/test_app_shell.py` attempted but the local shell lacks existing `docsuri_shared`, `docsuri_ops`, and discovery imports required by pre-existing app-shell assertions.
+- Current gate: Code Generation review/approval. Next recommended stage: Build and Test after approval.
+- Code generated: yes.
+
+## Novelty Agent — Build and Test Complete
+
+- Date: 2026-06-30
+- Stage: CONSTRUCTION / Build and Test
+- Code Generation approval:
+  - User approved: "`Approve code generation and proceed to Build & Test`를 진행해 주세요."
+- Build/test documents updated:
+  - `aidlc-docs/construction/build-and-test/build-instructions.md`
+  - `aidlc-docs/construction/build-and-test/unit-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/integration-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/performance-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/contract-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/security-test-instructions.md`
+  - `aidlc-docs/construction/build-and-test/build-and-test-summary.md`
+- Verification:
+  - `python -m pytest backend/tests/test_novelty.py -q` -> 10 passed
+  - `$env:PYTHONPATH='shared/python/src;ops/src;backend/modules/discovery/src;backend/modules/summarization/src'; python -m pytest backend/tests/test_novelty.py backend/tests/test_app_shell.py -q` -> 24 passed
+  - `$env:PYTHONPATH='shared/python/src;ops/src;backend/modules/discovery/src;backend/modules/summarization/src'; python -m pytest backend/tests -q` -> passed with 1 skipped test after installing declared `pytest-asyncio` dependency
+  - `python -m ruff check backend/modules/novelty backend/wiring.py backend/app.py backend/migrations/__main__.py backend/tests/test_novelty.py backend/tests/test_app_shell.py ops/cdk/stacks/novelty_stack.py ops/cdk/stacks/compute_stack.py ops/cdk/app.py` -> passed
+  - `python -m compileall backend/modules/novelty backend/wiring.py backend/app.py ops/cdk/stacks/novelty_stack.py ops/cdk/stacks/compute_stack.py ops/cdk/app.py` -> passed
+  - `cd ops/cdk; cdk synth` -> passed with existing CDK warnings
+- Current gate: Build and Test review/approval. Next stage per AI-DLC is Operations placeholder.

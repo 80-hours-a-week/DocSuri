@@ -34,8 +34,15 @@ class SearchStack(Stack):
                 data_nodes=2,  # Multi-AZ
             ),
             ebs=opensearch.EbsOptions(
-                volume_size=50,  # GB per node
+                # Grown 50 -> 200 GiB/node after the corpus rebuild filled the domain past the
+                # flood-stage watermark (index went read-only, all bulk_upserts 403'd). gp3
+                # throughput floor scales with size: 200 GiB requires >=250 MB/s, so 125 (the
+                # implicit default) is invalid here and must be set explicitly or deploy fails
+                # with "Throughput must be between 250 and 593". iops pinned to the gp3 baseline.
+                volume_size=200,  # GB per node
                 volume_type=ec2.EbsDeviceVolumeType.GP3,
+                iops=3000,
+                throughput=250,
             ),
             zone_awareness=opensearch.ZoneAwarenessConfig(
                 availability_zone_count=2,
