@@ -117,3 +117,50 @@ def test_search_drops_hit_missing_source_without_raising() -> None:
     out = adapter.knn_search([0.0] * DIMENSIONS, 20)
 
     assert [r.paperId for r, _ in out] == [good.paperId]
+
+
+# --- transient-retry (search read resilience under reindex load) --------------------
+
+@pytest.fixture(autouse=True)
+def _no_sleep(monkeypatch) -> None:
+    """Keep the bounded search retry from actually sleeping between attempts in tests."""
+    import discovery.adapters.opensearch_index as osi
+
+    monkeypatch.setattr(osi.time, "sleep", lambda _s: None)
+
+
+class FlakySearchClient:
+    """Fails the first ``fail_times`` calls (a transient store blip), then returns ``hits``."""
+
+    def __init__(self, *, fail_times: int, hits: list[dict]) -> None:
+        self._remaining = fail_times
+        self._hits = hits
+        self.calls = 0
+
+    def search(self, *, index, body):
+        self.calls += 1
+        if self._remaining > 0:
+            self._remaining -= 1
+            raise RuntimeError("transient shard unavailable")
+        return {"hits": {"hits": self._hits}}
+
+
+def test_search_retries_transient_failure_then_succeeds() -> None:
+    rec = fixtures.RECORDS[0]
+    flaky = FlakySearchClient(fail_times=2, hits=[_hit(rec, 0.9)])
+    adapter = OpenSearchVectorStoreAdapter(flaky, "idx")
+
+    out = adapter.knn_search([0.0] * DIMENSIONS, 20)
+
+    # A brief blip is absorbed — the query succeeds instead of surfacing a 503.
+    assert [r.paperId for r, _ in out] == [rec.paperId]
+    assert flaky.calls == 3  # two transient failures, then success
+
+
+def test_search_fail_closes_after_bounded_retries() -> None:
+    flaky = FlakySearchClient(fail_times=99, hits=[])
+    adapter = OpenSearchLexicalIndexAdapter(flaky, "idx")
+
+    with pytest.raises(IndexUnavailable):
+        adapter.bm25_search(["x"], 10)
+    assert flaky.calls == 3  # bounded — does not retry forever

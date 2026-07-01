@@ -15,6 +15,7 @@ exposed as two adapter objects but share one OpenSearch client via ``OpenSearchC
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Sequence
 from typing import Any
 
@@ -24,6 +25,40 @@ from pydantic import ValidationError
 from ..ports.search_ports import IndexUnavailable, ScoredRecord
 
 _log = logging.getLogger(__name__)
+
+# Bounded transient-retry for the single OpenSearch store. Search is a read (idempotent), and
+# under heavy concurrent indexing (e.g. a corpus rebuild) the cluster returns brief transient
+# failures — a shard relocating, a GC pause, a momentary timeout. A short retry absorbs most of
+# those so one unlucky moment does not surface to the user as a 503; repeated failure still
+# fail-closes (INV-3). Kept small so an added retry never blows the P50<3s search budget.
+_SEARCH_MAX_ATTEMPTS = 3
+_SEARCH_RETRY_BACKOFF_S = (0.1, 0.25)  # sleeps before attempt 2 and attempt 3
+
+
+def _search_hits(
+    client: Any, index: str, body: dict[str, Any], *, label: str, message: str
+) -> list[dict[str, Any]]:
+    """Run a search and return its hits, retrying transient store failures before fail-closing to
+    ``IndexUnavailable``. On exhaustion the underlying error is logged (type + truncated message)
+    — the previous ``raise ... from exc`` discarded it from the logs, so a real outage vs. a
+    transient blip was indistinguishable."""
+    last_exc: Exception | None = None
+    for attempt in range(_SEARCH_MAX_ATTEMPTS):
+        try:
+            response = client.search(index=index, body=body)
+            return response["hits"]["hits"]
+        except Exception as exc:  # noqa: BLE001 — one store; transient-tolerant then fail-closed
+            last_exc = exc
+            if attempt < _SEARCH_MAX_ATTEMPTS - 1:
+                time.sleep(_SEARCH_RETRY_BACKOFF_S[attempt])
+    _log.warning(
+        "discovery.%s failed after %d attempt(s): %s: %s",
+        label,
+        _SEARCH_MAX_ATTEMPTS,
+        type(last_exc).__name__,
+        str(last_exc)[:200],
+    )
+    raise IndexUnavailable(message) from last_exc
 
 
 def _hit_id(hit: dict[str, Any]) -> str:
@@ -138,11 +173,10 @@ class OpenSearchVectorStoreAdapter:
             "size": top_k,
             "query": {"knn": {"vector": knn}},
         }
-        try:
-            response = self._client.search(index=self._index, body=body)
-            hits = response["hits"]["hits"]
-        except Exception as exc:  # noqa: BLE001 — one store; any failure → fail-closed (INV-3)
-            raise IndexUnavailable("OpenSearch k-NN query failed") from exc
+        hits = _search_hits(
+            self._client, self._index, body, label="knn_search",
+            message="OpenSearch k-NN query failed",
+        )
         return _to_scored(hits)
 
 
@@ -169,11 +203,10 @@ class OpenSearchPaperLookupAdapter:
                 }
             },
         }
-        try:
-            response = self._client.search(index=self._index, body=body)
-            hits = response["hits"]["hits"]
-        except Exception as exc:  # noqa: BLE001 — one store; any failure → fail-closed (INV-3)
-            raise IndexUnavailable("OpenSearch paper lookup failed") from exc
+        hits = _search_hits(
+            self._client, self._index, body, label="paper_lookup",
+            message="OpenSearch paper lookup failed",
+        )
         if not hits:
             return None
         # A non-conforming stored record (schema drift) is treated like "not indexed": return
@@ -212,9 +245,8 @@ class OpenSearchLexicalIndexAdapter:
                 }
             },
         }
-        try:
-            response = self._client.search(index=self._index, body=body)
-            hits = response["hits"]["hits"]
-        except Exception as exc:  # noqa: BLE001 — one store; any failure → fail-closed (INV-3)
-            raise IndexUnavailable("OpenSearch BM25 query failed") from exc
+        hits = _search_hits(
+            self._client, self._index, body, label="bm25_search",
+            message="OpenSearch BM25 query failed",
+        )
         return _to_scored(hits)
