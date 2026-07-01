@@ -494,12 +494,12 @@ class ComputeStack(Stack):
 
         # --- U7 summarization + doc-model IAM (피벗, infra-design §4·§7) ---
         # Single papers bucket (Docsuri-Ingestion owns it) — referenced by ARN-by-name to avoid a
-        # cross-stack export. API reads the built doc-model and read/writes the summary cache.
+        # cross-stack export. API reads built doc-model/assets and read/writes the summary cache.
         _papers_bucket = f"arn:aws:s3:::docsuri-papers-fulltext-{self.account}"
         self.service.task_definition.task_role.add_to_principal_policy(
             iam.PolicyStatement(
                 actions=["s3:GetObject"],
-                resources=[f"{_papers_bucket}/doc-model/*"],
+                resources=[f"{_papers_bucket}/doc-model/*", f"{_papers_bucket}/assets/*"],
             )
         )
         # ListBucket on the papers bucket — WITHOUT it, GetObject on a not-yet-built key returns
