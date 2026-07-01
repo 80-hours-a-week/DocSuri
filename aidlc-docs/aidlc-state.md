@@ -646,7 +646,7 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - Design delta (folded here, no new FD round — US-P4/FR-20/BR-P8/BR-P9 already exist):
   - BR-P8 boost contract enforced at the read port (each ∈ [-0.1,+0.1], Σ≤0.2).
   - Relative (multiplicative) boost over the top-30% band only — nudge, never flip.
-  - Cross-unit seam: plain injected `search_boosts` callable (no new `shared/ports` Protocol — one consumer), fail-open (BR-P13).
+  - Cross-unit seam: plain injected `search_boosts` callable (no new `shared/ports` Protocol — one consumer), cached-profile-only in the search path, fail-open (BR-P13).
 - Files:
   - `backend/modules/personalization/service.py` (BR-P8 clamp `_to_search_boosts`)
   - `backend/modules/discovery/src/discovery/domain/ranker.py` (pure `shadow_rerank_diff` + `ShadowDiff`)
@@ -654,7 +654,7 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
   - `backend/wiring.py` (in-process U9 read-port provider, `PERSONALIZATION_ENABLED`-gated)
   - `backend/tests/test_personalization.py`, `backend/modules/discovery/tests/test_ranker_pbt.py`
 - Code summary: `aidlc-docs/construction/u9-personalization/code/summary.md` (§ Search-Boost Application — Shadow Mode)
-- Metric: `personalization.rerank_shadow` (value=positions that would move, dim `scope=search`).
+- Metrics: `personalization.rerank_shadow` (positions changed), `personalization.rerank_shadow.max_shift`, `personalization.rerank_shadow.boosted_count` (dim `scope=search`).
 - Verification (backend `.venv`, py3.13):
   - `pytest test_personalization.py test_ranker_pbt.py test_orchestrator.py -q` -> 25 passed
   - `pytest backend/modules/discovery/tests -q` -> passed (3 pre-existing skips)
@@ -663,4 +663,6 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - Rollout: SHADOW — user-visible ranking unchanged. Go-live = return `shadow_rerank_diff`'s `reordered` (one line) after observing the metric.
 - Deferred: summary/translation defaults (US-P5), `keywordWeights` surfacing.
 - Delivery: PR #300 (`feature/u9-search-boost-shadow` → develop).
+- Review remediation (2026-07-01): fixed BR-P8 post-normalization total-budget drift, changed U2 shadow reads to cached-profile-only `cached_search_boosts` with PostgreSQL `statement_timeout`, added max-shift/boosted-count shadow metrics, and added regressions for the counterexamples.
+- Remediation verification: focused personalization/discovery tests passed; app-shell/orchestrator tests passed; backend+discovery sweep passed with the existing skip; touched-file Ruff passed; `git diff --check` passed; `git merge-tree origin/develop HEAD` produced a clean merge tree.
 - Current gate: PR review/approval.

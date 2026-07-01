@@ -31,6 +31,13 @@ from .config import Settings
 log = logging.getLogger("docsuri.backend.wiring")
 
 
+def _personalization_decision_timeout_ms() -> int:
+    try:
+        return max(1, int(os.getenv("PERSONALIZATION_DECISION_TIMEOUT_MS", "75")))
+    except ValueError:
+        return 75
+
+
 class _DirectHistoryPublisher:
     """In-process SearchExecutedEvent publisher for when EventBridge is not configured.
 
@@ -509,23 +516,28 @@ def _mount_personalization(app: FastAPI, settings: Settings, result: MountResult
         observability = getattr(app.state, "observability", None)
 
         if _is_postgres(settings.database_url):
+            from sqlalchemy import text
+
+            timeout_ms = _personalization_decision_timeout_ms()
 
             def _search_boosts(user_id: str) -> dict[str, float]:
                 session = session_factory()
                 try:
+                    session.execute(
+                        text("select set_config('statement_timeout', :timeout, true)"),
+                        {"timeout": f"{timeout_ms}ms"},
+                    )
                     port = PersonalizationReadPort(
                         SqlPersonalizationRepository(session), observability=observability
                     )
-                    decision = port.search_decision(user_id)
-                    return dict(decision.searchBoosts) if decision.enabled else {}
+                    return port.cached_search_boosts(user_id)
                 finally:
                     session.close()
         else:
 
             def _search_boosts(user_id: str) -> dict[str, float]:
                 port = PersonalizationReadPort(repo, observability=observability)
-                decision = port.search_decision(user_id)
-                return dict(decision.searchBoosts) if decision.enabled else {}
+                return port.cached_search_boosts(user_id)
 
         app.state.personalization_search_boosts = _search_boosts
 

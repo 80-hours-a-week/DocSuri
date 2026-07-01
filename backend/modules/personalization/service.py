@@ -128,7 +128,7 @@ def _to_search_boosts(weights: dict[str, float]) -> dict[str, float]:
     if total > _BOOST_TOTAL:
         scale = _BOOST_TOTAL / total
         boosts = {key: b * scale for key, b in boosts.items()}
-    return {key: round(b, 4) for key, b in boosts.items()}
+    return boosts
 
 
 class PersonalizationReadPort:
@@ -144,6 +144,18 @@ class PersonalizationReadPort:
 
     def search_decision(self, user_id: str) -> PersonalizationDecision:
         return self._decision(user_id, include_search=True)
+
+    def cached_search_boosts(self, user_id: str) -> dict[str, float]:
+        """Search hot path: read an existing profile only; never aggregate raw events inline."""
+        try:
+            settings = self._repo.get_settings_if_exists(user_id)
+            if settings is not None and not settings.enabled:
+                return {}
+            profile = self._repo.get_profile(user_id)
+            return _to_search_boosts(profile.categoryWeights) if profile else {}
+        except Exception:
+            _emit_metric(self._observability, "personalization.degraded_decision")
+            return {}
 
     def summary_defaults(self, user_id: str) -> PersonalizationDecision:
         return self._decision(user_id, include_search=False)

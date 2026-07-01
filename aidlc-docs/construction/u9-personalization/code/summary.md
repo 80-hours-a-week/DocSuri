@@ -55,15 +55,31 @@ user-visible ranking is unchanged; only a metric is emitted.
   what the caller keeps.
 - **In-process wiring** (`backend/wiring.py`): the discovery orchestrator gets a `search_boosts`
   callable (default no-op) bound — via the existing `_event_publisher` patch idiom — to U9's read
-  port with a per-request session. Gated by `PERSONALIZATION_ENABLED`. Fail-open (BR-P13): any
-  error / `disabled` / `no_profile` → empty boosts → today's exact baseline.
-- **Metric**: `personalization.rerank_shadow` (value = positions that would move, dim
-  `scope=search`) in the `DocSuri/Production` namespace.
+  port with a per-request session. The search hot path reads only an existing cached profile
+  (`cached_search_boosts`) and never lazily aggregates raw behavior events inline; PostgreSQL reads
+  apply `PERSONALIZATION_DECISION_TIMEOUT_MS` via `statement_timeout`. Gated by
+  `PERSONALIZATION_ENABLED`. Fail-open (BR-P13): any error / `disabled` / `no_profile` → empty
+  boosts → today's exact baseline.
+- **Metrics**: `personalization.rerank_shadow` (positions changed),
+  `personalization.rerank_shadow.max_shift`, and
+  `personalization.rerank_shadow.boosted_count`, each with dim `scope=search`, in the
+  `DocSuri/Production` namespace.
 - **Go-live**: replace `shadow_rerank_diff`'s `reordered` as the returned order (one line) after
   the shadow numbers confirm nudges-not-flips.
 - **Deferred**: summary/translation defaults (US-P5), `keywordWeights` surfacing.
 
 PR: #300 (branch `feature/u9-search-boost-shadow` → develop).
+
+### Review Remediation (2026-07-01)
+
+- BR-P8 total budget now remains within `Σ|boost| ≤ 0.2` after normalization; regression is
+  covered by a Hypothesis invariant with the three-equal-category counterexample.
+- Discovery shadow reads use `cached_search_boosts`, which reads only existing settings/profile
+  rows and never performs lazy raw-event aggregation in the search request path.
+- Shadow observability now emits positions changed, max shift, and boosted count.
+- Verification: focused personalization/discovery tests passed, app-shell/orchestrator tests
+  passed, backend+discovery sweep passed, touched-file Ruff passed, `git diff --check` passed,
+  and `git merge-tree origin/develop HEAD` produced a clean merge tree.
 
 ## Tables
 

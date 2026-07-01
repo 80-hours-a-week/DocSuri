@@ -206,6 +206,16 @@ class SearchOrchestrationService:
             self._observability.emit_metric(
                 "personalization.rerank_shadow", float(diff.positions_changed), {"scope": "search"}
             )
+            self._observability.emit_metric(
+                "personalization.rerank_shadow.max_shift",
+                float(diff.max_shift),
+                {"scope": "search"},
+            )
+            self._observability.emit_metric(
+                "personalization.rerank_shadow.boosted_count",
+                float(diff.boosted_count),
+                {"scope": "search"},
+            )
         except Exception:  # noqa: BLE001
             pass
 
