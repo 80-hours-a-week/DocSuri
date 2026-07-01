@@ -15,6 +15,7 @@ exposed as two adapter objects but share one OpenSearch client via ``OpenSearchC
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Sequence
 from typing import Any
 
@@ -24,6 +25,12 @@ from pydantic import ValidationError
 from ..ports.search_ports import IndexUnavailable, ScoredRecord
 
 _log = logging.getLogger(__name__)
+
+# arXiv version suffix ("v3"). paperId is stored version-less, so stripping the requested id's
+# version lets the detail lookup resolve a paper indexed at a *different* version than the one
+# asked for. Mirrors ingestion's normalize_arxiv_ref (ingestion/.../domain/ids.py); cross-module
+# id parsing isn't shared yet, so this small strip is duplicated.
+_VERSION_SUFFIX_RE = re.compile(r"v[1-9][0-9]*$", re.IGNORECASE)
 
 
 def _hit_id(hit: dict[str, Any]) -> str:
@@ -155,14 +162,18 @@ class OpenSearchPaperLookupAdapter:
         self._index = index_name
 
     def fetch_paper(self, paper_id: str) -> IndexRecord | None:
-        # Match either the version-less paperId or the display arxivId (the detail route id is
-        # the arxivId). size=1: any chunk carries the paper-level metadata.
+        # Match the version-less paperId, the exact display arxivId, OR the version-stripped id
+        # against paperId — so a request for one version (e.g. ...v1) still resolves a paper
+        # indexed at another (...v3), instead of 404-ing on an exact-version miss. size=1: any
+        # chunk carries the paper-level metadata.
+        bare_id = _VERSION_SUFFIX_RE.sub("", paper_id)
         body = {
             "size": 1,
             "query": {
                 "bool": {
                     "should": [
                         {"term": {"paperId": paper_id}},
+                        {"term": {"paperId": bare_id}},
                         {"term": {"arxivId": paper_id}},
                     ],
                     "minimum_should_match": 1,
