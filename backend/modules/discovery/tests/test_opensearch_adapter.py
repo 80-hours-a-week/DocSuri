@@ -18,14 +18,26 @@ def _hit(record, score: float) -> dict:
     return {"_score": score, "_source": record.model_dump(mode="json")}
 
 
+class _StoreError(RuntimeError):
+    """Mimics an opensearch-py failure by its duck-typed ``status_code`` (the adapter classifies
+    transient-vs-terminal on that attribute without importing the ``real`` extra): 5xx / ``"N/A"`` /
+    ``"TIMEOUT"`` are transient (retried), a 4xx is terminal (fail-closes on the first attempt)."""
+
+    def __init__(self, status_code: int | str) -> None:
+        super().__init__(f"store error status={status_code}")
+        self.status_code = status_code
+
+
 class FakeSearchClient:
     def __init__(self, *, hits: list[dict] | None = None, error: Exception | None = None) -> None:
         self.hits = hits or []
         self.error = error
         self.last: tuple | None = None
+        self.request_timeouts: list[float | None] = []
 
-    def search(self, *, index, body):
+    def search(self, *, index, body, request_timeout=None):
         self.last = (index, body)
+        self.request_timeouts.append(request_timeout)
         if self.error is not None:
             raise self.error
         return {"hits": {"hits": self.hits}}
@@ -148,18 +160,24 @@ def _no_sleep(monkeypatch) -> None:
 
 
 class FlakySearchClient:
-    """Fails the first ``fail_times`` calls (a transient store blip), then returns ``hits``."""
+    """Fails the first ``fail_times`` calls with ``error`` (a transient store blip by default),
+    then returns ``hits``. Records the per-request timeout the adapter passes each attempt."""
 
-    def __init__(self, *, fail_times: int, hits: list[dict]) -> None:
+    def __init__(
+        self, *, fail_times: int, hits: list[dict], error: Exception | None = None
+    ) -> None:
         self._remaining = fail_times
         self._hits = hits
+        self._error = error or _StoreError("N/A")  # connection error → transient
         self.calls = 0
+        self.request_timeouts: list[float | None] = []
 
-    def search(self, *, index, body):
+    def search(self, *, index, body, request_timeout=None):
         self.calls += 1
+        self.request_timeouts.append(request_timeout)
         if self._remaining > 0:
             self._remaining -= 1
-            raise RuntimeError("transient shard unavailable")
+            raise self._error
         return {"hits": {"hits": self._hits}}
 
 
@@ -182,3 +200,28 @@ def test_search_fail_closes_after_bounded_retries() -> None:
     with pytest.raises(IndexUnavailable):
         adapter.bm25_search(["x"], 10)
     assert flaky.calls == 3  # bounded — does not retry forever
+
+
+def test_search_bounds_each_attempt_with_a_small_request_timeout() -> None:
+    # The retry must not stretch across the client's full connect/read timeout: every attempt is
+    # capped by a small per-request timeout, so even a genuine ConnectionTimeout fail-close stays
+    # within the search latency budget instead of ~MAX_ATTEMPTS * the 10s client default.
+    from discovery.adapters.opensearch_index import _SEARCH_REQUEST_TIMEOUT_S
+
+    flaky = FlakySearchClient(fail_times=99, hits=[], error=_StoreError("TIMEOUT"))
+    adapter = OpenSearchVectorStoreAdapter(flaky, "idx")
+
+    with pytest.raises(IndexUnavailable):
+        adapter.knn_search([0.0] * DIMENSIONS, 20)
+    assert flaky.request_timeouts == [_SEARCH_REQUEST_TIMEOUT_S] * 3
+
+
+def test_search_does_not_retry_non_transient_failure() -> None:
+    # A 4xx (e.g. a malformed query) can't be fixed by retrying — fail-close on the first attempt
+    # rather than burning the latency budget on doomed retries.
+    flaky = FlakySearchClient(fail_times=99, hits=[], error=_StoreError(400))
+    adapter = OpenSearchLexicalIndexAdapter(flaky, "idx")
+
+    with pytest.raises(IndexUnavailable):
+        adapter.bm25_search(["x"], 10)
+    assert flaky.calls == 1  # terminal error → no retry
