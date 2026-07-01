@@ -22,11 +22,19 @@
   color: var(--color-text);
 }
 
+.tagline {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text);
+  max-width: 30ch;
+}
+
 .subtitle {
   margin: 0;
   font-size: 15px;
   color: var(--color-text-muted);
-  max-width: 26ch;
+  max-width: 30ch;
 }
 
 .actions {
@@ -52,6 +60,11 @@
 
   .title {
     font-size: 48px;
+  }
+
+  .tagline {
+    font-size: 24px;
+    max-width: 40ch;
   }
 
   .subtitle {
