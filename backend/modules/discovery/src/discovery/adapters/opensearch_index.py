@@ -15,8 +15,8 @@ exposed as two adapter objects but share one OpenSearch client via ``OpenSearchC
 from __future__ import annotations
 
 import logging
-import time
 import re
+import time
 from collections.abc import Sequence
 from typing import Any
 
