@@ -68,6 +68,7 @@ import type { BehaviorEventCreate } from '@/types/personalization';
 import type {
   AgentAttachment,
   AgentMessage,
+  AgentSessionSnapshot,
   AgentSessionSummary,
   AgentTimelineEvent,
 } from '@/lib/agentChat/types';
@@ -394,6 +395,19 @@ export class MockTransport implements Transport {
         ? { status: 204, body: null }
         : { status: 404, body: null };
     }
+    const noveltyResult = path.match(/^\/api\/novelty\/jobs\/([^/]+)\/result$/);
+    if (noveltyResult && req.method === 'GET') {
+      const snapshot = mockLoadAgentSession(decodeURIComponent(noveltyResult[1]));
+      return {
+        status: snapshot ? 200 : 404,
+        body: snapshot
+          ? {
+              job: noveltyJob(snapshot.session),
+              artifacts: noveltyArtifacts(snapshot),
+            }
+          : null,
+      };
+    }
     const noveltyMessages = path.match(/^\/api\/novelty\/jobs\/([^/]+)\/messages$/);
     if (noveltyMessages && req.method === 'GET') {
       const snapshot = mockLoadAgentSession(decodeURIComponent(noveltyMessages[1]));
@@ -456,7 +470,62 @@ function noveltyEvent(event: AgentTimelineEvent) {
     state: event.stage,
     message: event.label,
     progressPercent: event.sequence ? event.sequence * 25 : 0,
-    payload: event.detail ? { detail: event.detail } : {},
+    payload: eventPayload(event),
     createdAt: '2026-07-01T00:00:00Z',
   };
+}
+
+function eventPayload(event: AgentTimelineEvent) {
+  const payload: Record<string, unknown> = event.detail ? { detail: event.detail } : {};
+  if (event.stage === 'corpus') {
+    return { ...payload, source: 'corpus', query: 'RAG 평가 자동화', resultCount: 3 };
+  }
+  if (event.stage === 'external') {
+    return {
+      ...payload,
+      source: 'github,dataset',
+      query: 'RAG evaluation automation',
+      resultCount: 2,
+      degradedReasons: event.state === 'degraded' ? ['dataset adapter degraded'] : undefined,
+    };
+  }
+  return payload;
+}
+
+function noveltyArtifacts(snapshot: AgentSessionSnapshot) {
+  const now = snapshot.session.updatedAt;
+  return [
+    {
+      artifactId: `${snapshot.session.id}-ideas`,
+      jobId: snapshot.session.id,
+      kind: 'novelty_candidates',
+      title: 'Novelty candidates',
+      objectKey: `mock/${snapshot.session.id}/ideas.json`,
+      payload: {
+        items: [
+          {
+            title: '도메인 지식 기반 실패 유형 분해',
+            evidenceStatus: 'supported',
+            sourceRefs: ['mock:corpus'],
+          },
+        ],
+      },
+      createdAt: now,
+    },
+    {
+      artifactId: `${snapshot.session.id}-plan`,
+      jobId: snapshot.session.id,
+      kind: 'experiment_plan',
+      title: 'Experiment plan',
+      objectKey: `mock/${snapshot.session.id}/plan.json`,
+      payload: {
+        researchQuestion: snapshot.session.title,
+        hypotheses: ['실패 유형 분해가 RAG 평가 재현성을 높인다.'],
+        datasets: ['도메인별 공개 QA 데이터셋'],
+        metrics: ['Novelty score', 'baseline delta'],
+        risks: ['dataset mismatch'],
+      },
+      createdAt: now,
+    },
+  ];
 }

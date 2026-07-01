@@ -104,6 +104,14 @@ type BackendNoveltyEvent = {
   eventId: string;
   state: string;
   message: string;
+  payload?: Record<string, unknown>;
+  createdAt: string;
+};
+type BackendNoveltyArtifact = {
+  artifactId: string;
+  kind: string;
+  title: string;
+  payload?: Record<string, unknown>;
   createdAt: string;
 };
 
@@ -180,9 +188,92 @@ function mapNoveltyEvent(event: BackendNoveltyEvent, index: number): AgentTimeli
     id: event.eventId,
     stage: event.state,
     label: event.message,
+    detail: timelineDetail(event.payload),
     state: mapTimelineState(state),
     sequence: index + 1,
   };
+}
+
+function mapNoveltyResultMessage(
+  artifacts: BackendNoveltyArtifact[],
+  fallbackCreatedAt: string,
+): AgentMessage | null {
+  if (artifacts.length === 0) return null;
+  return {
+    id: `novelty-result-${artifacts.map((artifact) => artifact.artifactId).join('-')}`,
+    role: 'agent',
+    content: [
+      'Novelty 분석 결과',
+      ...artifacts.map((artifact) => `- ${artifact.title}: ${artifactSummary(artifact)}`),
+    ].join('\n'),
+    createdAt: artifacts.at(-1)?.createdAt ?? fallbackCreatedAt,
+    status: 'sent',
+  };
+}
+
+function artifactSummary(artifact: BackendNoveltyArtifact): string {
+  const payload = artifact.payload ?? {};
+  const count = countFromPayload(payload);
+  if (artifact.kind === 'experiment_plan') {
+    return [
+      stringValue(payload.researchQuestion),
+      listValue(payload.hypotheses),
+      listValue(payload.datasets),
+      listValue(payload.metrics),
+      listValue(payload.risks),
+    ]
+      .filter(Boolean)
+      .join(' / ');
+  }
+  const firstItem = firstItemTitle(payload);
+  if (firstItem) return count ? `${firstItem} 외 ${count}건` : firstItem;
+  return count ? `${count}건` : '결과 생성됨';
+}
+
+function timelineDetail(payload?: Record<string, unknown>): string | undefined {
+  if (!payload) return undefined;
+  const parts = [
+    labeled('소스', payload.source ?? payload.sourceType ?? payload.type),
+    labeled('쿼리', payload.query),
+    labeled('요약', payload.outputSummary ?? payload.summary ?? payload.detail),
+    countFromPayload(payload) ? `결과 ${countFromPayload(payload)}건` : undefined,
+    reasons(payload.degradedReasons ?? payload.reason ?? payload.error),
+  ];
+  return parts.filter(Boolean).join(' · ') || undefined;
+}
+
+function labeled(label: string, value: unknown): string | undefined {
+  const text = stringValue(value);
+  return text ? `${label}: ${text}` : undefined;
+}
+
+function reasons(value: unknown): string | undefined {
+  const text = Array.isArray(value) ? value.map(stringValue).filter(Boolean).join(', ') : stringValue(value);
+  return text ? `사유: ${text}` : undefined;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function listValue(value: unknown): string | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.map(stringValue).filter(Boolean).slice(0, 2).join(', ') || undefined;
+}
+
+function countFromPayload(payload: Record<string, unknown>): number | undefined {
+  const explicit = payload.count ?? payload.foundCount ?? payload.resultCount;
+  if (typeof explicit === 'number') return explicit;
+  return Array.isArray(payload.items) ? payload.items.length : undefined;
+}
+
+function firstItemTitle(payload: Record<string, unknown>): string | undefined {
+  const items = payload.items;
+  if (!Array.isArray(items)) return undefined;
+  const first = items[0];
+  if (!first || typeof first !== 'object') return undefined;
+  const item = first as Record<string, unknown>;
+  return stringValue(item.title) ?? stringValue(item.summary);
 }
 
 function toResearchBody(req: AgentSendMessageRequest) {
@@ -467,7 +558,7 @@ export class ApiClient {
   }
 
   private async loadNoveltySession(id: string): Promise<AgentSessionSnapshot> {
-    const [jobRes, messageRes] = await Promise.all([
+    const [jobRes, messageRes, resultRes] = await Promise.all([
       this.request({
         method: 'GET',
         path: `/api/novelty/jobs/${encodeURIComponent(id)}`,
@@ -478,16 +569,30 @@ export class ApiClient {
         path: `/api/novelty/jobs/${encodeURIComponent(id)}/messages`,
         idempotent: true,
       }),
+      this.request({
+        method: 'GET',
+        path: `/api/novelty/jobs/${encodeURIComponent(id)}/result`,
+        idempotent: true,
+      }),
     ]);
     if (jobRes.status !== 200) throw normalizeHttpError(jobRes.status, serverMessage(jobRes.body));
     if (messageRes.status !== 200) {
       throw normalizeHttpError(messageRes.status, serverMessage(messageRes.body));
     }
+    if (resultRes.status !== 200) throw normalizeHttpError(resultRes.status, serverMessage(resultRes.body));
     const jobBody = jobRes.body as { job: BackendNoveltyJob; events?: BackendNoveltyEvent[] };
     const messageBody = messageRes.body as { messages?: BackendNoveltyMessage[] };
+    const resultBody = resultRes.body as {
+      artifacts?: BackendNoveltyArtifact[];
+    };
+    const messages = (messageBody.messages ?? []).map((message) => mapAgentMessage(message));
+    const resultMessage = mapNoveltyResultMessage(
+      resultBody.artifacts ?? [],
+      jobBody.job.updatedAt,
+    );
     return {
       session: mapNoveltyJob(jobBody.job),
-      messages: (messageBody.messages ?? []).map((message) => mapAgentMessage(message)),
+      messages: resultMessage ? [...messages, resultMessage] : messages,
       events: (jobBody.events ?? []).map((event, index) => mapNoveltyEvent(event, index)),
     };
   }
