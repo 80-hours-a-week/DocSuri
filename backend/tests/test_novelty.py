@@ -94,6 +94,31 @@ def test_owner_isolation_blocks_cross_owner_reads() -> None:
         raise AssertionError("cross-owner job read should fail closed")
 
 
+def test_service_rejects_unbound_manuscript_object_key() -> None:
+    repo = InMemoryNoveltyRepository()
+    service = NoveltyService(repo)
+
+    try:
+        service.create_job(
+            "u1",
+            NoveltyJobRequest(
+                inputType="manuscript",
+                topic="owner scoped manuscript",
+                manuscript={
+                    "fileName": "draft.md",
+                    "contentType": "text/markdown",
+                    "objectKey": "novelty/u2/other-job/draft.md",
+                },
+            ),
+        )
+    except ValueError as exc:
+        assert "owner and job" in str(exc)
+    else:  # pragma: no cover - failure path clarity
+        raise AssertionError("cross-owner manuscript objectKey should be rejected")
+
+    assert repo.list_jobs("u1") == []
+
+
 def test_state_transition_guard_rejects_backtracking() -> None:
     repo = InMemoryNoveltyRepository()
     service, owner_id, job_id = _service_job(repo)
@@ -133,6 +158,8 @@ def test_external_query_and_url_guards() -> None:
     assert is_safe_external_url("https://127.0.0.1/admin") is False
     assert is_safe_external_url("https://8.8.8.8/dns-query") is False
     assert is_safe_external_url("https://github.com.evil.example/x") is False
+    assert is_safe_external_url("https://news.google.com/search?q=rag") is False
+    assert is_safe_external_url("https://zenodo.org/records/123") is True
 
 
 def test_worker_processes_minimal_job_to_completion() -> None:
@@ -206,12 +233,48 @@ def test_similarity_adapter_reads_text_manuscript_and_queries_corpus() -> None:
         {
             "objectKey": "novelty/u1/job/draft.txt",
             "contentType": "text/plain",
+            "jobId": "job",
         },
     )
 
     assert result.evidenceStatus is EvidenceStatus.SUPPORTED
     assert any(item["riskType"] == "sentence_similarity" for item in result.items)
     assert result.items[-1]["sourceRefs"][0]["url"].startswith("https://arxiv.org")
+
+
+def test_similarity_adapter_rejects_cross_owner_object_key() -> None:
+    result = S3ManuscriptSimilarityClient(
+        bucket="papers",
+        prefix="novelty/",
+        client=object(),
+        corpus=object(),
+    ).check(
+        "u1",
+        {
+            "objectKey": "novelty/u2/job/draft.txt",
+            "contentType": "text/plain",
+        },
+    )
+
+    assert result.degradedReason == "manuscript objectKey is outside owner prefix"
+
+
+def test_similarity_adapter_rejects_cross_job_object_key() -> None:
+    result = S3ManuscriptSimilarityClient(
+        bucket="papers",
+        prefix="novelty/",
+        client=object(),
+        corpus=object(),
+    ).check(
+        "u1",
+        {
+            "objectKey": "novelty/u1/other-job/draft.txt",
+            "contentType": "text/plain",
+            "jobId": "job",
+        },
+    )
+
+    assert result.degradedReason == "manuscript objectKey is outside job prefix"
 
 
 def test_external_adapter_queries_public_api_sources() -> None:
@@ -280,19 +343,7 @@ def test_external_adapter_queries_public_api_sources() -> None:
                         }
                     }
                 )
-            return Response(
-                {
-                    "articles": [
-                        {
-                            "title": "New RAG benchmark released",
-                            "url": "https://example.com/rag-benchmark",
-                            "domain": "example.com",
-                            "seendate": "20260701T120000Z",
-                            "language": "English",
-                        }
-                    ]
-                }
-            )
+            raise AssertionError(f"unexpected external API call: {url}")
 
     http = FakeHttp()
     result = ExternalApiSearchClient(http).search("privacy preserving RAG")
@@ -302,11 +353,8 @@ def test_external_adapter_queries_public_api_sources() -> None:
         "https://api.github.com/search/repositories",
         "https://huggingface.co/api/datasets",
         "https://zenodo.org/api/records",
-        "https://api.gdeltproject.org/api/v2/doc/doc",
     }
-    assert {"github_repo", "dataset", "news"} <= {
-        item["sourceType"] for item in result.items
-    }
+    assert {item["sourceType"] for item in result.items} == {"github_repo", "dataset"}
     assert all(item["sourceRefs"] for item in result.items)
 
 
@@ -327,16 +375,21 @@ def test_bedrock_llm_adapter_maps_source_ref_indexes_only() -> None:
                 "noveltyCandidates": [
                     {
                         "title": "Freshness-aware evaluation",
-                        "rationale": "Compare recent news evidence against corpus baselines.",
+                        "rationale": "Compare recent dataset evidence against corpus baselines.",
                         "sourceRefIndexes": [1],
                     }
                 ],
                 "experimentPlan": {
                     "researchQuestion": "How can RAG novelty be evaluated?",
+                    "noveltyAngle": "Evaluate freshness against grounded baselines.",
                     "hypotheses": ["Freshness signals improve differentiation."],
+                    "baselines": ["Prior RAG benchmark"],
+                    "procedure": ["Compare against corpus and dataset baselines."],
                     "datasets": ["RAG Evaluation Dataset"],
                     "metrics": ["baseline delta"],
+                    "resources": ["Public dataset and evaluation script"],
                     "risks": ["dataset mismatch"],
+                    "sourceRefIndexes": [1],
                 },
             }
             return {
@@ -373,6 +426,8 @@ def test_bedrock_llm_adapter_maps_source_ref_indexes_only() -> None:
     assert draft.similarWorks["items"][0]["sourceRefs"] == [corpus_ref]
     assert draft.noveltyCandidates["items"][0]["sourceRefs"] == [dataset_ref]
     assert draft.experimentPlan["metrics"] == ["baseline delta"]
+    assert draft.experimentPlan["sourceRefs"] == [dataset_ref]
+    assert "Novelty score" not in draft.experimentPlan["metrics"]
 
 
 def test_worker_completes_when_adapters_are_not_degraded() -> None:
@@ -417,10 +472,16 @@ def test_worker_completes_when_adapters_are_not_degraded() -> None:
                 },
                 experimentPlan={
                     "researchQuestion": topic,
+                    "noveltyAngle": "Evaluate against grounded prior work.",
                     "hypotheses": ["Grounded difference improves novelty."],
+                    "baselines": ["Prior work"],
+                    "procedure": ["Run baseline comparison."],
                     "datasets": ["RAG Evaluation Dataset"],
                     "metrics": ["baseline delta"],
+                    "resources": ["Evaluation script"],
                     "risks": ["dataset mismatch"],
+                    "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                    "sourceRefs": [source_ref],
                 },
             )
 
@@ -504,6 +565,45 @@ def test_worker_loop_acks_successful_message() -> None:
 
     assert acked == [message]
     assert NoveltyService(repo).result(owner_id, job_id).job.state is JobState.DEGRADED
+
+
+def test_worker_loop_acks_missing_job_message_as_stale() -> None:
+    class CountingRepo(InMemoryNoveltyRepository):
+        def __init__(self) -> None:
+            super().__init__()
+            self.commits = 0
+            self.rollbacks = 0
+
+        def commit(self) -> None:
+            self.commits += 1
+
+        def rollback(self) -> None:
+            self.rollbacks += 1
+
+    class Message:
+        def __init__(self, body):
+            self.body = body
+
+    repo = CountingRepo()
+    message = Message({"ownerId": "u1", "jobId": "missing"})
+    acked: list[Message] = []
+    calls = 0
+
+    def receive():
+        nonlocal calls
+        calls += 1
+        return [message] if calls == 1 else []
+
+    run_worker(
+        repo_factory=lambda: repo,
+        receive=receive,
+        ack=acked.append,
+        should_stop=lambda: calls > 1,
+    )
+
+    assert acked == [message]
+    assert repo.commits == 1
+    assert repo.rollbacks == 0
 
 
 def test_worker_loop_commits_and_acks_recorded_failure() -> None:

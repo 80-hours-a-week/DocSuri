@@ -105,7 +105,11 @@ def process_job(
 ) -> None:
     adapters = adapters or NoveltyAdapters()
     service = NoveltyService(repo, observability)
-    job = repo.get_job(owner_id, job_id)
+    try:
+        job = repo.get_job(owner_id, job_id)
+    except KeyError:
+        log.warning("novelty job not found; dropping stale message", extra={"jobId": job_id})
+        return
     if job.cancelled or job.state in TERMINAL_STATES:
         return
     try:
@@ -167,7 +171,8 @@ def process_job(
                 JobState.CHECKING_SIMILARITY,
                 "Checking sentence similarity and AI-style risks",
             )
-            similarity = adapters.similarity.check(owner_id, job.manuscript.model_dump())
+            similarity_ref = {**job.manuscript.model_dump(), "jobId": job_id}
+            similarity = adapters.similarity.check(owner_id, similarity_ref)
             similarity_payload, degraded_reason = _payload_from_bundle(similarity)
             if degraded_reason:
                 degraded_reasons.append(degraded_reason)

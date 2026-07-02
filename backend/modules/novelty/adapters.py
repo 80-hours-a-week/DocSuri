@@ -170,7 +170,6 @@ class ExternalApiSearchClient:
             ("github", self._github_repos),
             ("huggingface", self._huggingface_datasets),
             ("zenodo", self._zenodo_records),
-            ("gdelt", self._gdelt_news),
         ):
             try:
                 items.extend(search(cleaned))
@@ -267,33 +266,6 @@ class ExternalApiSearchClient:
                 keywords=(record.get("metadata") or {}).get("keywords") or [],
             )
             for record in records[: self._per_source]
-        ]
-
-    def _gdelt_news(self, query: str) -> list[dict[str, Any]]:
-        payload = self._json(
-            "https://api.gdeltproject.org/api/v2/doc/doc",
-            params={
-                "query": query,
-                "mode": "artlist",
-                "format": "json",
-                "sort": "datedesc",
-                "timespan": "1week",
-                "maxrecords": self._per_source,
-            },
-        )
-        return [
-            _external_item(
-                source_type="news",
-                source_name="GDELT",
-                title=str(article.get("title") or ""),
-                url=str(article.get("url") or ""),
-                summary=str(article.get("domain") or article.get("sourcecountry") or ""),
-                identifier=str(article.get("url") or ""),
-                publishedAt=article.get("seendate"),
-                domain=article.get("domain"),
-                language=article.get("language"),
-            )
-            for article in payload.get("articles", [])[: self._per_source]
         ]
 
     def _json(
@@ -437,7 +409,7 @@ class BedrockNoveltyLlmClient:
                 refs,
                 fallback=_fallback_novelty_candidates(),
             ),
-            experimentPlan=_llm_experiment_plan(payload.get("experimentPlan"), topic),
+            experimentPlan=_llm_experiment_plan(payload.get("experimentPlan"), topic, refs),
         )
 
     def _invoke_json(self, system: str, user: str) -> dict[str, Any]:
@@ -512,10 +484,15 @@ def _novelty_user_prompt(
         ],
         "experimentPlan": {
             "researchQuestion": "string",
+            "noveltyAngle": "string",
             "hypotheses": ["string"],
+            "baselines": ["string"],
+            "procedure": ["string"],
             "datasets": ["string"],
             "metrics": ["string"],
+            "resources": ["string"],
             "risks": ["string"],
+            "sourceRefIndexes": [0],
         },
     }
     return (
@@ -581,16 +558,41 @@ def _refs_by_indexes(raw: Any, refs: list[dict[str, Any]]) -> list[dict[str, Any
     return selected
 
 
-def _llm_experiment_plan(raw: Any, topic: str) -> dict[str, Any]:
+def _llm_experiment_plan(raw: Any, topic: str, refs: list[dict[str, Any]]) -> dict[str, Any]:
     if not isinstance(raw, dict):
         return _fallback_experiment_plan(topic)
+    source_refs = _refs_by_indexes(raw.get("sourceRefIndexes"), refs)
     return {
         "researchQuestion": str(raw.get("researchQuestion") or topic)[:500],
+        "noveltyAngle": str(
+            raw.get("noveltyAngle")
+            or "Ground the differentiator in retrieved evidence."
+        )[:500],
         "hypotheses": _string_list(raw.get("hypotheses"))
         or ["A grounded differentiator improves over close prior work."],
+        "baselines": _string_list(raw.get("baselines"))
+        or ["Closest retrieved prior-work baseline."],
+        "procedure": _string_list(raw.get("procedure"))
+        or [
+            "Select the closest retrieved prior work.",
+            "Run the same task against the proposed differentiator and baselines.",
+            "Compare metrics and inspect failure cases with source references.",
+        ],
         "datasets": _string_list(raw.get("datasets")) or ["Select from dataset search results."],
-        "metrics": _string_list(raw.get("metrics")) or ["Novelty score", "baseline delta"],
+        "metrics": _string_list(raw.get("metrics")) or [
+            "baseline delta",
+            "evidence coverage",
+            "reproducibility checklist pass rate",
+        ],
+        "resources": _string_list(raw.get("resources"))
+        or ["Retrieved papers, public datasets, and reproducible evaluation scripts."],
         "risks": _string_list(raw.get("risks")) or ["Weak evidence", "dataset mismatch"],
+        "evidenceStatus": (
+            EvidenceStatus.SUPPORTED.value
+            if source_refs
+            else EvidenceStatus.ABSTAINED.value
+        ),
+        "sourceRefs": source_refs,
     }
 
 
@@ -636,14 +638,24 @@ def _fallback_novelty_candidates() -> dict[str, Any]:
 def _fallback_experiment_plan(topic: str) -> dict[str, Any]:
     return {
         "researchQuestion": topic,
+        "noveltyAngle": "Ground the differentiator in retrieved evidence before execution.",
         "hypotheses": ["A differentiator grounded in retrieved evidence improves novelty."],
+        "baselines": ["Closest retrieved prior-work baseline."],
+        "procedure": [
+            "Select the closest retrieved prior work.",
+            "Run the proposed differentiator against the same task and data.",
+            "Compare outcomes and document unsupported assumptions.",
+        ],
         "datasets": ["To be selected from dataset search results."],
         "metrics": [
-            "Novelty score",
             "baseline delta",
+            "evidence coverage",
             "reproducibility checklist pass rate",
         ],
+        "resources": ["Retrieved papers, public datasets, and evaluation scripts."],
         "risks": ["Weak evidence", "dataset mismatch", "unapproved Notion export"],
+        "evidenceStatus": EvidenceStatus.ABSTAINED.value,
+        "sourceRefs": [],
     }
 
 
@@ -678,6 +690,11 @@ class S3ManuscriptSimilarityClient:
             return RetrievalBundle(degradedReason="manuscript objectKey is required")
         if not object_key.startswith(self._prefix):
             return RetrievalBundle(degradedReason="manuscript objectKey is outside novelty prefix")
+        if not object_key.startswith(f"{self._prefix}{owner_id}/"):
+            return RetrievalBundle(degradedReason="manuscript objectKey is outside owner prefix")
+        job_id = str(manuscript_ref.get("jobId") or "")
+        if job_id and not object_key.startswith(f"{self._prefix}{owner_id}/{job_id}/"):
+            return RetrievalBundle(degradedReason="manuscript objectKey is outside job prefix")
         if content_type not in {"text/plain", "text/markdown"}:
             return RetrievalBundle(
                 degradedReason=f"similarity text extraction not configured for {content_type}"
