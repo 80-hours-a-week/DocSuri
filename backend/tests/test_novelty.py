@@ -450,7 +450,7 @@ def test_worker_manuscript_path_records_similarity_risk_degradation() -> None:
         NoveltyJobRequest(
             inputType="manuscript",
             topic="novelty agent draft",
-            manuscript={"fileName": "draft.pdf", "contentType": "application/pdf"},
+            manuscript={"fileName": "draft.md", "contentType": "text/markdown"},
         ),
     )
 
@@ -617,13 +617,40 @@ def test_api_rejects_unsupported_manuscript(monkeypatch) -> None:
             "inputType": "manuscript",
             "topic": "novelty agent",
             "manuscript": {
-                "fileName": "draft.docx",
-                "contentType": "application/vnd.openxmlformats",
+                "fileName": "draft.pdf",
+                "contentType": "application/pdf",
             },
         },
     )
 
     assert resp.status_code == 422
+
+
+def test_api_marks_job_failed_when_sqs_dispatch_fails(monkeypatch) -> None:
+    class BrokenSqs:
+        def send_message(self, **kwargs):
+            del kwargs
+            raise RuntimeError("sqs down")
+
+    import boto3
+
+    principal = _principal()
+    repo = InMemoryNoveltyRepository()
+    monkeypatch.setenv(
+        "DOCSURI_NOVELTY_JOB_QUEUE_URL",
+        "https://sqs.ap-northeast-2.amazonaws.com/123/docsuri-novelty-agent-job-queue",
+    )
+    monkeypatch.setattr(boto3, "client", lambda *_args, **_kwargs: BrokenSqs())
+    client = _client(monkeypatch, principal, repo)
+
+    resp = client.post(
+        "/api/novelty/jobs",
+        json={"inputType": "natural_language", "topic": "adaptive literature review agent"},
+    )
+
+    jobs = repo.list_jobs(principal.user_id)
+    assert resp.status_code == 503
+    assert jobs[0].state is JobState.FAILED
 
 
 def test_api_rejects_blank_topic_before_job_is_created(monkeypatch) -> None:

@@ -33,6 +33,7 @@ _ECS_CLUSTER = "docsuri"
 _ECS_SERVICES = [
     (_ECS_CLUSTER, "docsuri-api"),
     (_ECS_CLUSTER, "docsuri-ingestion"),
+    (_ECS_CLUSTER, "docsuri-novelty-agent-worker"),
     ("docsuri-frontend", "docsuri-frontend"),
 ]
 

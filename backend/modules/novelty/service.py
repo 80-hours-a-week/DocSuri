@@ -52,7 +52,7 @@ class NoveltyService:
         if dto.inputType is InputType.MANUSCRIPT:
             assert dto.manuscript is not None
             if dto.manuscript.contentType not in SUPPORTED_MANUSCRIPT_CONTENT_TYPES:
-                raise ValueError("only PDF, Markdown, and plain text manuscripts are supported")
+                raise ValueError("only Markdown and plain text manuscripts are supported")
         job = self._repo.create_job(
             NoveltyJob(
                 ownerId=owner_id,

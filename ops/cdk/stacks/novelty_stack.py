@@ -124,6 +124,16 @@ class NoveltyStack(Stack):
                 ],
             )
         )
+        task_def.add_to_task_role_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "es:ESHttpGet",
+                    "es:ESHttpHead",
+                    "es:ESHttpPost",
+                ],
+                resources=[f"{opensearch_domain.domain_arn}/*"],
+            )
+        )
         ops_log_group_arn = (
             f"arn:aws:logs:{self.region}:{account}:log-group:/docsuri/ops"
         )

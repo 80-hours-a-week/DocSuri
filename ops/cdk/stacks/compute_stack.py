@@ -608,6 +608,16 @@ class ComputeStack(Stack):
                 ],
             )
         )
+        self.service.task_definition.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "es:ESHttpGet",
+                    "es:ESHttpHead",
+                    "es:ESHttpPost",
+                ],
+                resources=[f"{opensearch_domain.domain_arn}/*"],
+            )
+        )
 
         # Autoscaling: min 1 — max 2 (U3 spec)
         scaling = self.service.service.auto_scale_task_count(min_capacity=1, max_capacity=2)

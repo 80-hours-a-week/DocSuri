@@ -19,6 +19,7 @@ from .models import (
     ExportPreviewResponse,
     InvalidTransitionError,
     JobResultResponse,
+    JobState,
     JobStatusResponse,
     NoveltyChatMessage,
     NoveltyJobListResponse,
@@ -254,14 +255,29 @@ def _dispatch_job(
     if commit is not None:
         commit()
 
-    import boto3
+    try:
+        import boto3
 
-    sqs = boto3.client(
-        "sqs",
-        region_name=os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION", "ap-northeast-2"),
-    )
-    sqs.send_message(
-        QueueUrl=queue_url,
-        MessageBody=json.dumps({"ownerId": owner_id, "jobId": job_id}),
-        DelaySeconds=1,
-    )
+        sqs = boto3.client(
+            "sqs",
+            region_name=(
+                os.getenv("AWS_REGION")
+                or os.getenv("AWS_DEFAULT_REGION", "ap-northeast-2")
+            ),
+        )
+        sqs.send_message(
+            QueueUrl=queue_url,
+            MessageBody=json.dumps({"ownerId": owner_id, "jobId": job_id}),
+            DelaySeconds=1,
+        )
+    except Exception as exc:  # noqa: BLE001 - dispatch failure must not leave a silent queued job.
+        NoveltyService(repo, observability).advance_state(
+            owner_id,
+            job_id,
+            JobState.FAILED,
+            "Novelty analysis dispatch failed",
+            {"error": type(exc).__name__},
+        )
+        if commit is not None:
+            commit()
+        raise HTTPException(status_code=503, detail="novelty job dispatch failed") from exc
