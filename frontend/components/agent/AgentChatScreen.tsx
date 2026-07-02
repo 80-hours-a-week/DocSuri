@@ -155,7 +155,7 @@ export function AgentChatScreen() {
   }
 
   return (
-    <section className={styles.shell} data-testid="agent-chat-screen">
+    <section className={styles.shell} data-mode={state.mode ?? undefined} data-testid="agent-chat-screen">
       <div className={styles.toolbar}>
         <button
           type="button"
@@ -263,12 +263,18 @@ function AgentModePicker({
         onClick={() => onSelect('evidence')}
         disabled={!researchEnabled}
         aria-label={researchEnabled ? 'Research' : 'Research 준비 중'}
+        data-mode="evidence"
         data-testid="agent-mode-evidence"
       >
         <strong>Research</strong>
         <span>작성 논문 근거 형성</span>
       </button>
-      <button type="button" onClick={() => onSelect('novelty')} data-testid="agent-mode-novelty">
+      <button
+        type="button"
+        onClick={() => onSelect('novelty')}
+        data-mode="novelty"
+        data-testid="agent-mode-novelty"
+      >
         <strong>Novelty</strong>
         <span>유사도 검사 및 차별점 추천</span>
       </button>
@@ -304,7 +310,12 @@ function AgentSessionDrawer({
         </div>
         <div className={styles.sessionList}>
           {sessions.map((session) => (
-            <div key={session.id} className={styles.sessionRow} data-active={session.id === activeId}>
+            <div
+              key={session.id}
+              className={styles.sessionRow}
+              data-active={session.id === activeId}
+              data-mode={session.mode}
+            >
               <button type="button" onClick={() => onLoad(session)}>
                 <span>{session.title}</span>
                 <small>
