@@ -299,7 +299,8 @@ def test_external_adapter_queries_public_api_sources() -> None:
 
         def get(self, url: str, *, params: dict, headers: dict):
             self.calls.append((url, params))
-            if "api.github.com" in url:
+            host = urlparse(url).hostname
+            if host == "api.github.com":
                 return Response(
                     {
                         "items": [
@@ -315,7 +316,7 @@ def test_external_adapter_queries_public_api_sources() -> None:
                         ]
                     }
                 )
-            if "huggingface.co" in url:
+            if host == "huggingface.co":
                 return Response(
                     [
                         {
@@ -326,7 +327,7 @@ def test_external_adapter_queries_public_api_sources() -> None:
                         }
                     ]
                 )
-            if "zenodo.org" in url:
+            if host == "zenodo.org":
                 return Response(
                     {
                         "hits": {
