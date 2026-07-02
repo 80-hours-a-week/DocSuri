@@ -39,6 +39,9 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
+  /* Cap the width on wide (desktop) viewports so the input isn't overly long; on a narrow (mobile)
+     row it spans the full `.terms` width (< cap), still without pushing the page sideways. */
+  max-width: 22rem;
   padding: 0.625rem 0.75rem;
   background: var(--color-surface);
   border: 1px solid var(--color-border);

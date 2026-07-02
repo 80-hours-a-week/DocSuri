@@ -221,24 +221,21 @@ function DocTOC({ sections }: { sections: DocSection[] }) {
 
 // ---- tap-to-enlarge (figures / tables / formulas) -----------------------
 
-// Adjacent zoom-in control (D1, BR-U5-21). Previously this wrapped the ENTIRE block
-// (table/figure/formula) in a `role="button"` <div>, which made the whole thing an opaque,
-// unlabeled control to screen readers — the table's rows/cells, the figure's alt text, and
-// the formula were all swallowed into "크게 보기" and lost. Now it is a small standalone
-// <button> rendered NEXT TO the block's own (untouched) markup, so the content stays
-// directly in the accessibility tree and the zoom affordance is just an extra control.
+// Tap-to-enlarge control (D1, BR-U5-21). A transparent overlay covering the whole block: tapping
+// anywhere on the figure/table/formula zooms it — no visible button chrome. It stays a real
+// (labeled, keyboard-focusable) <button>, but a SIBLING overlay rather than a wrapper, so the
+// block's own markup (table rows/cells, figure alt, formula) stays directly in the accessibility
+// tree (never swallowed into the control — the D1 regression).
 function ZoomButton({ onZoom }: { onZoom: () => void }) {
   return (
     <button
       type="button"
-      className={styles.zoomButton}
+      className={styles.zoomTapTarget}
       onClick={onZoom}
       title="탭하면 크게 볼 수 있어요"
       aria-label="크게 보기"
       data-testid="docmodel-zoom-trigger"
-    >
-      <span aria-hidden="true">⤢</span>
-    </button>
+    />
   );
 }
 
