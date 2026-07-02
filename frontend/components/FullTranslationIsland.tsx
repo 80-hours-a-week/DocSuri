@@ -52,6 +52,11 @@ export function FullTranslationIsland({ paperId, version }: { paperId: string; v
           cached={outcome.cached}
           showGlossary
           assetsById={assetsById}
+          // Re-run so a just-applied glossary group reflects: weak terms as a read-time overlay on
+          // the cached base, strong terms as a fresh (cache-miss) re-translation. `run` no-ops only
+          // while the same request is in-flight; here it settled, so this re-issues (or gets
+          // `pending`, which the hook then polls).
+          onRegenerate={retry}
         />
       );
     case 'summary':

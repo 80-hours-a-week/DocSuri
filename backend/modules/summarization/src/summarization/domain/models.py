@@ -331,8 +331,12 @@ class SummaryResultDTO:
                     seen.add(key)
             translated_text = doc.get("fullText") or ""
             for m in SEED_MAPPINGS:  # mapping present (governed reference, en→ko)
-                if m.term_to and m.term_to in translated_text:
+                key = m.term_from.lower()
+                # ``seen`` also guards here so a term that is both kept-as-is and a mapping can't
+                # emit two entries (which would render as two 표준 badges sharing one editor key).
+                if m.term_to and m.term_to in translated_text and key not in seen:
                     std_glossary.append({"term": m.term_from, "translated": m.term_to})
+                    seen.add(key)
             out["translation"] = {
                 "docModel": doc,
                 "keptTerms": list(self.translation.kept_terms),

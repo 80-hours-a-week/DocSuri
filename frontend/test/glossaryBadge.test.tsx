@@ -1,13 +1,15 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { useState } from 'react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TranslationView } from '@/components/TranslationView';
 import { resetMockGlossary } from '@/mocks/summarizeFixtures';
 import type { TranslationVM } from '@/types/generated';
 
-// 개인 용어집 (BR-S4) — drives the real MockTransport end to end through TranslationView, which
-// shows 원어 유지 용어 (other kept terms → weak) first, then 표준 용어 (seed standard: keep-as-is +
-// mapping chips, both → strong; mappings pre-filled). Only one editor opens; outside click dismisses.
+// 개인 용어집 (BR-S4) — drives the real MockTransport through TranslationView, which shows 원어 유지
+// 용어 (kept → weak) then 표준 용어 (seed standard: keep-as-is + mapping chips → strong). Editing a
+// chip only STAGES the rendering (per-paper draft, sessionStorage) — nothing hits the server until the
+// group's own "반영" button is pressed, and the two groups apply independently.
 
 const translation: TranslationVM = {
   docModel: {
@@ -39,14 +41,14 @@ const translation: TranslationVM = {
   ],
 };
 
-// Badges are selected by term (order-independent): encoder (원어 유지 → weak), Transformer / BLEU
-// (표준 → strong).
+// Badges are selected by term (order-independent): encoder (원어 유지 → weak), Transformer / BLEU /
+// attention (표준 → strong).
 const badge = (term: string) => screen.getByRole('button', { name: term });
 
-function renderView() {
+function renderView(onRegenerate: () => void = () => {}) {
   return render(
     <div>
-      <TranslationView translation={translation} showGlossary />
+      <TranslationView translation={translation} showGlossary onRegenerate={onRegenerate} />
       <button type="button" data-testid="outside">
         바깥
       </button>
@@ -57,6 +59,7 @@ function renderView() {
 describe('GlossaryTermBadge (via TranslationView)', () => {
   beforeEach(() => {
     resetMockGlossary();
+    sessionStorage.clear(); // start with no pending draft
   });
 
   it('renders both groups; the mapping is an editable 표준 badge', () => {
@@ -71,14 +74,38 @@ describe('GlossaryTermBadge (via TranslationView)', () => {
 
   it('hides the 표준 용어 group when the paper has no standard terms', () => {
     render(<TranslationView translation={{ ...translation, standardGlossary: [] }} showGlossary />);
-    // No standard terms → the 표준 용어 section (heading + chips) is not rendered at all.
     expect(screen.queryByRole('heading', { name: '표준 용어' })).not.toBeInTheDocument();
-    // 원어 유지 용어 still shows (every kept term is now non-standard).
     expect(screen.getByRole('heading', { name: '원어 유지 용어' })).toBeInTheDocument();
     expect(screen.getAllByTestId('glossary-badge')).toHaveLength(3);
   });
 
-  it('a mapping (attention) pre-fills the standard rendering and saves as strong', async () => {
+  it('no apply button until something is staged', () => {
+    renderView();
+    expect(screen.queryByTestId('glossary-apply-weak')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('glossary-apply-strong')).not.toBeInTheDocument();
+  });
+
+  it('staging a 원어 유지 term stages it and reveals the weak apply button (no server call yet)', async () => {
+    const user = userEvent.setup();
+    renderView();
+
+    await user.click(badge('encoder'));
+    const input = await screen.findByTestId('glossary-input');
+    expect(screen.getByTestId('glossary-save')).toBeDisabled();
+
+    await user.type(input, '인코더');
+    expect(screen.getByTestId('glossary-save')).toBeEnabled();
+    await user.click(screen.getByTestId('glossary-save'));
+
+    // Staged, not saved to the server — the note points at the button, and the chip is now marked.
+    expect(screen.getByTestId('glossary-saved')).toHaveTextContent('지정됨');
+    expect(badge('encoder')).toHaveAttribute('data-saved', 'true');
+    expect(await screen.findByTestId('glossary-apply-weak')).toBeInTheDocument();
+    // Strong group untouched → no strong apply button.
+    expect(screen.queryByTestId('glossary-apply-strong')).not.toBeInTheDocument();
+  });
+
+  it('a mapping (attention) pre-fills the standard rendering, then stages under the strong button', async () => {
     const user = userEvent.setup();
     renderView();
 
@@ -89,28 +116,70 @@ describe('GlossaryTermBadge (via TranslationView)', () => {
     await user.clear(input);
     await user.type(input, '주목');
     await user.click(screen.getByTestId('glossary-save'));
-    await waitFor(() => expect(screen.getByTestId('glossary-saved')).toBeInTheDocument());
-    expect(screen.getByTestId('glossary-saved')).toHaveTextContent('번역을 다시 만드는 중'); // strong
+
+    expect(screen.getByTestId('glossary-saved')).toHaveTextContent('지정됨');
+    expect(await screen.findByTestId('glossary-apply-strong')).toBeInTheDocument();
+    expect(screen.queryByTestId('glossary-apply-weak')).not.toBeInTheDocument();
   });
 
-  it('opens an editor on tap and confirms a weak save', async () => {
+  it('applies ONE group independently: pressing 반영 persists+re-runs only that group', async () => {
     const user = userEvent.setup();
-    renderView();
-    expect(screen.queryByTestId('glossary-input')).not.toBeInTheDocument();
+    const onRegenerate = vi.fn();
+    renderView(onRegenerate);
 
-    await user.click(badge('encoder')); // 원어 유지 → weak
-    const input = await screen.findByTestId('glossary-input');
-    expect(screen.getByTestId('glossary-save')).toBeDisabled();
-
-    await user.type(input, '인코더');
-    expect(screen.getByTestId('glossary-save')).toBeEnabled();
-
+    // Stage one weak (encoder) and one strong (Transformer) edit → both apply buttons appear.
+    await user.click(badge('encoder'));
+    await user.type(await screen.findByTestId('glossary-input'), '인코더');
     await user.click(screen.getByTestId('glossary-save'));
-    await waitFor(() => expect(screen.getByTestId('glossary-saved')).toBeInTheDocument());
-    expect(screen.getByTestId('glossary-saved')).toHaveTextContent('바로 반영');
-    // Personalized → the chip is now marked (amber), showing only the term (no inline rendering).
-    expect(badge('encoder')).toHaveAttribute('data-saved', 'true');
-    expect(badge('encoder')).toHaveTextContent('encoder');
+
+    await user.click(badge('Transformer'));
+    await user.type(await screen.findByTestId('glossary-input'), '트랜스포머');
+    await user.click(screen.getByTestId('glossary-save'));
+
+    expect(await screen.findByTestId('glossary-apply-weak')).toBeInTheDocument();
+    expect(await screen.findByTestId('glossary-apply-strong')).toBeInTheDocument();
+
+    // Apply ONLY the weak group.
+    await user.click(screen.getByTestId('glossary-apply-weak'));
+    await waitFor(() => expect(onRegenerate).toHaveBeenCalledTimes(1));
+    // Weak button gone (its edit applied); the strong edit is still pending, its button remains.
+    await waitFor(() =>
+      expect(screen.queryByTestId('glossary-apply-weak')).not.toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('glossary-apply-strong')).toBeInTheDocument();
+  });
+
+  it('applies in one press even though the re-run unmounts the view (no double-press)', async () => {
+    const user = userEvent.setup();
+    // Mirrors FullTranslationIsland: applying re-runs the translation, which swaps this view out for
+    // a loading surface (unmount) and back. The applied edit must already be cleared from storage,
+    // or it rehydrates on remount and the button reappears — forcing a pointless second press.
+    function Harness() {
+      const [loading, setLoading] = useState(false);
+      return loading ? (
+        <button type="button" data-testid="remount" onClick={() => setLoading(false)}>
+          done
+        </button>
+      ) : (
+        <TranslationView
+          translation={translation}
+          showGlossary
+          onRegenerate={() => setLoading(true)}
+        />
+      );
+    }
+    render(<Harness />);
+
+    await user.click(badge('encoder'));
+    await user.type(await screen.findByTestId('glossary-input'), '인코더');
+    await user.click(screen.getByTestId('glossary-save'));
+    await user.click(await screen.findByTestId('glossary-apply-weak'));
+
+    // Re-run unmounted the view; remount as if the fresh translation arrived.
+    await user.click(await screen.findByTestId('remount'));
+    await waitFor(() =>
+      expect(screen.queryByTestId('glossary-apply-weak')).not.toBeInTheDocument(),
+    );
   });
 
   it('keeps only one editor open at a time', async () => {
@@ -136,33 +205,71 @@ describe('GlossaryTermBadge (via TranslationView)', () => {
     await waitFor(() => expect(screen.queryByTestId('glossary-input')).not.toBeInTheDocument());
   });
 
-  it('a 표준 용어 saves as strong (re-translation)', async () => {
-    const user = userEvent.setup();
-    renderView();
-
-    // 'Transformer' is a 표준 용어 (keep-as-is) → saving it is a strong, re-translated override.
-    await user.click(badge('Transformer'));
-    await user.type(await screen.findByTestId('glossary-input'), '트랜스포머');
-    await user.click(screen.getByTestId('glossary-save'));
-    await waitFor(() => expect(screen.getByTestId('glossary-saved')).toBeInTheDocument());
-    expect(screen.getByTestId('glossary-saved')).toHaveTextContent('번역을 다시 만드는 중');
-
-    await user.click(screen.getByTestId('outside'));
-    expect(badge('Transformer')).toHaveAttribute('data-saved', 'true');
-  });
-
-  it('pre-fills a previously saved rendering when reopened', async () => {
+  it('auto-dismisses the staged confirmation after a moment', async () => {
     const user = userEvent.setup();
     renderView();
 
     await user.click(badge('encoder'));
     await user.type(await screen.findByTestId('glossary-input'), '인코더');
     await user.click(screen.getByTestId('glossary-save'));
-    await waitFor(() => expect(screen.getByTestId('glossary-saved')).toBeInTheDocument());
+    expect(screen.getByTestId('glossary-saved')).toBeInTheDocument();
+
+    // The editor closes itself shortly after (the durable cue is the apply button, which stays).
+    await waitFor(() => expect(screen.queryByTestId('glossary-saved')).not.toBeInTheDocument(), {
+      timeout: 4000,
+    });
+    expect(screen.getByTestId('glossary-apply-weak')).toBeInTheDocument();
+  });
+
+  it('un-stages a pending edit via 지우기 (removes the edit and its button)', async () => {
+    const user = userEvent.setup();
+    renderView();
+
+    await user.click(badge('encoder'));
+    await user.type(await screen.findByTestId('glossary-input'), '인코더');
+    await user.click(screen.getByTestId('glossary-save'));
+    expect(await screen.findByTestId('glossary-apply-weak')).toBeInTheDocument();
+    expect(badge('encoder')).toHaveAttribute('data-saved', 'true');
+
+    // Reopen the (pending) badge → the editor now offers 지우기; clearing un-stages it.
+    await user.click(screen.getByTestId('outside'));
+    await user.click(badge('encoder'));
+    await user.click(await screen.findByTestId('glossary-clear'));
+
+    await waitFor(() =>
+      expect(screen.queryByTestId('glossary-apply-weak')).not.toBeInTheDocument(),
+    );
+    expect(badge('encoder')).not.toHaveAttribute('data-saved'); // reverted to unmarked
+  });
+
+  it('pre-fills a staged rendering when the badge is reopened', async () => {
+    const user = userEvent.setup();
+    renderView();
+
+    await user.click(badge('encoder'));
+    await user.type(await screen.findByTestId('glossary-input'), '인코더');
+    await user.click(screen.getByTestId('glossary-save'));
 
     await user.click(screen.getByTestId('outside'));
     await user.click(badge('encoder'));
     const reopened = (await screen.findByTestId('glossary-input')) as HTMLInputElement;
     expect(reopened.value).toBe('인코더');
+  });
+
+  it('keeps the pending edit and its button across a remount (sessionStorage)', async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderView();
+
+    await user.click(badge('encoder'));
+    await user.type(await screen.findByTestId('glossary-input'), '인코더');
+    await user.click(screen.getByTestId('glossary-save'));
+    expect(await screen.findByTestId('glossary-apply-weak')).toBeInTheDocument();
+
+    // Simulate leaving and re-entering the page — the draft rehydrates from sessionStorage.
+    unmount();
+    render(<TranslationView translation={translation} showGlossary onRegenerate={() => {}} />);
+
+    expect(await screen.findByTestId('glossary-apply-weak')).toBeInTheDocument();
+    expect(badge('encoder')).toHaveAttribute('data-saved', 'true'); // still marked from the draft
   });
 });

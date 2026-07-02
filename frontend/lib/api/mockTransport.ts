@@ -24,6 +24,7 @@ import {
   assetsResponse,
   mockUpsertGlossaryTerm,
   mockListGlossaryTerms,
+  withWeakOverlay,
 } from '@/mocks/summarizeFixtures';
 import { mockPaperMeta } from '@/mocks/paperFixtures';
 import { mockSignup, mockLogin, mockLogout, mockCurrentSession } from '@/mocks/accountFixtures';
@@ -144,7 +145,10 @@ export class MockTransport implements Transport {
       if (body.task === 'translate') {
         return {
           status: 200,
-          body: body.scope === 'full' ? fullTranslationResponse : abstractTranslationResponse,
+          body:
+            body.scope === 'full'
+              ? withWeakOverlay(fullTranslationResponse) // reflect applied 원어 유지 terms in dev
+              : abstractTranslationResponse,
         };
       }
       return {

@@ -75,16 +75,19 @@
   cursor: not-allowed;
 }
 
+/* Un-stage a pending edit — secondary (text) button so it reads as the lesser action next to 저장. */
+.clear {
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.5rem;
+  color: var(--color-danger);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
 .savedNote {
   flex: 1 1 100%;
   font-size: 0.8125rem;
   line-height: 1.5;
   color: var(--color-accent);
-  white-space: nowrap;
-}
-
-.error {
-  flex-basis: 100%;
-  font-size: 0.75rem;
-  color: var(--color-danger);
 }
