@@ -428,6 +428,8 @@ export class ApiClient {
       path: '/api/summarize',
       body: req,
       idempotent: true,
+      // dedup yes (BR-U5-18), retry no — a cost-bearing LLM POST must never double-bill (P-R1, NFR-C1).
+      retryable: false,
     });
     if (res.status === 200 || res.status === 400) {
       return classifySummarizeResponse(res.body);
@@ -1100,12 +1102,12 @@ export class ApiClient {
   }
 
   private async sendWithPolicy(req: TransportRequest): Promise<TransportResponse> {
-    const attempts = req.idempotent ? 2 : 1;
-    const stop = recordPath(req.path);
+    const attempts = (req.retryable ?? req.idempotent) ? 2 : 1;
+    const stop = recordPath(req.path.split('?')[0]);
     for (let i = 0; i < attempts; i++) {
       const lastAttempt = i === attempts - 1;
       try {
-        const res = await this.withTimeout(this.transport.send(req));
+        const res = await this.withTimeout((signal) => this.transport.send({ ...req, signal }));
         if (res.status >= 500 && !lastAttempt) {
           await delay(this.retryBackoffMs * (i + 1));
           continue;
@@ -1126,10 +1128,16 @@ export class ApiClient {
     throw new UserFacingError('network');
   }
 
-  private withTimeout(p: Promise<TransportResponse>): Promise<TransportResponse> {
+  private withTimeout(
+    send: (signal: AbortSignal) => Promise<TransportResponse>,
+  ): Promise<TransportResponse> {
+    const controller = new AbortController();
     return new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error('timeout')), this.timeoutMs);
-      p.then(
+      const t = setTimeout(() => {
+        controller.abort();
+        reject(new Error('timeout'));
+      }, this.timeoutMs);
+      send(controller.signal).then(
         (v) => {
           clearTimeout(t);
           resolve(v);
