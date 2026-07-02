@@ -291,6 +291,7 @@ def main(argv: list[str] | None = None) -> int:
         "sqs",
         region_name=os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION", "ap-northeast-2"),
     )
+    observability, cost_guard, telemetry_store = _build_worker_ops()
 
     def receive() -> list[_Message]:
         resp = sqs.receive_message(
@@ -308,15 +309,35 @@ def main(argv: list[str] | None = None) -> int:
             sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=message.receipt_handle)
 
     log.info("novelty worker started; polling queue")
-    run_worker(
-        repo_factory=repo_factory,
-        receive=receive,
-        ack=ack,
-        should_stop=_shutdown.is_set,
-        adapters=build_default_novelty_adapters(),
-    )
+    try:
+        run_worker(
+            repo_factory=repo_factory,
+            receive=receive,
+            ack=ack,
+            should_stop=_shutdown.is_set,
+            adapters=build_default_novelty_adapters(
+                observability=observability,
+                cost_guard=cost_guard,
+            ),
+            observability=observability,
+        )
+    finally:
+        close = getattr(telemetry_store, "close", None)
+        if close is not None:
+            close()
     log.info("novelty worker shut down gracefully")
     return 0
+
+
+def _build_worker_ops() -> tuple[Any, Any, Any]:
+    try:
+        from backend.app import _build_observability, _build_ops_dashboard_service
+    except ImportError:
+        return None, None, None
+
+    observability, telemetry_store = _build_observability()
+    _, cost_guard, _, _ = _build_ops_dashboard_service(telemetry_store)
+    return observability, cost_guard, telemetry_store
 
 
 if __name__ == "__main__":

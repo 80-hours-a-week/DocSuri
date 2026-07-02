@@ -116,9 +116,33 @@ class NoveltyStack(Stack):
             iam.PolicyStatement(
                 actions=["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
                 resources=[
+                    "arn:aws:bedrock:::foundation-model/anthropic.*",
                     "arn:aws:bedrock:*::foundation-model/anthropic.*",
+                    "arn:aws:bedrock:::foundation-model/cohere.embed-v4:0",
                     "arn:aws:bedrock:*::foundation-model/cohere.embed-v4:0",
                     f"arn:aws:bedrock:{self.region}:{account}:inference-profile/*",
                 ],
+            )
+        )
+        ops_log_group_arn = (
+            f"arn:aws:logs:{self.region}:{account}:log-group:/docsuri/ops"
+        )
+        task_def.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["cloudwatch:PutMetricData"],
+                resources=["*"],
+                conditions={"StringEquals": {"cloudwatch:namespace": "DocSuri/Production"}},
+            )
+        )
+        task_def.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["logs:CreateLogGroup"],
+                resources=[ops_log_group_arn],
+            )
+        )
+        task_def.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["logs:CreateLogStream", "logs:DescribeLogStreams", "logs:PutLogEvents"],
+                resources=[f"{ops_log_group_arn}:*"],
             )
         )
