@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from io import BytesIO
+from urllib.parse import urlparse
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -239,7 +240,9 @@ def test_similarity_adapter_reads_text_manuscript_and_queries_corpus() -> None:
 
     assert result.evidenceStatus is EvidenceStatus.SUPPORTED
     assert any(item["riskType"] == "sentence_similarity" for item in result.items)
-    assert result.items[-1]["sourceRefs"][0]["url"].startswith("https://arxiv.org")
+    parsed_url = urlparse(result.items[-1]["sourceRefs"][0]["url"])
+    assert parsed_url.scheme == "https"
+    assert parsed_url.hostname == "arxiv.org"
 
 
 def test_similarity_adapter_rejects_cross_owner_object_key() -> None:
