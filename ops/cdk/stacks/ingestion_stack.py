@@ -269,9 +269,13 @@ class IngestionStack(Stack):
                 # into the image via the [assets] extra).
                 "DOCSURI_MULTIMODAL_ASSETS_ENABLED": "true",
                 # Throttle rebuild drains so write pressure does not starve live search.
+                # ponytail: loop delay 3→0 — the arXiv adapter's ~1-req/3s politeness limiter
+                # already paces every job (single worker, max_capacity=1), so the extra 3s/msg
+                # sleep only added ~1 day to a 31.8k-job drain. Restore >0 only if a non-arXiv
+                # job mix ever makes the loop spin hot.
                 "DOCSURI_WORKER_QUEUE_MODE": "bulk",
                 "DOCSURI_WORKER_MAX_MESSAGES": "1",
-                "DOCSURI_WORKER_LOOP_DELAY_SECONDS": "3",
+                "DOCSURI_WORKER_LOOP_DELAY_SECONDS": "0",
             },
             secrets={
                 "PGPASSWORD": ecs.Secret.from_secrets_manager(db_secret, "password"),

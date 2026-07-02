@@ -21,7 +21,7 @@ type Tab = 'interest' | 'recent' | 'saved' | 'history';
 
 const TABS: { key: Tab; label: string; testid: string }[] = [
   { key: 'interest', label: '관심 논문', testid: 'mypage-library-tab-interest' },
-  { key: 'recent', label: '최근 본', testid: 'mypage-library-tab-recent' },
+  { key: 'recent', label: '최근 본 논문', testid: 'mypage-library-tab-recent' },
   { key: 'saved', label: '저장한 검색', testid: 'mypage-library-tab-saved' },
   { key: 'history', label: '검색 이력', testid: 'mypage-library-tab-history' },
 ];

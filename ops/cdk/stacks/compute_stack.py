@@ -159,7 +159,8 @@ class ComputeStack(Stack):
             queue_arn=f"arn:aws:sqs:{self.region}:{self.account}:docsuri-novelty-agent-job-queue",
             queue_url=f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-novelty-agent-job-queue",
         )
-        novelty_dlq.metric_approximate_number_of_messages_visible().create_alarm(
+        novelty_dlq_visible_metric = novelty_dlq.metric_approximate_number_of_messages_visible()
+        novelty_dlq_alarm = novelty_dlq_visible_metric.create_alarm(
             self,
             "NoveltyDlqAlarm",
             threshold=0,
@@ -760,10 +761,11 @@ class ComputeStack(Stack):
                 value="set -c ops_alert_email=<addr>[,<addr>...] so alarms + budget page a human",
             )
 
-        novelty_queue_age_alarm = self.novelty_queue.metric_approximate_age_of_oldest_message(
+        novelty_queue_age_metric = self.novelty_queue.metric_approximate_age_of_oldest_message(
             period=Duration.minutes(5),
             statistic="Maximum",
-        ).create_alarm(
+        )
+        novelty_queue_age_alarm = novelty_queue_age_metric.create_alarm(
             self,
             "NoveltyQueueAgeAlarm",
             threshold=900,
@@ -775,11 +777,12 @@ class ComputeStack(Stack):
         novelty_queue_age_alarm.add_alarm_action(cw_actions.SnsAction(ops_alerts))
 
         # SLO 1 — API availability: backend 5xx. Native ALB metric, no app instrumentation needed.
-        api_5xx_alarm = self.service.target_group.metrics.http_code_target(
+        api_5xx_metric = self.service.target_group.metrics.http_code_target(
             elbv2.HttpCodeTarget.TARGET_5XX_COUNT,
             period=Duration.minutes(5),
             statistic="Sum",
-        ).create_alarm(
+        )
+        api_5xx_alarm = api_5xx_metric.create_alarm(
             self, "Api5xxAlarm",
             threshold=10,  # tune: >10 backend 5xx in 5 min
             evaluation_periods=1,
@@ -790,10 +793,11 @@ class ComputeStack(Stack):
         api_5xx_alarm.add_alarm_action(cw_actions.SnsAction(ops_alerts))
 
         # SLO 2 — search latency: ALB target p95 response time. Native metric.
-        api_latency_alarm = self.service.target_group.metrics.target_response_time(
+        api_latency_metric = self.service.target_group.metrics.target_response_time(
             period=Duration.minutes(5),
             statistic="p95",
-        ).create_alarm(
+        )
+        api_latency_alarm = api_latency_metric.create_alarm(
             self, "ApiLatencyP95Alarm",
             threshold=2,  # seconds; tune to the search SLO
             evaluation_periods=3,  # 3×5min sustained → avoid paging on a single slow window
@@ -803,12 +807,13 @@ class ComputeStack(Stack):
         )
         api_latency_alarm.add_alarm_action(cw_actions.SnsAction(ops_alerts))
 
-        personalization_purge_alarm = cloudwatch.Metric(
+        personalization_purge_metric = cloudwatch.Metric(
             namespace="DocSuri/Production",
             metric_name="personalization.retention_purge_failure",
             period=Duration.minutes(5),
             statistic="Sum",
-        ).create_alarm(
+        )
+        personalization_purge_alarm = personalization_purge_metric.create_alarm(
             self,
             "PersonalizationRetentionPurgeFailureAlarm",
             threshold=0,
@@ -827,12 +832,13 @@ class ComputeStack(Stack):
         # support SEARCH (dimension wildcards) — the dimensionless total catches every error_type
         # (Resend RuntimeError, network exceptions, SES boto errors) in one alarm. threshold=0 →
         # any failure in a 5-min window pages ops instead of failing silently.
-        email_failure_alarm = cloudwatch.Metric(
+        email_failure_metric = cloudwatch.Metric(
             namespace="DocSuri/Production",
             metric_name="EmailDeliveryFailureSignal",
             period=Duration.minutes(5),
             statistic="Sum",
-        ).create_alarm(
+        )
+        email_failure_alarm = email_failure_metric.create_alarm(
             self,
             "EmailDeliveryFailureAlarm",
             threshold=0,
@@ -875,3 +881,153 @@ class ComputeStack(Stack):
                     ),
                 ],
             )
+
+        # One on-call view for the alarmed signals. Cross-stack alarm names are generated, so the
+        # queue widgets use the stable queue names and the same thresholds as their alarms.
+        dashboard = cloudwatch.Dashboard(
+            self,
+            "OpsDashboard",
+            dashboard_name="DocSuri-Production-Ops",
+        )
+        ingestion_queue_age_metric = cloudwatch.Metric(
+            namespace="AWS/SQS",
+            metric_name="ApproximateAgeOfOldestMessage",
+            dimensions_map={"QueueName": "docsuri-ingestion-queue"},
+            period=Duration.minutes(5),
+            statistic="Maximum",
+        )
+        docmodel_queue_age_metric = cloudwatch.Metric(
+            namespace="AWS/SQS",
+            metric_name="ApproximateAgeOfOldestMessage",
+            dimensions_map={"QueueName": "docsuri-docmodel-queue"},
+            period=Duration.minutes(5),
+            statistic="Maximum",
+        )
+        summary_queue_age_metric = cloudwatch.Metric(
+            namespace="AWS/SQS",
+            metric_name="ApproximateAgeOfOldestMessage",
+            dimensions_map={"QueueName": "docsuri-summary-job-queue"},
+            period=Duration.minutes(5),
+            statistic="Maximum",
+        )
+        ingestion_queue_visible_metric = cloudwatch.Metric(
+            namespace="AWS/SQS",
+            metric_name="ApproximateNumberOfMessagesVisible",
+            dimensions_map={"QueueName": "docsuri-ingestion-queue"},
+            period=Duration.minutes(5),
+            statistic="Maximum",
+        )
+        docmodel_queue_visible_metric = cloudwatch.Metric(
+            namespace="AWS/SQS",
+            metric_name="ApproximateNumberOfMessagesVisible",
+            dimensions_map={"QueueName": "docsuri-docmodel-queue"},
+            period=Duration.minutes(5),
+            statistic="Maximum",
+        )
+        summary_queue_visible_metric = cloudwatch.Metric(
+            namespace="AWS/SQS",
+            metric_name="ApproximateNumberOfMessagesVisible",
+            dimensions_map={"QueueName": "docsuri-summary-job-queue"},
+            period=Duration.minutes(5),
+            statistic="Maximum",
+        )
+
+        dashboard.add_widgets(
+            cloudwatch.TextWidget(
+                markdown=(
+                    "# DocSuri production ops\n"
+                    "Alarm tiles show the current SNS-paged signals. Graphs below use the same "
+                    "CloudWatch metrics and thresholds for quick triage."
+                ),
+                width=24,
+                height=2,
+            )
+        )
+        dashboard.add_widgets(
+            cloudwatch.AlarmWidget(title="API 5xx", alarm=api_5xx_alarm, width=8, height=4),
+            cloudwatch.AlarmWidget(
+                title="API p95 latency", alarm=api_latency_alarm, width=8, height=4
+            ),
+            cloudwatch.AlarmWidget(
+                title="Email delivery", alarm=email_failure_alarm, width=8, height=4
+            ),
+        )
+        dashboard.add_widgets(
+            cloudwatch.AlarmWidget(
+                title="Novelty queue age", alarm=novelty_queue_age_alarm, width=8, height=4
+            ),
+            cloudwatch.AlarmWidget(title="Novelty DLQ", alarm=novelty_dlq_alarm, width=8, height=4),
+            cloudwatch.AlarmWidget(
+                title="Retention purge", alarm=personalization_purge_alarm, width=8, height=4
+            ),
+        )
+        dashboard.add_widgets(
+            cloudwatch.GraphWidget(
+                title="API 5xx count",
+                left=[api_5xx_metric],
+                left_annotations=[
+                    cloudwatch.HorizontalAnnotation(value=10, label="alarm: >10 / 5m")
+                ],
+                width=12,
+                height=6,
+            ),
+            cloudwatch.GraphWidget(
+                title="API p95 latency",
+                left=[api_latency_metric],
+                left_annotations=[
+                    cloudwatch.HorizontalAnnotation(value=2, label="alarm: >2s for 15m")
+                ],
+                width=12,
+                height=6,
+            ),
+        )
+        dashboard.add_widgets(
+            cloudwatch.GraphWidget(
+                title="Queue age SLOs",
+                left=[
+                    novelty_queue_age_metric,
+                    ingestion_queue_age_metric,
+                    docmodel_queue_age_metric,
+                    summary_queue_age_metric,
+                ],
+                left_annotations=[
+                    cloudwatch.HorizontalAnnotation(value=300, label="docmodel: 5m"),
+                    cloudwatch.HorizontalAnnotation(value=900, label="novelty/summary: 15m"),
+                    cloudwatch.HorizontalAnnotation(value=1800, label="ingestion: 30m"),
+                ],
+                width=24,
+                height=6,
+            )
+        )
+        dashboard.add_widgets(
+            cloudwatch.GraphWidget(
+                title="Queue backlog and DLQ",
+                left=[
+                    self.novelty_queue.metric_approximate_number_of_messages_visible(),
+                    novelty_dlq_visible_metric,
+                    ingestion_queue_visible_metric,
+                    docmodel_queue_visible_metric,
+                    summary_queue_visible_metric,
+                ],
+                width=12,
+                height=6,
+            ),
+            cloudwatch.GraphWidget(
+                title="Application failure signals",
+                left=[email_failure_metric, personalization_purge_metric],
+                left_annotations=[cloudwatch.HorizontalAnnotation(value=0, label="alarm: >0")],
+                width=12,
+                height=6,
+            ),
+        )
+        dashboard.add_widgets(
+            cloudwatch.TextWidget(
+                markdown=(
+                    "## Cost alert\n"
+                    "AWS Budget remains the source of truth: monthly cap $1600, email alert at "
+                    "80% actual spend ($1280)."
+                ),
+                width=24,
+                height=2,
+            )
+        )
