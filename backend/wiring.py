@@ -548,6 +548,7 @@ def _mount_novelty(app: FastAPI, settings: Settings, result: MountResult) -> Non
         NoveltyAdapters,
         U2FullSearchCorpusRetrievalClient,
         build_external_adapter,
+        build_llm_adapter,
         build_similarity_adapter,
     )
     from backend.modules.novelty.repository import (
@@ -591,6 +592,7 @@ def _mount_novelty(app: FastAPI, settings: Settings, result: MountResult) -> Non
             corpus=corpus,
             external=build_external_adapter(),
             similarity=build_similarity_adapter(corpus),
+            llm=build_llm_adapter(),
         )
         log.info("app-shell: novelty wired U2 full-search corpus adapter")
     for router in novelty.routers:

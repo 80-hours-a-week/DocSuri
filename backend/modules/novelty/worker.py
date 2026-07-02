@@ -142,6 +142,10 @@ def process_job(
             external_payload,
         )
 
+        draft = adapters.llm.draft(topic=job.topic, corpus=corpus, external=external)
+        if draft.degradedReason:
+            degraded_reasons.append(draft.degradedReason)
+
         service.advance_state(
             owner_id,
             job_id,
@@ -153,11 +157,7 @@ def process_job(
             job_id,
             ArtifactKind.SIMILAR_WORKS,
             "Similar completed work",
-            {
-                "items": [],
-                "evidenceStatus": EvidenceStatus.ABSTAINED.value,
-                "sourceRefs": [],
-            },
+            draft.similarWorks,
         )
 
         if job.inputType is InputType.MANUSCRIPT and job.manuscript is not None:
@@ -190,15 +190,7 @@ def process_job(
             job_id,
             ArtifactKind.NOVELTY_CANDIDATES,
             "Novelty candidates",
-            {
-                "items": [
-                    {
-                        "title": "Add an evidence-backed differentiator after corpus retrieval",
-                        "evidenceStatus": EvidenceStatus.ABSTAINED.value,
-                        "sourceRefs": [],
-                    }
-                ]
-            },
+            draft.noveltyCandidates,
         )
 
         service.advance_state(
@@ -212,17 +204,7 @@ def process_job(
             job_id,
             ArtifactKind.EXPERIMENT_PLAN,
             "Experiment plan",
-            {
-                "researchQuestion": job.topic,
-                "hypotheses": ["A differentiator grounded in retrieved evidence improves novelty."],
-                "datasets": ["To be selected from dataset search results."],
-                "metrics": [
-                    "Novelty score",
-                    "baseline delta",
-                    "reproducibility checklist pass rate",
-                ],
-                "risks": ["Weak evidence", "dataset mismatch", "unapproved Notion export"],
-            },
+            draft.experimentPlan,
         )
         if degraded_reasons:
             service.advance_state(

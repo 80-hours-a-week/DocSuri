@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from io import BytesIO
 from uuid import uuid4
 
@@ -12,8 +13,10 @@ from backend.config import Settings
 from backend.modules.accounts.models import Principal, UserRole
 from backend.modules.novelty import controller
 from backend.modules.novelty.adapters import (
+    BedrockNoveltyLlmClient,
     ExternalApiSearchClient,
     NoveltyAdapters,
+    NoveltyLlmDraft,
     RetrievalBundle,
     S3ManuscriptSimilarityClient,
     U2FullSearchCorpusRetrievalClient,
@@ -307,14 +310,119 @@ def test_external_adapter_queries_public_api_sources() -> None:
     assert all(item["sourceRefs"] for item in result.items)
 
 
+def test_bedrock_llm_adapter_maps_source_ref_indexes_only() -> None:
+    class FakeBedrock:
+        def invoke_model(self, **kwargs):
+            body = json.loads(kwargs["body"].decode("utf-8"))
+            assert body["anthropic_version"] == "bedrock-2023-05-31"
+            payload = {
+                "similarWorks": [
+                    {
+                        "title": "Prior RAG benchmark",
+                        "summary": "Grounded baseline.",
+                        "sourceRefIndexes": [0],
+                        "url": "https://invented.example/not-used",
+                    }
+                ],
+                "noveltyCandidates": [
+                    {
+                        "title": "Freshness-aware evaluation",
+                        "rationale": "Compare recent news evidence against corpus baselines.",
+                        "sourceRefIndexes": [1],
+                    }
+                ],
+                "experimentPlan": {
+                    "researchQuestion": "How can RAG novelty be evaluated?",
+                    "hypotheses": ["Freshness signals improve differentiation."],
+                    "datasets": ["RAG Evaluation Dataset"],
+                    "metrics": ["baseline delta"],
+                    "risks": ["dataset mismatch"],
+                },
+            }
+            return {
+                "body": BytesIO(
+                    json.dumps(
+                        {"content": [{"type": "text", "text": json.dumps(payload)}]}
+                    ).encode("utf-8")
+                )
+            }
+
+    corpus_ref = {
+        "type": "url",
+        "identifier": "2401.00001",
+        "title": "Prior RAG benchmark",
+        "url": "https://arxiv.org/abs/2401.00001",
+    }
+    dataset_ref = {
+        "type": "url",
+        "identifier": "10.5281/zenodo.123",
+        "title": "RAG Evaluation Dataset",
+        "url": "https://zenodo.org/records/123",
+    }
+
+    draft = BedrockNoveltyLlmClient(
+        model_id="global.anthropic.claude-sonnet-4-6",
+        client=FakeBedrock(),
+    ).draft(
+        topic="RAG novelty evaluation",
+        corpus=RetrievalBundle(items=[{"title": "Prior", "sourceRefs": [corpus_ref]}]),
+        external=RetrievalBundle(items=[{"title": "Dataset", "sourceRefs": [dataset_ref]}]),
+    )
+
+    assert draft.degradedReason is None
+    assert draft.similarWorks["items"][0]["sourceRefs"] == [corpus_ref]
+    assert draft.noveltyCandidates["items"][0]["sourceRefs"] == [dataset_ref]
+    assert draft.experimentPlan["metrics"] == ["baseline delta"]
+
+
 def test_worker_completes_when_adapters_are_not_degraded() -> None:
+    source_ref = {
+        "type": "url",
+        "identifier": "2401.00001",
+        "url": "https://arxiv.org/abs/2401.00001",
+    }
+
     class CleanCorpus:
         def full_search(self, owner_id: str, query: str) -> RetrievalBundle:
-            return RetrievalBundle(items=[{"title": query}])
+            return RetrievalBundle(items=[{"title": query, "sourceRefs": [source_ref]}])
 
     class CleanExternal:
         def search(self, query: str) -> RetrievalBundle:
-            return RetrievalBundle(items=[{"title": query}])
+            return RetrievalBundle(items=[{"title": query, "sourceRefs": [source_ref]}])
+
+    class CleanLlm:
+        def draft(self, *, topic, corpus, external) -> NoveltyLlmDraft:
+            return NoveltyLlmDraft(
+                similarWorks={
+                    "items": [
+                        {
+                            "title": "Prior work",
+                            "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                            "sourceRefs": [source_ref],
+                        }
+                    ],
+                    "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                    "sourceRefs": [source_ref],
+                },
+                noveltyCandidates={
+                    "items": [
+                        {
+                            "title": "Novel candidate",
+                            "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                            "sourceRefs": [source_ref],
+                        }
+                    ],
+                    "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                    "sourceRefs": [source_ref],
+                },
+                experimentPlan={
+                    "researchQuestion": topic,
+                    "hypotheses": ["Grounded difference improves novelty."],
+                    "datasets": ["RAG Evaluation Dataset"],
+                    "metrics": ["baseline delta"],
+                    "risks": ["dataset mismatch"],
+                },
+            )
 
     repo = InMemoryNoveltyRepository()
     _, owner_id, job_id = _service_job(repo)
@@ -323,7 +431,11 @@ def test_worker_completes_when_adapters_are_not_degraded() -> None:
         repo,
         owner_id,
         job_id,
-        adapters=NoveltyAdapters(corpus=CleanCorpus(), external=CleanExternal()),
+        adapters=NoveltyAdapters(
+            corpus=CleanCorpus(),
+            external=CleanExternal(),
+            llm=CleanLlm(),
+        ),
     )
 
     assert NoveltyService(repo).result(owner_id, job_id).job.state is JobState.COMPLETED

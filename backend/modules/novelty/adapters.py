@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 from dataclasses import dataclass, field
@@ -28,6 +29,24 @@ class ExternalSearchPort(Protocol):
 
 class SimilarityPort(Protocol):
     def check(self, owner_id: str, manuscript_ref: dict[str, Any]) -> RetrievalBundle: ...
+
+
+@dataclass(frozen=True)
+class NoveltyLlmDraft:
+    similarWorks: dict[str, Any]
+    noveltyCandidates: dict[str, Any]
+    experimentPlan: dict[str, Any]
+    degradedReason: str | None = None
+
+
+class NoveltyLlmPort(Protocol):
+    def draft(
+        self,
+        *,
+        topic: str,
+        corpus: RetrievalBundle,
+        external: RetrievalBundle,
+    ) -> NoveltyLlmDraft: ...
 
 
 class NotionExportPort(Protocol):
@@ -358,6 +377,286 @@ class NoopSimilarityClient:
         return RetrievalBundle(items=[], degradedReason="similarity adapter not configured")
 
 
+class NoopNoveltyLlmClient:
+    def draft(
+        self,
+        *,
+        topic: str,
+        corpus: RetrievalBundle,
+        external: RetrievalBundle,
+    ) -> NoveltyLlmDraft:
+        return NoveltyLlmDraft(
+            similarWorks=_fallback_similar_works(),
+            noveltyCandidates=_fallback_novelty_candidates(),
+            experimentPlan=_fallback_experiment_plan(topic),
+            degradedReason="LLM adapter not configured",
+        )
+
+
+class BedrockNoveltyLlmClient:
+    def __init__(self, *, model_id: str, client: Any, max_tokens: int = 4096) -> None:
+        self._model_id = model_id
+        self._client = client
+        self._max_tokens = max_tokens
+
+    def draft(
+        self,
+        *,
+        topic: str,
+        corpus: RetrievalBundle,
+        external: RetrievalBundle,
+    ) -> NoveltyLlmDraft:
+        refs = _source_ref_catalog(corpus.items + external.items)
+        if not refs:
+            return NoveltyLlmDraft(
+                similarWorks=_fallback_similar_works(),
+                noveltyCandidates=_fallback_novelty_candidates(),
+                experimentPlan=_fallback_experiment_plan(topic),
+                degradedReason="LLM input has no grounded sourceRefs",
+            )
+        try:
+            payload = self._invoke_json(
+                _novelty_system_prompt(),
+                _novelty_user_prompt(topic, corpus.items, external.items, refs),
+            )
+        except Exception as exc:  # noqa: BLE001 - LLM outage degrades, not fails, the job.
+            return NoveltyLlmDraft(
+                similarWorks=_fallback_similar_works(),
+                noveltyCandidates=_fallback_novelty_candidates(),
+                experimentPlan=_fallback_experiment_plan(topic),
+                degradedReason=f"LLM generation unavailable: {type(exc).__name__}",
+            )
+        return NoveltyLlmDraft(
+            similarWorks=_llm_items_payload(
+                payload.get("similarWorks"),
+                refs,
+                fallback=_fallback_similar_works(),
+            ),
+            noveltyCandidates=_llm_items_payload(
+                payload.get("noveltyCandidates"),
+                refs,
+                fallback=_fallback_novelty_candidates(),
+            ),
+            experimentPlan=_llm_experiment_plan(payload.get("experimentPlan"), topic),
+        )
+
+    def _invoke_json(self, system: str, user: str) -> dict[str, Any]:
+        body = {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": self._max_tokens,
+            "system": system,
+            "messages": [{"role": "user", "content": [{"type": "text", "text": user}]}],
+        }
+        response = self._client.invoke_model(
+            modelId=self._model_id,
+            body=json.dumps(body).encode("utf-8"),
+            accept="application/json",
+            contentType="application/json",
+        )
+        raw_body = response["body"].read()
+        model_payload = json.loads(raw_body.decode("utf-8"))
+        text = "".join(
+            part.get("text", "")
+            for part in model_payload.get("content", [])
+            if isinstance(part, dict)
+        )
+        return _parse_json_object(text)
+
+
+def _source_ref_catalog(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in items:
+        for ref in item.get("sourceRefs") or item.get("source_refs") or []:
+            url = ref.get("url") if isinstance(ref, dict) else None
+            if not url or url in seen:
+                continue
+            seen.add(str(url))
+            refs.append(ref)
+    return refs[:12]
+
+
+def _novelty_system_prompt() -> str:
+    return (
+        "You are DocSuri's novelty-analysis assistant. Return only valid JSON. "
+        "Use only the supplied sourceRefIndexes; never invent URLs, titles, datasets, or papers."
+    )
+
+
+def _novelty_user_prompt(
+    topic: str,
+    corpus_items: list[dict[str, Any]],
+    external_items: list[dict[str, Any]],
+    refs: list[dict[str, Any]],
+) -> str:
+    context = {
+        "topic": topic,
+        "corpusItems": _compact_items(corpus_items),
+        "externalItems": _compact_items(external_items),
+        "sourceRefs": [
+            {
+                "index": i,
+                "title": ref.get("title"),
+                "url": ref.get("url"),
+                "sourceName": ref.get("sourceName"),
+            }
+            for i, ref in enumerate(refs)
+        ],
+    }
+    contract = {
+        "similarWorks": [
+            {"title": "string", "summary": "string", "sourceRefIndexes": [0]}
+        ],
+        "noveltyCandidates": [
+            {"title": "string", "rationale": "string", "sourceRefIndexes": [0]}
+        ],
+        "experimentPlan": {
+            "researchQuestion": "string",
+            "hypotheses": ["string"],
+            "datasets": ["string"],
+            "metrics": ["string"],
+            "risks": ["string"],
+        },
+    }
+    return (
+        f"<context>{json.dumps(context, ensure_ascii=False)}</context>\n"
+        f"<json_contract>{json.dumps(contract, ensure_ascii=False)}</json_contract>"
+    )
+
+
+def _compact_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    compact: list[dict[str, Any]] = []
+    for item in items[:8]:
+        compact.append(
+            {
+                "title": item.get("title"),
+                "summary": (item.get("summary") or item.get("abstractSnippet") or "")[:500],
+                "sourceType": item.get("sourceType"),
+                "sourceName": item.get("sourceName"),
+            }
+        )
+    return compact
+
+
+def _llm_items_payload(
+    raw: Any,
+    refs: list[dict[str, Any]],
+    *,
+    fallback: dict[str, Any],
+) -> dict[str, Any]:
+    if not isinstance(raw, list):
+        return fallback
+    items: list[dict[str, Any]] = []
+    for item in raw[:5]:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "").strip()
+        if not title:
+            continue
+        item_refs = _refs_by_indexes(item.get("sourceRefIndexes"), refs)
+        items.append(
+            {
+                "title": title[:240],
+                "summary": str(item.get("summary") or item.get("rationale") or "")[:1000],
+                "evidenceStatus": (
+                    EvidenceStatus.SUPPORTED.value
+                    if item_refs
+                    else EvidenceStatus.ABSTAINED.value
+                ),
+                "sourceRefs": item_refs,
+            }
+        )
+    if not items:
+        return fallback
+    return _items_payload(items)
+
+
+def _refs_by_indexes(raw: Any, refs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    selected: list[dict[str, Any]] = []
+    for value in raw[:3]:
+        if isinstance(value, int) and 0 <= value < len(refs):
+            selected.append(refs[value])
+    return selected
+
+
+def _llm_experiment_plan(raw: Any, topic: str) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        return _fallback_experiment_plan(topic)
+    return {
+        "researchQuestion": str(raw.get("researchQuestion") or topic)[:500],
+        "hypotheses": _string_list(raw.get("hypotheses"))
+        or ["A grounded differentiator improves over close prior work."],
+        "datasets": _string_list(raw.get("datasets")) or ["Select from dataset search results."],
+        "metrics": _string_list(raw.get("metrics")) or ["Novelty score", "baseline delta"],
+        "risks": _string_list(raw.get("risks")) or ["Weak evidence", "dataset mismatch"],
+    }
+
+
+def _string_list(raw: Any) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    return [str(item).strip()[:240] for item in raw[:8] if str(item).strip()]
+
+
+def _items_payload(items: list[dict[str, Any]]) -> dict[str, Any]:
+    refs = _source_ref_catalog(items)
+    return {
+        "items": items,
+        "evidenceStatus": (
+            EvidenceStatus.SUPPORTED.value if refs else EvidenceStatus.ABSTAINED.value
+        ),
+        "sourceRefs": refs,
+    }
+
+
+def _fallback_similar_works() -> dict[str, Any]:
+    return {
+        "items": [],
+        "evidenceStatus": EvidenceStatus.ABSTAINED.value,
+        "sourceRefs": [],
+    }
+
+
+def _fallback_novelty_candidates() -> dict[str, Any]:
+    return {
+        "items": [
+            {
+                "title": "Add an evidence-backed differentiator after corpus retrieval",
+                "evidenceStatus": EvidenceStatus.ABSTAINED.value,
+                "sourceRefs": [],
+            }
+        ],
+        "evidenceStatus": EvidenceStatus.ABSTAINED.value,
+        "sourceRefs": [],
+    }
+
+
+def _fallback_experiment_plan(topic: str) -> dict[str, Any]:
+    return {
+        "researchQuestion": topic,
+        "hypotheses": ["A differentiator grounded in retrieved evidence improves novelty."],
+        "datasets": ["To be selected from dataset search results."],
+        "metrics": [
+            "Novelty score",
+            "baseline delta",
+            "reproducibility checklist pass rate",
+        ],
+        "risks": ["Weak evidence", "dataset mismatch", "unapproved Notion export"],
+    }
+
+
+def _parse_json_object(text: str) -> dict[str, Any]:
+    start, end = text.find("{"), text.rfind("}")
+    if start == -1 or end == -1:
+        raise ValueError("no JSON object in model output")
+    parsed = json.loads(text[start : end + 1])
+    if not isinstance(parsed, dict):
+        raise ValueError("model output is not a JSON object")
+    return parsed
+
+
 class S3ManuscriptSimilarityClient:
     def __init__(
         self,
@@ -479,6 +778,7 @@ class NoveltyAdapters:
     corpus: CorpusRetrievalPort = field(default_factory=NoopCorpusRetrievalClient)
     external: ExternalSearchPort = field(default_factory=NoopExternalSearchClient)
     similarity: SimilarityPort = field(default_factory=NoopSimilarityClient)
+    llm: NoveltyLlmPort = field(default_factory=NoopNoveltyLlmClient)
     notion: NotionExportPort = field(default_factory=NoopNotionExportClient)
 
 
@@ -491,6 +791,7 @@ def build_default_novelty_adapters(observability=None, cost_guard=None) -> Novel
         corpus=corpus,
         external=build_external_adapter(),
         similarity=build_similarity_adapter(corpus),
+        llm=build_llm_adapter(),
     )
 
 
@@ -540,4 +841,26 @@ def build_external_adapter() -> ExternalSearchPort:
             headers={"User-Agent": "DocSuri-Novelty/1.0"},
         ),
         github_token=os.getenv("DOCSURI_GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN"),
+    )
+
+
+def build_llm_adapter() -> NoveltyLlmPort:
+    import boto3
+    from botocore.config import Config
+
+    region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION", "ap-northeast-2")
+    return BedrockNoveltyLlmClient(
+        model_id=os.getenv(
+            "DOCSURI_NOVELTY_LLM_MODEL_ID",
+            "global.anthropic.claude-sonnet-4-6",
+        ),
+        client=boto3.client(
+            "bedrock-runtime",
+            region_name=region,
+            config=Config(
+                connect_timeout=5.0,
+                read_timeout=45.0,
+                retries={"max_attempts": 1},
+            ),
+        ),
     )
