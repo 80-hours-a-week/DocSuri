@@ -397,16 +397,16 @@ class ComputeStack(Stack):
         for email in ops_alert_emails:
             ses_events_topic.add_subscription(subs.EmailSubscription(email))
 
-        # --- ALB + Fargate service (deploy unit ①: 0.25 vCPU / 512 MB, min 1 max 2) ---
+        # --- ALB + Fargate service (deploy unit ①: 1 vCPU / 2 GB, min 2 max 6) ---
         # HTTPS :443 terminated on the ALB with the ACM cert + a Route53 alias (origin.docsuri.org
         # → ALB). CloudFront reaches the origin over HTTPS (below), so edge↔origin is encrypted.
         self.service = ecs_patterns.ApplicationLoadBalancedFargateService(
             self, "ApiService",
             cluster=cluster,
             service_name="docsuri-api",
-            cpu=256,
-            memory_limit_mib=512,
-            desired_count=1,
+            cpu=1024,
+            memory_limit_mib=2048,
+            desired_count=2,
             # ECS Exec (SSM-backed): team assumes DocsuriCrossAccountDev → `aws ecs
             # execute-command` into this task → psql to the private RDS. No EC2 bastion.
             # CDK auto-grants the task role ssmmessages:*. ponytail: shell-in only; a
@@ -609,8 +609,8 @@ class ComputeStack(Stack):
             )
         )
 
-        # Autoscaling: min 1 — max 2 (U3 spec)
-        scaling = self.service.service.auto_scale_task_count(min_capacity=1, max_capacity=2)
+        # Autoscaling: min 2 for AZ/task headroom, max 6 after API search p95 broke under smoke.
+        scaling = self.service.service.auto_scale_task_count(min_capacity=2, max_capacity=6)
         scaling.scale_on_cpu_utilization("CpuScale", target_utilization_percent=70)
 
         # U9 Personalization retention cleanup: one short scheduled task, no always-on worker.
@@ -744,6 +744,20 @@ class ComputeStack(Stack):
                 self, "OpsAlertEmailMissing",
                 value="set -c ops_alert_email=<addr>[,<addr>...] so alarms + budget page a human",
             )
+
+        novelty_queue_age_alarm = self.novelty_queue.metric_approximate_age_of_oldest_message(
+            period=Duration.minutes(5),
+            statistic="Maximum",
+        ).create_alarm(
+            self,
+            "NoveltyQueueAgeAlarm",
+            threshold=900,
+            evaluation_periods=1,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+            alarm_description="Novelty jobs are waiting more than 15 minutes before processing",
+        )
+        novelty_queue_age_alarm.add_alarm_action(cw_actions.SnsAction(ops_alerts))
 
         # SLO 1 — API availability: backend 5xx. Native ALB metric, no app instrumentation needed.
         api_5xx_alarm = self.service.target_group.metrics.http_code_target(

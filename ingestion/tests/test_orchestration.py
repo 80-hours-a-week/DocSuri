@@ -8,6 +8,7 @@ import pytest
 from docsuri_shared.dtos import DocModel
 from docsuri_shared.vector_spec import DIMENSIONS, IndexRecord
 
+import docsuri_ingestion.worker as worker_module
 from docsuri_ingestion.adapters.aws import OpenSearchVectorIndex
 from docsuri_ingestion.adapters.local import (
     FailingEmbeddingPort,
@@ -25,6 +26,7 @@ from docsuri_ingestion.domain.canonical import canonical_key
 from docsuri_ingestion.domain.enums import DedupDecision, FailureReason, JobKind, SourceName
 from docsuri_ingestion.domain.errors import PermanentIngestionError, RetriableIngestionError
 from docsuri_ingestion.domain.models import CanonicalDedupState, IndexRecordBatch, IngestionJob
+from docsuri_ingestion.settings import IngestionSettings
 from docsuri_ingestion.worker import job_from_payload, process_message
 
 from .conftest import build_test_pipeline
@@ -264,6 +266,87 @@ def test_worker_dispatches_legacy_type_less_ingest_job() -> None:
     assert queue.acked == ["legacy-job"]
     assert queue.dlq == []
     assert seen[0].job_id == "job-1"
+
+
+def test_worker_main_uses_configured_polling_limits(monkeypatch) -> None:
+    class FakeEvent:
+        def __init__(self) -> None:
+            self.stopped = False
+            self.waits: list[float] = []
+
+        def is_set(self) -> bool:
+            return self.stopped
+
+        def wait(self, timeout: float) -> None:
+            self.waits.append(timeout)
+            self.stopped = True
+
+    class FakeQueue:
+        def __init__(self) -> None:
+            self.calls: list[int] = []
+
+        def receive_messages(self, max_messages: int = 10):
+            self.calls.append(max_messages)
+            return []
+
+    event = FakeEvent()
+    queue = FakeQueue()
+    docmodel_queue = FakeQueue()
+    settings = IngestionSettings(
+        DOCSURI_WORKER_MAX_MESSAGES=25,
+        DOCSURI_WORKER_LOOP_DELAY_SECONDS=7.5,
+    )
+    runtime = SimpleNamespace(queue=queue, docmodel_queue=docmodel_queue)
+
+    monkeypatch.setattr(worker_module, "_shutdown_event", event)
+    monkeypatch.setattr(worker_module.IngestionSettings, "from_env", lambda: settings)
+    monkeypatch.setattr(worker_module, "build_production_runtime", lambda _settings: runtime)
+
+    assert worker_module.main([]) == 0
+
+    assert docmodel_queue.calls == [10]
+    assert queue.calls == [10]
+    assert event.waits == [7.5]
+
+
+def test_worker_main_docmodel_mode_does_not_poll_bulk_queue(monkeypatch) -> None:
+    class FakeEvent:
+        def __init__(self) -> None:
+            self.stopped = False
+
+        def is_set(self) -> bool:
+            return self.stopped
+
+        def wait(self, timeout: float) -> None:
+            del timeout
+            self.stopped = True
+
+    class FakeQueue:
+        def __init__(self, messages=None) -> None:
+            self.messages = messages or []
+            self.calls: list[int] = []
+
+        def receive_messages(self, max_messages: int = 10):
+            self.calls.append(max_messages)
+            return self.messages
+
+    event = FakeEvent()
+    queue = FakeQueue()
+    docmodel_queue = FakeQueue()
+    settings = IngestionSettings(
+        DOCSURI_WORKER_QUEUE_MODE="docmodel",
+        DOCSURI_DOCMODEL_QUEUE_URL="https://sqs.example/docmodel",
+    )
+    runtime = SimpleNamespace(queue=queue, docmodel_queue=docmodel_queue)
+
+    monkeypatch.setattr(worker_module, "_shutdown_event", event)
+    monkeypatch.setattr(worker_module.IngestionSettings, "from_env", lambda: settings)
+    monkeypatch.setattr(worker_module, "build_production_runtime", lambda _settings: runtime)
+
+    assert worker_module.main([]) == 0
+
+    assert docmodel_queue.calls == [1]
+    assert queue.calls == []
 
 
 def test_queue_payload_preserves_corpus_retry_metadata() -> None:
