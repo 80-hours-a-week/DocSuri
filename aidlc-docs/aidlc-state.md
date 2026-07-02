@@ -797,3 +797,20 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - SSOT back-sync: BR-S1/S4/S6/S18 (business-rules), infrastructure-design §2.1, business-logic-model §3.1/3.5/3.7/3.9, nfr-design (NFR-C1).
 - Quality note today: zero user-created prompt-enforced (strong) terms exist, so signature=0 for all → one shared `_g0` base per paper; the strong-term path forks base + owner-scopes when a future UI/API opens strong-term creation (separate track).
 - Delivery: branch `feat/u7-glossary-overlay-and-map-parallelism` → develop. Current gate: local commit; push/PR pending user approval.
+
+## Monitoring Dashboard — CloudWatch Ops View Increment
+
+- Date: 2026-07-02
+- Stage: CONSTRUCTION / Infrastructure Code Generation (follow-on increment)
+- Trigger: operator request to add one CloudWatch dashboard that puts the current alarms/SLO metrics in one place.
+- Scope:
+  - Added `DocSuri-Production-Ops` dashboard in `ops/cdk/stacks/compute_stack.py`.
+  - Reused the existing CloudWatch/SNS alert path; no new monitoring service or notification route.
+  - Included local alarm widgets for API 5xx, API p95 latency, email delivery failure, novelty queue age, novelty DLQ, and personalization retention purge failure.
+  - Included metric graphs for API SLOs, novelty/ingestion/docmodel/summary queue age, queue backlog/DLQ depth, application failure signals, and the existing AWS Budget cost alert context.
+- Verification:
+  - `python3 -m compileall ops/cdk/stacks/compute_stack.py` -> passed
+  - `uv run --directory ops ruff check ../ops/cdk/stacks/compute_stack.py` -> passed
+  - `npx --yes aws-cdk@2 --app "/Users/revenantonthemission/Projects/DocSuri/ops/cdk/.venv/bin/python app.py" synth Docsuri-Compute` -> passed with existing Node/CDK annotation warnings
+  - `git diff --check` -> passed
+- Current gate: ready for review/deploy decision.
