@@ -35,7 +35,11 @@ export function SavedSearchScreen({ showTabs = true }: { showTabs?: boolean } = 
       await getApiClient().deleteSavedSearch(itemId);
       removeLocal((it) => String(it.id) === itemId);
       if (rerun?.id === itemId) setRerun(null);
-    } catch {
+    } catch (e) {
+      if (e instanceof UserFacingError && e.isAuth) {
+        router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
+        return;
+      }
       setActionError('삭제하지 못했습니다. 다시 시도해 주세요.');
     } finally {
       setBusyId(null);

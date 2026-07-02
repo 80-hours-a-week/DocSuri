@@ -51,7 +51,11 @@ export function HistoryScreen({ showTabs = true }: { showTabs?: boolean } = {}) 
       await getApiClient().clearHistory();
       setRerun(null);
       await reload();
-    } catch {
+    } catch (e) {
+      if (e instanceof UserFacingError && e.isAuth) {
+        router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
+        return;
+      }
       setActionError('이력을 비우지 못했습니다. 다시 시도해 주세요.');
     } finally {
       setClearing(false);
