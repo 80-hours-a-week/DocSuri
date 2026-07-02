@@ -411,3 +411,15 @@ class IngestionStack(Stack):
                 ],
             )
         )
+        task_def.add_to_task_role_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "es:ESHttpDelete",
+                    "es:ESHttpGet",
+                    "es:ESHttpHead",
+                    "es:ESHttpPost",
+                    "es:ESHttpPut",
+                ],
+                resources=[f"{opensearch_domain.domain_arn}/*"],
+            )
+        )
