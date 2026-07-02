@@ -46,6 +46,13 @@ class IngestionSettings(BaseModel):
     # out of source; supplied via env.
     openalex_mailto: str | None = Field(default=None, alias="DOCSURI_OPENALEX_MAILTO")
     request_timeout_seconds: float = Field(default=30.0, alias="DOCSURI_REQUEST_TIMEOUT_SECONDS")
+    # Wall-clock cap for one resilience dependency_call. Must exceed the worst LEGITIMATE
+    # multi-request chain (politeness-paced html→ar5iv→pdf + pdfplumber on a big PDF ≈ 2-3 min);
+    # 30s (= one request's timeout) killed slow-but-healthy papers and tripped the arxiv
+    # circuit breaker into fast-fail storms (2026-07-02 drain incident).
+    dependency_timeout_seconds: float = Field(
+        default=180.0, alias="DOCSURI_DEPENDENCY_TIMEOUT_SECONDS"
+    )
     index_stats_ttl_seconds: float = Field(default=60.0, alias="DOCSURI_INDEX_STATS_TTL_SECONDS")
     arxiv_rate_per_second: float = Field(default=0.33, alias="DOCSURI_ARXIV_RATE_PER_SECOND")
     worker_max_messages: int = Field(default=1, alias="DOCSURI_WORKER_MAX_MESSAGES")
