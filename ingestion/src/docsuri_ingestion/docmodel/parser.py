@@ -394,8 +394,8 @@ def _table_block(figure_el: Tag, sec_ctx: _SectionCtx) -> dict | None:
 
 
 def _figure_block(figure_el: Tag, sec_ctx: _SectionCtx, doc_ctx: _DocCtx) -> dict | None:
-    img = figure_el.find("img")
-    if img is None:
+    imgs = figure_el.find_all("img")
+    if not imgs:
         return None  # no graphic to reference
     ordinal = doc_ctx.figure_ordinal
     doc_ctx.figure_ordinal += 1
@@ -404,7 +404,14 @@ def _figure_block(figure_el: Tag, sec_ctx: _SectionCtx, doc_ctx: _DocCtx) -> dic
     # image to this block (the append order matches the ordinal increment, keeping
     # figure_specs[ordinal] == this block).
     if doc_ctx.figure_specs is not None:
-        src = img.get("src") if isinstance(img, Tag) else None
+        # A multi-panel figure (LaTeXML nests one <img> per sub-panel in the float) must NOT be
+        # sourced from the first panel's e-print graphic — the stem-match would image only that
+        # one panel and drop the rest (the observed "figure shows a single sub-panel" breakage).
+        # Blank the src so the asset extractor falls back to a whole-figure PDF page-crop (matched
+        # by caption number), which captures every panel as laid out. A single-image figure keeps
+        # its src for the original-quality e-print graphic.
+        first = imgs[0]
+        src = first.get("src") if len(imgs) == 1 and isinstance(first, Tag) else None
         doc_ctx.figure_specs.append(
             FigureSpec(src=src if isinstance(src, str) else "", label=label)
         )
@@ -482,13 +489,31 @@ def _code_block(el: Tag, sec_ctx: _SectionCtx) -> dict | None:
         annotation.decompose()
     lines = el.find_all(class_="ltx_listingline")
     if lines:
-        text = "\n".join(line.get_text() for line in lines)
+        text = "\n".join(_listing_line_text(line) for line in lines)
     else:
         text = el.get_text("\n")
     text = text.strip("\n")
     if not text.strip():
         return None
     return {"id": sec_ctx.next_id("code"), "type": "code", "text": text}
+
+
+def _listing_line_text(line: Tag) -> str:
+    """One listing/algorithm line as ``"<num>: <body>"`` (or just the body for plain code).
+
+    Algorithm floats carry a per-line number in a ``ltx_tag_listingline`` span that LaTeXML
+    renders with NO separator, so a raw ``get_text`` glues it to the step ("1:Flow…"). Pull the
+    number out and re-join it with a space. LaTeXML also keeps the author's soft line-wrap inside
+    a single numbered step (the Require line splits across source lines); fold those internal
+    newlines back so one step stays on one line. Leading indentation (em-spaces marking nesting,
+    or a plain-code indent) is preserved — only newlines are collapsed."""
+    tag = line.find(class_="ltx_tag_listingline")
+    number = ""
+    if tag is not None:
+        number = tag.get_text().strip()
+        tag.extract()  # so it isn't duplicated in the body text below
+    body = line.get_text().strip("\n").replace("\r", " ").replace("\n", " ")
+    return f"{number} {body}" if number else body
 
 
 # --------------------------------------------------------------------------- text
