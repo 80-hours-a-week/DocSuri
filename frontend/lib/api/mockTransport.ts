@@ -26,12 +26,7 @@ import {
   mockListGlossaryTerms,
 } from '@/mocks/summarizeFixtures';
 import { mockPaperMeta } from '@/mocks/paperFixtures';
-import {
-  mockSignup,
-  mockLogin,
-  mockLogout,
-  mockCurrentSession,
-} from '@/mocks/accountFixtures';
+import { mockSignup, mockLogin, mockLogout, mockCurrentSession } from '@/mocks/accountFixtures';
 import {
   mockListSaved,
   mockCreateSaved,
@@ -59,10 +54,7 @@ import {
   mockLoadAgentSession,
   mockSendAgentMessage,
 } from '@/mocks/agentFixtures';
-import type {
-  SavedSearchCreateDTO,
-  LibraryItemCreateDTO,
-} from '@/types/generated';
+import type { SavedSearchCreateDTO, LibraryItemCreateDTO } from '@/types/generated';
 import type { CitationNode } from '@/types/citationGraph';
 import type { BehaviorEventCreate } from '@/types/personalization';
 import type {
@@ -234,6 +226,29 @@ export class MockTransport implements Transport {
     if (req.path === '/auth/session' && req.method === 'GET') {
       const session = mockCurrentSession();
       return session ? { status: 200, body: session } : { status: 401, body: null };
+    }
+
+    // U3 auth recourse/lifecycle endpoints (BR-U5-19 mock-first parity) — the real backend
+    // returns a generic/enumeration-safe success for all of these, so the mock mirrors that
+    // shape rather than modeling token validity. `path` is already query-stripped (see the
+    // top of `send`), so verify-email's `?token=...` doesn't need separate handling here.
+    if (path === '/auth/verify-email' && req.method === 'GET') {
+      return { status: 200, body: null };
+    }
+    if (path === '/auth/resend-verification' && req.method === 'POST') {
+      return { status: 200, body: null };
+    }
+    if (path === '/auth/password-reset/request' && req.method === 'POST') {
+      return { status: 200, body: null };
+    }
+    if (path === '/auth/password-reset/confirm' && req.method === 'POST') {
+      return { status: 200, body: null };
+    }
+    if (path === '/auth/change-password' && req.method === 'POST') {
+      return { status: 200, body: null };
+    }
+    if (path === '/auth/email-change/request' && req.method === 'POST') {
+      return { status: 200, body: null };
     }
 
     return { status: 404, body: null };
@@ -433,8 +448,7 @@ function researchJob(session: AgentSessionSummary) {
   return {
     jobId: session.id,
     title: session.title,
-    state:
-      session.state === 'completed' || session.state === 'failed' ? session.state : 'active',
+    state: session.state === 'completed' || session.state === 'failed' ? session.state : 'active',
     updatedAt: session.updatedAt,
     createdAt: session.updatedAt,
   };
