@@ -160,6 +160,12 @@ jobs:
             --force-new-deployment --no-cli-pager
           echo "Ingestion worker deployment initiated."
 
+      - name: Deploy Novelty worker
+        run: |
+          aws ecs update-service --cluster docsuri --service docsuri-novelty-agent-worker \
+            --force-new-deployment --no-cli-pager
+          echo "Novelty worker deployment initiated."
+
       - name: Deploy Frontend (deploy unit ④)
         run: |
           aws ecs update-service --cluster docsuri-frontend --service docsuri-frontend \
@@ -169,10 +175,10 @@ jobs:
       - name: Wait for services to stabilize
         run: |
           aws ecs wait services-stable --cluster docsuri \
-            --services docsuri-api docsuri-ingestion --no-cli-pager
+            --services docsuri-api docsuri-ingestion docsuri-novelty-agent-worker --no-cli-pager
           aws ecs wait services-stable --cluster docsuri-frontend \
             --services docsuri-frontend --no-cli-pager
-          echo "✅ API, ingestion and frontend services stable."
+          echo "✅ API, ingestion, novelty worker and frontend services stable."
 
       - name: Rollback on failure
         if: failure()

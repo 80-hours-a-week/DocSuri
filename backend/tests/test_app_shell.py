@@ -28,6 +28,16 @@ def test_app_boots_and_is_fastapi() -> None:
     assert isinstance(app, FastAPI)
 
 
+def test_settings_from_env_configures_gateway_rate_limit(monkeypatch) -> None:
+    monkeypatch.setenv("DOCSURI_GATEWAY_RATE_LIMIT_MAX_REQUESTS", "123")
+    monkeypatch.setenv("DOCSURI_GATEWAY_RATE_LIMIT_WINDOW_SECONDS", "7.5")
+
+    settings = Settings.from_env()
+
+    assert settings.gateway_rate_limit_max_requests == 123
+    assert settings.gateway_rate_limit_window_seconds == 7.5
+
+
 def test_health_and_liveness() -> None:
     client = _client()
     assert client.get("/health").json() == {"status": "ok", "service": "docsuri-backend"}

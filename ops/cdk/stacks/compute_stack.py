@@ -145,21 +145,19 @@ class ComputeStack(Stack):
             database_name="docsuri",
         )
 
-        novelty_dlq = sqs.Queue(
+        # ponytail: queues already exist in prod; import them until a separate CDK import migrates
+        # ownership. Creating same-name queues in this stack would fail the next Compute deploy.
+        novelty_dlq = sqs.Queue.from_queue_attributes(
             self,
             "NoveltyJobDlq",
-            queue_name="docsuri-novelty-agent-job-dlq",
-            retention_period=Duration.days(14),
-            encryption=sqs.QueueEncryption.SQS_MANAGED,
+            queue_arn=f"arn:aws:sqs:{self.region}:{self.account}:docsuri-novelty-agent-job-dlq",
+            queue_url=f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-novelty-agent-job-dlq",
         )
-        self.novelty_queue = sqs.Queue(
+        self.novelty_queue = sqs.Queue.from_queue_attributes(
             self,
             "NoveltyJobQueue",
-            queue_name="docsuri-novelty-agent-job-queue",
-            visibility_timeout=Duration.seconds(900),
-            retention_period=Duration.days(14),
-            encryption=sqs.QueueEncryption.SQS_MANAGED,
-            dead_letter_queue=sqs.DeadLetterQueue(max_receive_count=3, queue=novelty_dlq),
+            queue_arn=f"arn:aws:sqs:{self.region}:{self.account}:docsuri-novelty-agent-job-queue",
+            queue_url=f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-novelty-agent-job-queue",
         )
         novelty_dlq.metric_approximate_number_of_messages_visible().create_alarm(
             self,
@@ -217,6 +215,14 @@ class ComputeStack(Stack):
             "REDIS_HOST": redis_endpoint,
             "REDIS_PORT": redis_port,
             "REDIS_TLS": "1",  # ElastiCache transit_encryption_enabled=True → client TLS required
+            # CloudFront -> ALB -> ECS: trust the two controlled proxy hops so gateway
+            # rate-limiting keys on the viewer IP instead of collapsing all traffic to a proxy.
+            "TRUST_PROXY_HEADERS": "true",
+            "TRUSTED_PROXY_COUNT": "2",
+            # Blanket gateway backstop. Endpoint-specific account/email limits remain stricter;
+            # this cap must not trip the checked-in 20-VU production smoke load test.
+            "DOCSURI_GATEWAY_RATE_LIMIT_MAX_REQUESTS": "3000",
+            "DOCSURI_GATEWAY_RATE_LIMIT_WINDOW_SECONDS": "60",
             "SES_SENDER_EMAIL": "no-reply@docsuri.org",  # via the SES domain identity below
             # Email provider toggle. "resend" → ResendEmailClient (no SES sandbox review gate;
             # delivers to any recipient once docsuri.org is DNS-verified in Resend). Requires the
@@ -278,9 +284,8 @@ class ComputeStack(Stack):
             "DOCSURI_MAP_REDUCE_ENABLED": "true",
             "CITATION_GRAPH_ENABLED": "true",
             "PERSONALIZATION_ENABLED": "true",
-            # Research backend is session storage only today; keep it off in prod until a worker
-            # lands so users do not get a forever-running chat.
-            "RESEARCH_AGENT_ENABLED": "false",
+            # Research is intentionally enabled in prod; keep this aligned with the live flag.
+            "RESEARCH_AGENT_ENABLED": "true",
             "NOVELTY_AGENT_ENABLED": "true",
             "PERSONALIZATION_RAW_EVENT_RETENTION_DAYS": "90",
             # --- U3 social login (FR-27, Google OIDC) ---
@@ -606,6 +611,16 @@ class ComputeStack(Stack):
                     f"arn:aws:bedrock:{self.region}:{self.account}:inference-profile/global.cohere.embed-v4:0",
                     "arn:aws:bedrock:*::foundation-model/cohere.embed-v4:0",
                 ],
+            )
+        )
+        self.service.task_definition.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "es:ESHttpGet",
+                    "es:ESHttpHead",
+                    "es:ESHttpPost",
+                ],
+                resources=[f"{opensearch_domain.domain_arn}/*"],
             )
         )
 

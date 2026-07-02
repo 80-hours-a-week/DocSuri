@@ -101,9 +101,9 @@ python -m pytest backend/tests/test_novelty.py -q
 Covered contracts:
 
 - job request/result/progress DTO shape
-- manuscript content-type boundary: PDF, Markdown, TXT only
+- manuscript content-type boundary: Markdown and TXT accepted; PDF/DOCX rejected until parser/upload handle support exists
 - supported artifact outputs require `sourceRefs`
-- experiment-plan artifacts require research question, hypotheses, datasets, metrics, and risks
+- experiment-plan artifacts require research question, novelty angle, hypotheses, baselines, procedure, datasets, metrics, resources, risks, evidence status, and source refs
 - Notion export cannot complete before preview approval
 - SSE progress events encode persisted job progress
 
