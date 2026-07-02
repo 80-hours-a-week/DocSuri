@@ -68,6 +68,7 @@ export function ScrollToTopButton() {
       aria-label="맨 위로"
       aria-hidden={!visible}
       tabIndex={visible ? 0 : -1}
+      data-testid="scroll-to-top"
     >
       ↑
     </button>,
