@@ -20,7 +20,7 @@ and an exact behavioral match to the prior serial loop — the rollback/testing 
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TypeVar
 
 T = TypeVar("T")
@@ -40,8 +40,20 @@ def map_bounded(
     if max_workers <= 1 or n == 1:
         return [fn(item) for item in items]
     # Cap workers at the item count so an oversized pool doesn't spawn idle threads.
+    out: dict[int, R] = {}
     with ThreadPoolExecutor(max_workers=min(max_workers, n)) as pool:
-        # ``map`` yields in submission (input) order and re-raises the first worker exception on
-        # the failing result; the ``with`` block then cancels/joins the rest. Materialize inside
-        # the block so exceptions surface here.
-        return list(pool.map(fn, items))
+        # submit + as_completed (not ``pool.map``): map yields strictly in input order, so a late
+        # item's exception would be blocked behind slower earlier items. Consuming completions as
+        # they finish makes the FIRST failing chunk abort immediately (true fail-fast), and the
+        # ``except`` cancels not-yet-started futures so queued work (e.g. more Bedrock calls) stops
+        # spending — in-flight ones can't be cancelled, but the pool starts no new ones. Results are
+        # keyed by input index and re-assembled in order, so the return stays deterministic.
+        futures = {pool.submit(fn, item): i for i, item in enumerate(items)}
+        try:
+            for fut in as_completed(futures):
+                out[futures[fut]] = fut.result()  # re-raises the first failing completion
+        except BaseException:
+            for f in futures:
+                f.cancel()
+            raise
+    return [out[i] for i in range(n)]
