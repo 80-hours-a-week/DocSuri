@@ -3213,5 +3213,102 @@ aidlc 개발 과정을 적용하여 개발하려고 합니다. 질문지를 형�
 **User Input**: "좋아요. 실배포 환경에서 정상 동작 하도록 수정해 주세요."
 **AI Response**: "Novelty worker의 U6 observability/cost-guard 배선, Bedrock global inference IAM 보강, CICD OIDC provider L1 전환을 완료했고 backend tests, ruff, compileall, cdk synth, diff hygiene 검증을 통과했습니다."
 **Context**: Construction / Code Generation verification for Novelty production readiness
+## Embedded Papers / DocModel Investigation
+**Timestamp**: 2026-07-02T01:21:04Z
+**User Input**: "There is an issue about the embedded papers. Our team raised concerns about re-embedding or re-indexing the papers to fit the new docmodel. Focus on this specific issue and also investigate the current status of ingestion and indexing papers."
+**AI Response**: "Started a focused investigation of whether existing embedded/indexed papers need re-embedding or re-indexing for the new docmodel, plus current ingestion/indexing implementation and live status checks."
+**Context**: Minimal AI-DLC investigation path: workspace detection, requirements/context review, code review, and operational status verification.
+
+---
+## Embedded Papers / DocModel Investigation Completion
+**Timestamp**: 2026-07-02T01:26:12Z
+**User Input**: "There is an issue about the embedded papers. Our team raised concerns about re-embedding or re-indexing the papers to fit the new docmodel. Focus on this specific issue and also investigate the current status of ingestion and indexing papers."
+**AI Response**: "Completed focused investigation. Finding: lazy BUILD_DOC_MODEL jobs create or refresh S3 doc-model artifacts only; they do not update OpenSearch. Search records only fit the DocModel chunk/blockRefs contract when papers run through the ingestion/rebuild path that builds DocModel before chunking, embeds the resulting chunk text, and bulk-upserts OpenSearch. Live status: docsuri-ingestion is deployed with DocModel-aware settings and Cohere embed-v4/1024-dim vectors, but the main ingestion queue has a large backlog, DLQ has failures, logs show arXiv rate-limit/timeouts during SEED_REBUILD jobs, and API search currently returns 503 from OpenSearch read timeouts."
+**Context**: Focused read-only investigation; no application code changed.
+
+---
+## Ingestion Backlog Stabilization
+**Timestamp**: 2026-07-02T01:29:41Z
+**User Input**: "Stabilize the active backlog and OpenSearch search timeouts first"
+**AI Response**: "Paused docsuri-ingestion by setting ECS desired count to 0, suspended ECS Application Auto Scaling for service/docsuri/docsuri-ingestion so the SQS backlog cannot immediately restart the worker, preserved all queued messages, and verified API search recovered with 20 non-degraded results."
+**Context**: Operations stabilization for active ingestion backlog and OpenSearch read timeouts; no queue purge, no index mutation, no application code change.
+
+---
+## Throttled Rebuild Implementation
+**Timestamp**: 2026-07-02T01:35:43Z
+**User Input**: "Implement the plan."
+**AI Response**: "Implemented the throttled rebuild worker controls: added env-backed worker max-message and loop-delay settings, applied them to both priority DocModel and main ingestion queue polling, configured production CDK defaults to one message per poll with a three-second loop delay, added focused worker regression coverage, and validated with targeted pytest, ruff, diff hygiene, and CDK app synth execution."
+**Context**: Construction / Code Generation for U1 ingestion backlog throttling; no live deployment, queue purge, reindex, or re-embed executed.
+
+---
+## Throttled Rebuild Deployment and Backlog Sampling
+**Timestamp**: 2026-07-02T01:42:46Z
+**User Input**: "continue to the next step."
+**AI Response**: "Built and pushed the updated docsuri-ingestion image, deployed Docsuri-Ingestion with the throttle environment variables, verified ECS task definition revision 16 with desired/running/pending all zero and autoscaling still suspended, confirmed API search stayed non-degraded, and sampled the main ingestion queue without deleting messages. Samples were stale bulk ArXiv SEED_REBUILD jobs, so the next purge/requeue action requires explicit operator approval."
+**Context**: Operations rollout and read-only queue sampling; no queue purge, reindex, re-embed, or worker resume executed.
+
+---
+## Throttled Rebuild Purge and Pilot Requeue
+**Timestamp**: 2026-07-02T01:57:27Z
+**User Input**: "yes"
+**AI Response**: "Purged the stale main ingestion queue after explicit approval, verified it was empty, requeued the controlled ArXiv pilot window 2025-01-01 to 2025-01-02 as one unique SEED_REBUILD job, and attempted a one-worker canary with autoscaling still suspended. ECS task attempts remained pending/pre-start and were scaled back to zero before processing. Final state: one pilot message visible, zero in-flight, DLQ stable at 111, docsuri-ingestion desired/running/pending all zero, autoscaling suspended, and API search non-degraded."
+**Context**: Operations purge/requeue/canary attempt; no pilot message processed, no reindex/re-embed completed.
+
+---
+## Fargate Pre-Start Diagnosis
+**Timestamp**: 2026-07-02T02:16:01Z
+**User Input**: "Check why the Fargate task stayed pre-start"
+**AI Response**: "Inspected the two stopped docsuri-ingestion task attempts, ECS service events, task definition, ECR image metadata, and CloudWatch log streams. Both tasks attached ENIs, resolved image digests, and entered image pull, but neither reached container startedAt before being stopped by the operator scale-down. StopCode was ServiceSchedulerInitiated and stoppedReason was scaling activity, with no container-level failure reason and no worker log events. Diagnosis: the canaries were interrupted during cold image pull, likely dominated by pulling both the ECR worker image and the public grobid/grobid image; not an IAM, subnet, task-definition, or app startup failure based on current evidence."
+**Context**: Operations diagnosis only; worker remains paused and pilot message remains queued.
+
+---
+## Throttled Rebuild Canary Completion
+**Timestamp**: 2026-07-02T02:27:56Z
+**User Input**: "run the canary again"
+**AI Response**: "Ran the one-worker throttled rebuild canary with autoscaling still suspended and allowed the cold pull to complete. The pilot job for arXiv 2412.20964 processed successfully: DocModel eager build succeeded, OpenSearch bulk upsert and stale-chunk delete succeeded, 13 assets were stored, and ingestion.paper.indexed reported 118 chunks for SEED_REBUILD. The queue drained to zero, DLQ stayed at 111, API search remained non-degraded, and docsuri-ingestion was scaled back to desired/running/pending 0/0/0."
+**Context**: Operations canary execution for throttled DocModel rebuild; one pilot paper re-embedded/re-indexed successfully.
+
+---
+## Production Performance Hardening Request
+**Timestamp**: 2026-07-02T02:37:03Z
+**User Input**: "load test the API/frontend, raise API/frontend task size or max count if p95 breaks, split bulk ingestion from user-triggered doc-model work,
+  add queue-age alarms, fix summary-worker CloudWatch IAM, and migrate RDS to encrypted storage."
+**AI Response**: "Started a focused AI-DLC construction/operations hardening pass: load-test artifact, API/frontend capacity tuning, ingestion/doc-model queue isolation, queue-age alarms, summary-worker CloudWatch IAM, and RDS encryption migration runbook. RDS encryption will not be applied as a direct in-place CDK flip because existing RDS storage encryption requires snapshot-copy/restore migration."
+**Context**: Construction / Code Generation plus Operations runbook update for production performance and security hardening.
+
+---
+## Production Performance Hardening Continuation
+**Timestamp**: 2026-07-02T02:37:03Z
+**User Input**: "continue"
+**AI Response**: "Resumed the interrupted production performance hardening turn and continued implementation."
+**Context**: Continuation after interrupted tool turn.
+
+---
+## Production Performance Hardening Completion
+**Timestamp**: 2026-07-02T02:46:01Z
+**User Input**: "continue"
+**AI Response**: "Completed the production performance hardening implementation. Live smoke load before deployment showed frontend / p95 394.7 ms, API /readyz p95 455.3 ms, and API /api/search p95 9061.0 ms; API capacity was raised to 1 vCPU / 2 GB with min 2 max 6, and frontend capacity was raised to 0.5 vCPU / 1 GB with min 2 max 4. Split ingestion into bulk and reader-triggered DocModel worker services, added queue-age alarms for ingestion/docmodel/summary/novelty queues plus frontend ALB alarms, fixed summary-worker CloudWatch Logs and PutMetricData IAM, added a k6 load-test artifact, linked performance instructions, and added an encrypted RDS snapshot-copy/restore migration runbook instead of forcing an unsafe direct replacement. Validation passed: ingestion targeted pytest 36 passed, ingestion ruff clean, git diff --check clean, and CDK synth succeeded with existing warnings."
+**Context**: Construction / Code Generation completion and Operations runbook update; changes are local only and not deployed.
+
+---
+## Production Performance Hardening PR Request
+**Timestamp**: 2026-07-02T02:58:10Z
+**User Input**: "make a PR to develop. also include the documents too."
+**AI Response**: "Started PR packaging to `develop`, including code changes and AI-DLC/operations/load-test documents."
+**Context**: Git branch, commit, push, and GitHub PR creation for production performance hardening.
+
+---
+## Production Performance Hardening PR Created
+**Timestamp**: 2026-07-02T03:00:40Z
+**User Input**: "make a PR to develop. also include the documents too."
+**AI Response**: "Created PR #323 to `develop` from `fix/production-performance-hardening`, including implementation, tests, load-test artifact, AI-DLC plans, performance instructions, operations runbook, RDS encryption migration runbook, and audit updates."
+**Context**: GitHub PR creation: https://github.com/80-hours-a-week/DocSuri/pull/323
+
+---
+## Production Performance Hardening CI Fix
+**Timestamp**: 2026-07-02T03:05:19Z
+**User Input**: "fix the lint error in CI ops stage."
+**AI Response**: "Inspected PR #323 CI, found ops Ruff I001 import-order failures in `ops/cdk/stacks/ingestion_stack.py` and `ops/cdk/stacks/summarization_stack.py`, and applied Ruff import formatting."
+**Context**: CI remediation for PR #323 ops stage.
 
 ---

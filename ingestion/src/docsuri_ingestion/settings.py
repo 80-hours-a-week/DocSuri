@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from typing import Literal
 
 from pydantic import BaseModel, Field, SecretStr, ValidationError
 
@@ -47,6 +48,13 @@ class IngestionSettings(BaseModel):
     request_timeout_seconds: float = Field(default=30.0, alias="DOCSURI_REQUEST_TIMEOUT_SECONDS")
     index_stats_ttl_seconds: float = Field(default=60.0, alias="DOCSURI_INDEX_STATS_TTL_SECONDS")
     arxiv_rate_per_second: float = Field(default=0.33, alias="DOCSURI_ARXIV_RATE_PER_SECOND")
+    worker_max_messages: int = Field(default=1, alias="DOCSURI_WORKER_MAX_MESSAGES")
+    worker_loop_delay_seconds: float = Field(
+        default=3.0, alias="DOCSURI_WORKER_LOOP_DELAY_SECONDS"
+    )
+    worker_queue_mode: Literal["all", "bulk", "docmodel"] = Field(
+        default="all", alias="DOCSURI_WORKER_QUEUE_MODE"
+    )
     max_chunks_per_paper: int = Field(default=128, alias="DOCSURI_MAX_CHUNKS_PER_PAPER")
     max_chunk_chars: int = Field(default=2400, alias="DOCSURI_MAX_CHUNK_CHARS")
     chunk_overlap_chars: int = Field(default=240, alias="DOCSURI_CHUNK_OVERLAP_CHARS")

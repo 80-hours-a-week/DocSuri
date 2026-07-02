@@ -30,17 +30,24 @@ def main(argv: list[str] | None = None) -> int:
     signal.signal(signal.SIGTERM, _handle_shutdown_signal)
     signal.signal(signal.SIGINT, _handle_shutdown_signal)
 
-    runtime = build_production_runtime(IngestionSettings.from_env())
+    settings = IngestionSettings.from_env()
+    max_messages = max(1, min(10, settings.worker_max_messages))
+    loop_delay = max(0.0, settings.worker_loop_delay_seconds)
+    runtime = build_production_runtime(settings)
     queue = runtime.queue
     docmodel_queue = runtime.docmodel_queue
+    poll_bulk = settings.worker_queue_mode in ("all", "bulk")
+    poll_docmodel = settings.worker_queue_mode in ("all", "docmodel")
+    if settings.worker_queue_mode == "docmodel" and docmodel_queue is None:
+        raise RuntimeError("DOCSURI_DOCMODEL_QUEUE_URL is required in docmodel worker mode")
     log.info("worker started — polling queue")
     while not _shutdown_event.is_set():
         # Priority: drain reader-triggered doc-model builds first so the viewer/citation-tree are
         # never starved behind a bulk backfill on the main queue. The doc-model SqsQueue short-polls
         # (wait_time_seconds=0), so an empty one returns immediately and we fall through to the
         # backfill queue; a non-empty one loops back here before touching the backfill queue.
-        if docmodel_queue is not None:
-            docmodel_messages = docmodel_queue.receive_messages(max_messages=10)
+        if poll_docmodel and docmodel_queue is not None:
+            docmodel_messages = docmodel_queue.receive_messages(max_messages=max_messages)
             if docmodel_messages:
                 for message in docmodel_messages:
                     process_message(runtime, message, docmodel_queue)
@@ -49,11 +56,12 @@ def main(argv: list[str] | None = None) -> int:
                 continue
         if _shutdown_event.is_set():
             break
-        for message in queue.receive_messages(max_messages=10):
-            process_message(runtime, message, queue)
-            if _shutdown_event.is_set():
-                break
-        _shutdown_event.wait(timeout=1.0)
+        if poll_bulk:
+            for message in queue.receive_messages(max_messages=max_messages):
+                process_message(runtime, message, queue)
+                if _shutdown_event.is_set():
+                    break
+        _shutdown_event.wait(timeout=loop_delay)
     log.info("worker shut down gracefully")
     return 0
 
