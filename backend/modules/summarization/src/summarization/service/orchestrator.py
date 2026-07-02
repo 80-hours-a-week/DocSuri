@@ -23,7 +23,7 @@ from docsuri_shared.ports import CostGuardCircuitBreaker, ObservabilityHub
 
 from ..domain.assembler import ResultAssembler
 from ..domain.cache_key import build_cache_key
-from ..domain.glossary import GlossaryResolver
+from ..domain.glossary import GlossaryResolver, seed_cache_segment
 from ..domain.grounding import GroundingValidator
 from ..domain.length_router import LengthRoute, LengthRouter
 from ..domain.map_reduce import MapReduceSummarizer
@@ -133,23 +133,29 @@ class SummarizationOrchestrationService:
         user_id = ctx.auth_session.user_id
 
         # 0. cache lookup (read-through) — HIT ends here (LLM 0 calls, §11).
-        # Summary output only varies with PROMPT-ENFORCED terms, so it keys on a content signature
-        # of that subset; translate also varies with post-substitution terms, so it keys on the
-        # full monotonic version. This keeps a translate-only term edit from forking the per-user
-        # summary cache into an identical re-summary (NFR-C1), while the content signature (unlike a
-        # filtered MAX) still invalidates when a prompt-enforced term is demoted (BR-S1).
-        glossary_ver = (
-            self._glossary.prompt_glossary_signature(user_id)
-            if request.task == Task.SUMMARY
-            else self._glossary.glossary_version(user_id)
-        )
+        # Both tasks key on the PROMPT-ENFORCED content signature: the derived artifact varies only
+        # with terms that ride into the prompt. Post-substitution (weak) terms — today every
+        # personal term — are applied as a read-time overlay on a SHARED base, so a weak-only edit
+        # (or two users with different weak sets) does NOT fork the cache into an identical
+        # re-generation (NFR-C1); the content signature (unlike a filtered MAX) still invalidates
+        # when a prompt-enforced term is added/edited/demoted (BR-S1). Resolve once here and reuse
+        # for generation below (one repo fetch); the seed segment self-invalidates on a seed edit.
+        glossary = self._glossary.resolve(user_id)
         key = build_cache_key(
-            request, glossary_ver=glossary_ver, model_ver=self._model_ver, user_id=user_id
+            request,
+            glossary_ver=GlossaryResolver.signature_of(glossary),
+            model_ver=self._model_ver,
+            user_id=user_id,
+            seed_ver=seed_cache_segment(),
         )
         cached = self._store.get(key)
         if cached is not None:
             self._emit("u7.cache.hit", 1.0, request)
-            return _CachedResult(cached)
+            # Translate caches the shared base; apply the user's weak-term overlay on read (no-op
+            # when the user has no weak terms). Summary has no post-substitution — served as-is.
+            if request.task == Task.TRANSLATE:
+                cached = self._assembler.overlay_translation(cached, glossary)
+            return _PayloadResult(cached, cached=True)
 
         # 1. cost gate (U6 single authority) — BEFORE any LLM spend.
         if _is_cost_degraded(self._cost_guard.get_budget_state()):
@@ -205,8 +211,7 @@ class SummarizationOrchestrationService:
             self._emit("u7.job.pending", 1.0, request)
             return PendingDTO(retry_after_ms=_SUMMARY_POLL_BACKOFF_MS)
 
-        # 4. glossary
-        glossary = self._glossary.resolve(user_id)
+        # 4. glossary — already resolved at step 0 (single repo fetch) and reused here.
 
         # 6-7. generate (buffer) → grounding validate, with ONE retry (BR-S7). On the MAP_REDUCE
         # band the summary is produced by the map-reduce summarizer (chunk→map→reduce); grounding
@@ -283,10 +288,13 @@ class SummarizationOrchestrationService:
                     self._emit("u7.translate.empty", 1.0, request)
                     return AbstainDTO(reason="empty_translation")
                 continue
-            result = self._assembler.assemble_translation(draft, glossary, source)
-            self._store.put(key, result.to_dict())  # write-through
+            # Assemble + cache the SHARED base (strong-term translation, no weak post-substitution);
+            # apply this user's weak-term overlay on the returned view so the first requester also
+            # sees their preferences (the cache stays the base, shared across users — NFR-C1).
+            base = self._assembler.assemble_translation(draft, source).to_dict()
+            self._store.put(key, base)  # write-through (base)
             self._emit("u7.translate.ok", 1.0, request)
-            return result
+            return _PayloadResult(self._assembler.overlay_translation(base, glossary))
         return AbstainDTO(reason="empty_translation")
 
     # --- personal glossary (Q8 / §9.1) ---------------------------------------
@@ -405,14 +413,17 @@ def _has_translated_text(draft, source: DocModel) -> bool:
     return any(o.strip() and o != s for o, s in zip(out, src, strict=False))
 
 
-class _CachedResult:
-    """Thin wrapper so a cache HIT serializes the stored payload (cached=True) directly."""
+class _PayloadResult:
+    """Thin ``SummaryResponse`` over an already-serialized payload dict — used where the response
+    is a stored/overlaid payload rather than a live DTO: a cache HIT (``cached=True``), or a fresh
+    translate whose shared base was cached but whose returned view carries the read-time weak-term
+    overlay (``cached=False``)."""
 
     __slots__ = ("_payload",)
 
-    def __init__(self, payload: dict) -> None:
+    def __init__(self, payload: dict, *, cached: bool = False) -> None:
         self._payload = dict(payload)
-        self._payload["cached"] = True
+        self._payload["cached"] = cached
 
     def to_dict(self) -> dict:
         return self._payload

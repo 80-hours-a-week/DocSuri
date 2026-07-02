@@ -773,3 +773,27 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - Review remediation (2026-07-01): fixed BR-P8 post-normalization total-budget drift, changed U2 shadow reads to cached-profile-only `cached_search_boosts` with PostgreSQL `statement_timeout`, added max-shift/boosted-count shadow metrics, and added regressions for the counterexamples.
 - Remediation verification: focused personalization/discovery tests passed; app-shell/orchestrator tests passed; backend+discovery sweep passed with the existing skip; touched-file Ruff passed; `git diff --check` passed; `git merge-tree origin/develop HEAD` produced a clean merge tree.
 - Current gate: PR review/approval.
+
+## U7 Summarization — Personal-Glossary Redesign + Map Parallelism Increment
+
+- Date: 2026-07-02
+- Stage: CONSTRUCTION / U7 Code Generation (follow-on increment)
+- Trigger: translate keyed on the full per-user `glossary_ver` counter + owner scoping, but today every personal term is post-substitution (weak) — the LLM base translation is identical across users/versions. So a weak-term edit forced a full re-translation and each user got a duplicate copy (wasted LLM spend + storage, NFR-C1). Seed-glossary edits also served stale cache (seed not in the key).
+- Design delta (folded here, no new FD round — BR-S1/S4/S6/S18 already exist):
+  - **Shared base + read-time overlay (BR-S4/NFR-C1)**: translate now keys on the prompt-enforced content signature (like summary); `assemble_translation` stores the shared **base** (no weak post-substitution); `overlay_translation` applies the user's weak terms on read (HIT + fresh). Weak-only edits/distinct weak sets de-dup to one shared base — instant, free, cross-user.
+  - **Seed cache-invalidation (BR-S1)**: `seedVer` = content hash of the seed glossary, appended to the cache path only when it diverges from the shipped baseline (`_SEED_BASELINE_VER`, frozen `344c3ccb`) → seed edits self-invalidate, no manual PROMPT_VER bump; unchanged-seed deploys keep existing cache valid.
+  - **Concurrent map (BR-S6/S18)**: shared `map_bounded` (bounded, order-preserving, fail-fast) runs the translate map-only chunks and the summary map phase concurrently — latency down, byte-identical result, cost-neutral. Reduce stays sequential. Worker caps: translate 4, summary 3 (Bedrock TPM).
+  - **Dead code removed**: `GlossaryResolver.glossary_version` + `GlossaryRepositoryPort.get_glossary_version` + RDS impl (no longer a cache-key input; the `glossary_ver` column stays, bumped on upsert and returned to the badge editor).
+- Files:
+  - `backend/modules/summarization/src/summarization/domain/parallel.py` (new — `map_bounded`)
+  - `domain/structured_translator.py`, `domain/map_reduce.py` (concurrent map + `max_workers`)
+  - `domain/glossary.py` (`signature_of`, `SEED_VER`/`seed_cache_segment`, dropped `glossary_version`)
+  - `domain/models.py` (`SummaryCacheKey.seed_ver` + path), `domain/cache_key.py` (`seed_ver` param, both tasks → signature)
+  - `service/orchestrator.py` (resolve once, signature key both tasks, HIT/fresh overlay, `_PayloadResult`)
+  - `domain/assembler.py` (`assemble_translation` base-only + `overlay_translation`)
+  - `ports/ports.py`, `adapters/rds_glossary.py` (dead method removed, docstring back-sync)
+  - Tests: `tests/test_glossary_overlay_cache.py`, `tests/test_parallel.py` (new); updated `tests/test_domain_glossary.py`, `tests/test_glossary_upsert.py`, `tests/stubs.py`
+- Verification (module `.venv`): `pytest -q` → 174 passed, 3 skipped; `ruff check src/ tests/` → All checks passed.
+- SSOT back-sync: BR-S1/S4/S6/S18 (business-rules), infrastructure-design §2.1, business-logic-model §3.1/3.5/3.7/3.9, nfr-design (NFR-C1).
+- Quality note today: zero user-created prompt-enforced (strong) terms exist, so signature=0 for all → one shared `_g0` base per paper; the strong-term path forks base + owner-scopes when a future UI/API opens strong-term creation (separate track).
+- Delivery: branch `feat/u7-glossary-overlay-and-map-parallelism` → develop. Current gate: local commit; push/PR pending user approval.

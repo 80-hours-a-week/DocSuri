@@ -57,13 +57,14 @@ export function FullTranslationIsland({ paperId, version }: { paperId: string; v
     case 'summary':
       return <StateView kind="error" message="예상치 못한 결과예요." onRetry={retry} />;
     case 'pending':
-      // A full-text translation runs as a background job (multi-chunk, tens of seconds); the hook
-      // polls until it's ready. Set the expectation so the wait doesn't read as a failure.
+      // Reached ONLY when the API returned `pending` — the full-text translation was dispatched to
+      // a background job (multi-chunk, tens of seconds) and the hook polls until ready (the inline
+      // `loading` state above covers short waits). So tell the user it's running in the background.
       return (
         <StateView
           kind="loading"
           title="번역 생성 중…"
-          message="AI가 논문을 번역하고 있어요. 논문이 길면 1~2분 걸릴 수 있어요. 이 화면을 열어두면 완료되는 대로 표시돼요."
+          message="AI가 백그라운드에서 논문을 번역하고 있어요. 논문이 길면 1~2분 걸릴 수 있어요. 완료되면 여기에 표시돼요."
         />
       );
     case 'abstain':

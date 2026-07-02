@@ -42,17 +42,19 @@ class CicdStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        # 계정당 1개. L2 OpenIdConnectProvider가 로컬 jsii에서 synth 전에 깨진 적이 있어
-        # 같은 CloudFormation 리소스를 L1으로 둔다.
-        provider = iam.CfnOIDCProvider(
+        # 계정당 1개. 라이브 스택이 이 리소스를 L2(Custom::AWSCDKOpenIdConnectProvider,
+        # 논리 ID GithubOidcProviderD8241A88)로 이미 소유 중(2026-07-02 확인) — L1
+        # CfnOIDCProvider로 바꾸면 새 리소스 생성을 시도해 EntityAlreadyExists로 배포가
+        # 깨진다. 같은 construct id의 L2를 유지해야 논리 ID가 일치해 no-op diff가 된다.
+        provider = iam.OpenIdConnectProvider(
             self, "GithubOidcProvider",
             url="https://token.actions.githubusercontent.com",
-            client_id_list=["sts.amazonaws.com"],
+            client_ids=["sts.amazonaws.com"],
         )
 
         # 신뢰: 이 provider + aud=sts + sub가 이 repo의 v* 태그 또는 main 브랜치일 때만 assume 허용.
         principal = iam.FederatedPrincipal(
-            provider.attr_arn,
+            provider.open_id_connect_provider_arn,
             conditions={
                 "StringEquals": {
                     "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",

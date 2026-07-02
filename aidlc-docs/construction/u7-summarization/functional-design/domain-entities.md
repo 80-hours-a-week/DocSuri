@@ -59,7 +59,7 @@
 | `paperId` · `version` | 논문·버전 |
 | `task` · `targetLang` | 작업·언어 |
 | `persona` | 생성 변형(요약만; 번역은 무관) |
-| `glossaryVer` | 용어집 버전 — **사용자 개인 오버라이드가 개인화 분기를 흡수**(공유 기본=0, 개인=N). 별도 `userId` 불필요(Q7=A) |
+| `glossaryVer` | **프롬프트-강제 용어의 콘텐츠 시그니처**(요약·번역 공통; 강한 용어 없음=0=공유 베이스). 약한(후치환) 용어는 키에 미포함·읽기시 오버레이. `signature > 0`은 `ownerId`로 갈라 충돌 방지 |
 | `modelVer` · `promptVer` | 모델·프롬프트 버전(업그레이드 시 키 변경 = 자동 무효화) |
 
 > **불변식(INV-5)**: 같은 키 = 항상 같은 산출물. 무효화는 키(경로) 변경에 의한 신규 객체 생성 — 수동 flush 없음.
@@ -109,7 +109,7 @@
 ### `TermMapping`
 `{ from, to, kind: enum{prompt_enforced, post_substitution} }`
 - `prompt_enforced`: 핵심 용어 보존·매핑 = **프롬프트 강제**(생성 시 일관·문맥 처리).
-- `post_substitution`: 사용자 선호 **단순 명사** = 캐시 번역에 **결정적 후치환**(조사 안전한 단순 명사 한정, LLM 재호출 0).
+- `post_substitution`(약한 용어): 사용자 선호 **단순 명사** = **읽기시** 공유 베이스에 **결정적 후치환 오버레이**(조사 안전한 단순 명사 한정, LLM 재호출 0, 캐시 미포함 — NFR-C1).
 
 ---
 

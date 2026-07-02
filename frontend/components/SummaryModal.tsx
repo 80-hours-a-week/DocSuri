@@ -114,15 +114,16 @@ export function SummaryModal({ paperId, version, view, onClose, onAnchor }: Summ
       case 'translation':
         return <TranslationView translation={outcome.translation} cached={outcome.cached} />;
       case 'pending': {
-        // Generation runs as a background job (BR-S6/BR-S8) and the hook keeps polling. Set the
-        // expectation up front (it can take 1–2 min for a long paper) so the wait doesn't read as
-        // a failure — the result appears automatically when ready.
+        // This state renders ONLY when the API returned `pending` — i.e. the work was dispatched
+        // to a background job (BR-S6/BR-S8) and the hook keeps polling (short inline waits never
+        // reach here). So it's accurate to tell the user it's running in the background; set the
+        // 1–2 min expectation up front so the wait doesn't read as a failure.
         const noun = view === 'summary' ? '요약' : '번역';
         return (
           <StateView
             kind="loading"
             title={`${noun} 생성 중…`}
-            message={`AI가 논문을 읽고 ${noun}을 만들고 있어요. 논문이 길면 1~2분 걸릴 수 있어요. 이 화면을 열어두면 완료되는 대로 표시돼요.`}
+            message={`AI가 백그라운드에서 ${noun}을 만들고 있어요. 논문이 길면 1~2분 걸릴 수 있어요. 완료되면 여기에 표시돼요.`}
           />
         );
       }
