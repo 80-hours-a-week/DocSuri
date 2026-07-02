@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import { getApiClient, UserFacingError, type SearchOutcome } from '@/lib/api';
 import { usePaginatedList } from '@/lib/usePaginatedList';
 import { StateView } from '../StateView';
@@ -12,6 +13,8 @@ import styles from './Library.module.css';
 // SavedSearchScreen (US-L1, FR-8) — list/delete/rerun saved searches. Rerun goes
 // through the gateway (U6 -> U2) and renders the live result inline (BR-U5-9).
 export function SavedSearchScreen({ showTabs = true }: { showTabs?: boolean } = {}) {
+  const router = useRouter();
+  const pathname = usePathname();
   const fetchPage = useCallback((cursor?: string) => getApiClient().listSavedSearches({ cursor }), []);
   const { items, status, error, hasMore, loadMore, reload, removeLocal } =
     usePaginatedList<SavedSearchDTO>(fetchPage);
@@ -44,6 +47,11 @@ export function SavedSearchScreen({ showTabs = true }: { showTabs?: boolean } = 
       const outcome = await getApiClient().rerunSavedSearch(itemId);
       setRerun({ id: itemId, outcome });
     } catch (e) {
+      if (e instanceof UserFacingError && e.isAuth) {
+        // Session expired mid-list (BR-U5-15) — route to login rather than an inline error.
+        router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
+        return;
+      }
       setActionError(e instanceof UserFacingError ? e.message : '다시 실행하지 못했습니다.');
     } finally {
       setRerunId(null);

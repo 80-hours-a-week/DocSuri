@@ -31,8 +31,20 @@ export default async function DocModelPage({
   const span = typeof sp.anchorSpan === 'string' ? sp.anchorSpan : '';
   const anchor: AnchorVM | null = label ? { field: '', target: 'section', span, label } : null;
 
+  // Preserve ?version/?anchorLabel/?anchorSpan across a login round-trip (E6, BR-U5-15) — a
+  // query-less redirectTo used to drop them, landing the user back on the doc-model page but
+  // no longer scrolled to the summary anchor they came from.
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(sp)) {
+    if (Array.isArray(value)) value.forEach((v) => query.append(key, v));
+    else if (value !== undefined) query.append(key, value);
+  }
+  const redirectTo = query.toString()
+    ? `/paper/${id}/doc-model?${query.toString()}`
+    : `/paper/${id}/doc-model`;
+
   return (
-    <RouteGuard redirectTo={`/paper/${id}/doc-model`}>
+    <RouteGuard redirectTo={redirectTo}>
       <div className={screen.screen}>
         <AppHeader title="전문" backHref={`/paper/${id}`} />
         <main className={page.page}>

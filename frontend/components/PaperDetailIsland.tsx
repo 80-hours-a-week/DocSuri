@@ -24,6 +24,20 @@ interface PaperDetailIslandProps {
   arxivUrl?: string;
 }
 
+// ResultCardVM.abstractSnippet is a SNIPPET, never the full abstract (BR-U5-4;
+// u5-frontend/functional-design/domain-entities.md §1.3 — the 7-field card contract). The
+// detail page only has the full abstract on hand, so it must be truncated before being saved
+// into a bookmark's card snapshot — otherwise every detail-page bookmark drifts from that
+// contract by carrying the entire text. Cuts on the last whitespace at/before the limit so a
+// word isn't sliced mid-way.
+const ABSTRACT_SNIPPET_MAX_CHARS = 300;
+function truncateSnippet(text: string, max = ABSTRACT_SNIPPET_MAX_CHARS): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const lastSpace = cut.lastIndexOf(' ');
+  return `${(lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
+}
+
 // Top action bar (modal openers). 본문 / 본문 번역 live below the metadata instead.
 const ACTIONS: { view: DetailView; label: string }[] = [
   { view: 'summary', label: '요약' },
@@ -139,7 +153,7 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
                 title: meta.meta.title,
                 authors: meta.meta.authors,
                 year: meta.meta.year,
-                abstractSnippet: meta.meta.abstract,
+                abstractSnippet: truncateSnippet(meta.meta.abstract),
                 arxivUrl: meta.meta.arxivUrl ?? arxivUrl,
               }}
             />

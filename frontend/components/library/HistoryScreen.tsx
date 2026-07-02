@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import { getApiClient, UserFacingError, type SearchOutcome } from '@/lib/api';
 import { usePaginatedList } from '@/lib/usePaginatedList';
 import { StateView } from '../StateView';
@@ -12,6 +13,8 @@ import styles from './Library.module.css';
 // HistoryScreen (US-L3, FR-10) — recent searches (async-recorded). Rerun renders
 // the live result inline; "이력 비우기" clears all (BR-U5). Cursor "더 보기".
 export function HistoryScreen({ showTabs = true }: { showTabs?: boolean } = {}) {
+  const router = useRouter();
+  const pathname = usePathname();
   const fetchPage = useCallback((cursor?: string) => getApiClient().listHistory({ cursor }), []);
   const { items, status, error, hasMore, loadMore, reload } =
     usePaginatedList<HistoryEntry>(fetchPage);
@@ -29,6 +32,11 @@ export function HistoryScreen({ showTabs = true }: { showTabs?: boolean } = {}) 
       const outcome = await getApiClient().rerunHistory(itemId);
       setRerun({ id: itemId, outcome });
     } catch (e) {
+      if (e instanceof UserFacingError && e.isAuth) {
+        // Session expired mid-list (BR-U5-15) — route to login rather than an inline error.
+        router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
+        return;
+      }
       setActionError(e instanceof UserFacingError ? e.message : '다시 실행하지 못했습니다.');
     } finally {
       setRerunId(null);
