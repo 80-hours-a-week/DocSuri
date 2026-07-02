@@ -25,9 +25,6 @@ class _FakeRepo:
     def get_user_glossary(self, user_id: str):
         return ()
 
-    def get_glossary_version(self, user_id: str) -> int:
-        return 0
-
     def upsert_term(self, user_id, term_from, term_to, *, prompt_enforced) -> int:
         self.calls.append((user_id, term_from, term_to, prompt_enforced))
         return 7

@@ -19,17 +19,13 @@ def test_resolve_fail_soft_on_repo_error() -> None:
 
 
 class _TermRepo:
-    """A repo whose term set can be swapped per test, returning the version/terms shape."""
+    """A repo whose term set can be swapped per test."""
 
-    def __init__(self, terms: tuple[TermMapping, ...] = (), version: int = 0) -> None:
+    def __init__(self, terms: tuple[TermMapping, ...] = ()) -> None:
         self.terms = terms
-        self.version = version
 
     def get_user_glossary(self, user_id):
         return self.terms
-
-    def get_glossary_version(self, user_id):
-        return self.version
 
 
 def test_summary_signature_ignores_post_substitution_edits() -> None:
@@ -74,8 +70,20 @@ def test_summary_signature_degrades_to_baseline_on_fault() -> None:
     assert GlossaryResolver(None).prompt_glossary_signature("u1") == 0
 
 
-def test_full_version_unaffected() -> None:
-    assert GlossaryResolver(_TermRepo(version=5)).glossary_version("u1") == 5
+def test_signature_of_matches_prompt_glossary_signature() -> None:
+    # signature_of is the pure (no-I/O) core; prompt_glossary_signature is resolve()+signature_of.
+    # The orchestrator uses signature_of on an already-resolved glossary — they must agree.
+    terms = (
+        TermMapping("attention", "어텐션", prompt_enforced=True),
+        TermMapping("잠재공간", "latent space", prompt_enforced=False),
+    )
+    repo = _TermRepo(terms=terms)
+    resolver = GlossaryResolver(repo)
+    glossary = resolver.resolve("u1")
+    assert GlossaryResolver.signature_of(glossary) == resolver.prompt_glossary_signature("u1")
+    # Pure over a Glossary with only weak terms → baseline (0), like the wrapper.
+    weak_only = Glossary(user_overrides=(TermMapping("주의", "어텐션", prompt_enforced=False),))
+    assert GlossaryResolver.signature_of(weak_only) == 0
 
 
 def test_post_substitute_applies_user_simple_noun() -> None:
