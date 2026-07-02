@@ -1,38 +1,44 @@
 .wrap {
-  /* Static so the popover's containing block is the glossary section (which is
-     position:relative), letting the editor span the section width instead of overflowing
-     the viewport from a badge near the right edge. */
+  /* Relative so the editor popover anchors right below THIS badge (뱃지 바로 아래). */
+  position: relative;
   display: inline-flex;
 }
 
-/* Tappable kept-term chip — compact. */
+/* Kept-term chip. Blue = 아직 안 바꾼 용어 / amber(주황) = 내가 번역어를 지정한 용어. */
 .term {
   font-size: 0.8125rem;
   padding: 0.25rem 0.625rem;
   color: var(--color-accent);
   background: var(--color-accent-soft-bg);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-accent);
   border-radius: 999px;
   cursor: pointer;
 }
 
 .term:hover,
 .term[aria-expanded='true'] {
-  border-color: var(--color-accent);
+  filter: brightness(0.97);
+}
+
+/* Personalized chip (the user saved a rendering) — amber, so "내가 지정한 용어" stands out. */
+.term[data-saved='true'] {
+  color: var(--color-warn-text);
+  background: var(--color-warn-bg);
+  border-color: var(--color-warn-text);
 }
 
 .popover {
-  /* Anchored to the glossary section (not the badge), spanning its full width: the editor
-     always stays inside the viewport — never cut off, never pushing the page sideways. */
+  /* Right below the tapped badge, left-aligned; bounded so it never pushes the page sideways. */
   position: absolute;
   top: calc(100% + 0.375rem);
   left: 0;
-  right: 0;
   z-index: 10;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
+  min-width: min(24rem, calc(100vw - 2rem)); /* roomy input, like before; capped to the viewport */
+  max-width: calc(100vw - 2rem);
   padding: 0.625rem 0.75rem;
   background: var(--color-surface);
   border: 1px solid var(--color-border);

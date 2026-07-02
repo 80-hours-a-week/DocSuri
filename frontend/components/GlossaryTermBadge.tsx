@@ -1,13 +1,15 @@
 'use client';
 
-// GlossaryTermBadge (개인 용어집 Phase 1) — a kept-as-is term badge that, when open, shows a
-// tiny inline editor to save the user's preferred Korean rendering via POST /api/glossary.
-// Mock-first: getApiClient() routes to MockTransport in dev. Open state is CONTROLLED by the
-// parent (TranslationView) so only one editor is open at a time and an outside click closes
-// it. `term` is external data, escaped by React (XSS, BR-SF-9). Phase 1 has no auto-rerun and
-// does not pre-fill an existing override (the translation response carries no saved value yet).
+// GlossaryTermBadge (개인 용어집) — a kept-term chip that opens a tiny inline editor to save the
+// user's preferred Korean rendering via POST /api/glossary. `strong` (a 표준 용어 = seed keep-as-is)
+// saves as a prompt-enforced override that re-generates the full translation; otherwise it is a
+// weak read-time substitution. The chip shows only the term; a personalized chip is tinted (색:
+// 미수정=파랑 / 내가 지정=주황) and the saved rendering pre-fills the editor input on open.
+// Mock-first: getApiClient() routes to MockTransport in dev. Open state is CONTROLLED by the parent
+// (TranslationView) so only one editor is open at a time. `term` is external data, escaped by React.
 import { useEffect, useId, useRef, useState } from 'react';
 import { getApiClient } from '@/lib/api';
+import { UserFacingError } from '@/lib/api/errors';
 import { recordGlossaryUpdated } from '@/lib/personalization';
 import styles from './GlossaryTermBadge.module.css';
 
@@ -18,8 +20,16 @@ interface GlossaryTermBadgeProps {
   open: boolean;
   onOpen: () => void;
   onClose: () => void;
-  /** The user's previously saved rendering for this term, pre-filled on open (Phase 2a). */
-  initialValue?: string;
+  /** True for a 표준 용어 (seed keep-as-is or mapping): saving overrides it as a strong,
+   * prompt-enforced term that re-generates the full translation. False → weak read-time
+   * substitution. */
+  strong?: boolean;
+  /** Standard rendering to pre-fill the editor when the user has no saved override yet — used for
+   * mapping terms (e.g. attention → 어텐션) so the editor starts from the standard value. */
+  defaultValue?: string;
+  /** The user's previously saved rendering (undefined = none). Pre-fills the editor (over
+   * ``defaultValue``) and marks the chip as personalized. */
+  saved?: string;
   /** Notify the parent of a successful save so its term map stays in sync. */
   onSaved?: (termTo: string) => void;
 }
@@ -29,40 +39,49 @@ export function GlossaryTermBadge({
   open,
   onOpen,
   onClose,
-  initialValue = '',
+  strong = false,
+  defaultValue = '',
+  saved,
   onSaved,
 }: GlossaryTermBadgeProps) {
   const [value, setValue] = useState('');
   const [status, setStatus] = useState<SaveStatus>('idle');
+  const [errMsg, setErrMsg] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const wasOpenRef = useRef(false);
   const panelId = useId();
 
   // Pre-fill with the saved rendering only on the open transition, then focus. A late-arriving
-  // glossary fetch can change initialValue while the editor is already open; re-running the
-  // pre-fill then would clobber the user's in-progress draft, so we latch on open instead.
-  // On close: reset the draft/state so a reopened badge re-reads initialValue afresh.
+  // glossary fetch can change props while the editor is already open; re-running the pre-fill then
+  // would clobber the user's in-progress draft, so we latch on open instead. On close: reset.
   useEffect(() => {
     if (open && !wasOpenRef.current) {
-      setValue(initialValue);
+      setValue(saved ?? defaultValue);
       requestAnimationFrame(() => inputRef.current?.focus());
     } else if (!open) {
       setValue('');
       setStatus('idle');
+      setErrMsg(null);
     }
     wasOpenRef.current = open;
-  }, [open, initialValue]);
+  }, [open, saved, defaultValue]);
 
   const save = async () => {
     const termTo = value.trim();
     if (!termTo || status === 'saving') return;
     setStatus('saving');
+    setErrMsg(null);
     try {
-      const saved = await getApiClient().upsertGlossaryTerm({ termFrom: term, termTo });
-      recordGlossaryUpdated(saved.glossaryVer);
+      const res = await getApiClient().upsertGlossaryTerm({
+        termFrom: term,
+        termTo,
+        promptEnforced: strong,
+      });
+      recordGlossaryUpdated(res.glossaryVer);
       setStatus('saved');
       onSaved?.(termTo);
-    } catch {
+    } catch (e) {
+      setErrMsg(e instanceof UserFacingError ? e.message : null);
       setStatus('error');
     }
   };
@@ -72,6 +91,7 @@ export function GlossaryTermBadge({
       <button
         type="button"
         className={styles.term}
+        data-saved={saved ? 'true' : undefined}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         onClick={() => (open ? onClose() : onOpen())}
@@ -82,10 +102,15 @@ export function GlossaryTermBadge({
       </button>
 
       {open ? (
-        <span id={panelId} className={styles.popover} role="group" aria-label={`${term} 번역어 지정`}>
+        <span
+          id={panelId}
+          className={styles.popover}
+          role="group"
+          aria-label={`${term} 번역어 지정`}
+        >
           {status === 'saved' ? (
             <span className={styles.savedNote} role="status" data-testid="glossary-saved">
-              저장됨 · 다시 번역하면 반영돼요
+              {strong ? '저장됨 · 번역을 다시 만드는 중이에요' : '저장됨 · 바로 반영됐어요'}
             </span>
           ) : (
             <>
@@ -117,7 +142,7 @@ export function GlossaryTermBadge({
           )}
           {status === 'error' ? (
             <span className={styles.error} role="alert">
-              저장 실패 · 다시 시도해 주세요
+              {errMsg ?? '저장 실패 · 다시 시도해 주세요'}
             </span>
           ) : null}
         </span>

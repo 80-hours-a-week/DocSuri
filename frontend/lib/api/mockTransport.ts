@@ -26,12 +26,7 @@ import {
   mockListGlossaryTerms,
 } from '@/mocks/summarizeFixtures';
 import { mockPaperMeta } from '@/mocks/paperFixtures';
-import {
-  mockSignup,
-  mockLogin,
-  mockLogout,
-  mockCurrentSession,
-} from '@/mocks/accountFixtures';
+import { mockSignup, mockLogin, mockLogout, mockCurrentSession } from '@/mocks/accountFixtures';
 import {
   mockListSaved,
   mockCreateSaved,
@@ -59,10 +54,7 @@ import {
   mockLoadAgentSession,
   mockSendAgentMessage,
 } from '@/mocks/agentFixtures';
-import type {
-  SavedSearchCreateDTO,
-  LibraryItemCreateDTO,
-} from '@/types/generated';
+import type { SavedSearchCreateDTO, LibraryItemCreateDTO } from '@/types/generated';
 import type { CitationNode } from '@/types/citationGraph';
 import type { BehaviorEventCreate } from '@/types/personalization';
 import type {
@@ -164,11 +156,16 @@ export class MockTransport implements Transport {
       return { status: 200, body: { status: 'ok', terms: mockListGlossaryTerms() } };
     }
     if (req.path === '/api/glossary' && req.method === 'POST') {
-      const body = (req.body ?? {}) as { termFrom?: unknown; termTo?: unknown };
+      const body = (req.body ?? {}) as {
+        termFrom?: unknown;
+        termTo?: unknown;
+        promptEnforced?: unknown;
+      };
       const termFrom = String(body.termFrom ?? '').trim();
       const termTo = String(body.termTo ?? '').trim();
+      const promptEnforced = body.promptEnforced === true; // strict boolean (mirror the backend)
       if (!termFrom || !termTo) return { status: 400, body: { message: '용어를 입력해 주세요.' } };
-      return { status: 201, body: mockUpsertGlossaryTerm(termFrom, termTo) };
+      return { status: 201, body: mockUpsertGlossaryTerm(termFrom, termTo, promptEnforced) };
     }
     if (/^\/api\/papers\/[^/]+\/assets$/.test(path) && req.method === 'GET') {
       return { status: 200, body: assetsResponse };
@@ -433,8 +430,7 @@ function researchJob(session: AgentSessionSummary) {
   return {
     jobId: session.id,
     title: session.title,
-    state:
-      session.state === 'completed' || session.state === 'failed' ? session.state : 'active',
+    state: session.state === 'completed' || session.state === 'failed' ? session.state : 'active',
     updatedAt: session.updatedAt,
     createdAt: session.updatedAt,
   };

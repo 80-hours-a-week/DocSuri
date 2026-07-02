@@ -163,6 +163,22 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Untranslated terminology or glossary terms kept as-is. Trace: FR-13."
+        },
+        "standardGlossary": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "term": { "type": "string", "description": "The English (source) term." },
+              "translated": {
+                "type": "string",
+                "description": "Standard Korean rendering — present only for mapping terms (e.g. attention→어텐션), where it pre-fills the editor; absent for keep-as-is terms (kept in English)."
+              }
+            },
+            "required": ["term"],
+            "additionalProperties": false
+          },
+          "description": "DocSuri standard glossary terms (shared seed) that appear in THIS paper: keep-as-is terms the model kept in English (no 'translated'), plus mapping terms whose standard Korean appears in the translation ('translated' set). The client renders a 표준 용어집; both kinds are editable as strong, prompt-enforced overrides (re-translation) — a mapping chip pre-fills its editor with the standard rendering. Trace: BR-S4."
         }
       },
       "required": ["docModel", "keptTerms"],

@@ -5,9 +5,9 @@ import { TranslationView } from '@/components/TranslationView';
 import { resetMockGlossary } from '@/mocks/summarizeFixtures';
 import type { TranslationVM } from '@/types/generated';
 
-// 개인 용어집 Phase 1 — drives the real MockTransport (mock-first) end to end through
-// TranslationView, which owns the open-editor state: tap a kept-term badge, type a
-// rendering, save; only one editor opens at a time; an outside click dismisses it.
+// 개인 용어집 (BR-S4) — drives the real MockTransport end to end through TranslationView, which
+// shows 원어 유지 용어 (other kept terms → weak) first, then 표준 용어 (seed standard: keep-as-is +
+// mapping chips, both → strong; mappings pre-filled). Only one editor opens; outside click dismisses.
 
 const translation: TranslationVM = {
   docModel: {
@@ -31,14 +31,25 @@ const translation: TranslationVM = {
       },
     ],
   },
-  keptTerms: ['attention', 'BLEU'],
+  keptTerms: ['Transformer', 'encoder', 'BLEU'],
+  standardGlossary: [
+    { term: 'Transformer' }, // keep-as-is standard → strong badge
+    { term: 'BLEU' }, // keep-as-is standard → strong badge
+    { term: 'attention', translated: '어텐션' }, // mapping → editable strong (pre-filled 어텐션)
+  ],
 };
+
+// Badges are selected by term (order-independent): encoder (원어 유지 → weak), Transformer / BLEU
+// (표준 → strong).
+const badge = (term: string) => screen.getByRole('button', { name: term });
 
 function renderView() {
   return render(
     <div>
       <TranslationView translation={translation} showGlossary />
-      <button type="button" data-testid="outside">바깥</button>
+      <button type="button" data-testid="outside">
+        바깥
+      </button>
     </div>,
   );
 }
@@ -48,34 +59,60 @@ describe('GlossaryTermBadge (via TranslationView)', () => {
     resetMockGlossary();
   });
 
-  it('opens an editor on tap and confirms after a successful save', async () => {
+  it('renders both groups; the mapping is an editable 표준 badge', () => {
+    renderView();
+    expect(screen.getByRole('heading', { name: '원어 유지 용어' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '표준 용어' })).toBeInTheDocument();
+    // encoder (원어 유지) + Transformer, BLEU, attention (표준) — attention is editable now too.
+    expect(screen.getAllByTestId('glossary-badge')).toHaveLength(4);
+    expect(badge('attention')).toBeInTheDocument();
+    expect(badge('encoder')).not.toHaveAttribute('data-saved'); // unedited → no marker
+  });
+
+  it('a mapping (attention) pre-fills the standard rendering and saves as strong', async () => {
     const user = userEvent.setup();
     renderView();
 
+    await user.click(badge('attention'));
+    const input = (await screen.findByTestId('glossary-input')) as HTMLInputElement;
+    expect(input.value).toBe('어텐션'); // standard rendering pre-filled (defaultValue)
+
+    await user.clear(input);
+    await user.type(input, '주목');
+    await user.click(screen.getByTestId('glossary-save'));
+    await waitFor(() => expect(screen.getByTestId('glossary-saved')).toBeInTheDocument());
+    expect(screen.getByTestId('glossary-saved')).toHaveTextContent('번역을 다시 만드는 중'); // strong
+  });
+
+  it('opens an editor on tap and confirms a weak save', async () => {
+    const user = userEvent.setup();
+    renderView();
     expect(screen.queryByTestId('glossary-input')).not.toBeInTheDocument();
 
-    await user.click(screen.getAllByTestId('glossary-badge')[0]);
+    await user.click(badge('encoder')); // 원어 유지 → weak
     const input = await screen.findByTestId('glossary-input');
     expect(screen.getByTestId('glossary-save')).toBeDisabled();
 
-    await user.type(input, '주의집중');
+    await user.type(input, '인코더');
     expect(screen.getByTestId('glossary-save')).toBeEnabled();
 
     await user.click(screen.getByTestId('glossary-save'));
     await waitFor(() => expect(screen.getByTestId('glossary-saved')).toBeInTheDocument());
+    expect(screen.getByTestId('glossary-saved')).toHaveTextContent('바로 반영');
+    // Personalized → the chip is now marked (amber), showing only the term (no inline rendering).
+    expect(badge('encoder')).toHaveAttribute('data-saved', 'true');
+    expect(badge('encoder')).toHaveTextContent('encoder');
   });
 
   it('keeps only one editor open at a time', async () => {
     const user = userEvent.setup();
     renderView();
-    const [first, second] = screen.getAllByTestId('glossary-badge');
 
-    await user.click(first);
+    await user.click(badge('encoder'));
     expect(await screen.findByTestId('glossary-input')).toBeInTheDocument();
     expect(screen.getAllByTestId('glossary-input')).toHaveLength(1);
 
-    // Opening the second badge closes the first — still exactly one editor.
-    await user.click(second);
+    await user.click(badge('Transformer'));
     await waitFor(() => expect(screen.getAllByTestId('glossary-input')).toHaveLength(1));
   });
 
@@ -83,27 +120,40 @@ describe('GlossaryTermBadge (via TranslationView)', () => {
     const user = userEvent.setup();
     renderView();
 
-    await user.click(screen.getAllByTestId('glossary-badge')[0]);
+    await user.click(badge('encoder'));
     expect(await screen.findByTestId('glossary-input')).toBeInTheDocument();
 
     await user.click(screen.getByTestId('outside'));
     await waitFor(() => expect(screen.queryByTestId('glossary-input')).not.toBeInTheDocument());
   });
 
-  it('pre-fills a previously saved rendering when reopened (Phase 2a round-trip)', async () => {
+  it('a 표준 용어 saves as strong (re-translation)', async () => {
     const user = userEvent.setup();
     renderView();
 
-    // Save a rendering for the first term…
-    await user.click(screen.getAllByTestId('glossary-badge')[0]);
-    await user.type(await screen.findByTestId('glossary-input'), '주의집중');
+    // 'Transformer' is a 표준 용어 (keep-as-is) → saving it is a strong, re-translated override.
+    await user.click(badge('Transformer'));
+    await user.type(await screen.findByTestId('glossary-input'), '트랜스포머');
+    await user.click(screen.getByTestId('glossary-save'));
+    await waitFor(() => expect(screen.getByTestId('glossary-saved')).toBeInTheDocument());
+    expect(screen.getByTestId('glossary-saved')).toHaveTextContent('번역을 다시 만드는 중');
+
+    await user.click(screen.getByTestId('outside'));
+    expect(badge('Transformer')).toHaveAttribute('data-saved', 'true');
+  });
+
+  it('pre-fills a previously saved rendering when reopened', async () => {
+    const user = userEvent.setup();
+    renderView();
+
+    await user.click(badge('encoder'));
+    await user.type(await screen.findByTestId('glossary-input'), '인코더');
     await user.click(screen.getByTestId('glossary-save'));
     await waitFor(() => expect(screen.getByTestId('glossary-saved')).toBeInTheDocument());
 
-    // …close, reopen: the input is pre-filled with the saved value (no blank restart).
     await user.click(screen.getByTestId('outside'));
-    await user.click(screen.getAllByTestId('glossary-badge')[0]);
-    const reopened = await screen.findByTestId('glossary-input');
-    expect((reopened as HTMLInputElement).value).toBe('주의집중');
+    await user.click(badge('encoder'));
+    const reopened = (await screen.findByTestId('glossary-input')) as HTMLInputElement;
+    expect(reopened.value).toBe('인코더');
   });
 });

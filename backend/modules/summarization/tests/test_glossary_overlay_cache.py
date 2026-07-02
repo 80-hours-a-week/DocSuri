@@ -164,13 +164,34 @@ def test_overlay_is_noop_without_weak_terms() -> None:
     assert ResultAssembler.overlay_translation(base, Glossary()) is base
 
 
+def test_translation_standard_glossary_lists_present_seed_terms() -> None:
+    # standardGlossary = shared-seed standard terms present in THIS paper (BR-S4): keep-as-is terms
+    # the model kept in English (no 'translated'), plus mapping terms whose Korean is in the text.
+    draft = TranslationDraft(
+        doc_model=tiny_doc(paragraph="이 모델은 어텐션을 쓴다."),
+        kept_terms=("Transformer", "transformer", "WMT", "BLEU"),
+    )
+    out = ResultAssembler().assemble_translation(draft, _src()).to_dict()["translation"]
+    glossary = out["standardGlossary"]
+    # keep-as-is present (Transformer, BLEU) → English, no 'translated'; dedup case-insensitively.
+    assert {"term": "Transformer"} in glossary
+    assert {"term": "BLEU"} in glossary
+    assert sum(1 for g in glossary if g["term"].lower() == "transformer") == 1  # deduped
+    assert all(g["term"] != "WMT" for g in glossary)  # WMT is not a seed term
+    # mapping present (translated text contains 어텐션) → attention→어텐션 with 'translated'.
+    assert {"term": "attention", "translated": "어텐션"} in glossary
+
+
 # --- seed change → cache self-invalidation ----------------------------------------------
 
 
-def test_current_seed_omits_cache_segment() -> None:
-    # The shipped seed matches the frozen baseline → segment omitted → existing cache paths
-    # unchanged on deploy (no gratuitous regeneration).
-    assert glossary_mod.seed_cache_segment() == ""
+def test_current_seed_diverges_from_baseline_and_activates_segment() -> None:
+    # The shipped seed was intentionally edited past the frozen baseline (strong-term finalization:
+    # fine-tuning demoted to keep-as-is + keep-as-is enrichment), so the seed segment is ACTIVE
+    # (non-empty, == current SEED_VER) → prior seed-based artifacts self-invalidate on deploy.
+    assert glossary_mod.SEED_VER != glossary_mod._SEED_BASELINE_VER
+    assert glossary_mod.seed_cache_segment() == glossary_mod.SEED_VER
+    assert glossary_mod.seed_cache_segment() != ""
 
 
 def test_seed_edit_flips_segment_and_changes_path(monkeypatch) -> None:

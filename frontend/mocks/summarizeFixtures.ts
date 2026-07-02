@@ -116,6 +116,12 @@ export const abstractTranslationResponse: TranslationOkDTO = {
       ],
     },
     keptTerms: ['Transformer', 'attention', 'BLEU'],
+    // seed keep-as-is present (English) + the attention mapping (Korean is in the text)
+    standardGlossary: [
+      { term: 'Transformer' },
+      { term: 'BLEU' },
+      { term: 'attention', translated: '어텐션' },
+    ],
   },
 };
 
@@ -222,23 +228,33 @@ export const fullTranslationResponse: TranslationOkDTO = {
       ],
     },
     keptTerms: ['Transformer', 'encoder', 'decoder', 'self-attention'],
+    // Transformer = keep-as-is standard (English); attention→어텐션 mapping appears in the text
+    standardGlossary: [{ term: 'Transformer' }, { term: 'attention', translated: '어텐션' }],
   },
 };
 
 // Personal glossary (Phase 1/2a) — an in-memory store so the dev preview behaves like the
 // real round-trip: upsert remembers termFrom→termTo and bumps a version, and the list reads
 // it back so the badge editor pre-fills a previously saved rendering.
-const mockGlossary = new Map<string, string>();
+const mockGlossary = new Map<string, { termTo: string; promptEnforced: boolean }>();
 let mockGlossaryVer = 0;
 
-export function mockUpsertGlossaryTerm(termFrom: string, termTo: string): GlossaryUpsertResultDTO {
-  mockGlossary.set(termFrom, termTo);
+export function mockUpsertGlossaryTerm(
+  termFrom: string,
+  termTo: string,
+  promptEnforced = false,
+): GlossaryUpsertResultDTO {
+  mockGlossary.set(termFrom, { termTo, promptEnforced });
   mockGlossaryVer += 1;
   return { status: 'ok', glossaryVer: mockGlossaryVer };
 }
 
 export function mockListGlossaryTerms(): GlossaryTermDTO[] {
-  return [...mockGlossary.entries()].map(([termFrom, termTo]) => ({ termFrom, termTo }));
+  return [...mockGlossary.entries()].map(([termFrom, { termTo, promptEnforced }]) => ({
+    termFrom,
+    termTo,
+    promptEnforced,
+  }));
 }
 
 /** Reset the in-memory glossary so tests start from a clean store (no cross-test bleed). */
@@ -246,6 +262,11 @@ export function resetMockGlossary(): void {
   mockGlossary.clear();
   mockGlossaryVer = 0;
 }
+
+// Dev preview only: personalize one non-standard kept term ('encoder' → 인코더) so the "원어 유지
+// 용어" section shows a saved rendering out of the box. Tests reset the store first, so they start
+// empty. Non-standard terms save weak (표준 용어 are the strong / re-translated case).
+mockUpsertGlossaryTerm('encoder', '인코더', false);
 
 // FR-17 figure/table assets (dev preview). Inline SVG data URLs render without network.
 const _ph = (label: string, fill: string): string =>

@@ -315,11 +315,28 @@ class SummaryResultDTO:
         if self.translation is not None:
             # Mirror the doc-model read path (router): emit the translated doc-model with
             # ``exclude_none`` so absent optional fields stay absent (schema parity).
+            # ``standardGlossary`` = shared-seed standard terms that appear in THIS paper (BR-S4):
+            # keep-as-is terms the model kept in English (no ``translated``), plus mapping terms
+            # whose standard Korean shows up in the translated text (``translated`` set). The client
+            # renders a 표준 용어집 from it. Lazy import avoids a models↔glossary cycle.
+            from .glossary import SEED_KEEP_AS_IS_LOWER, SEED_MAPPINGS
+
+            doc = self.translation.doc_model.model_dump(mode="json", exclude_none=True)
+            std_glossary: list[dict] = []
+            seen: set[str] = set()
+            for t in self.translation.kept_terms:  # keep-as-is present (English, editable → strong)
+                key = t.lower()
+                if key in SEED_KEEP_AS_IS_LOWER and key not in seen:
+                    std_glossary.append({"term": t})
+                    seen.add(key)
+            translated_text = doc.get("fullText") or ""
+            for m in SEED_MAPPINGS:  # mapping present (governed reference, en→ko)
+                if m.term_to and m.term_to in translated_text:
+                    std_glossary.append({"term": m.term_from, "translated": m.term_to})
             out["translation"] = {
-                "docModel": self.translation.doc_model.model_dump(
-                    mode="json", exclude_none=True
-                ),
+                "docModel": doc,
                 "keptTerms": list(self.translation.kept_terms),
+                "standardGlossary": std_glossary,
             }
         return out
 

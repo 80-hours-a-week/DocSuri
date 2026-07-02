@@ -298,11 +298,7 @@ function attachmentStatus(value: unknown): AgentAttachmentStatus {
   return value === 'rejected' ? 'rejected' : 'ready';
 }
 
-function attachmentKind(
-  value: unknown,
-  contentType?: string,
-  name?: string,
-): AgentAttachmentKind {
+function attachmentKind(value: unknown, contentType?: string, name?: string): AgentAttachmentKind {
   if (value === 'pdf' || value === 'markdown' || value === 'text') return value;
   const lowerName = name?.toLowerCase() ?? '';
   const lowerType = contentType?.toLowerCase() ?? '';

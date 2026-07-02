@@ -113,3 +113,35 @@ def test_resolve_includes_seed_keep_as_is() -> None:
     glossary = GlossaryResolver(None).resolve("user-1")
     assert "Transformer" in glossary.keep_as_is
     assert glossary.user_overrides == ()
+
+
+# --- personal strong override may replace a shared seed mapping (lock removed, BR-S4) -----------
+
+
+class _CapRepo:
+    """Owner-scoped repo that records upsert calls (and never returns saved terms)."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple] = []
+
+    def get_user_glossary(self, user_id):
+        return ()
+
+    def upsert_term(self, user_id, term_from, term_to, *, prompt_enforced):
+        self.calls.append((user_id, term_from, term_to, prompt_enforced))
+        return 1
+
+
+def test_strong_override_of_seed_mapping_is_allowed() -> None:
+    # No lock: a personal STRONG override of a shared seed mapping (attention→어텐션) is permitted —
+    # it wins over the seed for that user (precedence handled in the prompt, see _glossary_block).
+    repo = _CapRepo()
+    ver = GlossaryResolver(repo).upsert_term("u1", "attention", "주목", prompt_enforced=True)
+    assert ver == 1
+    assert repo.calls == [("u1", "attention", "주목", True)]
+
+
+def test_weak_override_delegates() -> None:
+    repo = _CapRepo()
+    GlossaryResolver(repo).upsert_term("u1", "encoder", "인코더", prompt_enforced=False)
+    assert repo.calls == [("u1", "encoder", "인코더", False)]

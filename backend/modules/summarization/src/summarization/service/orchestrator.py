@@ -299,19 +299,24 @@ class SummarizationOrchestrationService:
 
     # --- personal glossary (Q8 / §9.1) ---------------------------------------
     def list_glossary_terms(self, user_id: str) -> list[dict]:
-        """The user's saved personal terms as ``{termFrom, termTo}`` (owner-scoped). Used to
-        pre-fill the badge editor; exposes only the two display fields (no internal flags)."""
+        """The user's saved personal terms as ``{termFrom, termTo, promptEnforced}`` (owner-scoped).
+        Pre-fills the badge editor and lets it distinguish strong (프롬프트 강제) from weak (후치환)
+        terms; ``glossary_ver`` and other internals stay hidden."""
         return [
-            {"termFrom": m.term_from, "termTo": m.term_to}
+            {"termFrom": m.term_from, "termTo": m.term_to, "promptEnforced": m.prompt_enforced}
             for m in self._glossary.list_user_terms(user_id)
         ]
 
-    def upsert_glossary_term(self, user_id: str, term_from: str, term_to: str) -> int:
-        """Persist a personal term override; return the bumped ``glossary_ver`` (Phase 1:
-        simple-noun, applied to translation via post-substitution). The version bump folds
-        into ``build_cache_key``, invalidating the user's cached results so the next request
-        reflects the new term."""
-        return self._glossary.upsert_term(user_id, term_from, term_to)
+    def upsert_glossary_term(
+        self, user_id: str, term_from: str, term_to: str, *, prompt_enforced: bool = False
+    ) -> int:
+        """Persist a personal term override; return the bumped ``glossary_ver``.
+        ``prompt_enforced`` selects strong (프롬프트 강제 → forks the owner-scoped cache) vs weak
+        (후치환 → read-time overlay on the shared base, key unchanged). A strong override may
+        replace a shared seed mapping for that user, taking precedence in the prompt (BR-S4)."""
+        return self._glossary.upsert_term(
+            user_id, term_from, term_to, prompt_enforced=prompt_enforced
+        )
 
     # --- structured doc-model (BR-30, rich-view + summary input) -------------
     def doc_model(self, paper_id: str, version: int) -> DocModelLookup:
