@@ -186,6 +186,7 @@ def job_from_payload(payload) -> IngestionJob:
         paper_id=payload.get("paperId"),
         version=payload.get("version"),
         source_record=payload.get("sourceRecord"),
+        arxiv_metadata=payload.get("arxivMetadata"),
     )
 
 
