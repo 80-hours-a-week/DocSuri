@@ -91,26 +91,32 @@ class SummaryCacheKey:
     glossary_ver: int
     model_ver: str
     prompt_ver: str
-    # Owner of a personalized artifact (set only when glossary_ver > 0). glossary_ver is a
-    # per-user counter, not a content identity, so two different users can both be at ver=1
-    # with different terms — without owner scoping their keys would collide and one would be
-    # served the other's personalized translation. None for the shared baseline (ver == 0).
+    # Owner of a personalized artifact (set only when glossary_ver > 0). glossary_ver is the
+    # prompt-enforced content signature: 0 (no prompt-enforced terms) is the shared, owner-agnostic
+    # baseline; a positive signature is owner-scoped so two users' distinct term sets never collide.
     owner_id: str | None = None
+    # Content version of the shared seed glossary. Empty while the seed matches the shipped
+    # baseline (path unchanged → existing objects stay valid); a seed edit makes it non-empty so
+    # the path changes and exactly the affected objects invalidate (see seed_cache_segment).
+    seed_ver: str = ""
 
     def object_path(self) -> str:
         """S3 object path (infrastructure-design §2.1). Immutable → permanent (INV-5).
 
-        ``glossaryVer`` is part of the path so a personal-term change (glossaryVer++) yields a
-        new key → cache miss → re-translation (BR-S1: invalidation by key change, no manual
-        flush). Personalized artifacts (glossary_ver > 0) additionally carry ``owner_id`` so
-        per-user counters that share an integer don't collide across users; the baseline
-        (glossary_ver == 0, no personal terms) stays owner-agnostic and shared.
+        ``glossaryVer`` (the prompt-enforced content signature) is part of the path so adding/
+        editing a prompt-enforced term yields a new key → miss → regenerate (BR-S1: invalidation
+        by key change, no manual flush). A positive signature additionally carries ``owner_id`` so
+        distinct per-user term sets don't collide; the baseline (0, no prompt-enforced terms) stays
+        owner-agnostic and shared — post-substitution (weak) terms don't alter the path (they are a
+        read-time overlay on the shared base). ``seed_ver`` appends only when the seed diverges from
+        the shipped baseline, so a seed edit self-invalidates without touching unaffected objects.
         """
         owner = f"_u{self.owner_id}" if self.owner_id else ""
+        seed = f"_s{self.seed_ver}" if self.seed_ver else ""
         return (
             f"summaries/{self.paper_id}/v{self.version}/"
             f"{self.task}_{self.target_lang}_{self.scope}_{self.persona}"
-            f"_g{self.glossary_ver}{owner}_{self.model_ver}_{self.prompt_ver}.json"
+            f"_g{self.glossary_ver}{owner}{seed}_{self.model_ver}_{self.prompt_ver}.json"
         )
 
     def redis_key(self) -> str:
