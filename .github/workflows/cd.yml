@@ -6,14 +6,15 @@ name: CD
 
 on:
   push:
-    tags: ["v*"] # git-flow releases are v* tags — deploy the tagged release, not every main push
+    tags: ["v*"] # manual/hotfix path — pushing a v* tag deploys that tagged release
+  workflow_call: {} # auto path — release.yml calls this after auto-tagging a push to main
 
-# Trigger is the release TAG (not push:main / workflow_run) so a deploy maps 1:1 to a git-flow
-# release. PREREQUISITE (verified 2026-07-01): the GitHub OIDC provider and this CD role do NOT yet
-# exist in account 028317349537 — CD has never authenticated (fully dormant). Whoever provisions
-# them must scope the role's trust `sub` to `repo:80-hours-a-week/DocSuri:ref:refs/tags/v*` (the
-# token ref on a tag push). There is no pre-existing main-scoped policy to conflict with, so
-# tag-triggering is safe to adopt now.
+# Two entry points, both 1:1 with a release:
+#   • push a v* tag directly (hotfix) → OIDC sub = repo:...:ref:refs/tags/v*
+#   • release.yml (on push:main) auto-tags then calls this as a reusable workflow → OIDC sub =
+#     repo:...:ref:refs/heads/main (the caller's branch ref, NOT a tag).
+# The CD role trust (cicd_stack.py) must therefore allow BOTH subs, else the reusable-call path
+# fails at sts:AssumeRoleWithWebIdentity. All deploy jobs use env.CD_ROLE_ARN below.
 permissions:
   contents: read
   id-token: write # OIDC for AWS assume-role (no long-lived keys)
