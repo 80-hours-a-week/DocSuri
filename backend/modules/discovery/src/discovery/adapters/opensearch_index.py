@@ -43,7 +43,13 @@ _log = logging.getLogger(__name__)
 #      ~MAX_ATTEMPTS * this + backoff instead of ~30s.
 _SEARCH_MAX_ATTEMPTS = 3
 _SEARCH_RETRY_BACKOFF_S = (0.1, 0.25)  # sleeps before attempt 2 and attempt 3
-_SEARCH_REQUEST_TIMEOUT_S = 2.0  # per-attempt cap; bounds the fail-close tail (P50<3s budget)
+# Per-attempt cap. Raised from 2.0s: the k-NN (HNSW) graph of a freshly written or just-merged
+# segment is loaded into native memory on the FIRST query that touches it, which takes a few
+# seconds; a 2.0s cap made that cold load time out and the whole search fail-close (the observed
+# "first search fails, works on retry" — worst during a corpus reindex, but it recurs after any
+# merge / memory eviction / idle period, so it isn't only a backfill artifact). 5.0s absorbs a
+# cold graph load on attempt 1; the small backoff'd retries still bound a genuine-outage tail.
+_SEARCH_REQUEST_TIMEOUT_S = 5.0
 
 
 def _is_transient(exc: BaseException) -> bool:
