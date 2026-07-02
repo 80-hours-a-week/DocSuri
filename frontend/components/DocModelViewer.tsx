@@ -11,7 +11,14 @@
 // id-based anchor contract is a follow-up). Span-precise inline highlight is a follow-up.
 // (KaTeX stylesheet is pulled in by the renderMath import below.)
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { AnchorVM, AssetRef, DocBlock, DocModel, DocSection, DocTableBlock } from '@/types/generated';
+import type {
+  AnchorVM,
+  AssetRef,
+  DocBlock,
+  DocModel,
+  DocSection,
+  DocTableBlock,
+} from '@/types/generated';
 import { useDocModel } from '@/lib/useDocModel';
 import { useAssets } from '@/lib/useAssets';
 import { createPortal } from 'react-dom';
@@ -31,7 +38,13 @@ interface DocModelViewerProps {
   hideTitle?: boolean;
 }
 
-export function DocModelViewer({ paperId, version, anchor, arxivUrl, hideTitle }: DocModelViewerProps) {
+export function DocModelViewer({
+  paperId,
+  version,
+  anchor,
+  arxivUrl,
+  hideTitle,
+}: DocModelViewerProps) {
   const { state, load } = useDocModel();
   const { state: assetState, load: loadAssets } = useAssets();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -444,7 +457,11 @@ function BlockView({
           <div className={`${cls} ${styles.formula}`} data-block={block.id} tabIndex={-1}>
             {/* role="img" so the label is honored on a bare <span> (generic role) — aria-label
                 alone is unreliable there (D5, BR-U5-21, NFR-U5-U2). */}
-            <span role="img" className={styles.formulaPlaceholder} aria-label="수식을 표시할 수 없습니다">
+            <span
+              role="img"
+              className={styles.formulaPlaceholder}
+              aria-label="수식을 표시할 수 없습니다"
+            >
               [수식]
             </span>
             {block.anchorLabel ? <span className={styles.eqno}>{block.anchorLabel}</span> : null}

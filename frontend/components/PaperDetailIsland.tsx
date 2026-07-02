@@ -61,8 +61,7 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
   const sourceName = m?.sourceName ?? 'arXiv';
   const isArxiv = sourceName.toLowerCase() === 'arxiv';
   const sourceUrlRaw = m?.sourceUrl ?? m?.arxivUrl ?? arxivUrl;
-  const sourceUrl =
-    sourceUrlRaw && /^https?:\/\//i.test(sourceUrlRaw) ? sourceUrlRaw : undefined;
+  const sourceUrl = sourceUrlRaw && /^https?:\/\//i.test(sourceUrlRaw) ? sourceUrlRaw : undefined;
   const router = useRouter();
   const openedRef = useRef<string | null>(null);
 

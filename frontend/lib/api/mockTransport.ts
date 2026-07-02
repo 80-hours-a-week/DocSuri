@@ -26,12 +26,7 @@ import {
   mockListGlossaryTerms,
 } from '@/mocks/summarizeFixtures';
 import { mockPaperMeta } from '@/mocks/paperFixtures';
-import {
-  mockSignup,
-  mockLogin,
-  mockLogout,
-  mockCurrentSession,
-} from '@/mocks/accountFixtures';
+import { mockSignup, mockLogin, mockLogout, mockCurrentSession } from '@/mocks/accountFixtures';
 import {
   mockListSaved,
   mockCreateSaved,
@@ -59,10 +54,7 @@ import {
   mockLoadAgentSession,
   mockSendAgentMessage,
 } from '@/mocks/agentFixtures';
-import type {
-  SavedSearchCreateDTO,
-  LibraryItemCreateDTO,
-} from '@/types/generated';
+import type { SavedSearchCreateDTO, LibraryItemCreateDTO } from '@/types/generated';
 import type { CitationNode } from '@/types/citationGraph';
 import type { BehaviorEventCreate } from '@/types/personalization';
 import type {
@@ -456,8 +448,7 @@ function researchJob(session: AgentSessionSummary) {
   return {
     jobId: session.id,
     title: session.title,
-    state:
-      session.state === 'completed' || session.state === 'failed' ? session.state : 'active',
+    state: session.state === 'completed' || session.state === 'failed' ? session.state : 'active',
     updatedAt: session.updatedAt,
     createdAt: session.updatedAt,
   };

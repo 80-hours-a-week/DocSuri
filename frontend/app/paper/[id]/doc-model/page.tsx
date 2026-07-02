@@ -24,7 +24,8 @@ export default async function DocModelPage({
   // Prefer the explicit ?version from the detail-page link; on a deep link with no query, fall
   // back to the revision in the id itself rather than a hardcoded v1 (which would show a stale
   // or perpetually-"building" body for any later-revision paper).
-  const version = Number(Array.isArray(sp.version) ? sp.version[0] : sp.version) || arxivVersion(id);
+  const version =
+    Number(Array.isArray(sp.version) ? sp.version[0] : sp.version) || arxivVersion(id);
   const arxivUrl = `https://arxiv.org/abs/${encodeURIComponent(id)}`;
 
   const label = typeof sp.anchorLabel === 'string' ? sp.anchorLabel : undefined;

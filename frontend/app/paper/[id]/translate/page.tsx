@@ -20,7 +20,8 @@ export default async function TranslatePage({
   const sp = await searchParams;
   // Explicit ?version from the detail-page link wins; a deep link with no query falls back to
   // the revision parsed from the id rather than a hardcoded v1.
-  const version = Number(Array.isArray(sp.version) ? sp.version[0] : sp.version) || arxivVersion(id);
+  const version =
+    Number(Array.isArray(sp.version) ? sp.version[0] : sp.version) || arxivVersion(id);
 
   // Preserve ?version (and any other query) across a login round-trip (E6, BR-U5-15) — a
   // query-less redirectTo used to drop it, landing the user back on the wrong revision.

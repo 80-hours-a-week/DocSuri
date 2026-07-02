@@ -203,7 +203,11 @@ export function LoginForm() {
         Google로 계속하기
       </a>
       {ORCID_LOGIN_ENABLED ? (
-        <a className={styles.socialButton} href="/auth/social/orcid/start" data-testid="login-orcid">
+        <a
+          className={styles.socialButton}
+          href="/auth/social/orcid/start"
+          data-testid="login-orcid"
+        >
           ORCID로 계속하기
         </a>
       ) : null}

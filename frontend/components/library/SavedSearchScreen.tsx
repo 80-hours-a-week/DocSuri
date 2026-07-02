@@ -15,7 +15,10 @@ import styles from './Library.module.css';
 export function SavedSearchScreen({ showTabs = true }: { showTabs?: boolean } = {}) {
   const router = useRouter();
   const pathname = usePathname();
-  const fetchPage = useCallback((cursor?: string) => getApiClient().listSavedSearches({ cursor }), []);
+  const fetchPage = useCallback(
+    (cursor?: string) => getApiClient().listSavedSearches({ cursor }),
+    [],
+  );
   const { items, status, error, hasMore, loadMore, reload, removeLocal } =
     usePaginatedList<SavedSearchDTO>(fetchPage);
 
@@ -66,7 +69,10 @@ export function SavedSearchScreen({ showTabs = true }: { showTabs?: boolean } = 
         <StateView kind="error" message={error ?? undefined} onRetry={() => void reload()} />
       ) : null}
       {status !== 'loading' && status !== 'error' && items.length === 0 ? (
-        <StateView kind="empty" message="저장한 검색이 없습니다. 검색 화면에서 검색을 저장해 보세요." />
+        <StateView
+          kind="empty"
+          message="저장한 검색이 없습니다. 검색 화면에서 검색을 저장해 보세요."
+        />
       ) : null}
 
       {actionError ? (
