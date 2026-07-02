@@ -29,6 +29,7 @@ from docsuri_shared.dtos import DocModel
 
 from ..ports.ports import LlmGatewayPort, LlmUnavailable
 from .models import Glossary, SummaryRequest, TranslationDraft, TranslationSegment
+from .parallel import map_bounded
 from .token_estimate import estimate_tokens
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,11 @@ logger = logging.getLogger(__name__)
 # that still exceeds it is re-split by ``_translate_chunk`` (correctness no longer depends on this
 # estimate being exact). Conservative default; runtime-tunable (NFR).
 _DEFAULT_CHUNK_BUDGET_TOKENS = 3_500
+
+# Concurrent chunk translations per request (map-only → chunks are independent, BR-S18). Bounded
+# so a many-chunk full-text translation does not fan out unbounded Bedrock calls (throttle/cost).
+# Translate chunks are small (output-capped ~3.5K tok), so a modest fan-out is safe; 1 = serial.
+_DEFAULT_MAX_WORKERS = 4
 
 # Human-readable seg-id suffixes (BR-S18). NOTE: these descriptive ids are NOT used as the LLM
 # segment key — translate() keys segments by reading-order index, so correctness does not depend
@@ -57,9 +63,11 @@ class StructuredTranslator:
         llm: LlmGatewayPort,
         *,
         chunk_budget_tokens: int = _DEFAULT_CHUNK_BUDGET_TOKENS,
+        max_workers: int = _DEFAULT_MAX_WORKERS,
     ) -> None:
         self._llm = llm
         self._budget = chunk_budget_tokens
+        self._max_workers = max_workers
 
     def translate(
         self, doc: DocModel, request: SummaryRequest, glossary: Glossary
@@ -75,13 +83,26 @@ class StructuredTranslator:
             TranslationSegment(id=str(i), text=t) for i, (_sid, t, _set) in enumerate(fields)
         ]
 
+        # Map (BR-S18): translate each chunk independently and concurrently (bounded). Each chunk
+        # produces a LOCAL (translations, kept, unresolved) tuple — no shared mutation across
+        # threads — then results are folded back IN CHUNK ORDER so the merge is deterministic
+        # (identical artifact to the serial path; segment ids are global reading-order indices, so
+        # the per-chunk translation dicts are disjoint and never collide on merge).
+        chunks = list(self._chunk(segments))
+        chunk_results = map_bounded(
+            lambda chunk: self._translate_chunk(chunk, request, glossary),
+            chunks,
+            max_workers=self._max_workers,
+        )
         translations: dict[str, str] = {}
         kept: list[str] = []
         unresolved_truncations = 0
-        for chunk in self._chunk(segments):
-            unresolved_truncations += self._translate_chunk(
-                chunk, request, glossary, translations, kept
-            )
+        for local_translations, local_kept, unresolved in chunk_results:
+            translations.update(local_translations)
+            for term in local_kept:
+                if term not in kept:
+                    kept.append(term)
+            unresolved_truncations += unresolved
 
         if unresolved_truncations:
             # A single oversized segment hit the model's output cap and cannot be split further, so
@@ -133,18 +154,19 @@ class StructuredTranslator:
         chunk: Sequence[TranslationSegment],
         request: SummaryRequest,
         glossary: Glossary,
-        translations: dict[str, str],
-        kept: list[str],
-    ) -> int:
-        """Translate one chunk (map), folding results into ``translations``/``kept`` in place.
+    ) -> tuple[dict[str, str], list[str], int]:
+        """Translate one chunk (map) and return its LOCAL ``(translations, kept, unresolved)``.
 
-        Returns the number of leaf chunks that remained truncated after splitting as far as
-        possible. A truncated MULTI-segment chunk (the model hit its output cap mid-batch → partial
-        JSON) is split in half and each half retried — recursively, down to single segments — so a
-        LaTeX-dense batch that under-estimated its output size still yields full translations. A
-        SINGLE segment that still truncates cannot be split further; its partial result is folded in
-        (the field is not silently lost) but it is reported UNRESOLVED so the caller fails closed
-        rather than caching a known-truncated translation (QT-5).
+        Returning local results (rather than mutating shared state) keeps the concurrent map
+        thread-safe; the caller folds them back in chunk order. ``unresolved`` is the number of
+        leaf chunks that remained truncated after splitting as far as possible. A truncated
+        MULTI-segment chunk (the model hit its output cap mid-batch → partial JSON) is split in
+        half and each half retried — recursively, down to single segments — so a LaTeX-dense batch
+        that under-estimated its output size still yields full translations. A SINGLE segment that
+        still truncates cannot be split further; its partial result is folded in (the field is not
+        silently lost) but it is reported UNRESOLVED so the caller fails closed rather than caching
+        a known-truncated translation (QT-5). The recursive re-split runs inline (a rare truncation
+        path within one chunk), not fanned out.
         """
         result = self._llm.translate_segments(chunk, request, glossary)
         if result.truncated and len(chunk) > 1:
@@ -153,14 +175,12 @@ class StructuredTranslator:
                 "translate chunk truncated (%d segs); re-splitting into %d+%d",
                 len(chunk), mid, len(chunk) - mid,
             )
-            left = self._translate_chunk(chunk[:mid], request, glossary, translations, kept)
-            right = self._translate_chunk(chunk[mid:], request, glossary, translations, kept)
-            return left + right
-        translations.update(result.translations)
-        for term in result.kept_terms:
-            if term not in kept:
-                kept.append(term)
-        return 1 if result.truncated else 0
+            left_tr, left_kept, left_un = self._translate_chunk(chunk[:mid], request, glossary)
+            right_tr, right_kept, right_un = self._translate_chunk(chunk[mid:], request, glossary)
+            merged = {**left_tr, **right_tr}
+            kept = left_kept + [t for t in right_kept if t not in left_kept]
+            return merged, kept, left_un + right_un
+        return dict(result.translations), list(result.kept_terms), 1 if result.truncated else 0
 
     def _chunk(
         self, segments: list[TranslationSegment]
