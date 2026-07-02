@@ -197,12 +197,15 @@
    normally, with a transparent full-block tap target overlaid as a SIBLING (not a wrapper), so the
    content stays directly in the accessibility tree. */
 .zoomable {
-  position: relative; /* containing block for the transparent full-block tap target below */
+  position: relative; /* containing block for the transparent tap target below */
   min-width: 0;
+  cursor: zoom-in; /* tap-to-zoom lives on this wrapper (see DocModelViewer `Zoomable`) */
 }
 
-/* Transparent overlay covering the whole block — the only zoom affordance (no visible chrome).
-   Its content sits underneath, still in the accessibility tree (D1). */
+/* Transparent full-block overlay kept ONLY as the keyboard/screen-reader affordance (no visible
+   chrome). `pointer-events: none` so it never intercepts touch — a horizontal scroll drag on a wide
+   formula/table reaches the scroll container instead of being eaten here; pointer taps are handled
+   by the wrapper's onClick. Content sits underneath, still in the accessibility tree (D1). */
 .zoomTapTarget {
   position: absolute;
   inset: 0;
@@ -210,7 +213,7 @@
   margin: 0;
   background: transparent;
   border: none;
-  cursor: zoom-in;
+  pointer-events: none;
 }
 
 .zoomTapTarget:focus-visible {
