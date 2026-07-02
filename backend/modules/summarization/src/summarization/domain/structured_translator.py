@@ -33,10 +33,13 @@ from .token_estimate import estimate_tokens
 
 logger = logging.getLogger(__name__)
 
-# Per-chunk budget: bounded by the model's *output* token cap (a translation is ~ the size of
-# its input), not the much larger single-call *input* budget used for summary. Conservative
-# defaults; runtime-tunable (NFR).
-_DEFAULT_CHUNK_BUDGET_TOKENS = 6_000
+# Per-chunk budget, measured on INPUT tokens but bounded by the model's OUTPUT cap: a Korean
+# translation of an English source expands (CJK costs more tokens/char) and the JSON envelope
+# (keys, quotes, escaped LaTeX) adds overhead, so the output can outgrow a same-sized input and
+# hit the 8192 cap. Kept well under that so a chunk rarely truncates in the first place; a chunk
+# that still exceeds it is re-split by ``_translate_chunk`` (correctness no longer depends on this
+# estimate being exact). Conservative default; runtime-tunable (NFR).
+_DEFAULT_CHUNK_BUDGET_TOKENS = 3_500
 
 # Human-readable seg-id suffixes (BR-S18). NOTE: these descriptive ids are NOT used as the LLM
 # segment key — translate() keys segments by reading-order index, so correctness does not depend

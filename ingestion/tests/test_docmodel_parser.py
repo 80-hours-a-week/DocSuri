@@ -247,6 +247,30 @@ def test_subfigure_uses_own_caption_not_first_panel() -> None:
     assert figure.anchorLabel == "Figure 4"  # NOT "(a)"
     assert figure.caption == "Overall result"
     assert specs[0].label == "Figure 4"  # numbered label flows to the asset extractor
+    # Multi-panel: src is blanked so the asset extractor page-crops the WHOLE figure (all panels)
+    # instead of imaging only the first sub-panel's e-print graphic.
+    assert specs[0].src == ""
+
+
+def test_single_image_figure_keeps_eprint_src() -> None:
+    """A single-image figure keeps its <img src> so the asset extractor images the
+    original-quality e-print graphic (the blank-src page-crop path is multi-panel only)."""
+    html = (
+        '<html><body><div class="ltx_document">'
+        '<section class="ltx_section"><h2>1 Results</h2>'
+        '<figure class="ltx_figure"><img src="plot.png"/>'
+        '<figcaption class="ltx_caption">'
+        '<span class="ltx_tag">Figure 1: </span>A plot</figcaption>'
+        "</figure></section></div></body></html>"
+    )
+    specs: list = []
+    parse_html_to_docmodel(
+        html, paper_id="2401.00010", version=1, title="T", abstract=None,
+        source_tier=SourceTier.ar5iv, parser_version="p", schema_version="1.0.0",
+        generated_at=_FIXED_TS, figure_specs=specs,
+    )
+    assert specs[0].src == "plot.png"
+    assert specs[0].label == "Figure 1"
 
 
 def test_list_and_code_blocks() -> None:
@@ -257,6 +281,31 @@ def test_list_and_code_blocks() -> None:
     assert [i.text for i in list_block.items] == ["first", "second"]
     code_block = next(b for b in _blocks(sub) if isinstance(b, CodeBlock))
     assert code_block.text == "def f():\n    return 1"
+
+
+def test_algorithm_listing_line_numbers_and_soft_wrap() -> None:
+    """An algorithm float's numbered listing lines get their number split off with a space
+    (not glued "1:Flow"), and an author soft-wrap inside one numbered step is folded to one line."""
+    html = (
+        '<html><body><div class="ltx_document">'
+        '<section class="ltx_section"><h2>1 Method</h2>'
+        '<div class="ltx_float ltx_float_algorithm">'
+        '<div class="ltx_listing">'
+        '<div class="ltx_listingline">'
+        '<span class="ltx_tag ltx_tag_listingline">1:</span>Require model,\nlearning rate</div>'
+        '<div class="ltx_listingline">'
+        '<span class="ltx_tag ltx_tag_listingline">2:</span> return x</div>'
+        "</div></div></section></div></body></html>"
+    )
+    doc = parse_html_to_docmodel(
+        html, paper_id="2401.00011", version=1, title="T", abstract=None,
+        source_tier=SourceTier.ar5iv, parser_version="p", schema_version="1.0.0",
+        generated_at=_FIXED_TS,
+    )
+    code = next(
+        b.root for s in doc.sections for b in s.blocks if isinstance(b.root, CodeBlock)
+    )
+    assert code.text == "1: Require model, learning rate\n2:  return x"
 
 
 def test_block_ids_reset_per_section() -> None:

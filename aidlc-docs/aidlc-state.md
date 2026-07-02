@@ -688,7 +688,7 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
 - Scope boundary:
   - novelty Agent consumes EvidenceFormationPort/SourceRef; it does not implement literature/evidence formation internals.
   - v1 external search = GitHub + datasets; news search is next cycle.
-  - v1 manuscript upload = PDF/Markdown/TXT; DOCX is next cycle.
+  - v1 backend manuscript analysis = Markdown/TXT object refs only; PDF/DOCX parser support is next cycle.
   - No novelty score, "newness proven" judgment, paper prose generation, or code skeleton generation.
 - Current gate: `novelty-agent-code-generation-plan.md` 승인 질문 답변 대기.
 - Code generated: no.

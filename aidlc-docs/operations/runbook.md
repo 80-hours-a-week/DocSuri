@@ -64,7 +64,7 @@ CDK 스택 8개 (`ops/cdk/app.py`, account/region 하드코딩 `app.py:20`):
 
 ## 6. 복구 절차 (Recovery)
 
-- **RDS 복원**: RETAIN이라 실수 삭제는 막히지만 **스냅샷 복원은 한 번도 테스트 안 됨**(하드닝 항목). 자동백업 보존 7일. 복원: 최신 스냅샷 → 새 인스턴스 → compute 스택 secret 갱신. ⚠️ 검증 전엔 "백업 있음"을 신뢰하지 말 것.
+- **RDS 복원/암호화 이전**: RETAIN이라 실수 삭제는 막히지만 **스냅샷 복원은 한 번도 테스트 안 됨**(하드닝 항목). 자동백업 보존 7일. 복원: 최신 스냅샷 → 새 인스턴스 → compute 스택 secret 갱신. 암호화 이전 절차는 [rds-encryption-migration.md](rds-encryption-migration.md)를 따른다. ⚠️ 검증 전엔 "백업 있음"을 신뢰하지 말 것.
 - **비용가드 OPEN(요청거부)**: cap 일시 상향 또는 강등 모드로 운영하며 비용 원인 차단. 근본원인 전 cap만 올리지 말 것.
 - **SES 바운스 급증**: `BOUNCES_AND_COMPLAINTS` 자동 suppression(`compute_stack.py:187`)이 계정 레벨에서 재발송 차단. suppression list 확인, 발신 도메인 평판 점검.
 - **배포 롤백**: circuit breaker가 헬스체크 실패 시 자동 롤백. 수동은 직전 task definition으로 ECS 서비스 업데이트.
@@ -93,7 +93,7 @@ cdk deploy Docsuri-Compute -c ops_alert_email=ops@docsuri.org
 
 **검증 (배포 후, 라이브 — 같이 돌릴 것):**
 - ☐ **알림→사람**: CloudWatch 콘솔에서 `Api5xxAlarm`을 임시로 `Set alarm state → ALARM` → ops 메일 수신 확인. 끝나면 원복.
-- ☐ **RDS 복원**: 최신 자동 스냅샷 → 새 인스턴스로 복원 테스트 1회 → 접속 확인 후 폐기. (RETAIN이라 원본은 안전.) **검증 전엔 "백업 있음"을 신뢰하지 말 것.**
+- ☐ **RDS 복원/암호화 이전**: 최신 자동 스냅샷 → 새 인스턴스로 복원 테스트 1회 → 접속 확인 후 폐기. 암호화 이전은 [rds-encryption-migration.md](rds-encryption-migration.md) 기준으로 암호화 스냅샷 복사 → 병렬 복원 → 명시적 컷오버로 처리한다. (RETAIN이라 원본은 안전.) **검증 전엔 "백업 있음"을 신뢰하지 말 것.**
 - ☐ **번인**: 며칠 실트래픽 관찰 후 §7 임계값 튜닝.
 
 ## 9. 팀원 크로스계정 접근 (Cross-account onboarding) — `Docsuri-Access`

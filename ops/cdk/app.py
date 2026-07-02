@@ -53,6 +53,7 @@ novelty = NoveltyStack(
     vpc=network.vpc,
     db=compute.db,
     queue=compute.novelty_queue,
+    opensearch_domain=search.domain,
     env=env,
 )
 # Deploy unit ④ — U11 evidence formation agent worker. Code/synth only; deploy remains

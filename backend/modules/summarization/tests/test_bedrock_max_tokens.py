@@ -76,3 +76,56 @@ def test_translate_segments_surfaces_output_truncation() -> None:
     )
     assert result.truncated is True
     assert result.translations == {"0": "번역"}
+
+
+class _UnparseableTruncatedBedrock:
+    """A max_tokens stop that cut the JSON MID-STRING, so the payload can't be parsed at all —
+    the common real truncation (not the tidy complete-JSON case above)."""
+
+    def invoke_model_with_response_stream(self, *, modelId, body, accept, contentType):  # noqa: N803
+        events = [
+            # Unterminated string value — json.loads raises "Unterminated string".
+            {"type": "content_block_delta", "delta": {"text": '{"translations": {"0": "ab'}},
+            {"type": "message_delta", "delta": {"stop_reason": "max_tokens"}},
+        ]
+        return {"body": [{"chunk": {"bytes": json.dumps(e).encode("utf-8")}} for e in events]}
+
+
+def test_translate_segments_truncated_unparseable_json_reports_truncation() -> None:
+    # A batch truncated MID-STRING (unparseable JSON) must NOT hard-fail — it must still report
+    # ``truncated`` so the translator re-splits into smaller batches, instead of abstaining the
+    # whole full-text translation (the observed long-paper failure).
+    gw = BedrockLlmGateway(
+        summary_model_id="m", translate_model_id="t", client=_UnparseableTruncatedBedrock(),
+        max_retries=0,
+    )
+    req = SummaryRequest(paper_id="p", version=1, task=Task.TRANSLATE, target_lang=TargetLang.KO)
+    result = gw.translate_segments(
+        [TranslationSegment(id="0", text="hello"), TranslationSegment(id="1", text="world")],
+        req, Glossary(),
+    )
+    assert result.truncated is True
+    assert result.translations == {}
+
+
+class _UnparseableCompleteBedrock:
+    """Bad JSON on a COMPLETE response (no max_tokens stop) — a genuine malformed output."""
+
+    def invoke_model_with_response_stream(self, *, modelId, body, accept, contentType):  # noqa: N803
+        chunk = json.dumps({"type": "content_block_delta", "delta": {"text": "not json at all"}})
+        return {"body": [{"chunk": {"bytes": chunk.encode("utf-8")}}]}
+
+
+def test_translate_segments_bad_json_without_truncation_still_fails() -> None:
+    # A parse failure on a COMPLETE (non-truncated) response is genuine bad output — it must still
+    # fail-closed (retry then LlmUnavailable), not be masked as a truncation.
+    gw = BedrockLlmGateway(
+        summary_model_id="m", translate_model_id="t", client=_UnparseableCompleteBedrock(),
+        max_retries=0,
+    )
+    req = SummaryRequest(paper_id="p", version=1, task=Task.TRANSLATE, target_lang=TargetLang.KO)
+    try:
+        gw.translate_segments([TranslationSegment(id="0", text="hello")], req, Glossary())
+        raise AssertionError("expected LlmUnavailable for genuine bad output")
+    except LlmUnavailable:
+        pass

@@ -17,9 +17,15 @@ from aws_cdk import CfnOutput, Stack
 from aws_cdk import aws_iam as iam
 from constructs import Construct
 
-# 이 repo만 신뢰하고, sub를 릴리스 태그로 한정한다(least privilege).
+# 이 repo만 신뢰. 두 배포 진입점의 OIDC sub를 모두 허용(least privilege 유지):
+#   • v* 태그 직접 push(수동/hotfix)         → ref:refs/tags/v*
+#   • release.yml(push:main)이 cd.yml 재사용 호출 → ref:refs/heads/main (호출자 브랜치 ref)
+# main은 보호 브랜치이고 이 역할은 OIDC 전용 배포 역할이라 main-ref 허용은 안전.
 _GITHUB_REPO = "80-hours-a-week/DocSuri"
-_TRUSTED_SUB = f"repo:{_GITHUB_REPO}:ref:refs/tags/v*"
+_TRUSTED_SUBS = [
+    f"repo:{_GITHUB_REPO}:ref:refs/tags/v*",
+    f"repo:{_GITHUB_REPO}:ref:refs/heads/main",
+]
 _ECR_REPOS = ["docsuri-api", "docsuri-ingestion", "docsuri-frontend"]
 _ECS_CLUSTER = "docsuri"
 # (cluster, service). Frontend runs on its OWN cluster (frontend_stack.py), not `docsuri`;
@@ -27,6 +33,7 @@ _ECS_CLUSTER = "docsuri"
 _ECS_SERVICES = [
     (_ECS_CLUSTER, "docsuri-api"),
     (_ECS_CLUSTER, "docsuri-ingestion"),
+    (_ECS_CLUSTER, "docsuri-novelty-agent-worker"),
     ("docsuri-frontend", "docsuri-frontend"),
 ]
 
@@ -35,24 +42,26 @@ class CicdStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        # 계정당 1개. 최신 GitHub 발급자라 aws-cdk-lib가 thumbprint를 자동 처리한다.
-        provider = iam.OpenIdConnectProvider(
+        # 계정당 1개. L2 OpenIdConnectProvider가 로컬 jsii에서 synth 전에 깨진 적이 있어
+        # 같은 CloudFormation 리소스를 L1으로 둔다.
+        provider = iam.CfnOIDCProvider(
             self, "GithubOidcProvider",
             url="https://token.actions.githubusercontent.com",
-            client_ids=["sts.amazonaws.com"],
+            client_id_list=["sts.amazonaws.com"],
         )
 
-        # 신뢰: 이 provider + aud=sts + sub가 이 repo의 v* 태그일 때만 assume 허용.
-        principal = iam.OpenIdConnectPrincipal(
-            provider,
+        # 신뢰: 이 provider + aud=sts + sub가 이 repo의 v* 태그 또는 main 브랜치일 때만 assume 허용.
+        principal = iam.FederatedPrincipal(
+            provider.attr_arn,
             conditions={
                 "StringEquals": {
                     "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
                 },
                 "StringLike": {
-                    "token.actions.githubusercontent.com:sub": _TRUSTED_SUB,
+                    "token.actions.githubusercontent.com:sub": _TRUSTED_SUBS,
                 },
             },
+            assume_role_action="sts:AssumeRoleWithWebIdentity",
         )
 
         role = iam.Role(

@@ -45,6 +45,42 @@ Observed: all 12 tests complete in under 1.2 s (no I/O — InMemory + StubOrches
 
 ---
 
+# Production API/Frontend Load Test — 2026-07-02
+
+Use the checked-in k6 script for the public frontend and API gateway:
+
+```bash
+brew install k6
+DOCSURI_APP_URL=https://docsuri.org \
+DOCSURI_API_URL=https://d2bsni6xhpvbw1.cloudfront.net \
+DOCSURI_VUS=20 \
+DOCSURI_HOLD=2m \
+k6 run tests/performance/api_frontend_load_test.js
+```
+
+Default thresholds:
+
+| Target | Threshold |
+|---|---|
+| Frontend `/` | p95 < 1000 ms |
+| API `/readyz` | p95 < 500 ms |
+| API `/api/search` sampled at 20% | p95 < 3000 ms |
+| Overall error rate | < 1% |
+
+Set `DOCSURI_SKIP_SEARCH=1` for a frontend/readiness-only smoke run. If p95 breaks, inspect the matching ALB p95 alarm and ECS CPU/memory metrics, then tune `ops/cdk/stacks/compute_stack.py` or `ops/cdk/stacks/frontend_stack.py` task size/max capacity and rerun the same script.
+
+Live smoke result before deploying this hardening change:
+
+| Target | Requests / concurrency | p95 | Status |
+|---|---:|---:|---|
+| Frontend `/` | 40 / 8 | 394.7 ms | 40× 200 |
+| API `/readyz` | 80 / 10 | 455.3 ms | 80× 200 |
+| API `/api/search` | 12 / 3 | 9061.0 ms | 12× 200 |
+
+Because API search p95 broke the 3000 ms threshold, the API service is raised to 1 vCPU / 2 GB, min 2, max 6 in `ops/cdk/stacks/compute_stack.py`. Re-run the k6 script after deployment; if search p95 remains high with low API CPU, investigate OpenSearch query latency and index/cache behavior before adding more API replicas.
+
+---
+
 # U11 Novelty Agent Performance Test Instructions — 2026-06-30
 
 No standalone load test was executed for U11 in this local Build & Test pass.
