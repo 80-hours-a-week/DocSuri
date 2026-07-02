@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 
 from backend.modules.accounts.models import Principal
 
+from .adapters import NoveltyAdapters
 from .models import (
     CancelJobResponse,
     ChatMessageCreateRequest,
@@ -55,6 +56,10 @@ def _observability(request: Request):
     return getattr(request.app.state, "observability", None)
 
 
+def _adapters(request: Request) -> NoveltyAdapters | None:
+    return getattr(request.app.state, "novelty_adapters", None)
+
+
 PRINCIPAL_DEP = Depends(get_principal)
 REPO_DEP = Depends(get_repo)
 
@@ -69,7 +74,13 @@ async def create_job(
     try:
         service = NoveltyService(repo, _observability(request))
         created = service.create_job(principal.user_id, dto)
-        _dispatch_job(repo, principal.user_id, created.jobId, _observability(request))
+        _dispatch_job(
+            repo,
+            principal.user_id,
+            created.jobId,
+            _observability(request),
+            adapters=_adapters(request),
+        )
         return created
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -224,12 +235,19 @@ async def approve_notion_export(
 routers = (router,)
 
 
-def _dispatch_job(repo: NoveltyRepository, owner_id: str, job_id: str, observability=None) -> None:
+def _dispatch_job(
+    repo: NoveltyRepository,
+    owner_id: str,
+    job_id: str,
+    observability=None,
+    *,
+    adapters: NoveltyAdapters | None = None,
+) -> None:
     queue_url = os.getenv("DOCSURI_NOVELTY_JOB_QUEUE_URL")
     if not queue_url:
         from .worker import process_job
 
-        process_job(repo, owner_id, job_id, observability=observability)
+        process_job(repo, owner_id, job_id, adapters=adapters, observability=observability)
         return
 
     commit = getattr(repo, "commit", None)

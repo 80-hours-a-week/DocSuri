@@ -10,7 +10,11 @@ from backend.app import create_app
 from backend.config import Settings
 from backend.modules.accounts.models import Principal, UserRole
 from backend.modules.novelty import controller
-from backend.modules.novelty.adapters import NoveltyAdapters, RetrievalBundle
+from backend.modules.novelty.adapters import (
+    NoveltyAdapters,
+    RetrievalBundle,
+    U2FullSearchCorpusRetrievalClient,
+)
 from backend.modules.novelty.models import (
     ArtifactKind,
     ArtifactValidationError,
@@ -137,6 +141,20 @@ def test_worker_processes_minimal_job_to_completion() -> None:
         ArtifactKind.EVIDENCE,
         ArtifactKind.EXPERIMENT_PLAN,
     }
+
+
+def test_u2_corpus_adapter_maps_full_search_cards_to_source_refs() -> None:
+    from discovery.mocks import build_mock_orchestrator
+
+    bundle = build_mock_orchestrator()
+    result = U2FullSearchCorpusRetrievalClient(
+        bundle.orchestrator,
+        bundle.grounding_hook,
+    ).full_search("u1", "diffusion protein structure")
+
+    assert result.evidenceStatus is EvidenceStatus.SUPPORTED
+    assert result.items
+    assert result.items[0]["sourceRefs"][0]["url"].startswith("https://")
 
 
 def test_worker_completes_when_adapters_are_not_degraded() -> None:

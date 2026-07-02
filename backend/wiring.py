@@ -544,6 +544,10 @@ def _mount_personalization(app: FastAPI, settings: Settings, result: MountResult
 
 def _mount_novelty(app: FastAPI, settings: Settings, result: MountResult) -> None:
     from backend.modules.novelty import controller as novelty
+    from backend.modules.novelty.adapters import (
+        NoveltyAdapters,
+        U2FullSearchCorpusRetrievalClient,
+    )
     from backend.modules.novelty.repository import (
         InMemoryNoveltyRepository,
         SqlNoveltyRepository,
@@ -574,6 +578,16 @@ def _mount_novelty(app: FastAPI, settings: Settings, result: MountResult) -> Non
             return repo
 
     app.dependency_overrides[novelty.get_repo] = get_novelty_repo
+    discovery_bundle = getattr(app.state, "discovery_bundle", None)
+    grounding_hook = getattr(app.state, "grounding_hook", None)
+    if discovery_bundle is not None and grounding_hook is not None:
+        app.state.novelty_adapters = NoveltyAdapters(
+            corpus=U2FullSearchCorpusRetrievalClient(
+                discovery_bundle.orchestrator,
+                grounding_hook,
+            )
+        )
+        log.info("app-shell: novelty wired U2 full-search corpus adapter")
     for router in novelty.routers:
         app.include_router(router)
     result.mounted.append("novelty")

@@ -9,7 +9,7 @@ import threading
 from collections.abc import Callable, Iterable
 from typing import Any
 
-from .adapters import NoveltyAdapters, RetrievalBundle
+from .adapters import NoveltyAdapters, RetrievalBundle, build_default_novelty_adapters
 from .models import TERMINAL_STATES, ArtifactKind, EvidenceStatus, InputType, JobState
 from .repository import NoveltyRepository
 from .service import NoveltyService
@@ -331,6 +331,7 @@ def main(argv: list[str] | None = None) -> int:
         receive=receive,
         ack=ack,
         should_stop=_shutdown.is_set,
+        adapters=build_default_novelty_adapters(),
     )
     log.info("novelty worker shut down gracefully")
     return 0
