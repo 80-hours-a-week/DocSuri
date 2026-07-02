@@ -24,15 +24,28 @@ export default async function DocModelPage({
   // Prefer the explicit ?version from the detail-page link; on a deep link with no query, fall
   // back to the revision in the id itself rather than a hardcoded v1 (which would show a stale
   // or perpetually-"building" body for any later-revision paper).
-  const version = Number(Array.isArray(sp.version) ? sp.version[0] : sp.version) || arxivVersion(id);
+  const version =
+    Number(Array.isArray(sp.version) ? sp.version[0] : sp.version) || arxivVersion(id);
   const arxivUrl = `https://arxiv.org/abs/${encodeURIComponent(id)}`;
 
   const label = typeof sp.anchorLabel === 'string' ? sp.anchorLabel : undefined;
   const span = typeof sp.anchorSpan === 'string' ? sp.anchorSpan : '';
   const anchor: AnchorVM | null = label ? { field: '', target: 'section', span, label } : null;
 
+  // Preserve ?version/?anchorLabel/?anchorSpan across a login round-trip (E6, BR-U5-15) — a
+  // query-less redirectTo used to drop them, landing the user back on the doc-model page but
+  // no longer scrolled to the summary anchor they came from.
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(sp)) {
+    if (Array.isArray(value)) value.forEach((v) => query.append(key, v));
+    else if (value !== undefined) query.append(key, value);
+  }
+  const redirectTo = query.toString()
+    ? `/paper/${id}/doc-model?${query.toString()}`
+    : `/paper/${id}/doc-model`;
+
   return (
-    <RouteGuard redirectTo={`/paper/${id}/doc-model`}>
+    <RouteGuard redirectTo={redirectTo}>
       <div className={screen.screen}>
         <AppHeader title="전문" backHref={`/paper/${id}`} />
         <main className={page.page}>

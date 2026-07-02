@@ -11,7 +11,14 @@
 // id-based anchor contract is a follow-up). Span-precise inline highlight is a follow-up.
 // (KaTeX stylesheet is pulled in by the renderMath import below.)
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { AnchorVM, AssetRef, DocBlock, DocModel, DocSection, DocTableBlock } from '@/types/generated';
+import type {
+  AnchorVM,
+  AssetRef,
+  DocBlock,
+  DocModel,
+  DocSection,
+  DocTableBlock,
+} from '@/types/generated';
 import { useDocModel } from '@/lib/useDocModel';
 import { useAssets } from '@/lib/useAssets';
 import { createPortal } from 'react-dom';
@@ -31,7 +38,13 @@ interface DocModelViewerProps {
   hideTitle?: boolean;
 }
 
-export function DocModelViewer({ paperId, version, anchor, arxivUrl, hideTitle }: DocModelViewerProps) {
+export function DocModelViewer({
+  paperId,
+  version,
+  anchor,
+  arxivUrl,
+  hideTitle,
+}: DocModelViewerProps) {
   const { state, load } = useDocModel();
   const { state: assetState, load: loadAssets } = useAssets();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -58,7 +71,11 @@ export function DocModelViewer({ paperId, version, anchor, arxivUrl, hideTitle }
     const id = findBlockIdByLabel(docModel, anchor.label);
     if (!id) return;
     const el = containerRef.current.querySelector<HTMLElement>(`[data-block="${CSS.escape(id)}"]`);
-    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    // Move focus (and SR reading position) to the jumped-to block, not just the scroll
+    // position (D3, BR-U5-15) — every block root carries tabIndex={-1} for this.
+    el.focus({ preventScroll: true });
   }, [docModel, anchor]);
 
   if (state.status === 'idle' || state.status === 'loading') {
@@ -183,11 +200,14 @@ function DocTOC({ sections }: { sections: DocSection[] }) {
           <li key={e.id} style={{ paddingInlineStart: `${(e.depth - 1) * 12}px` }}>
             <a
               href={`#dm-${e.id}`}
+              data-testid="docmodel-toc-link"
               onClick={(ev) => {
                 ev.preventDefault();
-                document
-                  .getElementById(`dm-${e.id}`)
-                  ?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                const target = document.getElementById(`dm-${e.id}`);
+                target?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                // Move focus (and SR reading position) to the jumped-to section, not just the
+                // scroll position (D3, BR-U5-15) — the section carries tabIndex={-1} for this.
+                target?.focus({ preventScroll: true });
               }}
             >
               {e.title}
@@ -201,34 +221,24 @@ function DocTOC({ sections }: { sections: DocSection[] }) {
 
 // ---- tap-to-enlarge (figures / tables / formulas) -----------------------
 
-// Wraps a block so a tap/click/Enter opens the zoom overlay. `role=button` (not <button>)
-// so block content like <table> stays valid inside it.
-function ZoomTrigger({
-  children,
-  onZoom,
-  className,
-}: {
-  children: React.ReactNode;
-  onZoom: () => void;
-  className?: string;
-}) {
+// Adjacent zoom-in control (D1, BR-U5-21). Previously this wrapped the ENTIRE block
+// (table/figure/formula) in a `role="button"` <div>, which made the whole thing an opaque,
+// unlabeled control to screen readers — the table's rows/cells, the figure's alt text, and
+// the formula were all swallowed into "크게 보기" and lost. Now it is a small standalone
+// <button> rendered NEXT TO the block's own (untouched) markup, so the content stays
+// directly in the accessibility tree and the zoom affordance is just an extra control.
+function ZoomButton({ onZoom }: { onZoom: () => void }) {
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      className={className ? `${styles.zoomTrigger} ${className}` : styles.zoomTrigger}
+    <button
+      type="button"
+      className={styles.zoomButton}
       onClick={onZoom}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onZoom();
-        }
-      }}
       title="탭하면 크게 볼 수 있어요"
       aria-label="크게 보기"
+      data-testid="docmodel-zoom-trigger"
     >
-      {children}
-    </div>
+      <span aria-hidden="true">⤢</span>
+    </button>
   );
 }
 
@@ -249,6 +259,10 @@ function BlockZoomOverlay({
 }) {
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  // The element that had focus before the overlay opened (e.g. the ZoomButton that
+  // triggered it) — restored on close (D2, BR-U5-20).
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const [scale, setScale] = useState(1);
 
   useLayoutEffect(() => {
@@ -276,11 +290,44 @@ function BlockZoomOverlay({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      // Trap Tab within the dialog while it's open (D2, BR-U5-20) — otherwise focus can
+      // escape to the (visually hidden, behind the backdrop) page content behind it.
+      if (e.key === 'Tab') {
+        const overlay = overlayRef.current;
+        if (!overlay) return;
+        const focusables = overlay.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // Focus management (D2, BR-U5-20): move focus into the dialog (its close button) on open,
+  // and restore focus to whatever triggered it (the ZoomButton) when the overlay unmounts.
+  useEffect(() => {
+    previouslyFocusedRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeButtonRef.current?.focus();
+    return () => {
+      previouslyFocusedRef.current?.focus();
+    };
+  }, []);
 
   // Portalled to body: the backdrop covers the whole viewport and the content centres on the
   // user's screen wherever they have scrolled to.
@@ -295,7 +342,14 @@ function BlockZoomOverlay({
       onClick={onClose}
       data-testid="block-zoom"
     >
-      <button type="button" className={styles.zoomClose} onClick={onClose} aria-label="닫기">
+      <button
+        ref={closeButtonRef}
+        type="button"
+        className={styles.zoomClose}
+        onClick={onClose}
+        aria-label="닫기"
+        data-testid="block-zoom-close"
+      >
         ✕
       </button>
       <div
@@ -330,7 +384,9 @@ function SectionView({
 }) {
   const Heading = `h${Math.min(depth + 1, 6)}` as keyof React.JSX.IntrinsicElements;
   return (
-    <section id={`dm-${section.id}`} className={styles.section}>
+    // tabIndex=-1 (D3, BR-U5-15): programmatically focusable so a TOC jump moves keyboard/SR
+    // focus here too, not just the viewport scroll position.
+    <section id={`dm-${section.id}`} className={styles.section} tabIndex={-1}>
       {section.title ? <Heading className={styles.heading}>{section.title}</Heading> : null}
       {section.blocks.map((b) => (
         <BlockView
@@ -374,7 +430,7 @@ function BlockView({
   switch (block.type) {
     case 'paragraph':
       return (
-        <p className={cls} data-block={block.id}>
+        <p className={cls} data-block={block.id} tabIndex={-1}>
           {renderInlineMath(block.text, macros)}
         </p>
       );
@@ -398,8 +454,14 @@ function BlockView({
         // block, so the equation number still lines up with in-text references and the anchor
         // still resolves — only the render source is missing, not the equation.
         return (
-          <div className={`${cls} ${styles.formula}`} data-block={block.id}>
-            <span className={styles.formulaPlaceholder} aria-label="수식을 표시할 수 없습니다">
+          <div className={`${cls} ${styles.formula}`} data-block={block.id} tabIndex={-1}>
+            {/* role="img" so the label is honored on a bare <span> (generic role) — aria-label
+                alone is unreliable there (D5, BR-U5-21, NFR-U5-U2). */}
+            <span
+              role="img"
+              className={styles.formulaPlaceholder}
+              aria-label="수식을 표시할 수 없습니다"
+            >
               [수식]
             </span>
             {block.anchorLabel ? <span className={styles.eqno}>{block.anchorLabel}</span> : null}
@@ -407,10 +469,11 @@ function BlockView({
         );
       }
       return (
-        <div className={`${cls} ${styles.formula}`} data-block={block.id}>
-          <ZoomTrigger className={styles.formulaInner} onZoom={() => onZoom(inner)}>
-            {inner}
-          </ZoomTrigger>
+        <div className={`${cls} ${styles.formula}`} data-block={block.id} tabIndex={-1}>
+          <div className={styles.zoomable}>
+            <div className={styles.formulaInner}>{inner}</div>
+            <ZoomButton onZoom={() => onZoom(inner)} />
+          </div>
           {block.anchorLabel ? <span className={styles.eqno}>{block.anchorLabel}</span> : null}
         </div>
       );
@@ -429,17 +492,18 @@ function BlockView({
       const asset = assetsById.get(block.assetRef.assetId);
       const alt = block.caption ?? block.anchorLabel ?? '그림';
       return (
-        <figure className={`${cls} ${styles.figure}`} data-block={block.id}>
+        <figure className={`${cls} ${styles.figure}`} data-block={block.id} tabIndex={-1}>
           {asset?.url ? (
-            <ZoomTrigger
-              onZoom={() =>
-                // eslint-disable-next-line @next/next/no-img-element -- signed S3 url
-                onZoom(<img src={asset.url} alt={alt} className={styles.zoomImg} />)
-              }
-            >
+            <div className={styles.zoomable}>
               {/* eslint-disable-next-line @next/next/no-img-element -- signed S3 url, not a static asset */}
               <img src={asset.url} alt={alt} loading="lazy" />
-            </ZoomTrigger>
+              <ZoomButton
+                onZoom={() =>
+                  // eslint-disable-next-line @next/next/no-img-element -- signed S3 url
+                  onZoom(<img src={asset.url} alt={alt} className={styles.zoomImg} />)
+                }
+              />
+            </div>
           ) : null}
           {caption(block.anchorLabel, block.caption, macros)}
         </figure>
@@ -447,13 +511,13 @@ function BlockView({
     }
     case 'list':
       return block.ordered ? (
-        <ol className={cls} data-block={block.id}>
+        <ol className={cls} data-block={block.id} tabIndex={-1}>
           {block.items.map((it, i) => (
             <li key={i}>{renderInlineMath(it.text, macros)}</li>
           ))}
         </ol>
       ) : (
-        <ul className={cls} data-block={block.id}>
+        <ul className={cls} data-block={block.id} tabIndex={-1}>
           {block.items.map((it, i) => (
             <li key={i}>{renderInlineMath(it.text, macros)}</li>
           ))}
@@ -461,7 +525,7 @@ function BlockView({
       );
     case 'code':
       return (
-        <pre className={`${cls} ${styles.code}`} data-block={block.id}>
+        <pre className={`${cls} ${styles.code}`} data-block={block.id} tabIndex={-1}>
           <code>{block.text}</code>
         </pre>
       );
@@ -520,16 +584,18 @@ function TableBlockView({
   // Only offer the toggle when there is a real choice (both a structured table and an image).
   const canToggle = hasRows && Boolean(asset?.url);
   return (
-    <figure className={cls} data-block={block.id}>
-      <ZoomTrigger className={styles.tableWrap} onZoom={() => onZoom(shown)}>
-        {shown}
-      </ZoomTrigger>
+    <figure className={cls} data-block={block.id} tabIndex={-1}>
+      <div className={styles.zoomable}>
+        <div className={styles.tableWrap}>{shown}</div>
+        <ZoomButton onZoom={() => onZoom(shown)} />
+      </div>
       {canToggle ? (
         <button
           type="button"
           className={styles.originalToggle}
           aria-pressed={showImage}
           onClick={() => setOverride(!showImage)}
+          data-testid="docmodel-table-toggle"
         >
           {showImage ? '구조화 표 보기' : '원본 이미지 보기'}
         </button>

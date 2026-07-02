@@ -17,6 +17,13 @@ vi.mock('next/link', () => ({
     </a>
   ),
 }));
+// InterestTab/SavedSearchScreen/HistoryScreen all use usePaginatedList, which now reads
+// useRouter/usePathname (E1/E2 mid-session-401 redirect) — neither exists in this jsdom render
+// without a Next.js app-router context, so it needs mocking like the other screen tests do.
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => '/mypage/library',
+}));
 
 beforeEach(() => {
   mockLogin('mypage-library-test@example.com');

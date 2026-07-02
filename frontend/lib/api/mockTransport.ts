@@ -233,6 +233,29 @@ export class MockTransport implements Transport {
       return session ? { status: 200, body: session } : { status: 401, body: null };
     }
 
+    // U3 auth recourse/lifecycle endpoints (BR-U5-19 mock-first parity) — the real backend
+    // returns a generic/enumeration-safe success for all of these, so the mock mirrors that
+    // shape rather than modeling token validity. `path` is already query-stripped (see the
+    // top of `send`), so verify-email's `?token=...` doesn't need separate handling here.
+    if (path === '/auth/verify-email' && req.method === 'GET') {
+      return { status: 200, body: null };
+    }
+    if (path === '/auth/resend-verification' && req.method === 'POST') {
+      return { status: 200, body: null };
+    }
+    if (path === '/auth/password-reset/request' && req.method === 'POST') {
+      return { status: 200, body: null };
+    }
+    if (path === '/auth/password-reset/confirm' && req.method === 'POST') {
+      return { status: 200, body: null };
+    }
+    if (path === '/auth/change-password' && req.method === 'POST') {
+      return { status: 200, body: null };
+    }
+    if (path === '/auth/email-change/request' && req.method === 'POST') {
+      return { status: 200, body: null };
+    }
+
     return { status: 404, body: null };
   }
 
