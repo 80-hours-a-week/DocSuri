@@ -1,9 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { AgentChatScreen } from '@/components/agent/AgentChatScreen';
+import { AgentChatScreen, normalizeTimelineDisplay } from '@/components/agent/AgentChatScreen';
 
 describe('AgentChatScreen', () => {
+  it('marks previous running timeline steps complete when a terminal event arrives', () => {
+    expect(
+      normalizeTimelineDisplay([
+        { id: '1', stage: 'queued', label: 'queued', state: 'running' },
+        { id: '2', stage: 'retrieving', label: 'retrieving', state: 'running' },
+        { id: '3', stage: 'degraded', label: 'done', state: 'degraded' },
+      ]).map((event) => event.state),
+    ).toEqual(['completed', 'completed', 'degraded']);
+  });
+
   it('starts in novelty mode and sends a multi-turn message through the mock transport', async () => {
     const user = userEvent.setup();
     render(<AgentChatScreen />);

@@ -18,6 +18,7 @@ import type {
   AgentMode,
   AgentSessionSummary,
   AgentTimelineEvent,
+  AgentTimelineState,
 } from '@/lib/agentChat/types';
 import styles from './AgentChatScreen.module.css';
 
@@ -368,12 +369,29 @@ function AgentMessageList({ messages }: { messages: AgentMessage[] }) {
 
 function AgentProgressTimeline({ events }: { events: AgentTimelineEvent[] }) {
   if (events.length === 0) return null;
+  const displayEvents = normalizeTimelineDisplay(events);
   return (
     <section className={styles.timeline} aria-label="탐구 프로세스" data-testid="agent-timeline">
-      {events.map((event) => (
+      {displayEvents.map((event) => (
         <AgentTimelineItem key={event.id} event={event} />
       ))}
     </section>
+  );
+}
+
+export function normalizeTimelineDisplay(events: AgentTimelineEvent[]): AgentTimelineEvent[] {
+  let lastTerminalIndex = -1;
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    if (events[i].state !== 'running') {
+      lastTerminalIndex = i;
+      break;
+    }
+  }
+  if (lastTerminalIndex <= 0) return events;
+  return events.map((event, index) =>
+    index < lastTerminalIndex && event.state === 'running'
+      ? { ...event, state: 'completed' satisfies AgentTimelineState }
+      : event,
   );
 }
 
