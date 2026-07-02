@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from io import BytesIO
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -13,6 +14,7 @@ from backend.modules.novelty import controller
 from backend.modules.novelty.adapters import (
     NoveltyAdapters,
     RetrievalBundle,
+    S3ManuscriptSimilarityClient,
     U2FullSearchCorpusRetrievalClient,
 )
 from backend.modules.novelty.models import (
@@ -155,6 +157,57 @@ def test_u2_corpus_adapter_maps_full_search_cards_to_source_refs() -> None:
     assert result.evidenceStatus is EvidenceStatus.SUPPORTED
     assert result.items
     assert result.items[0]["sourceRefs"][0]["url"].startswith("https://")
+
+
+def test_similarity_adapter_reads_text_manuscript_and_queries_corpus() -> None:
+    class FakeS3:
+        def get_object(self, **kwargs):
+            assert kwargs["Bucket"] == "papers"
+            assert kwargs["Key"] == "novelty/u1/job/draft.txt"
+            return {
+                "Body": BytesIO(
+                    b"This manuscript presents a robust framework for privacy preserving "
+                    b"retrieval augmented generation evaluation across domain specific "
+                    b"scientific workflows with repeated evidence checking. "
+                )
+            }
+
+    class FakeCorpus:
+        def full_search(self, owner_id: str, query: str) -> RetrievalBundle:
+            assert owner_id == "u1"
+            assert "privacy preserving" in query
+            return RetrievalBundle(
+                items=[
+                    {
+                        "title": "Privacy Preserving RAG",
+                        "sourceRefs": [
+                            {
+                                "type": "url",
+                                "identifier": "2401.00001",
+                                "url": "https://arxiv.org/abs/2401.00001",
+                            }
+                        ],
+                    }
+                ],
+                evidenceStatus=EvidenceStatus.SUPPORTED,
+            )
+
+    result = S3ManuscriptSimilarityClient(
+        bucket="papers",
+        prefix="novelty/",
+        client=FakeS3(),
+        corpus=FakeCorpus(),
+    ).check(
+        "u1",
+        {
+            "objectKey": "novelty/u1/job/draft.txt",
+            "contentType": "text/plain",
+        },
+    )
+
+    assert result.evidenceStatus is EvidenceStatus.SUPPORTED
+    assert any(item["riskType"] == "sentence_similarity" for item in result.items)
+    assert result.items[-1]["sourceRefs"][0]["url"].startswith("https://arxiv.org")
 
 
 def test_worker_completes_when_adapters_are_not_degraded() -> None:

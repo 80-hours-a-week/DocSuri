@@ -547,6 +547,7 @@ def _mount_novelty(app: FastAPI, settings: Settings, result: MountResult) -> Non
     from backend.modules.novelty.adapters import (
         NoveltyAdapters,
         U2FullSearchCorpusRetrievalClient,
+        build_similarity_adapter,
     )
     from backend.modules.novelty.repository import (
         InMemoryNoveltyRepository,
@@ -581,11 +582,13 @@ def _mount_novelty(app: FastAPI, settings: Settings, result: MountResult) -> Non
     discovery_bundle = getattr(app.state, "discovery_bundle", None)
     grounding_hook = getattr(app.state, "grounding_hook", None)
     if discovery_bundle is not None and grounding_hook is not None:
+        corpus = U2FullSearchCorpusRetrievalClient(
+            discovery_bundle.orchestrator,
+            grounding_hook,
+        )
         app.state.novelty_adapters = NoveltyAdapters(
-            corpus=U2FullSearchCorpusRetrievalClient(
-                discovery_bundle.orchestrator,
-                grounding_hook,
-            )
+            corpus=corpus,
+            similarity=build_similarity_adapter(corpus),
         )
         log.info("app-shell: novelty wired U2 full-search corpus adapter")
     for router in novelty.routers:
