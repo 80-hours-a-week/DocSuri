@@ -8,6 +8,7 @@ in until it is promoted (U4 library precedent).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -285,8 +286,12 @@ class SummaryResultDTO:
     meta: dict[str, str] = field(default_factory=dict)
     cached: bool = False
 
-    def to_dict(self) -> dict:
-        """SEC-9 whitelist — only user-facing fields (no tokens/cost/cache-key/model id)."""
+    def to_dict(self, strong_overrides: Mapping[str, str] | None = None) -> dict:
+        """SEC-9 whitelist — only user-facing fields (no tokens/cost/cache-key/model id).
+
+        ``strong_overrides`` = the user's effective prompt-enforced terms (term_from lower →
+        term_to) for this fork; the translation branch needs them so a 표준 용어 whose seed
+        rendering an override replaced keeps its (editable) chip (BR-S4)."""
         out: dict = {
             "status": "ok",
             "task": str(self.task),
@@ -315,27 +320,44 @@ class SummaryResultDTO:
         if self.translation is not None:
             # Mirror the doc-model read path (router): emit the translated doc-model with
             # ``exclude_none`` so absent optional fields stay absent (schema parity).
-            # ``standardGlossary`` = shared-seed standard terms that appear in THIS paper (BR-S4):
-            # keep-as-is terms the model kept in English (no ``translated``), plus mapping terms
-            # whose standard Korean shows up in the translated text (``translated`` set). The client
-            # renders a 표준 용어집 from it. Lazy import avoids a models↔glossary cycle.
-            from .glossary import SEED_KEEP_AS_IS_LOWER, SEED_MAPPINGS
+            # ``standardGlossary`` = shared-seed standard terms present in THIS paper (BR-S4).
+            # Presence is judged by EFFECTIVE rendering so a strong personal override keeps its
+            # (editable) chip instead of vanishing when it replaces the seed value in the text:
+            #  · keep-as-is seed — overridden → present iff the override rendering is in the text
+            #    (an editable strong chip, pre-filled); else → present iff the model kept it in
+            #    English (``kept_terms``).
+            #  · mapping seed — present iff its effective rendering (override, else the seed Korean)
+            #    is in the text. Without this, attention→주목 drops 어텐션 and the chip would
+            #    vanish, breaking the 표준 용어 edit path. Lazy import avoids a cycle.
+            from .glossary import SEED_KEEP_AS_IS, SEED_MAPPINGS
 
             doc = self.translation.doc_model.model_dump(mode="json", exclude_none=True)
+            translated_text = doc.get("fullText") or ""
+            overrides = strong_overrides or {}
             std_glossary: list[dict] = []
             seen: set[str] = set()
-            for t in self.translation.kept_terms:  # keep-as-is present (English, editable → strong)
-                key = t.lower()
-                if key in SEED_KEEP_AS_IS_LOWER and key not in seen:
-                    std_glossary.append({"term": t})
+            kept_by_lower: dict[str, str] = {}
+            for t in self.translation.kept_terms:  # first-seen casing wins (case-insensitive dedup)
+                kept_by_lower.setdefault(t.lower(), t)
+            for s in SEED_KEEP_AS_IS:  # keep-as-is standard (English) or its strong override
+                key = s.lower()
+                if key in seen:
+                    continue
+                eff = overrides.get(key)
+                if eff:
+                    if eff in translated_text:
+                        std_glossary.append({"term": s, "translated": eff})
+                        seen.add(key)
+                elif key in kept_by_lower:
+                    std_glossary.append({"term": kept_by_lower[key]})
                     seen.add(key)
-            translated_text = doc.get("fullText") or ""
-            for m in SEED_MAPPINGS:  # mapping present (governed reference, en→ko)
+            for m in SEED_MAPPINGS:  # mapping standard (en→ko), by effective rendering
                 key = m.term_from.lower()
-                # ``seen`` also guards here so a term that is both kept-as-is and a mapping can't
-                # emit two entries (which would render as two 표준 badges sharing one editor key).
-                if m.term_to and m.term_to in translated_text and key not in seen:
-                    std_glossary.append({"term": m.term_from, "translated": m.term_to})
+                if key in seen:  # keep-as-is and mapping are disjoint — guard a double chip anyway
+                    continue
+                eff = overrides.get(key) or m.term_to
+                if eff and eff in translated_text:
+                    std_glossary.append({"term": m.term_from, "translated": eff})
                     seen.add(key)
             out["translation"] = {
                 "docModel": doc,

@@ -291,7 +291,16 @@ class SummarizationOrchestrationService:
             # Assemble + cache the SHARED base (strong-term translation, no weak post-substitution);
             # apply this user's weak-term overlay on the returned view so the first requester also
             # sees their preferences (the cache stays the base, shared across users — NFR-C1).
-            base = self._assembler.assemble_translation(draft, source).to_dict()
+            # Pass the user's effective strong overrides so ``standardGlossary`` keeps a 표준 용어
+            # chip whose seed rendering the override replaced (BR-S4). They are part of this fork's
+            # cache signature, so the stored base is correct for every user who shares it.
+            base = self._assembler.assemble_translation(draft, source).to_dict(
+                strong_overrides={
+                    m.term_from.lower(): m.term_to
+                    for m in glossary.user_overrides
+                    if m.prompt_enforced
+                }
+            )
             self._store.put(key, base)  # write-through (base)
             self._emit("u7.translate.ok", 1.0, request)
             return _PayloadResult(self._assembler.overlay_translation(base, glossary))

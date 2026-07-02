@@ -182,6 +182,28 @@ def test_translation_standard_glossary_lists_present_seed_terms() -> None:
     assert {"term": "attention", "translated": "어텐션"} in glossary
 
 
+def test_standard_glossary_keeps_chip_after_strong_override() -> None:
+    # A strong personal override replaces the seed rendering in the text; the 표준 용어 chip must
+    # stay (editable) rather than vanish (BR-S4). attention→주목 removes 어텐션 from the text, and
+    # Transformer→트랜스포머 removes the English keep-as-is, yet both chips must persist with the
+    # user's rendering pre-filled.
+    draft = TranslationDraft(
+        doc_model=tiny_doc(paragraph="이 모델은 주목을 쓰는 트랜스포머 이다."),
+        kept_terms=("BLEU",),  # Transformer no longer kept in English (overridden)
+    )
+    overrides = {"attention": "주목", "transformer": "트랜스포머"}
+    glossary = ResultAssembler().assemble_translation(draft, _src()).to_dict(
+        strong_overrides=overrides
+    )["translation"]["standardGlossary"]
+    # Overridden seeds keep their chips, pre-filled with the effective rendering.
+    assert {"term": "attention", "translated": "주목"} in glossary
+    assert {"term": "Transformer", "translated": "트랜스포머"} in glossary
+    # A non-overridden keep-as-is still present in English shows without 'translated'.
+    assert {"term": "BLEU"} in glossary
+    # No stale seed-rendering chip once overridden.
+    assert {"term": "attention", "translated": "어텐션"} not in glossary
+
+
 # --- seed change → cache self-invalidation ----------------------------------------------
 
 
