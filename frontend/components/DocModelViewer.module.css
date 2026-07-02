@@ -130,17 +130,24 @@
   font-style: italic;
 }
 
-/* Structured table (DATA, not a crop — D8). Fits the width by wrapping cells (no horizontal
-   scrollbar); tap to enlarge for the full layout. */
+/* Structured table (DATA, not a crop — D8). Columns size to their content and the block scrolls
+   horizontally when it can't fit — a fixed equal-width layout crushed math-heavy columns so KaTeX
+   (which never wraps) overflowed a narrow cell and overlapped its neighbour. ``min-width: 100%``
+   still fills the width for small tables; ``width: max-content`` lets a wide one grow + scroll.
+   Tap to enlarge for the full layout. */
 .table {
-  width: 100%;
-  table-layout: fixed;
+  min-width: 100%;
+  width: max-content;
+  max-width: none;
+  table-layout: auto;
   border-collapse: collapse;
   font-size: 0.8125rem;
 }
 
 .tableWrap {
   width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Original-image fallback shown inside a table block (assetRef crop). */

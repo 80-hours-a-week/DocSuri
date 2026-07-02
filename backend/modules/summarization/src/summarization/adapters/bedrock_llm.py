@@ -117,7 +117,9 @@ class BedrockLlmGateway:
         # A translation's output volume tracks its input, so it needs a generous token cap; the
         # StructuredTranslator chunks upstream (output-bounded) so each call stays within this 8192
         # ceiling — the same cap the summary path uses to avoid mid-JSON truncation.
-        payload = self._invoke_json(self._translate_model, system, user, max_tokens=8192)
+        payload = self._invoke_json(
+            self._translate_model, system, user, max_tokens=8192, graceful_truncation=True
+        )
         raw = payload.get("translations", {})
         translations = {str(k): str(v) for k, v in raw.items()} if isinstance(raw, dict) else {}
         return TranslationSegmentsResult(
@@ -130,7 +132,13 @@ class BedrockLlmGateway:
 
     # --- bedrock plumbing ----------------------------------------------------
     def _invoke_json(
-        self, model_id: str, system: str, user: str, *, max_tokens: int = 2000
+        self,
+        model_id: str,
+        system: str,
+        user: str,
+        *,
+        max_tokens: int = 2000,
+        graceful_truncation: bool = False,
     ) -> dict:
         if not self._cb.allow_request():
             raise LlmUnavailable("Bedrock LLM circuit breaker is OPEN")
@@ -147,7 +155,20 @@ class BedrockLlmGateway:
                 time.sleep(2 ** attempt * 0.5)
             try:
                 text, truncated = self._stream_text(model_id, body)
-                payload = _parse_json(text)
+                try:
+                    payload = _parse_json(text)
+                except (ValueError, json.JSONDecodeError):
+                    # A response stopped at max_tokens is usually cut MID-STRING, so its JSON can't
+                    # be parsed at all — a raw re-raise loses the truncation signal and the whole
+                    # batch hard-fails (the observed full-translation abstain on long papers). For a
+                    # re-splittable caller (translate), surface the truncation so the chunk is split
+                    # into smaller batches — each emits less output and fits the cap — instead of
+                    # abstaining. A parse failure on a COMPLETE response is genuine bad output and
+                    # still raises (retry then abstain).
+                    if not (graceful_truncation and truncated):
+                        raise
+                    self._cb.record_success()  # the call succeeded; only the batch was oversized
+                    return {"_truncated": True}
                 payload["_truncated"] = truncated
                 self._cb.record_success()
                 return payload

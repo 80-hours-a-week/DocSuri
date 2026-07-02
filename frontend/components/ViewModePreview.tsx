@@ -53,6 +53,19 @@ export function ViewModePreview() {
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
+  // Lock the background document's scroll while the opaque phone overlay covers it. Otherwise the
+  // desktop page (a long search-results/detail screen) keeps its own scrollbar at the window edge,
+  // but the wheel scrolls the phone iframe on top — so that outer scrollbar just sits there,
+  // visible yet unusable ("dead" scrollbar). Restored to its prior value when the preview closes.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
   if (!mounted) return null;
   // Inside the preview iframe: render no chrome (no toggle, no nested preview).
   if (isPreview) return null;
