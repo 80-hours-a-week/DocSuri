@@ -10,6 +10,7 @@ from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_ecr as ecr
 from aws_cdk import aws_ecs as ecs
 from aws_cdk import aws_iam as iam
+from aws_cdk import aws_opensearchservice as opensearch
 from aws_cdk import aws_rds as rds
 from aws_cdk import aws_sqs as sqs
 from constructs import Construct
@@ -24,6 +25,7 @@ class NoveltyStack(Stack):
         vpc: ec2.IVpc,
         db: rds.DatabaseInstance,
         queue: sqs.IQueue,
+        opensearch_domain: opensearch.IDomain,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -60,6 +62,10 @@ class NoveltyStack(Stack):
                 "DOCSURI_NOVELTY_JOB_QUEUE_URL": queue.queue_url,
                 "DOCSURI_NOVELTY_ARTIFACT_BUCKET": f"docsuri-papers-fulltext-{account}",
                 "DOCSURI_NOVELTY_ARTIFACT_PREFIX": "novelty/",
+                "DOCSURI_OPENSEARCH_ENDPOINT": f"https://{opensearch_domain.domain_endpoint}",
+                "DOCSURI_BEDROCK_MODEL_ID": "global.cohere.embed-v4:0",
+                "DOCSURI_NOVELTY_LLM_MODEL_ID": "global.anthropic.claude-sonnet-4-6",
+                "DOCSURI_AWS_REGION": self.region,
                 "CLOUDWATCH_NAMESPACE": "DocSuri/Production",
                 "CLOUDWATCH_LOG_GROUP": "/docsuri/ops",
             },
@@ -97,6 +103,7 @@ class NoveltyStack(Stack):
             mutable=True,
         )
         self.service.connections.allow_to(rds_sg, ec2.Port.tcp(5432))
+        self.service.connections.allow_to(opensearch_domain.connections, ec2.Port.tcp(443))
 
         queue.grant_consume_messages(task_def.task_role)
         task_def.add_to_task_role_policy(
@@ -109,8 +116,43 @@ class NoveltyStack(Stack):
             iam.PolicyStatement(
                 actions=["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
                 resources=[
-                    f"arn:aws:bedrock:{self.region}::foundation-model/anthropic.*",
+                    "arn:aws:bedrock:::foundation-model/anthropic.*",
+                    "arn:aws:bedrock:*::foundation-model/anthropic.*",
+                    "arn:aws:bedrock:::foundation-model/cohere.embed-v4:0",
+                    "arn:aws:bedrock:*::foundation-model/cohere.embed-v4:0",
                     f"arn:aws:bedrock:{self.region}:{account}:inference-profile/*",
                 ],
+            )
+        )
+        task_def.add_to_task_role_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "es:ESHttpGet",
+                    "es:ESHttpHead",
+                    "es:ESHttpPost",
+                ],
+                resources=[f"{opensearch_domain.domain_arn}/*"],
+            )
+        )
+        ops_log_group_arn = (
+            f"arn:aws:logs:{self.region}:{account}:log-group:/docsuri/ops"
+        )
+        task_def.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["cloudwatch:PutMetricData"],
+                resources=["*"],
+                conditions={"StringEquals": {"cloudwatch:namespace": "DocSuri/Production"}},
+            )
+        )
+        task_def.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["logs:CreateLogGroup"],
+                resources=[ops_log_group_arn],
+            )
+        )
+        task_def.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["logs:CreateLogStream", "logs:DescribeLogStreams", "logs:PutLogEvents"],
+                resources=[f"{ops_log_group_arn}:*"],
             )
         )

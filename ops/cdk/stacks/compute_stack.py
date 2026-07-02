@@ -145,21 +145,19 @@ class ComputeStack(Stack):
             database_name="docsuri",
         )
 
-        novelty_dlq = sqs.Queue(
+        # ponytail: queues already exist in prod; import them until a separate CDK import migrates
+        # ownership. Creating same-name queues in this stack would fail the next Compute deploy.
+        novelty_dlq = sqs.Queue.from_queue_attributes(
             self,
             "NoveltyJobDlq",
-            queue_name="docsuri-novelty-agent-job-dlq",
-            retention_period=Duration.days(14),
-            encryption=sqs.QueueEncryption.SQS_MANAGED,
+            queue_arn=f"arn:aws:sqs:{self.region}:{self.account}:docsuri-novelty-agent-job-dlq",
+            queue_url=f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-novelty-agent-job-dlq",
         )
-        self.novelty_queue = sqs.Queue(
+        self.novelty_queue = sqs.Queue.from_queue_attributes(
             self,
             "NoveltyJobQueue",
-            queue_name="docsuri-novelty-agent-job-queue",
-            visibility_timeout=Duration.seconds(900),
-            retention_period=Duration.days(14),
-            encryption=sqs.QueueEncryption.SQS_MANAGED,
-            dead_letter_queue=sqs.DeadLetterQueue(max_receive_count=3, queue=novelty_dlq),
+            queue_arn=f"arn:aws:sqs:{self.region}:{self.account}:docsuri-novelty-agent-job-queue",
+            queue_url=f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-novelty-agent-job-queue",
         )
         novelty_dlq.metric_approximate_number_of_messages_visible().create_alarm(
             self,
@@ -217,6 +215,14 @@ class ComputeStack(Stack):
             "REDIS_HOST": redis_endpoint,
             "REDIS_PORT": redis_port,
             "REDIS_TLS": "1",  # ElastiCache transit_encryption_enabled=True → client TLS required
+            # CloudFront -> ALB -> ECS: trust the two controlled proxy hops so gateway
+            # rate-limiting keys on the viewer IP instead of collapsing all traffic to a proxy.
+            "TRUST_PROXY_HEADERS": "true",
+            "TRUSTED_PROXY_COUNT": "2",
+            # Blanket gateway backstop. Endpoint-specific account/email limits remain stricter;
+            # this cap must not trip the checked-in 20-VU production smoke load test.
+            "DOCSURI_GATEWAY_RATE_LIMIT_MAX_REQUESTS": "3000",
+            "DOCSURI_GATEWAY_RATE_LIMIT_WINDOW_SECONDS": "60",
             "SES_SENDER_EMAIL": "no-reply@docsuri.org",  # via the SES domain identity below
             # Email provider toggle. "resend" → ResendEmailClient (no SES sandbox review gate;
             # delivers to any recipient once docsuri.org is DNS-verified in Resend). Requires the
@@ -278,9 +284,8 @@ class ComputeStack(Stack):
             "DOCSURI_MAP_REDUCE_ENABLED": "true",
             "CITATION_GRAPH_ENABLED": "true",
             "PERSONALIZATION_ENABLED": "true",
-            # Research backend is session storage only today; keep it off in prod until a worker
-            # lands so users do not get a forever-running chat.
-            "RESEARCH_AGENT_ENABLED": "false",
+            # Research is intentionally enabled in prod; keep this aligned with the live flag.
+            "RESEARCH_AGENT_ENABLED": "true",
             "NOVELTY_AGENT_ENABLED": "true",
             "PERSONALIZATION_RAW_EVENT_RETENTION_DAYS": "90",
             # --- U3 social login (FR-27, Google OIDC) ---
@@ -397,16 +402,16 @@ class ComputeStack(Stack):
         for email in ops_alert_emails:
             ses_events_topic.add_subscription(subs.EmailSubscription(email))
 
-        # --- ALB + Fargate service (deploy unit ①: 0.25 vCPU / 512 MB, min 1 max 2) ---
+        # --- ALB + Fargate service (deploy unit ①: 1 vCPU / 2 GB, min 2 max 6) ---
         # HTTPS :443 terminated on the ALB with the ACM cert + a Route53 alias (origin.docsuri.org
         # → ALB). CloudFront reaches the origin over HTTPS (below), so edge↔origin is encrypted.
         self.service = ecs_patterns.ApplicationLoadBalancedFargateService(
             self, "ApiService",
             cluster=cluster,
             service_name="docsuri-api",
-            cpu=256,
-            memory_limit_mib=512,
-            desired_count=1,
+            cpu=1024,
+            memory_limit_mib=2048,
+            desired_count=2,
             # ECS Exec (SSM-backed): team assumes DocsuriCrossAccountDev → `aws ecs
             # execute-command` into this task → psql to the private RDS. No EC2 bastion.
             # CDK auto-grants the task role ssmmessages:*. ponytail: shell-in only; a
@@ -608,9 +613,19 @@ class ComputeStack(Stack):
                 ],
             )
         )
+        self.service.task_definition.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "es:ESHttpGet",
+                    "es:ESHttpHead",
+                    "es:ESHttpPost",
+                ],
+                resources=[f"{opensearch_domain.domain_arn}/*"],
+            )
+        )
 
-        # Autoscaling: min 1 — max 2 (U3 spec)
-        scaling = self.service.service.auto_scale_task_count(min_capacity=1, max_capacity=2)
+        # Autoscaling: min 2 for AZ/task headroom, max 6 after API search p95 broke under smoke.
+        scaling = self.service.service.auto_scale_task_count(min_capacity=2, max_capacity=6)
         scaling.scale_on_cpu_utilization("CpuScale", target_utilization_percent=70)
 
         # U9 Personalization retention cleanup: one short scheduled task, no always-on worker.
@@ -744,6 +759,20 @@ class ComputeStack(Stack):
                 self, "OpsAlertEmailMissing",
                 value="set -c ops_alert_email=<addr>[,<addr>...] so alarms + budget page a human",
             )
+
+        novelty_queue_age_alarm = self.novelty_queue.metric_approximate_age_of_oldest_message(
+            period=Duration.minutes(5),
+            statistic="Maximum",
+        ).create_alarm(
+            self,
+            "NoveltyQueueAgeAlarm",
+            threshold=900,
+            evaluation_periods=1,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+            alarm_description="Novelty jobs are waiting more than 15 minutes before processing",
+        )
+        novelty_queue_age_alarm.add_alarm_action(cw_actions.SnsAction(ops_alerts))
 
         # SLO 1 — API availability: backend 5xx. Native ALB metric, no app instrumentation needed.
         api_5xx_alarm = self.service.target_group.metrics.http_code_target(

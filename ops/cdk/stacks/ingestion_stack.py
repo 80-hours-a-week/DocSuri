@@ -8,6 +8,12 @@ from aws_cdk import (
     Stack,
 )
 from aws_cdk import (
+    aws_cloudwatch as cloudwatch,
+)
+from aws_cdk import (
+    aws_cloudwatch_actions as cw_actions,
+)
+from aws_cdk import (
     aws_ec2 as ec2,
 )
 from aws_cdk import (
@@ -33,6 +39,12 @@ from aws_cdk import (
 )
 from aws_cdk import (
     aws_secretsmanager as secretsmanager,
+)
+from aws_cdk import (
+    aws_sns as sns,
+)
+from aws_cdk import (
+    aws_sns_subscriptions as subs,
 )
 from aws_cdk import (
     aws_sqs as sqs,
@@ -83,6 +95,13 @@ class IngestionStack(Stack):
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
+        _DEFAULT_OPS_ALERT_EMAIL = "corpseonthemission@icloud.com"
+        _ctx_alert_emails = self.node.try_get_context("ops_alert_email")
+        _raw_alert_emails = (
+            _DEFAULT_OPS_ALERT_EMAIL if _ctx_alert_emails is None else _ctx_alert_emails
+        )
+        ops_alert_emails = [e.strip() for e in _raw_alert_emails.split(",") if e.strip()]
+
         # --- ECR (already created manually; import by name) ---
         self.repo = ecr.Repository.from_repository_name(self, "IngestionRepo", "docsuri-ingestion")
 
@@ -120,6 +139,35 @@ class IngestionStack(Stack):
             encryption=sqs.QueueEncryption.SQS_MANAGED,
             dead_letter_queue=sqs.DeadLetterQueue(max_receive_count=3, queue=docmodel_dlq),
         )
+        ops_alerts = sns.Topic(self, "OpsAlerts", display_name="docsuri-ingestion-ops-alerts")
+        for email in ops_alert_emails:
+            ops_alerts.add_subscription(subs.EmailSubscription(email))
+        bulk_age_alarm = self.queue.metric_approximate_age_of_oldest_message(
+            period=Duration.minutes(5),
+            statistic="Maximum",
+        ).create_alarm(
+            self,
+            "IngestionQueueAgeAlarm",
+            threshold=1800,
+            evaluation_periods=1,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+            alarm_description="Bulk ingestion jobs are waiting more than 30 minutes",
+        )
+        bulk_age_alarm.add_alarm_action(cw_actions.SnsAction(ops_alerts))
+        docmodel_age_alarm = self.docmodel_queue.metric_approximate_age_of_oldest_message(
+            period=Duration.minutes(5),
+            statistic="Maximum",
+        ).create_alarm(
+            self,
+            "DocModelQueueAgeAlarm",
+            threshold=300,
+            evaluation_periods=1,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+            alarm_description="Reader-triggered DocModel builds are waiting more than 5 minutes",
+        )
+        docmodel_age_alarm.add_alarm_action(cw_actions.SnsAction(ops_alerts))
 
         # --- S3: full-text storage (infra-design §4) ---
         self.bucket = s3.Bucket(
@@ -220,6 +268,10 @@ class IngestionStack(Stack):
                 # FR-17 multimodal figure/table assets ON (Pillow/pypdfium2/pdfplumber baked
                 # into the image via the [assets] extra).
                 "DOCSURI_MULTIMODAL_ASSETS_ENABLED": "true",
+                # Throttle rebuild drains so write pressure does not starve live search.
+                "DOCSURI_WORKER_QUEUE_MODE": "bulk",
+                "DOCSURI_WORKER_MAX_MESSAGES": "1",
+                "DOCSURI_WORKER_LOOP_DELAY_SECONDS": "3",
             },
             secrets={
                 "PGPASSWORD": ecs.Secret.from_secrets_manager(db_secret, "password"),
@@ -240,6 +292,47 @@ class IngestionStack(Stack):
             task_definition=task_def,
             desired_count=0,  # scale-to-zero at rest
             assign_public_ip=True,  # NAT-free: public subnet + IGW
+            circuit_breaker=ecs.DeploymentCircuitBreaker(rollback=True),
+            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
+        )
+
+        # Reader-triggered doc-model builds are latency-sensitive and must not wait behind bulk
+        # corpus rebuilds. This service consumes ONLY docsuri-docmodel-queue and omits the heavy
+        # GROBID sidecar, so cache misses do not inherit bulk-worker cold-pull or write pressure.
+        docmodel_task_def = ecs.FargateTaskDefinition(
+            self, "DocModelWorkerTaskDef", cpu=512, memory_limit_mib=1024,
+        )
+        docmodel_task_def.add_container(
+            "worker",
+            image=ecs.ContainerImage.from_ecr_repository(self.repo, tag="latest"),
+            logging=ecs.LogDrivers.aws_logs(stream_prefix="docmodel"),
+            environment={
+                "DOCSURI_ENV": "production",
+                "DOCSURI_AWS_REGION": self.region,
+                "DOCSURI_S3_BUCKET": self.bucket.bucket_name,
+                "DOCSURI_BEDROCK_MODEL_ID": _BEDROCK_MODEL_ID,
+                "DOCSURI_OPENSEARCH_ENDPOINT": f"https://{opensearch_domain.domain_endpoint}",
+                "DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus-v2",
+                "DOCSURI_OPENSEARCH_ALIAS": "docsuri-corpus",
+                "DOCSURI_CORPUS_SOURCES": "ARXIV",
+                "DOCSURI_CONTROL_PLANE_DSN": control_plane_dsn,
+                "DOCSURI_SQS_QUEUE_URL": self.queue.queue_url,
+                "DOCSURI_SQS_DLQ_URL": dlq.queue_url,
+                "DOCSURI_DOCMODEL_QUEUE_URL": self.docmodel_queue.queue_url,
+                "DOCSURI_DOCMODEL_DLQ_URL": docmodel_dlq.queue_url,
+                "DOCSURI_MULTIMODAL_ASSETS_ENABLED": "true",
+                "DOCSURI_WORKER_QUEUE_MODE": "docmodel",
+                "DOCSURI_WORKER_MAX_MESSAGES": "1",
+                "DOCSURI_WORKER_LOOP_DELAY_SECONDS": "1",
+            },
+        )
+        self.docmodel_service = ecs.FargateService(
+            self, "DocModelWorkerService",
+            service_name="docsuri-docmodel-builder",
+            cluster=cluster,
+            task_definition=docmodel_task_def,
+            desired_count=0,
+            assign_public_ip=True,
             circuit_breaker=ecs.DeploymentCircuitBreaker(rollback=True),
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
         )
@@ -272,16 +365,16 @@ class IngestionStack(Stack):
             ],
             adjustment_type=appscaling.AdjustmentType.CHANGE_IN_CAPACITY,
         )
-        # Second trigger: wake the scale-to-zero worker when a reader enqueues a doc-model build,
-        # independent of the backfill queue depth — otherwise a priority build could sit unserved
-        # until the next backfill message happened to wake the worker. App Auto Scaling takes the
-        # max desired across both policies, so either queue having depth ≥1 brings up the 1 worker.
-        scaling.scale_on_metric(
+        docmodel_scaling = self.docmodel_service.auto_scale_task_count(
+            min_capacity=0, max_capacity=2
+        )
+        docmodel_scaling.scale_on_metric(
             "DocModelDepth",
             metric=self.docmodel_queue.metric_approximate_number_of_messages_visible(),
             scaling_steps=[
                 appscaling.ScalingInterval(upper=0, change=0),
                 appscaling.ScalingInterval(lower=1, change=1),
+                appscaling.ScalingInterval(lower=10, change=2),
             ],
             adjustment_type=appscaling.AdjustmentType.CHANGE_IN_CAPACITY,
         )
@@ -303,10 +396,10 @@ class IngestionStack(Stack):
         # ClientError. Grant send too.
         self.queue.grant_send_messages(task_def.task_role)
         dlq.grant_send_messages(task_def.task_role)
-        # Priority doc-model queue: worker consumes (receive/delete) it and DLQs poison builds.
-        self.docmodel_queue.grant_consume_messages(task_def.task_role)
-        docmodel_dlq.grant_send_messages(task_def.task_role)
         self.bucket.grant_read_write(task_def.task_role)
+        self.docmodel_queue.grant_consume_messages(docmodel_task_def.task_role)
+        docmodel_dlq.grant_send_messages(docmodel_task_def.task_role)
+        self.bucket.grant_read_write(docmodel_task_def.task_role)
         task_def.add_to_task_role_policy(
             iam.PolicyStatement(
                 actions=["bedrock:InvokeModel"],
@@ -316,5 +409,17 @@ class IngestionStack(Stack):
                     f"arn:aws:bedrock:{self.region}:{self.account}:inference-profile/{_BEDROCK_MODEL_ID}",
                     f"arn:aws:bedrock:*::foundation-model/{_BEDROCK_FOUNDATION_MODEL}",
                 ],
+            )
+        )
+        task_def.add_to_task_role_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "es:ESHttpDelete",
+                    "es:ESHttpGet",
+                    "es:ESHttpHead",
+                    "es:ESHttpPost",
+                    "es:ESHttpPut",
+                ],
+                resources=[f"{opensearch_domain.domain_arn}/*"],
             )
         )

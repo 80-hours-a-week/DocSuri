@@ -5,14 +5,24 @@ Fine-Grained Access Control, TLS + encryption at rest."""
 
 from aws_cdk import RemovalPolicy, Stack
 from aws_cdk import aws_ec2 as ec2
+from aws_cdk import aws_iam as iam
 from aws_cdk import aws_opensearchservice as opensearch
 from constructs import Construct
+
+_ES_HTTP_ACTIONS = [
+    "es:ESHttpDelete",
+    "es:ESHttpGet",
+    "es:ESHttpHead",
+    "es:ESHttpPost",
+    "es:ESHttpPut",
+]
 
 
 class SearchStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, *, vpc: ec2.IVpc, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
+        domain_name = "docsuri-papers"
         self._sg = ec2.SecurityGroup(
             self, "OpenSearchSg",
             vpc=vpc,
@@ -22,7 +32,7 @@ class SearchStack(Stack):
 
         self.domain = opensearch.Domain(
             self, "PapersDomain",
-            domain_name="docsuri-papers",
+            domain_name=domain_name,
             # 2.19 for disk-based vector search (mode=on_disk, compression_level=4x) — ~4x k-NN
             # RAM cut for full-body multi-chunk indexing, with NO app-side byte-vector plumbing.
             version=opensearch.EngineVersion.open_search("2.19"),
@@ -53,6 +63,19 @@ class SearchStack(Stack):
             fine_grained_access_control=opensearch.AdvancedSecurityOptions(
                 master_user_arn=None,  # IAM-based FGAC (no internal DB user)
             ),
+            access_policies=[
+                iam.PolicyStatement(
+                    principals=[iam.AccountPrincipal(self.account)],
+                    actions=_ES_HTTP_ACTIONS,
+                    resources=[
+                        self.format_arn(
+                            service="es",
+                            resource="domain",
+                            resource_name=f"{domain_name}/*",
+                        )
+                    ],
+                )
+            ],
             removal_policy=RemovalPolicy.RETAIN,
         )
 

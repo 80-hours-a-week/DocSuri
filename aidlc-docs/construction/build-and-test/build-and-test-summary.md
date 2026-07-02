@@ -27,7 +27,7 @@
 ## U11 Coverage
 
 - Natural-language novelty job creation.
-- PDF/Markdown/TXT manuscript boundary.
+- Markdown/TXT manuscript boundary, with PDF/DOCX rejected until parser/upload handle support exists.
 - Owner-scoped job access.
 - Job state transition guard and cancel path.
 - Persisted progress event SSE snapshot.

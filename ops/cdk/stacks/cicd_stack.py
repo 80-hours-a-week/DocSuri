@@ -33,6 +33,7 @@ _ECS_CLUSTER = "docsuri"
 _ECS_SERVICES = [
     (_ECS_CLUSTER, "docsuri-api"),
     (_ECS_CLUSTER, "docsuri-ingestion"),
+    (_ECS_CLUSTER, "docsuri-novelty-agent-worker"),
     ("docsuri-frontend", "docsuri-frontend"),
 ]
 
@@ -41,16 +42,17 @@ class CicdStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        # 계정당 1개. 최신 GitHub 발급자라 aws-cdk-lib가 thumbprint를 자동 처리한다.
-        provider = iam.OpenIdConnectProvider(
+        # 계정당 1개. L2 OpenIdConnectProvider가 로컬 jsii에서 synth 전에 깨진 적이 있어
+        # 같은 CloudFormation 리소스를 L1으로 둔다.
+        provider = iam.CfnOIDCProvider(
             self, "GithubOidcProvider",
             url="https://token.actions.githubusercontent.com",
-            client_ids=["sts.amazonaws.com"],
+            client_id_list=["sts.amazonaws.com"],
         )
 
         # 신뢰: 이 provider + aud=sts + sub가 이 repo의 v* 태그 또는 main 브랜치일 때만 assume 허용.
-        principal = iam.OpenIdConnectPrincipal(
-            provider,
+        principal = iam.FederatedPrincipal(
+            provider.attr_arn,
             conditions={
                 "StringEquals": {
                     "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
@@ -59,6 +61,7 @@ class CicdStack(Stack):
                     "token.actions.githubusercontent.com:sub": _TRUSTED_SUBS,
                 },
             },
+            assume_role_action="sts:AssumeRoleWithWebIdentity",
         )
 
         role = iam.Role(

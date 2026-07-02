@@ -100,7 +100,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     observability, telemetry_store = _build_observability()
     app.state.observability = observability
     app.state.telemetry_store = telemetry_store
-    app.state.rate_limiter = InMemoryRateLimiter()
+    app.state.rate_limiter = InMemoryRateLimiter(
+        max_requests=settings.gateway_rate_limit_max_requests,
+        window_seconds=settings.gateway_rate_limit_window_seconds,
+    )
 
     (
         incident_store,

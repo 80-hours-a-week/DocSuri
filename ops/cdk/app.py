@@ -52,6 +52,7 @@ novelty = NoveltyStack(
     vpc=network.vpc,
     db=compute.db,
     queue=compute.novelty_queue,
+    opensearch_domain=search.domain,
     env=env,
 )
 # Deploy unit ④ — U5 frontend. The BFF (server-side) calls the backend gateway over its
