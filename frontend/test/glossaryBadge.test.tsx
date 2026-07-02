@@ -69,6 +69,15 @@ describe('GlossaryTermBadge (via TranslationView)', () => {
     expect(badge('encoder')).not.toHaveAttribute('data-saved'); // unedited → no marker
   });
 
+  it('hides the 표준 용어 group when the paper has no standard terms', () => {
+    render(<TranslationView translation={{ ...translation, standardGlossary: [] }} showGlossary />);
+    // No standard terms → the 표준 용어 section (heading + chips) is not rendered at all.
+    expect(screen.queryByRole('heading', { name: '표준 용어' })).not.toBeInTheDocument();
+    // 원어 유지 용어 still shows (every kept term is now non-standard).
+    expect(screen.getByRole('heading', { name: '원어 유지 용어' })).toBeInTheDocument();
+    expect(screen.getAllByTestId('glossary-badge')).toHaveLength(3);
+  });
+
   it('a mapping (attention) pre-fills the standard rendering and saves as strong', async () => {
     const user = userEvent.setup();
     renderView();

@@ -17,7 +17,6 @@
 /* Personal-glossary section (전문 번역 only) — titled like the body lists, with a gap
    before the translated text below. */
 .glossary {
-  position: relative; /* containing block for a badge's editor popover (full-width, no overflow) */
   display: flex;
   flex-direction: column;
   gap: 0.75rem; /* between the 표준 / 원어 유지 groups */
@@ -46,6 +45,7 @@
 }
 
 .terms {
+  position: relative; /* containing block for a badge's editor popover — spans this row, no overflow */
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
