@@ -547,6 +547,7 @@ def _mount_novelty(app: FastAPI, settings: Settings, result: MountResult) -> Non
     from backend.modules.novelty.adapters import (
         NoveltyAdapters,
         U2FullSearchCorpusRetrievalClient,
+        build_external_adapter,
         build_similarity_adapter,
     )
     from backend.modules.novelty.repository import (
@@ -588,6 +589,7 @@ def _mount_novelty(app: FastAPI, settings: Settings, result: MountResult) -> Non
         )
         app.state.novelty_adapters = NoveltyAdapters(
             corpus=corpus,
+            external=build_external_adapter(),
             similarity=build_similarity_adapter(corpus),
         )
         log.info("app-shell: novelty wired U2 full-search corpus adapter")

@@ -4,6 +4,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from typing import Any, Protocol
+from urllib.parse import urlparse
 from uuid import uuid4
 
 from .models import EvidenceStatus
@@ -128,6 +129,228 @@ class NoopExternalSearchClient:
                 f"external browser adapter not configured for {sanitize_external_query(query)}"
             ),
         )
+
+
+class ExternalApiSearchClient:
+    def __init__(
+        self,
+        client: Any,
+        *,
+        github_token: str | None = None,
+        per_source: int = 3,
+    ) -> None:
+        self._client = client
+        self._github_token = github_token
+        self._per_source = per_source
+
+    def search(self, query: str) -> RetrievalBundle:
+        cleaned = sanitize_external_query(query)
+        items: list[dict[str, Any]] = []
+        degraded: list[str] = []
+        for source, search in (
+            ("github", self._github_repos),
+            ("huggingface", self._huggingface_datasets),
+            ("zenodo", self._zenodo_records),
+            ("gdelt", self._gdelt_news),
+        ):
+            try:
+                items.extend(search(cleaned))
+            except Exception:  # noqa: BLE001 - one external source must not fail the job.
+                degraded.append(f"{source} external search unavailable")
+
+        deduped = _dedupe_by_url(items)
+        return RetrievalBundle(
+            items=deduped,
+            evidenceStatus=(
+                EvidenceStatus.SUPPORTED if deduped else EvidenceStatus.ABSTAINED
+            ),
+            degradedReason="; ".join(degraded) or None,
+        )
+
+    def _github_repos(self, query: str) -> list[dict[str, Any]]:
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        if self._github_token:
+            headers["Authorization"] = f"Bearer {self._github_token}"
+        payload = self._json(
+            "https://api.github.com/search/repositories",
+            params={
+                "q": f"{query} in:name,description,readme",
+                "sort": "updated",
+                "order": "desc",
+                "per_page": self._per_source,
+            },
+            headers=headers,
+        )
+        return [
+            _external_item(
+                source_type="github_repo",
+                source_name="GitHub",
+                title=str(repo.get("full_name") or ""),
+                url=str(repo.get("html_url") or ""),
+                summary=str(repo.get("description") or ""),
+                identifier=str(repo.get("full_name") or ""),
+                updatedAt=repo.get("updated_at"),
+                stars=repo.get("stargazers_count"),
+                language=repo.get("language"),
+                license=((repo.get("license") or {}).get("spdx_id")),
+                topics=repo.get("topics") or [],
+            )
+            for repo in payload.get("items", [])[: self._per_source]
+        ]
+
+    def _huggingface_datasets(self, query: str) -> list[dict[str, Any]]:
+        payload = self._json(
+            "https://huggingface.co/api/datasets",
+            params={"search": query, "limit": self._per_source},
+        )
+        return [
+            _external_item(
+                source_type="dataset",
+                source_name="Hugging Face",
+                title=str(dataset.get("id") or ""),
+                url=f"https://huggingface.co/datasets/{dataset.get('id')}",
+                summary=_summary_from_hf_dataset(dataset),
+                identifier=str(dataset.get("id") or ""),
+                provider="huggingface",
+                downloads=dataset.get("downloads"),
+                likes=dataset.get("likes"),
+                updatedAt=dataset.get("lastModified"),
+                tags=dataset.get("tags") or [],
+            )
+            for dataset in payload[: self._per_source]
+            if dataset.get("id")
+        ]
+
+    def _zenodo_records(self, query: str) -> list[dict[str, Any]]:
+        payload = self._json(
+            "https://zenodo.org/api/records",
+            params={
+                "q": f"{query} dataset",
+                "type": "dataset",
+                "sort": "mostrecent",
+                "size": self._per_source,
+            },
+        )
+        records = (payload.get("hits") or {}).get("hits") or []
+        return [
+            _external_item(
+                source_type="dataset",
+                source_name="Zenodo",
+                title=str((record.get("metadata") or {}).get("title") or ""),
+                url=str((record.get("links") or {}).get("html") or ""),
+                summary=_strip_html(str((record.get("metadata") or {}).get("description") or "")),
+                identifier=str(record.get("doi") or record.get("id") or ""),
+                provider="zenodo",
+                publishedAt=(record.get("metadata") or {}).get("publication_date"),
+                keywords=(record.get("metadata") or {}).get("keywords") or [],
+            )
+            for record in records[: self._per_source]
+        ]
+
+    def _gdelt_news(self, query: str) -> list[dict[str, Any]]:
+        payload = self._json(
+            "https://api.gdeltproject.org/api/v2/doc/doc",
+            params={
+                "query": query,
+                "mode": "artlist",
+                "format": "json",
+                "sort": "datedesc",
+                "timespan": "1week",
+                "maxrecords": self._per_source,
+            },
+        )
+        return [
+            _external_item(
+                source_type="news",
+                source_name="GDELT",
+                title=str(article.get("title") or ""),
+                url=str(article.get("url") or ""),
+                summary=str(article.get("domain") or article.get("sourcecountry") or ""),
+                identifier=str(article.get("url") or ""),
+                publishedAt=article.get("seendate"),
+                domain=article.get("domain"),
+                language=article.get("language"),
+            )
+            for article in payload.get("articles", [])[: self._per_source]
+        ]
+
+    def _json(
+        self,
+        url: str,
+        *,
+        params: dict[str, Any],
+        headers: dict[str, str] | None = None,
+    ) -> Any:
+        response = self._client.get(url, params=params, headers=headers or {})
+        if getattr(response, "status_code", 200) >= 400:
+            raise RuntimeError("external API unavailable")
+        raise_for_status = getattr(response, "raise_for_status", None)
+        if raise_for_status is not None:
+            raise_for_status()
+        return response.json()
+
+
+def _external_item(
+    *,
+    source_type: str,
+    source_name: str,
+    title: str,
+    url: str,
+    summary: str,
+    identifier: str,
+    **extra: Any,
+) -> dict[str, Any]:
+    if not title or not _safe_https_url(url):
+        return {}
+    source_ref = {
+        "type": "url",
+        "identifier": identifier or url,
+        "title": title,
+        "url": url,
+        "sourceName": source_name,
+    }
+    return {
+        "title": title,
+        "summary": summary[:1000],
+        "url": url,
+        "sourceType": source_type,
+        "sourceName": source_name,
+        "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+        "sourceRefs": [source_ref],
+        **{key: value for key, value in extra.items() if value not in (None, "", [])},
+    }
+
+
+def _dedupe_by_url(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    deduped: list[dict[str, Any]] = []
+    for item in items:
+        url = item.get("url")
+        if not url or url in seen:
+            continue
+        seen.add(str(url))
+        deduped.append(item)
+    return deduped
+
+
+def _safe_https_url(url: str) -> bool:
+    parsed = urlparse(url)
+    return parsed.scheme == "https" and bool(parsed.hostname)
+
+
+def _summary_from_hf_dataset(dataset: dict[str, Any]) -> str:
+    card = dataset.get("cardData") or {}
+    description = card.get("description") if isinstance(card, dict) else None
+    if description:
+        return str(description)
+    return ", ".join(str(tag) for tag in dataset.get("tags") or [])[:1000]
+
+
+def _strip_html(text: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", text)).strip()
 
 
 class NoopSimilarityClient:
@@ -266,6 +489,7 @@ def build_default_novelty_adapters(observability=None, cost_guard=None) -> Novel
     )
     return NoveltyAdapters(
         corpus=corpus,
+        external=build_external_adapter(),
         similarity=build_similarity_adapter(corpus),
     )
 
@@ -304,4 +528,16 @@ def build_similarity_adapter(corpus: CorpusRetrievalPort) -> SimilarityPort:
         corpus=corpus,
         client=boto3.client("s3", region_name=region),
         prefix=os.getenv("DOCSURI_NOVELTY_ARTIFACT_PREFIX", "novelty/"),
+    )
+
+
+def build_external_adapter() -> ExternalSearchPort:
+    import httpx
+
+    return ExternalApiSearchClient(
+        httpx.Client(
+            timeout=5.0,
+            headers={"User-Agent": "DocSuri-Novelty/1.0"},
+        ),
+        github_token=os.getenv("DOCSURI_GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN"),
     )

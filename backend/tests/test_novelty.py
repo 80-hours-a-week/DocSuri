@@ -12,6 +12,7 @@ from backend.config import Settings
 from backend.modules.accounts.models import Principal, UserRole
 from backend.modules.novelty import controller
 from backend.modules.novelty.adapters import (
+    ExternalApiSearchClient,
     NoveltyAdapters,
     RetrievalBundle,
     S3ManuscriptSimilarityClient,
@@ -208,6 +209,102 @@ def test_similarity_adapter_reads_text_manuscript_and_queries_corpus() -> None:
     assert result.evidenceStatus is EvidenceStatus.SUPPORTED
     assert any(item["riskType"] == "sentence_similarity" for item in result.items)
     assert result.items[-1]["sourceRefs"][0]["url"].startswith("https://arxiv.org")
+
+
+def test_external_adapter_queries_public_api_sources() -> None:
+    class Response:
+        status_code = 200
+
+        def __init__(self, payload):
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+        def raise_for_status(self) -> None:
+            return None
+
+    class FakeHttp:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, dict]] = []
+
+        def get(self, url: str, *, params: dict, headers: dict):
+            self.calls.append((url, params))
+            if "api.github.com" in url:
+                return Response(
+                    {
+                        "items": [
+                            {
+                                "full_name": "docsuri/novelty-baseline",
+                                "html_url": "https://github.com/docsuri/novelty-baseline",
+                                "description": "Novelty baseline",
+                                "updated_at": "2026-07-01T00:00:00Z",
+                                "stargazers_count": 7,
+                                "language": "Python",
+                                "license": {"spdx_id": "MIT"},
+                            }
+                        ]
+                    }
+                )
+            if "huggingface.co" in url:
+                return Response(
+                    [
+                        {
+                            "id": "docsuri/rag-eval",
+                            "tags": ["rag", "evaluation"],
+                            "downloads": 3,
+                            "likes": 2,
+                        }
+                    ]
+                )
+            if "zenodo.org" in url:
+                return Response(
+                    {
+                        "hits": {
+                            "hits": [
+                                {
+                                    "id": "123",
+                                    "doi": "10.5281/zenodo.123",
+                                    "links": {"html": "https://zenodo.org/records/123"},
+                                    "metadata": {
+                                        "title": "RAG Evaluation Dataset",
+                                        "description": "<p>Dataset for RAG evaluation.</p>",
+                                        "publication_date": "2026-06-30",
+                                        "keywords": ["rag"],
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                )
+            return Response(
+                {
+                    "articles": [
+                        {
+                            "title": "New RAG benchmark released",
+                            "url": "https://example.com/rag-benchmark",
+                            "domain": "example.com",
+                            "seendate": "20260701T120000Z",
+                            "language": "English",
+                        }
+                    ]
+                }
+            )
+
+    http = FakeHttp()
+    result = ExternalApiSearchClient(http).search("privacy preserving RAG")
+
+    assert result.evidenceStatus is EvidenceStatus.SUPPORTED
+    assert {url for url, _ in http.calls} == {
+        "https://api.github.com/search/repositories",
+        "https://huggingface.co/api/datasets",
+        "https://zenodo.org/api/records",
+        "https://api.gdeltproject.org/api/v2/doc/doc",
+    }
+    assert {"github_repo", "dataset", "news"} <= {
+        item["sourceType"] for item in result.items
+    }
+    assert all(item["sourceRefs"] for item in result.items)
 
 
 def test_worker_completes_when_adapters_are_not_degraded() -> None:
