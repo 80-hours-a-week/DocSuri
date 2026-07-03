@@ -19,7 +19,7 @@
 | 로그 수집 | ✅ Live | U9 collection healthy (944 events/7d, 0 failures); KPI funnel view missing (#346) |
 | 개인화 추천 | 🟡 Shadow | Search boost applied in shadow mode (PR #300); go-live judgment pending (#345); US-P5 deferred |
 | 에이전트: 문헌탐색/근거형성 | 🚧 One PR away (re-review) | PR #338 — author addressed **all 7 blocking items over 2 rounds** (INV-EV-3 grounding, worker poison/idempotency, CDK wiring) + regression tests; verified green locally (27 tests, synth) → awaiting **re-review/merge**. `Docsuri-Evidence` stack idle; FE raw JSON (#339) still pending behind merge |
-| (charter add) 연구아이디어 novelty 에이전트 | 🚧 In construction | Code in develop, `Docsuri-Novelty` stack built; US-NV stories (#251–259) open; PR #349 reviewed → **CHANGES_REQUESTED** (1 blocking: SSE mapper overwrites timeline detail) |
+| (charter add) 연구아이디어 novelty 에이전트 | 🚧 In construction | Code in develop, `Docsuri-Novelty` stack built; US-NV stories (#251–259) open; PR #349 reviewed → **CHANGES_REQUESTED** (1 blocking: SSE mapper overwrites timeline detail). Author had **not** pushed since review (head == reviewed commit) → drafted suggestion **PR #358** into the author's branch (field-preserving `mergeTimelineEvents` + regression test; logic RED→GREEN verified, vitest pending in ELSAPHABA's env), awaiting their re-test/merge |
 | 웹검색 레퍼런스 (고려) | ❌ Not started | Novelty agent has GitHub+datasets search; web/news deferred to next cycle |
 | 온보딩 (고려) | ❌ Not started | Candidate fix for personalization cold-start |
 
