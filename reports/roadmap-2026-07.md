@@ -1,7 +1,7 @@
 # DocSuri Production Roadmap — 2026-07
 
 > **Date**: 2026-07-03 · **Baseline**: develop `573ad494` (main at v1.2.3, 13 commits behind)
-> **Updated**: 2026-07-04 — PR #351 merged (summary-anchor structural resolution + stale-docmodel self-heal). PRs #338/#349 reviewed → **CHANGES_REQUESTED** (author fixes pending): #338 4 blocking (turn persistence, dropped attachments/context, input-length 500s, unwired async worker stack), #349 1 blocking (SSE mapper overwrites richer timeline detail). Roadmap execution started — **PR #353** opened: ALB + CloudFront access logs (#341 step ①); **PR #355** opened: edge 5xx branded error page, S3/OAC-backed so it survives an origin outage (#341 step ②).
+> **Updated**: 2026-07-04 — PR #351 merged (summary-anchor structural resolution + stale-docmodel self-heal). PRs #338/#349 reviewed → **CHANGES_REQUESTED** (author fixes pending): #338 4 blocking (turn persistence, dropped attachments/context, input-length 500s, unwired async worker stack), #349 1 blocking (SSE mapper overwrites richer timeline detail). Roadmap execution started — **PR #353** opened: ALB + CloudFront access logs (#341 step ①); **PR #355** opened: edge 5xx branded error page, S3/OAC-backed so it survives an origin outage (#341 step ②). **PR #357** opened: 각주트리 DOI 노드 확장 500 → Semantic Scholar 페이로드 fail-closed (#342).
 > _Prev 2026-07-03 pm — PR #337 merged; PR #349 opened._
 > Snapshot of where the product stands against the team's initial plan, and the path to
 > production-level completion of our goals. Tracking issues: #339–#348.
@@ -13,7 +13,7 @@
 | 논문 검색 | ✅ Live | Hybrid search over ~1.5M-chunk corpus; daily auto-harvest (EventBridge 15:00 KST); pre-2026 historical drain in progress |
 | 논문 요약/번역 | ✅ Live | Grounded summaries/translation; glossary system redesigned (PR #334); map parallelism + shared-base overlay landed; source-anchor structural resolution + stale-docmodel self-heal (PR #351); Bedrock output elicitation → tool-use structured output, killing the JSON-parse abstain failure class (**PR #356**, open, no linked issue) |
 | 프로필 페이지 | 🟡 Live w/ mocks | U10 merged; 최근 본 논문/ORCID still mock (#347) |
-| 인용 그래프 → 각주 트리 | 🟡 Live w/ bug | DOI node expansion returns 500 (#342) |
+| 인용 그래프 → 각주 트리 | 🟡 Live w/ bug | DOI node expansion returns 500 (#342) — fix in **PR #357** (provider fail-closed), awaiting merge |
 | 트렌드/알림 | ❌ Not started | Never entered requirements — needs inception re-entry |
 | 구독제 | ❌ Not started | Never entered requirements — needs inception re-entry |
 | 로그 수집 | ✅ Live | U9 collection healthy (944 events/7d, 0 failures); KPI funnel view missing (#346) |
@@ -60,7 +60,7 @@ Ordered by user impact:
 | Item | Tracking |
 |---|---|
 | Intermittent SSR 500 on paper pages — **PR #353** enables ALB/CloudFront access logs (step ①); root-cause after a repro. Investigation: module-resolution guess weak (no dynamic imports; self-contained standalone) — likelier load-driven OOM. Raw-500 exposure fix belongs at the edge (CloudFront `error_responses`), not React boundaries → **PR #355** (step ②): branded page served from a private S3/OAC origin, independent of the failing ALB. Remaining: **PR-B** root-cause fix, after #353 logs give a repro. | #341 · #353 · #355 |
-| 각주 트리 DOI node expansion 500 | #342 |
+| 각주 트리 DOI node expansion 500 — **PR #357**: S2 200-with-bad-body was fail-open (parse escaped the `httpx`-only guard → app 500); now fail-closed to Unavailable at both the provider parse and tree assembly (BR-CG12). Regression tests exercise the real provider path the old suite bypassed via FixtureProvider. | #342 · #357 |
 | Docmodel backlog self-heal — re-enqueue contaminated docmodels @3 (embedding-cost-free) + drain DLQ 111 | #343 |
 | Finish pre-2026 backfill drain → restore ingestion autoscale; decide on separate doc-model queue | #344 |
 | Personalization shadow→real flip after metric review; then US-P5 + keywordWeights | #345 |
