@@ -282,11 +282,12 @@ def test_orchestrator_abstract_translate_stays_inline() -> None:
     assert queue.calls == []
 
 
-# --- summary/translation input path: stale doc-model heal + no-cache (BR-30) -----------------
+# --- summary/translation input path: stale doc-model heal + generation-keyed cache (BR-30) ----
 # The rich-view doc_model() path self-heals a servable-but-stale doc-model; the summary/translation
-# input path (SourceSelector) must do the same, or it would (a) never trigger the heal for a user
-# who only summarizes, and (b) cache output derived from stale-parser content (e.g. @2/@3 garbled
-# algorithm blocks) under a key that carries no parser dimension — outliving the doc's own heal.
+# input path (SourceSelector) must do the same (enqueue the heal for a user who only summarizes).
+# The derived result IS cached — but under the ACTUAL doc generation's key, so it is async-safe (the
+# cache write is the worker→poll handoff) yet a healed request keys elsewhere and never serves stale
+# output. (Earlier the write was skipped for stale docs, which silently broke async job delivery.)
 
 from docsuri_shared.docmodel_contract import DOCMODEL_PARSER_VERSION  # noqa: E402
 from docsuri_shared.dtos import DocModel  # noqa: E402
@@ -357,7 +358,7 @@ def test_summary_from_fresh_docmodel_caches_and_no_heal() -> None:
     assert queue.calls == []  # already current → no heal enqueue
 
 
-def test_summary_from_stale_docmodel_heals_and_skips_cache() -> None:
+def test_summary_from_stale_docmodel_heals_and_caches_under_own_generation() -> None:
     store = StubStore()
     queue = _SpyBuildQueue()
     orch = make_orchestrator(
@@ -366,12 +367,14 @@ def test_summary_from_stale_docmodel_heals_and_skips_cache() -> None:
         doc_model_build_queue=queue,
     )
     result = orch.run(_req(), _ctx())
-    assert result.to_dict()["status"] == "ok"  # stale doc still served for this response
-    assert store.puts == 0  # derived summary NOT cached (would outlive the doc's self-heal)
-    assert queue.calls == [("2401.1", 1)]  # background rebuild enqueued to heal to current parser
+    assert result.to_dict()["status"] == "ok"  # stale doc served for this response
+    assert store.puts == 1  # cached under the stale doc's OWN generation key (async-safe)
+    (path,) = list(store.data)
+    assert "_d2." in path  # keyed on the ACTUAL (@2) generation, not the current one
+    assert queue.calls == [("2401.1", 1)]  # background rebuild still enqueued to heal
 
 
-def test_translate_from_stale_docmodel_heals_and_skips_cache() -> None:
+def test_translate_from_stale_docmodel_heals_and_caches_under_own_generation() -> None:
     store = StubStore()
     queue = _SpyBuildQueue()
     orch = make_orchestrator(
@@ -383,12 +386,45 @@ def test_translate_from_stale_docmodel_heals_and_skips_cache() -> None:
     request = SummaryRequest(paper_id="2401.1", version=1, task=Task.TRANSLATE, scope=Scope.FULL)
     result = orch.run(request, _ctx(), allow_enqueue=False)
     assert result.to_dict()["status"] == "ok"
-    assert store.puts == 0  # translate base derived from stale doc is not cached either
+    assert store.puts == 1  # translate base cached under the @2 key
+    (path,) = list(store.data)
+    assert "_d2." in path
     assert queue.calls == [("2401.1", 1)]
 
 
+def test_stale_docmodel_result_deliverable_via_cache_no_reenqueue_loop() -> None:
+    # Regression for the 2308.08469 async pending loop: a stale doc's worker-written result must be
+    # found on a later request via the actual-generation key (the poll re-check), so async delivery
+    # completes instead of re-enqueuing forever. Skipping the write (the old behavior) broke this.
+    store = StubStore()
+    orch = make_orchestrator(
+        store=store,
+        source_doc_model_reader=_DocReader(_grounding_doc("docmodel-parser@2")),
+    )
+    orch.run(_req(), _ctx(), allow_enqueue=False)  # worker writes under the @2 key
+    assert store.puts == 1
+    second = orch.run(_req(), _ctx()).to_dict()  # poll finds it via the actual-generation re-check
+    assert second["cached"] is True
+    assert store.puts == 1  # no regeneration → loop broken
+
+
+def test_healed_docmodel_does_not_serve_stale_generation_cache() -> None:
+    # Correctness (the original #337 concern preserved): output cached from a stale (@2) doc must
+    # NOT be served once the doc heals to the current parser — the keys differ by generation.
+    store = StubStore()
+    make_orchestrator(
+        store=store, source_doc_model_reader=_DocReader(_grounding_doc("docmodel-parser@2"))
+    ).run(_req(), _ctx(), allow_enqueue=False)  # cache the @2-derived result
+    assert store.puts == 1
+    healed = make_orchestrator(
+        store=store, source_doc_model_reader=_DocReader(_grounding_doc(DOCMODEL_PARSER_VERSION))
+    ).run(_req(), _ctx()).to_dict()
+    assert healed["cached"] is False  # healed key misses the @2 entry → regenerated, not stale
+
+
 def test_stale_heal_enqueue_is_best_effort_when_no_queue() -> None:
-    # No build queue wired → no heal enqueue, and the stale-derived result is still left uncached.
+    # No build queue wired → no heal enqueue; the stale-derived result is still cached (async-safe)
+    # under its own generation key.
     store = StubStore()
     orch = make_orchestrator(
         store=store,
@@ -396,7 +432,7 @@ def test_stale_heal_enqueue_is_best_effort_when_no_queue() -> None:
     )
     result = orch.run(_req(), _ctx())
     assert result.to_dict()["status"] == "ok"
-    assert store.puts == 0
+    assert store.puts == 1
 
 
 def test_legacy_cached_object_without_docmodel_segment_is_not_served() -> None:

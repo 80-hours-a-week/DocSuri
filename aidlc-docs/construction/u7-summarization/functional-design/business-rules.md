@@ -9,10 +9,11 @@
 ## 1. 결정 규칙 (Business Rules, BR-S*)
 
 ### BR-S1 — 캐시 키 immutable·무효화 (§11 / Q7)
-- 신원 = `(paperId, version, task, targetLang, persona, glossaryVer, [ownerId], [seedVer], modelVer, promptVer)`. 같은 키 = 같은 산출물.
+- 신원 = `(paperId, version, task, targetLang, persona, glossaryVer, [ownerId], [seedVer], modelVer, promptVer, docmodelVer)`. 같은 키 = 같은 산출물.
 - `glossaryVer`는 **프롬프트-강제(prompt-enforced) 용어의 콘텐츠 시그니처**다(요약·번역 **공통**). 산출물은 프롬프트에 실리는 강한 용어에만 의존하므로, 강한 용어 추가/편집/강등 시 키가 바뀌어 무효화된다(수동 flush 없음). **후치환(약한) 용어**는 캐시에 굽지 않고 **읽기시 오버레이**로 적용하므로(BR-S4), 약한-용어만 편집하거나 두 사용자의 약한 용어가 달라도 **동일 베이스를 공유**하고 키가 갈리지 않는다(NFR-C1 — 동일 산출물의 중복 생성 방지). 시그니처는 필터 MAX가 아닌 **해시**라 강한 용어를 약한으로 강등해도 값이 바뀌어 stale 무효화 누락이 없다.
 - 시그니처는 콘텐츠 식별자이나 사용자 간 충돌 방지를 위해 — 서로 다른 사용자의 강한 용어 집합이 다를 수 있어 — **개인화 산출물(`signature > 0`)은 `ownerId`로도 갈라**낸다. 베이스라인(`signature == 0`, 프롬프트-강제 용어 없음 — 오늘의 기본)은 owner 무관·공유.
 - `seedVer`는 **공유 시드 용어집(keep-as-is·강한 매핑)의 콘텐츠 버전**. 시드도 프롬프트에 실려 산출물 신원의 일부이므로, 시드 편집 시 경로가 바뀌어 자동 무효화된다. 배포된 시드와 동일한 동안은 세그먼트가 **생략**되어(기존 객체 유효) 시드 무변경 배포에서 캐시가 불필요하게 폐기되지 않는다.
+- `docmodelVer`는 산출물이 파생된 **doc-model 파서 세대**(`docmodel-parser@N`의 N)다. 요약·번역은 servable-but-stale(구 파서) doc-model도 소비하는데(리더가 blank 대신 서빙), 그 산출물을 **실제 세대의 키**로 캐시한다: heal되어 현재 파서로 재빌드되면 키가 회전(다른 `_dN`)해 stale 산출물이 자동 미서빙(재생성)된다. **stale 산출물도 반드시 캐시한다** — 비동기 잡(BR-S12)은 캐시 write가 워커→폴링의 유일한 전달 통로이므로, "stale이면 write 스킵"(구 동작)하면 긴 요약·전문번역이 영원히 pending 루프에 빠진다. 조회는 소스 선택 전 **현재 세대 키**로 먼저(핫패스 = fetch 0), 미스 시 선택 후 **실제 세대 키**로 재조회한다. 세그먼트 없는 레거시 객체(파서 차원 도입 전 저장분)는 경로 상이로 자동 미서빙→재생성.
 
 ### BR-S2 — 소스 선택·초록 폴백 (§5 / Q1=A)
 - `summary` → 전문(**doc-model read**; `.txt`→doc-model 입력 교체, D2 — 선택 로직 불변), `translate` → 초록(기본) 또는 **전문(scope=full, 프론트 노출 기능)**.
