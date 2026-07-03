@@ -130,7 +130,7 @@ def build_production_runtime(settings: IngestionSettings) -> RuntimeServices:
     )
     resilience = IngestionResilienceService(
         observability,
-        timeout_seconds=settings.request_timeout_seconds,
+        timeout_seconds=settings.dependency_timeout_seconds,
     )
     failure_handler = IngestFailureHandler(queue, observability)
     # FR-17 multimodal assets (display-only). Wired only when the flag is on — the three

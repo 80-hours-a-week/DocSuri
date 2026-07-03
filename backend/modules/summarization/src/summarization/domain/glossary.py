@@ -16,19 +16,85 @@ from collections.abc import Sequence
 from ..ports.ports import GlossaryRepositoryPort
 from .models import Glossary, TermMapping
 
-# P1 seed: model/abbreviation names kept in English (keep-as-is) — biggest cheap win (§9.1).
+# --- Shared seed glossary (§9.1) — SELECTION RULE ---------------------------------------------
+# Evidence table + A/B/C/D grading + per-term sources live in the design record
+# (functional-design/glossary-term-decisions.md); the governing rule is BR-S4. This seed is a
+# small, GOVERNED, shared artifact injected into EVERY summary/translate prompt — not a dictionary.
+# It is finalized once and frozen; the long tail of per-reader preferences is absorbed by the
+# personal glossary, not by growing this seed. Two categories, by an explicit rule:
+#   • keep-as-is (영어 유지): proper model/architecture names & abbreviations. Translating these
+#     invites bad 음차/오역 and breaks source cross-reference, so they ride into the prompt as
+#     "keep English". Justified by the RULE (proper name/abbrev), so obvious names may be listed
+#     without per-term grading.
+#   • prompt-enforced mappings (강한): ONLY high-frequency 음차 concept terms a general LLM is at
+#     real risk of mis-translating into a wrong Korean word (attention→'주의', embedding→'매장').
+#     Criterion: grade A/B AND enforcement-worth AND high-frequency. A-grade self-evident terms
+#     (신경망·역전파…) are OMITTED — the LLM already renders them right, so seeding them only
+#     inflates the prompt. C (mixed, e.g. gradient) / D (contested, e.g. regularization) excluded.
 SEED_KEEP_AS_IS: tuple[str, ...] = (
-    "Transformer", "BERT", "GPT", "LoRA", "RAG", "LLM", "CNN", "RNN", "LSTM", "ViT",
-    "ResNet", "ImageNet", "SOTA", "MLP", "GAN", "VAE", "ReLU", "Adam", "SGD",
+    # Architectures / models
+    "Transformer", "BERT", "GPT", "T5", "BART", "RoBERTa", "CLIP", "ViT", "ResNet", "U-Net",
+    "CNN", "RNN", "LSTM", "MLP", "GAN", "VAE", "GNN", "MoE", "LoRA", "RAG",
+    # Training / alignment techniques (kept as coined — 'fine-tuning' is C-grade as a mapping
+    # (파인튜닝/미세조정 mixed), so the mis-translation risk is sidestepped by keeping it English)
+    "fine-tuning", "RLHF", "SFT", "PPO", "DPO", "PEFT",
+    # Abbreviations / activations / optimizers
+    "LLM", "SOTA", "ReLU", "Adam", "SGD",
+    # Datasets / metrics (English acronyms in results sections)
+    "ImageNet", "BLEU", "ROUGE", "F1", "AUC", "IoU",
 )
 
-# P1 seed: core domain mappings enforced in the prompt for consistency.
+# Prompt-enforced (강한) mappings — mis-translation-risk 음차 concept terms only (see rule above).
 SEED_MAPPINGS: tuple[TermMapping, ...] = (
     TermMapping("attention", "어텐션", prompt_enforced=True),
     TermMapping("embedding", "임베딩", prompt_enforced=True),
-    TermMapping("fine-tuning", "파인튜닝", prompt_enforced=True),
     TermMapping("latent space", "잠재 공간", prompt_enforced=True),
 )
+
+# Lowercased keep-as-is set, precomputed once for O(1) membership — the response builder uses it to
+# mark which kept terms are DocSuri standard (BR-S4), on every translate serialization.
+SEED_KEEP_AS_IS_LOWER: frozenset[str] = frozenset(t.lower() for t in SEED_KEEP_AS_IS)
+
+
+# --- kept-term display filter (BR-S4) -----------------------------------------------------------
+# The model's free-form ``keptTerms`` (terms it left in English) also sweeps up math NOTATION —
+# Greek variables (theta, eta), sub/superscripted symbols (W_q, L_att^sm), expressions
+# (L(w+delta), O(rho^2)), LaTeX fragments (mathbb{E}, sqrt{2eta T}) — which are noise in the 원어
+# 유지 용어 list. This deterministic predicate keeps keyword/name-like terms and drops notation, so
+# the glossary shows words, not symbols. (Seeds are curated, so this only prunes free-form terms.)
+
+# Greek-letter names + LaTeX command tokens that, standing alone, are notation, not a keyword.
+# Layer/function names (Softmax, ReLU, Sigmoid…) are intentionally EXCLUDED — those are real terms.
+_MATH_WORDS: frozenset[str] = frozenset(
+    {
+        "alpha", "beta", "gamma", "delta", "epsilon", "varepsilon", "zeta", "eta", "theta",
+        "vartheta", "iota", "kappa", "lambda", "mu", "nu", "xi", "pi", "varpi", "rho", "varrho",
+        "sigma", "varsigma", "tau", "upsilon", "phi", "varphi", "chi", "psi", "omega",
+        "nabla", "partial", "langle", "rangle", "odot", "oplus", "otimes", "cdot", "cdots",
+        "ldots", "mid", "mathbb", "mathrm", "mathcal", "mathbf", "mathsf", "boldsymbol", "bm",
+        "widehat", "widetilde", "hat", "tilde", "bar", "vec", "sqrt", "argmax", "argmin", "sum",
+        "prod", "forall", "exists", "infty", "leftarrow", "rightarrow", "mapsto", "top", "ell",
+    }
+)
+
+# Characters that signal a math expression / LaTeX fragment. Hyphen and '+' are allowed so real
+# names survive (CIFAR-100, TimeMixer++); braces/parens/subscripts/relations/commas are not.
+_MATH_CHARS: frozenset[str] = frozenset("{}\\^_()[]=<>|/,~⟨⟩∇√∂⊙⊕⊗·×∑∏∈≤≥≈≠±∗•←→↦")
+_SUBTOKEN_RE = re.compile(r"[\s\-,]+")
+
+
+def is_glossary_worthy(term: str) -> bool:
+    """True when a kept term reads as a keyword/name worth a glossary chip; False when it is math
+    notation the model reported as 'kept' (Greek vars, ``W_q``, ``L(w+delta)``, ``mathbb{E}``…).
+
+    Rejects: length ≤ 1; any math metacharacter; any whitespace/hyphen/comma-delimited
+    sub-token that is a Greek-letter/LaTeX-command word."""
+    t = term.strip()
+    if len(t) <= 1:
+        return False
+    if any(c in _MATH_CHARS for c in t):
+        return False
+    return not any(sub.lower() in _MATH_WORDS for sub in _SUBTOKEN_RE.split(t) if sub)
 
 
 def _seed_signature() -> str:
@@ -51,6 +117,9 @@ SEED_VER = _seed_signature()
 # translate objects stay valid on deploy (no gratuitous cache-wide regeneration). Editing the seed
 # above changes ``SEED_VER`` → the segment appears → exactly the affected objects invalidate.
 # NEVER update this literal to match a seed edit — doing so would defeat the invalidation.
+# NOTE: as of the strong-term finalization (fine-tuning demoted to keep-as-is + keep-as-is
+# enrichment) the shipped seed intentionally DIVERGES from this frozen baseline, so the segment is
+# now ACTIVE and this deploy self-invalidates prior seed-based artifacts (empty corpus → ~0 cost).
 _SEED_BASELINE_VER = "344c3ccb"
 
 
@@ -124,8 +193,11 @@ class GlossaryResolver:
         self, user_id: str, term_from: str, term_to: str, *, prompt_enforced: bool = False
     ) -> int:
         """Persist a personal term override (owner-scoped, SEC-8); return the bumped
-        ``glossary_ver``. Phase 1 default ``prompt_enforced=False`` → simple-noun
-        post-substitution (translation only). Raises when no repository is configured."""
+        ``glossary_ver``. ``prompt_enforced=False`` → simple-noun post-substitution (translation
+        only); ``True`` → the term rides into the prompt (강한). A personal strong term may override
+        ANY term — including a shared seed mapping (e.g. attention) — for that user only; the
+        override takes precedence over the seed in the prompt (see ``_glossary_block``). Raises
+        ``RuntimeError`` when no repository is configured."""
         if self._repo is None:
             raise RuntimeError("glossary repository is not configured")
         return self._repo.upsert_term(

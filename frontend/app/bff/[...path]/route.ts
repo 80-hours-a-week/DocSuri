@@ -130,13 +130,23 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
     );
   }
 
-  const res = await transport.send({
-    method,
-    path: upstreamPath,
-    body,
-    headers: forwardedHeaders(req),
-    idempotent: method === 'GET',
-  });
+  let res;
+  try {
+    res = await transport.send({
+      method,
+      path: upstreamPath,
+      body,
+      headers: forwardedHeaders(req),
+      idempotent: method === 'GET',
+    });
+  } catch {
+    // Gateway hang/timeout (HttpTransport AbortSignal.timeout) — fail fast so a slow
+    // upstream can't pin BFF sockets into an FE-wide outage (BR-U5-10, NFR-U5-R2).
+    return NextResponse.json(
+      { message: '요청 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.' },
+      { status: 504 },
+    );
+  }
 
   // 204 No Content / 304 Not Modified must not carry a body — NextResponse.json() always
   // attaches one, and the Response constructor then throws ("Invalid response status code

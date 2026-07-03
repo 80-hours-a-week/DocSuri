@@ -20,6 +20,7 @@ from .domain.models import (
     CanonicalDedupState,
     EmbeddingBatch,
     IngestionJob,
+    MetadataRecord,
     ParsedPaper,
     Tombstone,
 )
@@ -142,11 +143,19 @@ class IngestionPipelineService:
                 "fetch_full_text",
                 lambda: self._arxiv.fetch_full_text(metadata),
             )
-            result = self._doc_model_builder.build_from_text(
-                metadata, raw_document.text, source_tier=SourceTier.pdf
-            )
-            status = "pdf_fallback"
-            cached = str(result.cached).lower()
+            if raw_document.source_tier is SourceTier.native_html:
+                # Native arXiv HTML text must never become a servable doc-model: its raw TeX/pgf
+                # leaks past the parser sanitizer, and storing it as pdf-labeled text would slip
+                # past the reader's native_html guard. ar5iv missed AND no usable PDF text → keep
+                # the source_unavailable result (viewer links out to arXiv) rather than shipping
+                # native-derived text as a clean doc-model. (Real PDF/GROBID recovery is follow-up.)
+                status = "native_html_refused"
+            else:
+                result = self._doc_model_builder.build_from_text(
+                    metadata, raw_document.text, source_tier=SourceTier.pdf
+                )
+                status = "pdf_fallback"
+                cached = str(result.cached).lower()
         self._observability.emit_metric(
             "ingestion.docmodel.build",
             1.0,
@@ -174,11 +183,16 @@ class IngestionPipelineService:
             if job.source_record is not None:
                 return self._ingest_source_record(job)
 
-            metadata = self._resilience.dependency_call(
-                "arxiv",
-                "fetch_metadata",
-                lambda: self._arxiv.fetch_metadata(job.arxiv_ref or ""),
-            )
+            if job.arxiv_metadata is not None:
+                # Harvest already fetched this via bulk OAI-PMH — skip the per-paper
+                # round-trip (arXiv politeness budget) and its breaker exposure.
+                metadata = MetadataRecord.from_payload(job.arxiv_metadata)
+            else:
+                metadata = self._resilience.dependency_call(
+                    "arxiv",
+                    "fetch_metadata",
+                    lambda: self._arxiv.fetch_metadata(job.arxiv_ref or ""),
+                )
             return self.ingest_metadata(job, metadata)
         except IngestionError as exc:
             self._control_plane.record_job_finished(
@@ -830,6 +844,7 @@ class RefreshOrchestrationService:
                         job_id=new_job_id("seed"),
                         kind=JobKind.SEED_REBUILD,
                         arxiv_ref=metadata.arxiv_ref,
+                        arxiv_metadata=metadata.to_payload(),
                     )
                 )
                 queued += 1

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { headers } from 'next/headers';
 import './globals.css';
 import { SessionProvider } from '@/components/session/SessionContext';
 import { ThemeProvider } from '@/components/theme/ThemeContext';
@@ -22,13 +23,17 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Production CSP script-src has no 'unsafe-inline' (middleware.ts, SEC-4); this inline
+  // theme-init script needs the per-request nonce middleware minted to stay allowed.
+  // Dev's CSP keeps 'unsafe-inline' and never sets x-nonce, so nonce is undefined there.
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
   return (
     <html lang="ko" suppressHydrationWarning>
       <head>
         {/* Applies the stored dark/light override before React hydrates, so there's no
             flash of the wrong theme (the script runs before first paint). */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body>
         <ThemeProvider>

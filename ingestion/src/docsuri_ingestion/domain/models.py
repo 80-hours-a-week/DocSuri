@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from docsuri_shared.dtos import SourceTier
 from docsuri_shared.vector_spec import DIMENSIONS, IndexRecord
 
 from .enums import DedupDecision, DedupStateKind, JobKind, SourceName
@@ -48,6 +49,39 @@ class MetadataRecord:
     def version(self) -> int:
         return self.identifier.version
 
+    def to_payload(self) -> dict[str, Any]:
+        """Queue-safe dict so a bulk harvest can ship its already-fetched metadata inside each
+        job, sparing the worker a per-paper fetch_metadata round-trip (arXiv politeness budget)."""
+        return {
+            "arxivRef": self.arxiv_ref,
+            "title": self.title,
+            "authors": list(self.authors),
+            "abstract": self.abstract,
+            "categories": list(self.categories),
+            "updatedAt": self.updated_at.isoformat(),
+            "publishedAt": self.published_at.isoformat() if self.published_at else None,
+            "licenseUrl": self.license_url,
+            "primaryCategory": self.primary_category,
+        }
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> MetadataRecord:
+        return cls(
+            arxiv_ref=payload["arxivRef"],
+            title=payload["title"],
+            authors=tuple(payload["authors"]),
+            abstract=payload["abstract"],
+            categories=tuple(payload["categories"]),
+            updated_at=datetime.fromisoformat(payload["updatedAt"]),
+            published_at=(
+                datetime.fromisoformat(payload["publishedAt"])
+                if payload.get("publishedAt")
+                else None
+            ),
+            license_url=payload.get("licenseUrl"),
+            primary_category=payload.get("primaryCategory"),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class RawDocument:
@@ -55,6 +89,11 @@ class RawDocument:
     text: str  # normalized plain text (BR-29: from HTML-preferred source, PDF fallback)
     source_url: str
     content_type: str = "text/plain"
+    # Which rung actually produced ``text`` (ar5iv / native_html / pdf). Consumers that store the
+    # text as a doc-model use this to keep native arXiv HTML text out of a servable doc-model (its
+    # raw TeX/pgf leaks past the parser sanitizer): the doc-model text-fallback refuses native_html.
+    # ``None`` when the producer does not tag it (treated as non-native by consumers).
+    source_tier: SourceTier | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,6 +212,9 @@ class IngestionJob:
     paper_id: str | None = None
     version: int | None = None
     source_record: dict[str, Any] | None = None
+    # Harvest-supplied arXiv metadata (MetadataRecord.to_payload()). When present the worker
+    # skips its per-paper fetch_metadata call — the bulk OAI-PMH harvest already had it.
+    arxiv_metadata: dict[str, Any] | None = None
 
     def to_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -189,6 +231,7 @@ class IngestionJob:
             "paperId": self.paper_id,
             "version": self.version,
             "sourceRecord": self.source_record,
+            "arxivMetadata": self.arxiv_metadata,
         }
         payload.update({key: value for key, value in optional.items() if value is not None})
         return payload

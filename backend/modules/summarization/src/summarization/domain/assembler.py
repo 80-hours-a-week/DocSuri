@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import copy
 
-from .glossary import GlossaryResolver
+from .glossary import GlossaryResolver, is_glossary_worthy
 from .models import (
     Glossary,
     SourceText,
@@ -64,3 +64,18 @@ class ResultAssembler:
             setter(GlossaryResolver.post_substitute(text, glossary))
         doc["fullText"] = project_full_text(doc)
         return out
+
+    @staticmethod
+    def filter_kept_terms(payload: dict) -> dict:
+        """Drop math-notation entries (Greek vars, ``W_q``, ``L(w+delta)``…) from a translation
+        view's ``keptTerms`` so the 원어 유지 용어 list shows keywords, not symbols (BR-S4). Applied
+        on the READ path so it also cleans results cached before the filter shipped. Idempotent;
+        copies only when it removes something, and never mutates the shared cached object."""
+        tr = payload.get("translation")
+        if not isinstance(tr, dict) or not isinstance(tr.get("keptTerms"), list):
+            return payload
+        kept = tr["keptTerms"]
+        filtered = [t for t in kept if isinstance(t, str) and is_glossary_worthy(t)]
+        if len(filtered) == len(kept):
+            return payload
+        return {**payload, "translation": {**tr, "keptTerms": filtered}}
