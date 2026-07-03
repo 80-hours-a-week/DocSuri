@@ -52,6 +52,11 @@ export function FullTranslationIsland({ paperId, version }: { paperId: string; v
           cached={outcome.cached}
           showGlossary
           assetsById={assetsById}
+          // Re-run so a just-applied glossary group reflects: weak terms as a read-time overlay on
+          // the cached base, strong terms as a fresh (cache-miss) re-translation. `run` no-ops only
+          // while the same request is in-flight; here it settled, so this re-issues (or gets
+          // `pending`, which the hook then polls).
+          onRegenerate={retry}
         />
       );
     case 'summary':
@@ -64,7 +69,7 @@ export function FullTranslationIsland({ paperId, version }: { paperId: string; v
         <StateView
           kind="loading"
           title="번역 생성 중…"
-          message="AI가 백그라운드에서 논문을 번역하고 있어요. 논문이 길면 1~2분 걸릴 수 있어요. 완료되면 여기에 표시돼요."
+          message="AI가 백그라운드에서 논문을 번역하고 있어요. 논문이 길면 시간이 걸릴 수 있어요. 완료되면 여기에 표시돼요."
         />
       );
     case 'abstain':
