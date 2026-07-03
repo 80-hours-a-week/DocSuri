@@ -69,7 +69,7 @@ export function FullTranslationIsland({ paperId, version }: { paperId: string; v
         <StateView
           kind="loading"
           title="번역 생성 중…"
-          message="AI가 백그라운드에서 논문을 번역하고 있어요. 논문이 길면 1~2분 걸릴 수 있어요. 완료되면 여기에 표시돼요."
+          message="AI가 백그라운드에서 논문을 번역하고 있어요. 논문이 길면 시간이 걸릴 수 있어요. 완료되면 여기에 표시돼요."
         />
       );
     case 'abstain':
