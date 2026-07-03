@@ -150,7 +150,7 @@ def test_pbt_response_to_dict_sec9_all_states(
     is_present=st.booleans(),
 )
 def test_pbt_anchor_resolution_soundness(name: str, distractor: str, is_present: bool) -> None:
-    from summarization.domain.grounding import GroundingValidator, _normalize_label
+    from summarization.domain.grounding import GroundingValidator, _contiguous, _label_tokens
     from summarization.domain.models import (
         Anchor,
         AnchorTarget,
@@ -160,15 +160,14 @@ def test_pbt_anchor_resolution_soundness(name: str, distractor: str, is_present:
         SummaryDraft,
     )
 
-    n_name = _normalize_label(name)
-    assume(n_name)  # the section label must normalize to a non-empty key
+    name_toks = _label_tokens(name)
+    assume(name_toks)  # the section label must have resolvable tokens
 
     if is_present:
         target_hint = f"Section: {name}"
     else:
-        n_dist = _normalize_label(distractor)
-        # guarantee the distractor cannot resolve to ``name`` by containment (either direction)
-        assume(n_dist and n_dist not in n_name and n_name not in n_dist)
+        # guarantee the distractor's tokens cannot contain the section's tokens as a run
+        assume(not _contiguous(name_toks, _label_tokens(f"Section: {distractor}")))
         target_hint = f"Section: {distractor}"
 
     draft = SummaryDraft(

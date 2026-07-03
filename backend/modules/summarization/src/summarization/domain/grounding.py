@@ -27,37 +27,49 @@ _NUM_RE = re.compile(r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?")
 
 # --- anchor location resolution (BR-S7) --------------------------------------
 # An anchor points at a doc-model LOCATION (a section / table / figure), not at a verbatim prose
-# quote. The summary is Korean, so the model localizes/paraphrases its ``label`` ("free-riding
-# penalty 수식") and a verbatim substring check against the English source rejects almost every
-# real anchor. Instead we resolve the model's raw ``target`` string (``target_hint``) against the
-# doc-model's ACTUAL section titles + table/figure labels; a resolved anchor is kept and its label
-# rewritten to the canonical doc-model label (so the chip jumps to the real block). Deterministic,
-# no LLM-judge (Q15). Anti-fabrication stays with the HARD numeric gate below — a hallucinated
-# location simply fails to resolve and is dropped (SOFT), never surfacing a fabricated figure.
-_LABEL_PREFIX_RE = re.compile(r"^\s*(?:section|sec\.?|§)\s*[:.\-]?\s*", re.IGNORECASE)
+# quote. The summary is Korean, so the model localizes/paraphrases prose; a verbatim substring
+# check against the English source rejects almost every real anchor. Instead the model names the
+# source location — the prompt asks for the exact section title or "Figure N"/"Table N" in
+# ``label`` (see prompts/templates.py), and some models also echo it in ``target`` (``target_hint``)
+# — and we resolve THAT against the doc-model's ACTUAL section/table/figure labels. A resolved
+# anchor is kept with its label rewritten to the canonical doc-model label (chip jumps to the real
+# block). Deterministic, no LLM-judge (Q15). Anti-fabrication stays with the HARD numeric gate — an
+# unresolved location is dropped (SOFT), never surfacing a fabricated figure.
+#
+# Matching is TOKEN-based (a run of consecutive tokens), not raw substring: "Figure 1" must not
+# match "Figure 10" (token "1" ≠ "10"), and a short title "Method" must not match "Methodology".
+_LABEL_PREFIX_RE = re.compile(r"^\s*(?:section\b|sec\.|§)\s*[:.\-]?\s*", re.IGNORECASE)
 _FIGTBL_RE = re.compile(r"\b(figure|fig\.?|table)\s*(\d+)", re.IGNORECASE)
 
 
-def _normalize_label(text: str) -> str:
-    """Casefold + strip a leading 'Section:'/'§' prefix + drop punctuation → collapsed spaces, so
-    'Section: Eliminating Free Riding' matches the title 'Eliminating Free Riding' and 'FACT: …'
-    matches 'Fact: …' (case) without verbatim-substring brittleness."""
+def _label_tokens(text: str) -> list[str]:
+    """Casefolded token list: strip a leading 'Section:'/'Sec.'/'§' prefix (``\\b`` so 'Security' is
+    not truncated), drop punctuation, split on whitespace. Tokens (not raw substrings) so 'figure 1'
+    ≠ 'figure 10' and 'Section: Eliminating Free Riding' still matches the title 'Eliminating Free
+    Riding' as a consecutive run."""
     t = _LABEL_PREFIX_RE.sub("", text.strip())
     t = re.sub(r"[^\w\s]", " ", t, flags=re.UNICODE)  # § : , . / → space
-    return re.sub(r"\s+", " ", t).strip().lower()
+    return t.lower().split()
 
 
-def _structural_index(refined: RefinedSource) -> list[tuple[str, str]]:
-    """(canonical label, normalized key) for every citable doc-model location, most specific first
+def _contiguous(needle: list[str], hay: list[str]) -> bool:
+    """True when ``needle`` occurs as a run of consecutive tokens in ``hay`` (order preserved)."""
+    n = len(needle)
+    return 0 < n <= len(hay) and any(hay[i : i + n] == needle for i in range(len(hay) - n + 1))
+
+
+def _structural_index(refined: RefinedSource) -> list[tuple[str, list[str]]]:
+    """(canonical label, key tokens) for every citable doc-model location, most specific first
     (figures/tables before sections) so a compound target resolves to the precise block."""
-    index: list[tuple[str, str]] = []
-    seen: set[str] = set()
+    index: list[tuple[str, list[str]]] = []
+    seen: set[tuple[str, ...]] = set()
 
     def add(canonical: str, raw_key: str) -> None:
-        key = _normalize_label(raw_key)
-        if key and key not in seen:
-            seen.add(key)
-            index.append((canonical, key))
+        toks = _label_tokens(raw_key)
+        sig = tuple(toks)
+        if toks and sig not in seen:
+            seen.add(sig)
+            index.append((canonical, toks))
 
     # Figure / Table labels — from caption prefixes ("Figure 1: …") + structured tables.
     for cap in refined.captions:
@@ -75,16 +87,16 @@ def _structural_index(refined: RefinedSource) -> list[tuple[str, str]]:
     return index
 
 
-def _resolve_location(anchor: Anchor, index: list[tuple[str, str]]) -> str | None:
+def _resolve_location(anchor: Anchor, index: list[tuple[str, list[str]]]) -> str | None:
     """Canonical doc-model label the anchor points at, or None if it resolves to nothing real.
-    Matches the model's ``target_hint`` (raw location string) against the index; the Korean
-    ``label`` is a fallback signal only."""
-    hint = _normalize_label(anchor.target_hint)
-    lbl = _normalize_label(anchor.label)
+    Resolves against ``label`` (the prompt's location field) OR ``target_hint`` (raw ``target``);
+    a location's key tokens must appear as a consecutive run in one of them."""
+    hint = _label_tokens(anchor.target_hint)
+    lbl = _label_tokens(anchor.label)
     if not hint and not lbl:
         return None
     for canonical, key in index:
-        if (hint and (key in hint or hint in key)) or (lbl and key in lbl):
+        if _contiguous(key, hint) or _contiguous(key, lbl):
             return canonical
     return None
 

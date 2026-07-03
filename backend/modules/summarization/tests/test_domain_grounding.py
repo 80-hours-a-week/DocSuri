@@ -125,6 +125,70 @@ def test_anchor_unresolvable_target_dropped(sample_paper: str, valid_draft: Summ
     assert any(v.kind == "anchor_missing" for v in verdict.violations)
 
 
+def _draft_with_anchor(anchor: Anchor) -> SummaryDraft:
+    return SummaryDraft(
+        tldr="t", contributions=("c",), method="m", results="r", limitations="l",
+        reproducibility={"code": "", "data": ""}, anchors=(anchor,),
+    )
+
+
+def test_anchor_resolves_by_label_location_field() -> None:
+    # New prompt contract: the model puts the exact source location in ``label`` (target is the
+    # coarse enum). The anchor resolves via ``label`` even when target_hint is just "section".
+    from summarization.domain.models import RefinedSource, Section
+
+    refined = RefinedSource(body="b", sections=(Section("Eliminating Free Riding", 0, 1),))
+    draft = _draft_with_anchor(
+        Anchor("method", AnchorTarget.SECTION, span="", label="Eliminating Free Riding",
+               target_hint="section")
+    )
+    verdict = GroundingValidator().validate(GroundingInput(draft=draft, refined=refined))
+    assert len(verdict.kept_anchors) == 1
+    assert verdict.kept_anchors[0].label == "Eliminating Free Riding"
+
+
+def test_anchor_figure_number_no_prefix_collision() -> None:
+    # "Figure 1" must NOT resolve to "Figure 10" — token match ('1' ≠ '10'), not raw substring.
+    from summarization.domain.models import RefinedSource
+
+    refined = RefinedSource(body="b", captions=("Figure 10: later.", "Figure 1: first."))
+    draft = _draft_with_anchor(
+        Anchor("results", AnchorTarget.FIGURE, span="", label="Figure 1", target_hint="Figure 1")
+    )
+    verdict = GroundingValidator().validate(GroundingInput(draft=draft, refined=refined))
+    assert len(verdict.kept_anchors) == 1
+    assert verdict.kept_anchors[0].label == "Figure 1"
+
+
+def test_anchor_section_prefix_does_not_truncate_title() -> None:
+    # 'Security Analysis' must not have 'Sec' stripped (→ 'urity analysis'), which would drop a
+    # valid anchor. The prefix strip requires a word boundary / 'Sec.' abbreviation dot.
+    from summarization.domain.models import RefinedSource, Section
+
+    refined = RefinedSource(body="b", sections=(Section("Security Analysis", 0, 1),))
+    draft = _draft_with_anchor(
+        Anchor("method", AnchorTarget.SECTION, span="", label="Security Analysis",
+               target_hint="Section: Security Analysis")
+    )
+    verdict = GroundingValidator().validate(GroundingInput(draft=draft, refined=refined))
+    assert len(verdict.kept_anchors) == 1
+    assert verdict.kept_anchors[0].label == "Security Analysis"
+
+
+def test_anchor_enum_only_target_does_not_over_resolve() -> None:
+    # A bare enum target ("table") + Korean label must NOT collapse to the first table (the old
+    # substring rule did); it drops instead of mislabeling the chip.
+    from summarization.domain.models import RefinedSource
+
+    refined = RefinedSource(body="b", captions=("Table 1: acc.",))
+    draft = _draft_with_anchor(
+        Anchor("results", AnchorTarget.TABLE, span="", label="정확도 표", target_hint="table")
+    )
+    verdict = GroundingValidator().validate(GroundingInput(draft=draft, refined=refined))
+    assert verdict.kept_anchors == ()
+    assert any(v.kind == "anchor_missing" for v in verdict.violations)
+
+
 def test_numeric_minority_mismatch_tolerated() -> None:
     # A few stray figures (1 of 4 absent = 25% ≤ 50%) shouldn't abstain an otherwise-grounded draft.
     from summarization.domain.models import RefinedSource
