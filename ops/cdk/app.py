@@ -25,6 +25,13 @@ app = cdk.App()
 env = cdk.Environment(account="028317349537", region="ap-northeast-2")
 
 
+def _required_context(key: str) -> str:
+    value = app.node.try_get_context(key)
+    if not value:
+        raise ValueError(f"Missing required CDK context '{key}' — pass via -c {key}=<value>")
+    return value
+
+
 network = NetworkStack(app, "Docsuri-Network", env=env)
 search = SearchStack(app, "Docsuri-Search", vpc=network.vpc, env=env)
 compute = ComputeStack(

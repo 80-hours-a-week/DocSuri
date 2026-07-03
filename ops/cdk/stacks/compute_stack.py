@@ -267,6 +267,10 @@ class ComputeStack(Stack):
             # papers bucket is Ingestion-owned (same name the summary worker carries); the IAM for
             # S3 read/write + Bedrock invoke is already granted to this task role below.
             "DOCSURI_SUMMARY_BUCKET": f"docsuri-papers-fulltext-{self.account}",
+            # U11 evidence formation — same papers bucket, doc-model/ prefix (IAM below already
+            # grants s3:GetObject on doc-model/*). evidence_enabled = bool(docmodel_bucket); this
+            # is the sole gate that wires the real orchestrator into research/jobs.
+            "DOCSURI_DOCMODEL_BUCKET": f"docsuri-papers-fulltext-{self.account}",
             "DOCSURI_NOVELTY_ARTIFACT_BUCKET": f"docsuri-papers-fulltext-{self.account}",
             "DOCSURI_NOVELTY_ARTIFACT_PREFIX": "novelty/",
             # doc-model rich view (본문): on a read miss the API enqueues a BUILD_DOC_MODEL job to
