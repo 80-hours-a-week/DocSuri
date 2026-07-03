@@ -175,6 +175,7 @@ def make_orchestrator(
     observability: StubObservability | None = None,
     doc_model_reader=None,
     doc_model_build_queue=None,
+    source_doc_model_reader=None,
     map_reduce_summarizer=None,
     summary_job_queue=None,
     glossary_resolver: GlossaryResolver | None = None,
@@ -182,7 +183,12 @@ def make_orchestrator(
     llm = llm or StubLlm()
     return SummarizationOrchestrationService(
         store=store or StubStore(),
-        source_selector=SourceSelector(full_text or StubFullText()),
+        # ``source_doc_model_reader`` wires the doc-model reader into the SUMMARY/TRANSLATE input
+        # path (SourceSelector), mirroring production; ``doc_model_reader`` (below) feeds only the
+        # rich-view doc_model() lookup. They are separate params so each path is testable alone.
+        source_selector=SourceSelector(
+            full_text or StubFullText(), doc_model_reader=source_doc_model_reader
+        ),
         refiner=InputRefiner(),
         glossary_resolver=glossary_resolver or GlossaryResolver(None),
         length_router=LengthRouter(),

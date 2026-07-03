@@ -155,12 +155,18 @@ class ArxivHttpSource:
         arxiv_id = metadata.identifier.arxiv_id
         html, html_url = self._try_get_html(arxiv_id)
         html_text = html_to_text(html) if html is not None else ""
+        # Tag which HTML rung produced the text so a doc-model text-fallback consumer can keep
+        # native arXiv HTML out of a servable doc-model (its raw TeX/pgf leaks past the parser
+        # sanitizer). Mirror the __init__ base→tier mapping ("ar5iv" in the base URL ⇒ ar5iv).
+        html_tier = SourceTier.ar5iv if "ar5iv" in html_url else SourceTier.native_html
         # A COMPLETE HTML conversion is the preferred source. A truncated one (ar5iv LaTeXML
         # failure — HTTP 200 but only the abstract + a sentence, below the floor) is worse than
         # the PDF text, so fall through to PDF and keep the short HTML only if the PDF is
         # unavailable too (better a fragment than nothing).
         if html_text and len(html_text) >= _MIN_HTML_FULLTEXT_CHARS:
-            return RawDocument(metadata=metadata, text=html_text, source_url=html_url)
+            return RawDocument(
+                metadata=metadata, text=html_text, source_url=html_url, source_tier=html_tier
+            )
 
         pdf_url = f"{self._pdf_base_url}/{arxiv_id}"
         try:
@@ -174,7 +180,9 @@ class ArxivHttpSource:
             # propagates so a later retry can still recover the full PDF instead of prematurely
             # settling for the fragment.
             if html_text:
-                return RawDocument(metadata=metadata, text=html_text, source_url=html_url)
+                return RawDocument(
+                    metadata=metadata, text=html_text, source_url=html_url, source_tier=html_tier
+                )
             if isinstance(exc, PermanentIngestionError):
                 raise
             raise PermanentIngestionError(
@@ -184,10 +192,16 @@ class ArxivHttpSource:
             ) from exc
         if text:
             return RawDocument(
-                metadata=metadata, text=text, source_url=pdf_url, content_type="text/plain"
+                metadata=metadata,
+                text=text,
+                source_url=pdf_url,
+                content_type="text/plain",
+                source_tier=SourceTier.pdf,
             )
         if html_text:  # PDF empty — fall back to the (short) HTML text rather than erroring.
-            return RawDocument(metadata=metadata, text=html_text, source_url=html_url)
+            return RawDocument(
+                metadata=metadata, text=html_text, source_url=html_url, source_tier=html_tier
+            )
         raise PermanentIngestionError(
             "full text extraction yielded empty text",
             reason=FailureReason.PARSE_FAILURE,

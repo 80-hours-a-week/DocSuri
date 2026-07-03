@@ -280,3 +280,120 @@ def test_orchestrator_abstract_translate_stays_inline() -> None:
     out = orch.run(_req(Task.TRANSLATE, abstract="An abstract about BERT."), _ctx()).to_dict()
     assert out["status"] == "ok"
     assert queue.calls == []
+
+
+# --- summary/translation input path: stale doc-model heal + no-cache (BR-30) -----------------
+# The rich-view doc_model() path self-heals a servable-but-stale doc-model; the summary/translation
+# input path (SourceSelector) must do the same, or it would (a) never trigger the heal for a user
+# who only summarizes, and (b) cache output derived from stale-parser content (e.g. @2/@3 garbled
+# algorithm blocks) under a key that carries no parser dimension — outliving the doc's own heal.
+
+from docsuri_shared.docmodel_contract import DOCMODEL_PARSER_VERSION  # noqa: E402
+from docsuri_shared.dtos import DocModel  # noqa: E402
+
+from summarization.domain.models import Scope  # noqa: E402
+
+
+def _grounding_doc(parser_version: str) -> DocModel:
+    # Body carries the valid_draft() anchor span so a summary grounds and reaches the cache write.
+    return DocModel.model_validate(
+        {
+            "meta": {
+                "paperId": "2401.1",
+                "version": 1,
+                "title": "Sample",
+                "provenance": {
+                    "sourceTier": "ar5iv",
+                    "parserVersion": parser_version,
+                    "schemaVersion": "1.1.0",
+                    "generatedAt": "1970-01-01T00:00:00Z",
+                },
+            },
+            "fullText": "5.2 Results\n\nOur model achieves 95.3% accuracy on ImageNet.",
+            "sections": [
+                {
+                    "id": "s1",
+                    "title": "5.2 Results",
+                    "blocks": [
+                        {
+                            "id": "s1.p1",
+                            "type": "paragraph",
+                            "text": "Our model achieves 95.3% accuracy on ImageNet.",
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+
+
+class _DocReader:
+    def __init__(self, doc: DocModel) -> None:
+        self._doc = doc
+
+    def get_doc_model(self, paper_id: str, version: int) -> DocModel | None:
+        return self._doc
+
+
+class _SpyBuildQueue:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, int]] = []
+
+    def enqueue_build(self, paper_id: str, version: int) -> None:
+        self.calls.append((paper_id, version))
+
+
+def test_summary_from_fresh_docmodel_caches_and_no_heal() -> None:
+    store = StubStore()
+    queue = _SpyBuildQueue()
+    orch = make_orchestrator(
+        store=store,
+        source_doc_model_reader=_DocReader(_grounding_doc(DOCMODEL_PARSER_VERSION)),
+        doc_model_build_queue=queue,
+    )
+    result = orch.run(_req(), _ctx())
+    assert result.to_dict()["status"] == "ok"
+    assert store.puts == 1  # current-parser doc → result cached
+    assert queue.calls == []  # already current → no heal enqueue
+
+
+def test_summary_from_stale_docmodel_heals_and_skips_cache() -> None:
+    store = StubStore()
+    queue = _SpyBuildQueue()
+    orch = make_orchestrator(
+        store=store,
+        source_doc_model_reader=_DocReader(_grounding_doc("docmodel-parser@2")),
+        doc_model_build_queue=queue,
+    )
+    result = orch.run(_req(), _ctx())
+    assert result.to_dict()["status"] == "ok"  # stale doc still served for this response
+    assert store.puts == 0  # derived summary NOT cached (would outlive the doc's self-heal)
+    assert queue.calls == [("2401.1", 1)]  # background rebuild enqueued to heal to current parser
+
+
+def test_translate_from_stale_docmodel_heals_and_skips_cache() -> None:
+    store = StubStore()
+    queue = _SpyBuildQueue()
+    orch = make_orchestrator(
+        store=store,
+        source_doc_model_reader=_DocReader(_grounding_doc("docmodel-parser@2")),
+        doc_model_build_queue=queue,
+    )
+    # Translate must be scope=full to consume the structured doc-model (abstract scope never does).
+    request = SummaryRequest(paper_id="2401.1", version=1, task=Task.TRANSLATE, scope=Scope.FULL)
+    result = orch.run(request, _ctx(), allow_enqueue=False)
+    assert result.to_dict()["status"] == "ok"
+    assert store.puts == 0  # translate base derived from stale doc is not cached either
+    assert queue.calls == [("2401.1", 1)]
+
+
+def test_stale_heal_enqueue_is_best_effort_when_no_queue() -> None:
+    # No build queue wired → no heal enqueue, and the stale-derived result is still left uncached.
+    store = StubStore()
+    orch = make_orchestrator(
+        store=store,
+        source_doc_model_reader=_DocReader(_grounding_doc("docmodel-parser@2")),
+    )
+    result = orch.run(_req(), _ctx())
+    assert result.to_dict()["status"] == "ok"
+    assert store.puts == 0

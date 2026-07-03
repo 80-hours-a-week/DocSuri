@@ -15,7 +15,7 @@ from docsuri_ingestion.adapters.local import FakeArxivSource, sample_metadata
 from docsuri_ingestion.docmodel.builder import DocModelBuilder
 from docsuri_ingestion.domain.enums import DedupDecision, JobKind
 from docsuri_ingestion.domain.errors import PermanentIngestionError
-from docsuri_ingestion.domain.models import IngestionJob
+from docsuri_ingestion.domain.models import IngestionJob, RawDocument
 from docsuri_ingestion.worker import process_message
 
 from .conftest import build_test_pipeline
@@ -110,6 +110,73 @@ def test_build_doc_model_falls_back_to_text_when_html_unavailable() -> None:
     assert result.status == "ok"
     assert result.docModel.meta.provenance.sourceTier is SourceTier.pdf
     assert result.docModel.fullText
+    assert len(store.put_calls) == 1
+    assert any(
+        metric[0] == "ingestion.docmodel.build" and metric[2]["status"] == "pdf_fallback"
+        for metric in observability.metrics
+    )
+
+
+def test_build_doc_model_refuses_native_html_text_fallback() -> None:
+    # ar5iv missing (builder source returns None) → SourceUnavailable → text fallback. When the
+    # only full text is native arXiv HTML (its raw TeX/pgf leaks past the parser sanitizer), it must
+    # NOT be stored as a servable doc-model labeled pdf — that would slip past the U7 reader's
+    # native_html guard. The build stays source_unavailable (viewer links out to arXiv) instead.
+    metadata = sample_metadata()
+
+    class _NativeHtmlArxiv(FakeArxivSource):
+        def fetch_full_text(self, meta):
+            return RawDocument(
+                metadata=meta,
+                text="Native HTML full text with \\pgfsys@color and \\ref leakage.",
+                source_url="https://arxiv.org/html/2401.00001v1",
+                source_tier=SourceTier.native_html,
+            )
+
+    store = _FakeStore()
+    pipeline, _, _, _, observability = build_test_pipeline(
+        arxiv=_NativeHtmlArxiv([metadata]),
+        doc_model_builder=_builder(_FakeSource(None), store),  # ar5iv miss → SourceUnavailable
+    )
+
+    result = pipeline.build_doc_model(
+        IngestionJob(job_id="b-nh", kind=JobKind.BUILD_DOC_MODEL, arxiv_ref=metadata.arxiv_ref)
+    )
+
+    assert result.status == "source_unavailable"  # native HTML text was refused, not stored
+    assert store.put_calls == []  # nothing cached as a servable doc-model
+    assert any(
+        metric[0] == "ingestion.docmodel.build" and metric[2]["status"] == "native_html_refused"
+        for metric in observability.metrics
+    )
+
+
+def test_build_doc_model_still_uses_pdf_text_fallback() -> None:
+    # Counterpart to the native_html refusal: a PDF-tagged (or untagged) text fallback still builds
+    # a servable doc-model, so the refusal is scoped to native HTML only.
+    metadata = sample_metadata()
+
+    class _PdfArxiv(FakeArxivSource):
+        def fetch_full_text(self, meta):
+            return RawDocument(
+                metadata=meta,
+                text="INTRODUCTION\nBody from the PDF text extractor.\nMETHOD\nDetails.",
+                source_url="https://arxiv.org/pdf/2401.00001v1",
+                source_tier=SourceTier.pdf,
+            )
+
+    store = _FakeStore()
+    pipeline, _, _, _, observability = build_test_pipeline(
+        arxiv=_PdfArxiv([metadata]),
+        doc_model_builder=_builder(_FakeSource(None), store),
+    )
+
+    result = pipeline.build_doc_model(
+        IngestionJob(job_id="b-pdf", kind=JobKind.BUILD_DOC_MODEL, arxiv_ref=metadata.arxiv_ref)
+    )
+
+    assert result.status == "ok"
+    assert result.docModel.meta.provenance.sourceTier is SourceTier.pdf
     assert len(store.put_calls) == 1
     assert any(
         metric[0] == "ingestion.docmodel.build" and metric[2]["status"] == "pdf_fallback"
