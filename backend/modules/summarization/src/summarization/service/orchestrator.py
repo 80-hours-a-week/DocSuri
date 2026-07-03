@@ -155,6 +155,8 @@ class SummarizationOrchestrationService:
             # when the user has no weak terms). Summary has no post-substitution — served as-is.
             if request.task == Task.TRANSLATE:
                 cached = self._assembler.overlay_translation(cached, glossary)
+                # Clean kept-term notation on read so papers cached before this filter also benefit.
+                cached = self._assembler.filter_kept_terms(cached)
             return _PayloadResult(cached, cached=True)
 
         # 1. cost gate (U6 single authority) — BEFORE any LLM spend.
@@ -303,7 +305,8 @@ class SummarizationOrchestrationService:
             )
             self._store.put(key, base)  # write-through (base)
             self._emit("u7.translate.ok", 1.0, request)
-            return _PayloadResult(self._assembler.overlay_translation(base, glossary))
+            view = self._assembler.overlay_translation(base, glossary)
+            return _PayloadResult(self._assembler.filter_kept_terms(view))
         return AbstainDTO(reason="empty_translation")
 
     # --- personal glossary (Q8 / §9.1) ---------------------------------------

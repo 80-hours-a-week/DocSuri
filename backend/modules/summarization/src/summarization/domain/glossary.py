@@ -56,6 +56,47 @@ SEED_MAPPINGS: tuple[TermMapping, ...] = (
 SEED_KEEP_AS_IS_LOWER: frozenset[str] = frozenset(t.lower() for t in SEED_KEEP_AS_IS)
 
 
+# --- kept-term display filter (BR-S4) -----------------------------------------------------------
+# The model's free-form ``keptTerms`` (terms it left in English) also sweeps up math NOTATION —
+# Greek variables (theta, eta), sub/superscripted symbols (W_q, L_att^sm), expressions
+# (L(w+delta), O(rho^2)), LaTeX fragments (mathbb{E}, sqrt{2eta T}) — which are noise in the 원어
+# 유지 용어 list. This deterministic predicate keeps keyword/name-like terms and drops notation, so
+# the glossary shows words, not symbols. (Seeds are curated, so this only prunes free-form terms.)
+
+# Greek-letter names + LaTeX command tokens that, standing alone, are notation, not a keyword.
+# Layer/function names (Softmax, ReLU, Sigmoid…) are intentionally EXCLUDED — those are real terms.
+_MATH_WORDS: frozenset[str] = frozenset(
+    {
+        "alpha", "beta", "gamma", "delta", "epsilon", "varepsilon", "zeta", "eta", "theta",
+        "vartheta", "iota", "kappa", "lambda", "mu", "nu", "xi", "pi", "varpi", "rho", "varrho",
+        "sigma", "varsigma", "tau", "upsilon", "phi", "varphi", "chi", "psi", "omega",
+        "nabla", "partial", "langle", "rangle", "odot", "oplus", "otimes", "cdot", "cdots",
+        "ldots", "mid", "mathbb", "mathrm", "mathcal", "mathbf", "mathsf", "boldsymbol", "bm",
+        "widehat", "widetilde", "hat", "tilde", "bar", "vec", "sqrt", "argmax", "argmin", "sum",
+        "prod", "forall", "exists", "infty", "leftarrow", "rightarrow", "mapsto", "top", "ell",
+    }
+)
+
+# Characters that signal a math expression / LaTeX fragment. Hyphen and '+' are allowed so real
+# names survive (CIFAR-100, TimeMixer++); braces/parens/subscripts/relations/commas are not.
+_MATH_CHARS: frozenset[str] = frozenset("{}\\^_()[]=<>|/,~⟨⟩∇√∂⊙⊕⊗·×∑∏∈≤≥≈≠±∗•←→↦")
+_SUBTOKEN_RE = re.compile(r"[\s\-,]+")
+
+
+def is_glossary_worthy(term: str) -> bool:
+    """True when a kept term reads as a keyword/name worth a glossary chip; False when it is math
+    notation the model reported as 'kept' (Greek vars, ``W_q``, ``L(w+delta)``, ``mathbb{E}``…).
+
+    Rejects: length ≤ 1; any math metacharacter; any whitespace/hyphen/comma-delimited
+    sub-token that is a Greek-letter/LaTeX-command word."""
+    t = term.strip()
+    if len(t) <= 1:
+        return False
+    if any(c in _MATH_CHARS for c in t):
+        return False
+    return not any(sub.lower() in _MATH_WORDS for sub in _SUBTOKEN_RE.split(t) if sub)
+
+
 def _seed_signature() -> str:
     """Short content hash of the shared seed glossary (keep-as-is + prompt-enforced mappings).
 

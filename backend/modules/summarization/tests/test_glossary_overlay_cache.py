@@ -182,6 +182,40 @@ def test_translation_standard_glossary_lists_present_seed_terms() -> None:
     assert {"term": "attention", "translated": "어텐션"} in glossary
 
 
+def test_translation_dto_filters_math_notation_from_kept_terms() -> None:
+    # End-to-end (client-facing) path: the assembled TranslationDraft → to_dict() must expose only
+    # keyword-like keptTerms, dropping the math notation the model reports alongside (BR-S4).
+    draft = TranslationDraft(
+        doc_model=tiny_doc(paragraph="이 모델은 어텐션을 쓴다."),
+        kept_terms=(
+            "Transformer", "SAM", "MSE", "CIFAR-100",  # keep
+            "theta", "W_q", "L(w+delta)", "mathbb{E}", "H=96", "F", "He et al., 2023",  # drop
+        ),
+    )
+    out = ResultAssembler().assemble_translation(draft, _src()).to_dict()
+    assert out["translation"]["keptTerms"] == ["Transformer", "SAM", "MSE", "CIFAR-100"]
+
+
+def test_filter_kept_terms_drops_math_notation_on_read() -> None:
+    # Read-path cleanup (BR-S4) — also fixes results cached before the filter shipped. Keywords
+    # survive; Greek vars / expressions / LaTeX fragments are removed.
+    payload = {
+        "translation": {
+            "docModel": {},
+            "keptTerms": ["Transformer", "theta", "W_q", "MSE", "L(w+delta)", "mathbb{E}", "SAM"],
+            "standardGlossary": [],
+        }
+    }
+    out = ResultAssembler.filter_kept_terms(payload)
+    assert out["translation"]["keptTerms"] == ["Transformer", "MSE", "SAM"]
+    assert payload["translation"]["keptTerms"] != out["translation"]["keptTerms"]  # input untouched
+
+
+def test_filter_kept_terms_is_noop_when_all_clean() -> None:
+    payload = {"translation": {"docModel": {}, "keptTerms": ["Transformer", "SAM"]}}
+    assert ResultAssembler.filter_kept_terms(payload) is payload  # same object, no copy
+
+
 def test_standard_glossary_keeps_chip_after_strong_override() -> None:
     # A strong personal override replaces the seed rendering in the text; the 표준 용어 chip must
     # stay (editable) rather than vanish (BR-S4). attention→주목 removes 어텐션 from the text, and

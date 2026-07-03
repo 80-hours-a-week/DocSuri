@@ -329,15 +329,18 @@ class SummaryResultDTO:
             #  · mapping seed — present iff its effective rendering (override, else the seed Korean)
             #    is in the text. Without this, attention→주목 drops 어텐션 and the chip would
             #    vanish, breaking the 표준 용어 edit path. Lazy import avoids a cycle.
-            from .glossary import SEED_KEEP_AS_IS, SEED_MAPPINGS
+            from .glossary import SEED_KEEP_AS_IS, SEED_MAPPINGS, is_glossary_worthy
 
             doc = self.translation.doc_model.model_dump(mode="json", exclude_none=True)
             translated_text = doc.get("fullText") or ""
             overrides = strong_overrides or {}
             std_glossary: list[dict] = []
             seen: set[str] = set()
+            # Drop math notation the model reported as "kept" (Greek vars, W_q, L(w+delta)…) so the
+            # 원어 유지 용어 list shows keywords/names, not symbols (BR-S4). Seeds pass the filter.
+            display_kept = [t for t in self.translation.kept_terms if is_glossary_worthy(t)]
             kept_by_lower: dict[str, str] = {}
-            for t in self.translation.kept_terms:  # first-seen casing wins (case-insensitive dedup)
+            for t in display_kept:  # first-seen casing wins (case-insensitive dedup)
                 kept_by_lower.setdefault(t.lower(), t)
             for s in SEED_KEEP_AS_IS:  # keep-as-is standard (English) or its strong override
                 key = s.lower()
@@ -361,7 +364,7 @@ class SummaryResultDTO:
                     seen.add(key)
             out["translation"] = {
                 "docModel": doc,
-                "keptTerms": list(self.translation.kept_terms),
+                "keptTerms": display_kept,
                 "standardGlossary": std_glossary,
             }
         return out

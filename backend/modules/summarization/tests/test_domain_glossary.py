@@ -2,8 +2,36 @@
 
 from __future__ import annotations
 
-from summarization.domain.glossary import GlossaryResolver
+import pytest
+
+from summarization.domain.glossary import GlossaryResolver, is_glossary_worthy
 from summarization.domain.models import Glossary, TermMapping
+
+
+@pytest.mark.parametrize(
+    "term",
+    [
+        # model / method / dataset / metric names + acronyms — real keywords
+        "SAM", "TransUNet", "iTransformer", "TimeMixer++", "CIFAR-100", "MSE", "HD95",
+        "Segment Anything", "Softmax", "Hessian", "Danskin", "ETTh1", "SSFormer-L", "T5",
+    ],
+)
+def test_is_glossary_worthy_keeps_keywords(term: str) -> None:
+    assert is_glossary_worthy(term) is True
+
+
+@pytest.mark.parametrize(
+    "term",
+    [
+        # Greek variables / LaTeX commands standing alone
+        "theta", "eta", "rho", "nabla", "partial", "rangle", "odot", "varepsilon", "mid",
+        # sub/superscripts, expressions, LaTeX fragments, relations, single letters, citations
+        "W_q", "nabla_theta", "L_att^sm", "L(w+delta)", "O(rho^2)", "mathbb{E}", "sqrt{2eta T}",
+        "1/L", "H=96", "partial theta", "eta Td", "w-eta", "F", "S", "He et al., 2023",
+    ],
+)
+def test_is_glossary_worthy_drops_math_notation(term: str) -> None:
+    assert is_glossary_worthy(term) is False
 
 
 def test_resolve_fail_soft_on_repo_error() -> None:
