@@ -119,6 +119,82 @@
   overflow-wrap: anywhere;
 }
 
+.evidenceClaims {
+  display: grid;
+  gap: 10px;
+}
+
+.evidenceClaim {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  border-radius: var(--agent-radius);
+}
+
+.evidenceStatement {
+  margin: 0;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.evidenceRefs {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.evidenceRef {
+  display: grid;
+  gap: 2px;
+}
+
+.evidencePaperId {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.evidenceRef blockquote {
+  margin: 0;
+  padding: 4px 8px;
+  border-left: 2px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.evidenceConflict {
+  display: grid;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--color-border);
+}
+
+.evidenceConflict strong {
+  font-size: 12px;
+  color: var(--color-danger);
+}
+
+.evidenceCoverage {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.abstainNotice {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--color-warn-text);
+  background: var(--color-warn-bg);
+  border-radius: var(--agent-radius);
+  color: var(--color-warn-text);
+  font-size: 13px;
+}
+
 .messageFiles {
   display: flex;
   flex-wrap: wrap;
