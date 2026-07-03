@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from collections.abc import Sequence
 
 from ..domain.models import (
@@ -33,6 +34,26 @@ _DELIM_RE = re.compile(r"</?(?:paper|segments)\s*>", re.IGNORECASE)
 
 def _strip_delimiters(text: str) -> str:
     return _DELIM_RE.sub("", text)
+
+
+# User-writable glossary terms ride into the SYSTEM prompt's "사용자 선호 매핑" line. Neutralize
+# them so a crafted term can't break out of the line and inject instructions (Prompt Injection):
+# drop delimiter tags and our field separators (→ ;), strip every Unicode control (Cc — C0/C1/DEL)
+# and format (Cf — zero-width joiners, word-joiner, BOM…) char, then collapse whitespace (newlines
+# and LS/PS/NBSP included) to a single space. Removing Cf also stops an invisible char (e.g. ZWSP
+# in "atte​ntion") from dodging seed de-dup and re-introducing a double instruction. Seed
+# terms are trusted (code-authored) — only user overrides are sanitized.
+
+
+def _sanitize_term(text: str) -> str:
+    out: list[str] = []
+    for c in _strip_delimiters(text):
+        cat = unicodedata.category(c)
+        if cat == "Cf":
+            continue  # DELETE zero-width/format chars so an invisible char can't dodge seed de-dup
+        # controls (Cc — C0/C1/DEL) and our field separators become a space (word boundary kept)
+        out.append(" " if (c in "→;" or cat == "Cc") else c)
+    return re.sub(r"\s+", " ", "".join(out)).strip()
 
 # Persona only shapes WORDING/treatment within the §3 fields — the JSON structure is identical
 # for both (no extra/missing fields). All grounding rules in the system prompt still apply, so
@@ -63,13 +84,30 @@ _JSON_CONTRACT = (
 
 
 def _glossary_block(glossary: Glossary) -> str:
-    keep = ", ".join(glossary.keep_as_is)
+    # Build the user's strong overrides FIRST (sanitized). A term counts as "overridden" only when
+    # the override survives neutralization (non-empty both sides) AND is keyed on the SANITIZED
+    # term_from — so suppression matches exactly what is emitted: a crafted term_from can't evade
+    # the de-dup, and an override that neutralizes to empty never drops a governed seed term without
+    # a replacement.
+    user_pairs = []
+    overridden: set[str] = set()
+    for m in glossary.user_overrides:
+        if not m.prompt_enforced:
+            continue
+        tf, tt = _sanitize_term(m.term_from), _sanitize_term(m.term_to)
+        if tf and tt:
+            user_pairs.append(f"{tf}→{tt}")
+            overridden.add(tf.lower())
+    # A user strong override replaces the seed for the SAME term in BOTH the keep-as-is line
+    # (e.g. Transformer) and the seed mappings (e.g. attention→어텐션), so the prompt never carries
+    # a contradictory double instruction ("keep English" + "render as X").
+    keep = ", ".join(t for t in glossary.keep_as_is if t.lower() not in overridden)
     maps = "; ".join(
-        f"{m.term_from}→{m.term_to}" for m in glossary.seed_mappings if m.prompt_enforced
+        f"{m.term_from}→{m.term_to}"
+        for m in glossary.seed_mappings
+        if m.prompt_enforced and m.term_from.lower() not in overridden
     )
-    user = "; ".join(
-        f"{m.term_from}→{m.term_to}" for m in glossary.user_overrides if m.prompt_enforced
-    )
+    user = "; ".join(user_pairs)
     parts = [f"미번역 유지(영어 그대로): {keep}", f"용어 매핑: {maps}"]
     if user:
         parts.append(f"사용자 선호 매핑: {user}")

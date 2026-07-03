@@ -155,6 +155,8 @@ class SummarizationOrchestrationService:
             # when the user has no weak terms). Summary has no post-substitution — served as-is.
             if request.task == Task.TRANSLATE:
                 cached = self._assembler.overlay_translation(cached, glossary)
+                # Clean kept-term notation on read so papers cached before this filter also benefit.
+                cached = self._assembler.filter_kept_terms(cached)
             return _PayloadResult(cached, cached=True)
 
         # 1. cost gate (U6 single authority) — BEFORE any LLM spend.
@@ -291,27 +293,42 @@ class SummarizationOrchestrationService:
             # Assemble + cache the SHARED base (strong-term translation, no weak post-substitution);
             # apply this user's weak-term overlay on the returned view so the first requester also
             # sees their preferences (the cache stays the base, shared across users — NFR-C1).
-            base = self._assembler.assemble_translation(draft, source).to_dict()
+            # Pass the user's effective strong overrides so ``standardGlossary`` keeps a 표준 용어
+            # chip whose seed rendering the override replaced (BR-S4). They are part of this fork's
+            # cache signature, so the stored base is correct for every user who shares it.
+            base = self._assembler.assemble_translation(draft, source).to_dict(
+                strong_overrides={
+                    m.term_from.lower(): m.term_to
+                    for m in glossary.user_overrides
+                    if m.prompt_enforced
+                }
+            )
             self._store.put(key, base)  # write-through (base)
             self._emit("u7.translate.ok", 1.0, request)
-            return _PayloadResult(self._assembler.overlay_translation(base, glossary))
+            view = self._assembler.overlay_translation(base, glossary)
+            return _PayloadResult(self._assembler.filter_kept_terms(view))
         return AbstainDTO(reason="empty_translation")
 
     # --- personal glossary (Q8 / §9.1) ---------------------------------------
     def list_glossary_terms(self, user_id: str) -> list[dict]:
-        """The user's saved personal terms as ``{termFrom, termTo}`` (owner-scoped). Used to
-        pre-fill the badge editor; exposes only the two display fields (no internal flags)."""
+        """The user's saved personal terms as ``{termFrom, termTo, promptEnforced}`` (owner-scoped).
+        Pre-fills the badge editor and lets it distinguish strong (프롬프트 강제) from weak (후치환)
+        terms; ``glossary_ver`` and other internals stay hidden."""
         return [
-            {"termFrom": m.term_from, "termTo": m.term_to}
+            {"termFrom": m.term_from, "termTo": m.term_to, "promptEnforced": m.prompt_enforced}
             for m in self._glossary.list_user_terms(user_id)
         ]
 
-    def upsert_glossary_term(self, user_id: str, term_from: str, term_to: str) -> int:
-        """Persist a personal term override; return the bumped ``glossary_ver`` (Phase 1:
-        simple-noun, applied to translation via post-substitution). The version bump folds
-        into ``build_cache_key``, invalidating the user's cached results so the next request
-        reflects the new term."""
-        return self._glossary.upsert_term(user_id, term_from, term_to)
+    def upsert_glossary_term(
+        self, user_id: str, term_from: str, term_to: str, *, prompt_enforced: bool = False
+    ) -> int:
+        """Persist a personal term override; return the bumped ``glossary_ver``.
+        ``prompt_enforced`` selects strong (프롬프트 강제 → forks the owner-scoped cache) vs weak
+        (후치환 → read-time overlay on the shared base, key unchanged). A strong override may
+        replace a shared seed mapping for that user, taking precedence in the prompt (BR-S4)."""
+        return self._glossary.upsert_term(
+            user_id, term_from, term_to, prompt_enforced=prompt_enforced
+        )
 
     # --- structured doc-model (BR-30, rich-view + summary input) -------------
     def doc_model(self, paper_id: str, version: int) -> DocModelLookup:
