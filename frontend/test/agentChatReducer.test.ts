@@ -159,4 +159,31 @@ describe('agent chat reducer/helpers', () => {
     });
     expect(canSend(rejected)).toBe(false);
   });
+
+  it('preserves richer detail/sequence when a lean SSE snapshot re-sends the same event (#349)', () => {
+    const polled: AgentTimelineEvent = {
+      id: 'evt-1',
+      stage: 'searching',
+      label: '유사 연구 탐색',
+      detail: '소스 arXiv · 쿼리 "diffusion" · 결과 12건',
+      state: 'running',
+      sequence: 3,
+    };
+    // AgentChatScreen.mapSseProgressEvent emits only these four fields — no detail/sequence.
+    const sseSnapshot: AgentTimelineEvent = {
+      id: 'evt-1',
+      stage: 'completed',
+      label: '완료',
+      state: 'completed',
+    };
+
+    const [merged] = mergeTimelineEvents([polled], [sseSnapshot]);
+
+    // incoming stage/label/state win…
+    expect(merged.state).toBe('completed');
+    expect(merged.stage).toBe('completed');
+    // …but the richer detail/sequence survive the snapshot.
+    expect(merged.detail).toBe('소스 arXiv · 쿼리 "diffusion" · 결과 12건');
+    expect(merged.sequence).toBe(3);
+  });
 });
