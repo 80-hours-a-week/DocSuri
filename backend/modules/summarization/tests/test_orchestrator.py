@@ -397,3 +397,28 @@ def test_stale_heal_enqueue_is_best_effort_when_no_queue() -> None:
     result = orch.run(_req(), _ctx())
     assert result.to_dict()["status"] == "ok"
     assert store.puts == 0
+
+
+def test_legacy_cached_object_without_docmodel_segment_is_not_served() -> None:
+    # Reviewer's backlog scenario: a summary cached BEFORE the parser dimension existed lives at a
+    # path with no ``_dN`` segment. Once the key carries the current parser generation, that legacy
+    # object is never looked up → miss → regenerate. This heals results derived from a
+    # since-superseded doc-model even though they were already stored (blocking new writes alone
+    # cannot). Belt-and-suspenders with the write-skip: existing objects self-invalidate by path.
+    store = StubStore()
+    orch = make_orchestrator(
+        store=store,
+        source_doc_model_reader=_DocReader(_grounding_doc(DOCMODEL_PARSER_VERSION)),
+    )
+    # Cache the object the normal way, then relocate it to its pre-migration (no-segment) path.
+    orch.run(_req(), _ctx())
+    (current_path,) = list(store.data)
+    gen = DOCMODEL_PARSER_VERSION.rpartition("@")[2]
+    legacy_path = current_path.replace(f"_d{gen}.json", ".json")
+    assert legacy_path != current_path  # sanity: the segment is actually present
+    store.data.clear()
+    store.data[legacy_path] = {"status": "ok", "marker": "STALE_LEGACY"}
+
+    result = orch.run(_req(), _ctx()).to_dict()
+    assert result.get("marker") != "STALE_LEGACY"  # legacy object was not served
+    assert result["cached"] is False  # miss → regenerated under the segmented path
