@@ -1,7 +1,7 @@
 # DocSuri Production Roadmap — 2026-07
 
 > **Date**: 2026-07-03 · **Baseline**: develop `573ad494` (main at v1.2.3, 13 commits behind)
-> **Updated**: 2026-07-04 — PR #351 merged (summary-anchor structural resolution + stale-docmodel self-heal). PRs #338/#349 reviewed → **CHANGES_REQUESTED** (author fixes pending): #338 4 blocking (turn persistence, dropped attachments/context, input-length 500s, unwired async worker stack), #349 1 blocking (SSE mapper overwrites richer timeline detail). Roadmap execution started — **PR #353** opened: ALB + CloudFront access logs (#341 step ①); **PR #355** opened: edge 5xx branded error page, S3/OAC-backed so it survives an origin outage (#341 step ②). **PR #357** opened: 각주트리 DOI 노드 확장 500 → Semantic Scholar 페이로드 fail-closed (#342).
+> **Updated**: 2026-07-04 — PR #351 merged (summary-anchor structural resolution + stale-docmodel self-heal). PRs #338/#349 reviewed → **CHANGES_REQUESTED** (author fixes pending): #338 4 blocking (turn persistence, dropped attachments/context, input-length 500s, unwired async worker stack), #349 1 blocking (SSE mapper overwrites richer timeline detail). Roadmap execution started — **PR #353** opened: ALB + CloudFront access logs (#341 step ①); **PR #355** opened: edge 5xx branded error page, S3/OAC-backed so it survives an origin outage (#341 step ②). **PR #357** opened: 각주트리 DOI 노드 확장 500 → Semantic Scholar 페이로드 fail-closed (#342). **#338 re-check (this session)**: status was stale — author (shr8596) pushed **2 rounds** (`f15eee6`, `d05e0ad`) addressing **all 7** review blockers (INV-EV-3 grounding bypass ×2, worker poison-message + idempotency/clobber, CDK IAM ARN + endpoint env + SG path) with a named regression test each; locally **27 evidence tests green + Docsuri-Evidence synth clean**, PR `MERGEABLE` → **ready for re-review/merge** (unblocks #340 promote, #339).
 > _Prev 2026-07-03 pm — PR #337 merged; PR #349 opened._
 > Snapshot of where the product stands against the team's initial plan, and the path to
 > production-level completion of our goals. Tracking issues: #339–#348.
@@ -18,7 +18,7 @@
 | 구독제 | ❌ Not started | Never entered requirements — needs inception re-entry |
 | 로그 수집 | ✅ Live | U9 collection healthy (944 events/7d, 0 failures); KPI funnel view missing (#346) |
 | 개인화 추천 | 🟡 Shadow | Search boost applied in shadow mode (PR #300); go-live judgment pending (#345); US-P5 deferred |
-| 에이전트: 문헌탐색/근거형성 | 🚧 One PR away (changes requested) | PR #338 — reviewed → **CHANGES_REQUESTED** (4 blocking, author fixes pending); `Docsuri-Evidence` stack deployed idle; FE renders raw JSON (#339) |
+| 에이전트: 문헌탐색/근거형성 | 🚧 One PR away (re-review) | PR #338 — author addressed **all 7 blocking items over 2 rounds** (INV-EV-3 grounding, worker poison/idempotency, CDK wiring) + regression tests; verified green locally (27 tests, synth) → awaiting **re-review/merge**. `Docsuri-Evidence` stack idle; FE raw JSON (#339) still pending behind merge |
 | (charter add) 연구아이디어 novelty 에이전트 | 🚧 In construction | Code in develop, `Docsuri-Novelty` stack built; US-NV stories (#251–259) open; PR #349 reviewed → **CHANGES_REQUESTED** (1 blocking: SSE mapper overwrites timeline detail) |
 | 웹검색 레퍼런스 (고려) | ❌ Not started | Novelty agent has GitHub+datasets search; web/news deferred to next cycle |
 | 온보딩 (고려) | ❌ Not started | Candidate fix for personalization cold-start |
@@ -31,7 +31,7 @@ Production deploys now go through CI on main push — the manual-buildx era is o
 | # | Action | Tracking |
 |---|---|---|
 | 1 | ✅ **PR #337 merged** (2026-07-03 13:00 UTC) — revert-on-promote trap closed | PR #337 |
-| 2 | Review + merge **PR #338** (U11 evidence agent; infra already live-but-idle) — reviewed 07-04 → 4 blocking, awaiting author | PR #338 |
+| 2 | Review + merge **PR #338** (U11 evidence agent; infra already live-but-idle) — reviewed 07-04 → 7 blocking; author fixed **all over 2 rounds** (`f15eee6`, `d05e0ad`) + regression tests, verified green (27 tests, synth) → **ready for re-review/merge** | PR #338 |
 | 3 | Promote develop→main + tag (ships glossary redesign + #337 + #338 via real CD) | #340 |
 | 4 | Fix AgentChatScreen raw-JSON rendering — start **after** #338 and #349 land (both rewrite `AgentChatScreen.tsx`); base the fix on #349's version | #339 |
 
