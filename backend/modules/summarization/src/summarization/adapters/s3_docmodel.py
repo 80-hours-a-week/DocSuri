@@ -48,8 +48,8 @@ class S3DocModelReader:
         try:
             obj = self._s3.get_object(Bucket=self._bucket, Key=key)
             payload = json.loads(obj["Body"].read())
-            if not _is_current_doc_model(payload):
-                logger.info("stale doc-model cache ignored for %s", key)
+            if not _is_servable_doc_model(payload):
+                logger.info("unservable doc-model ignored (rebuild will heal) for %s", key)
                 return None
             return DocModel.model_validate(payload)
         except ClientError as exc:
@@ -66,21 +66,30 @@ class S3DocModelReader:
             raise
 
 
-# Parser versions whose doc-models we still serve. The current version is always accepted; @2
-# is also accepted because its ar5iv-sourced text is clean, and rejecting it blanks the
-# full-text view for every paper not yet rebuilt to the current version — a slow drain to sit
-# behind. Schema is NOT relaxed: a schema bump is a genuine breaking change, not a cache-bust.
-_ACCEPTED_PARSER_VERSIONS = frozenset({"docmodel-parser@2", DOCMODEL_PARSER_VERSION})
+# Parser versions whose doc-models we still SERVE (clean-enough text). @2 introduced formula
+# LaTeX sanitization; @2/@3/@4 are all servable. @0/@1 predate sanitization → rejected (a miss
+# that re-triggers a build). The serve set is age-agnostic: an older-but-clean doc is served
+# immediately (no blank screen) and SummaryOrchestrator.doc_model enqueues a background rebuild
+# to heal it to the current parser.
+_SERVABLE_PARSER_VERSIONS = frozenset(
+    {"docmodel-parser@2", "docmodel-parser@3", DOCMODEL_PARSER_VERSION}
+)
+# Source tiers refused regardless of parser version: native arXiv HTML leaks raw TeX/pgf into
+# fullText (the parser sanitizer targets ar5iv/LaTeXML), so a native_html doc reads as a miss →
+# None → U7 re-triggers a build, which is now ar5iv/PDF-sourced (never native_html again).
+_REJECTED_SOURCE_TIERS = frozenset({"native_html"})
 
 
-def _is_current_doc_model(payload: object) -> bool:
+def _is_servable_doc_model(payload: object) -> bool:
     if not isinstance(payload, dict):
         return True
     meta = payload.get("meta")
     provenance = meta.get("provenance") if isinstance(meta, dict) else None
     if not isinstance(provenance, dict):
         return False
+    if provenance.get("sourceTier") in _REJECTED_SOURCE_TIERS:
+        return False
     return (
-        provenance.get("parserVersion") in _ACCEPTED_PARSER_VERSIONS
+        provenance.get("parserVersion") in _SERVABLE_PARSER_VERSIONS
         and provenance.get("schemaVersion") == DOCMODEL_SCHEMA_VERSION
     )

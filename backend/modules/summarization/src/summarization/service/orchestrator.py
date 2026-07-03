@@ -18,6 +18,7 @@ from __future__ import annotations
 import logging
 from dataclasses import replace
 
+from docsuri_shared.docmodel_contract import DOCMODEL_PARSER_VERSION
 from docsuri_shared.dtos import DocModel
 from docsuri_shared.ports import CostGuardCircuitBreaker, ObservabilityHub
 
@@ -58,6 +59,13 @@ logger = logging.getLogger(__name__)
 
 # Client poll backoff hint after a lazy build was (re)triggered on a miss (BR-30/D6).
 _BUILD_POLL_BACKOFF_MS = 2000
+
+
+def _doc_parser_version(doc: DocModel) -> str | None:
+    """Parser version a served doc-model was built with (None if the shape is unexpected)."""
+    meta = getattr(doc, "meta", None)
+    provenance = getattr(meta, "provenance", None)
+    return getattr(provenance, "parserVersion", None)
 # Client poll backoff hint after a long summary was enqueued as a background job (BR-S6/BR-S8).
 _SUMMARY_POLL_BACKOFF_MS = 3000
 # Generation above this input size is dispatched to the async job (pending → poll) instead of
@@ -327,6 +335,15 @@ class SummarizationOrchestrationService:
             return DocModelLookup()
         doc = self._docmodel_reader.get_doc_model(paper_id, version)
         if doc is not None:
+            # Serve the clean doc now. If an older parser built it, ALSO enqueue a background
+            # rebuild so it heals to the current parser (BR-30 self-heal) — otherwise accepting
+            # older-but-servable docs would pin them forever. The doc is still served meanwhile,
+            # so there is no blank screen while the rebuild runs.
+            if (
+                self._docmodel_build_queue is not None
+                and _doc_parser_version(doc) != DOCMODEL_PARSER_VERSION
+            ):
+                self._docmodel_build_queue.enqueue_build(paper_id, version)
             return DocModelLookup(doc=doc)
         if self._docmodel_build_queue is not None:
             self._docmodel_build_queue.enqueue_build(paper_id, version)

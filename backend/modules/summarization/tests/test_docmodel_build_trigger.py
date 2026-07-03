@@ -7,6 +7,7 @@ lookup branches and the SqsDocModelBuildQueue adapter (dedup + best-effort enque
 
 from __future__ import annotations
 
+from docsuri_shared.docmodel_contract import DOCMODEL_PARSER_VERSION
 from docsuri_shared.dtos import DocModel
 
 from summarization.adapters.sqs_docmodel_build import SqsDocModelBuildQueue
@@ -14,7 +15,11 @@ from summarization.domain.models import DocModelLookup
 from tests.stubs import make_orchestrator
 
 
-def _doc(paper_id: str = "2401.00001", version: int = 1) -> DocModel:
+def _doc(
+    paper_id: str = "2401.00001",
+    version: int = 1,
+    parser_version: str = DOCMODEL_PARSER_VERSION,
+) -> DocModel:
     return DocModel.model_validate(
         {
             "meta": {
@@ -23,7 +28,7 @@ def _doc(paper_id: str = "2401.00001", version: int = 1) -> DocModel:
                 "title": "A Paper",
                 "provenance": {
                     "sourceTier": "ar5iv",
-                    "parserVersion": "docmodel-parser@1",
+                    "parserVersion": parser_version,
                     "schemaVersion": "1.0.0",
                     "generatedAt": "2026-06-23T00:00:00Z",
                 },
@@ -63,7 +68,20 @@ def test_hit_returns_doc_without_enqueue() -> None:
     result = orch.doc_model("2401.00001", 2)
     assert isinstance(result, DocModelLookup)
     assert result.doc is not None and result.building is False
-    assert queue.calls == []  # cache hit → no build
+    assert queue.calls == []  # current-parser cache hit → no build
+
+
+def test_stale_but_servable_hit_serves_and_enqueues_heal() -> None:
+    # An older-but-servable doc (ar5iv @2) is returned to the client immediately AND a rebuild
+    # is enqueued so it heals to the current parser — accepting it must not pin it forever.
+    queue = _SpyQueue()
+    orch = make_orchestrator(
+        doc_model_reader=_FakeReader(_doc(version=2, parser_version="docmodel-parser@2")),
+        doc_model_build_queue=queue,
+    )
+    result = orch.doc_model("2401.00001", 2)
+    assert result.doc is not None and result.building is False
+    assert queue.calls == [("2401.00001", 2)]  # served now, healed in background
 
 
 def test_miss_with_queue_enqueues_and_signals_building() -> None:

@@ -197,11 +197,15 @@ class ArxivHttpSource:
     def fetch_html_source(self, arxiv_id: str) -> tuple[str, SourceTier] | None:
         """Fetch deterministic-parseable HTML for the doc-model (BR-30, Q6 ladder).
 
-        Walks the configured HTML bases (ar5iv → native arXiv HTML) and returns the first
-        ``(html, source_tier)`` that yields HTML, or ``None`` when no rung produced HTML
-        (the builder maps that to ``source_unavailable``). e-print/PDF rungs are additive.
+        Doc-model source is **ar5iv only**. Native arXiv HTML is deliberately excluded here:
+        its raw TeX/pgf markup leaks through the parser's sanitizer into fullText and breaks
+        multi-panel figure wiring, so it must never become a doc-model source (it stays a
+        full-text plain-text rung in ``_try_get_html``). When ar5iv yields nothing this returns
+        ``None`` → the builder degrades to the PDF/text fallback rather than parsing native HTML.
         """
         for base, tier in self._html_source_tiers:
+            if tier is not SourceTier.ar5iv:
+                continue
             html = self._get_html_at(base, arxiv_id)
             if html:
                 return html, tier
