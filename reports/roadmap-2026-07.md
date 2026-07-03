@@ -1,7 +1,7 @@
 # DocSuri Production Roadmap — 2026-07
 
 > **Date**: 2026-07-03 · **Baseline**: develop `573ad494` (main at v1.2.3, 13 commits behind)
-> **Updated**: 2026-07-04 — PR #351 merged (summary-anchor structural resolution + stale-docmodel self-heal). PRs #338/#349 reviewed → **CHANGES_REQUESTED** (author fixes pending): #338 4 blocking (turn persistence, dropped attachments/context, input-length 500s, unwired async worker stack), #349 1 blocking (SSE mapper overwrites richer timeline detail). Roadmap execution started — **PR #353** opened: ALB + CloudFront access logs (#341 step ①).
+> **Updated**: 2026-07-04 — PR #351 merged (summary-anchor structural resolution + stale-docmodel self-heal). PRs #338/#349 reviewed → **CHANGES_REQUESTED** (author fixes pending): #338 4 blocking (turn persistence, dropped attachments/context, input-length 500s, unwired async worker stack), #349 1 blocking (SSE mapper overwrites richer timeline detail). Roadmap execution started — **PR #353** opened: ALB + CloudFront access logs (#341 step ①); **PR #355** opened: edge 5xx branded error page, S3/OAC-backed so it survives an origin outage (#341 step ②).
 > _Prev 2026-07-03 pm — PR #337 merged; PR #349 opened._
 > Snapshot of where the product stands against the team's initial plan, and the path to
 > production-level completion of our goals. Tracking issues: #339–#348.
@@ -59,7 +59,7 @@ Ordered by user impact:
 
 | Item | Tracking |
 |---|---|
-| Intermittent SSR 500 on paper pages — **PR #353** enables ALB/CloudFront access logs (step ①); root-cause after a repro. Investigation: module-resolution guess weak (no dynamic imports; self-contained standalone) — likelier load-driven OOM. Raw-500 exposure fix belongs at the edge (CloudFront `error_responses`), not React boundaries → follow-up PR. | #341 · #353 |
+| Intermittent SSR 500 on paper pages — **PR #353** enables ALB/CloudFront access logs (step ①); root-cause after a repro. Investigation: module-resolution guess weak (no dynamic imports; self-contained standalone) — likelier load-driven OOM. Raw-500 exposure fix belongs at the edge (CloudFront `error_responses`), not React boundaries → **PR #355** (step ②): branded page served from a private S3/OAC origin, independent of the failing ALB. Remaining: **PR-B** root-cause fix, after #353 logs give a repro. | #341 · #353 · #355 |
 | 각주 트리 DOI node expansion 500 | #342 |
 | Docmodel backlog self-heal — re-enqueue contaminated docmodels @3 (embedding-cost-free) + drain DLQ 111 | #343 |
 | Finish pre-2026 backfill drain → restore ingestion autoscale; decide on separate doc-model queue | #344 |
