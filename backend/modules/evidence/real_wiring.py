@@ -43,10 +43,17 @@ def build_evidence_orchestrator(settings: EvidenceSettings) -> EvidenceBundle:
     from discovery.adapters.settings import DiscoverySettings
 
     d_settings = DiscoverySettings.from_env()
-    os_client = OpenSearchClientFactory().build(d_settings)
+    os_client = OpenSearchClientFactory.build(
+        endpoint=d_settings.opensearch_endpoint,
+        region_name=settings.region_name,
+        username=d_settings.opensearch_username,
+        password=d_settings.opensearch_password,
+        use_ssl=d_settings.opensearch_use_ssl,
+        verify_certs=d_settings.opensearch_verify_certs,
+    )
 
     embedding = BedrockCohereQueryEmbedder(
-        model_id=d_settings.bedrock_embedding_model_id,
+        model_id=d_settings.bedrock_model_id,
         region_name=settings.region_name,
     )
     vector_store = OpenSearchVectorStoreAdapter(os_client, d_settings.opensearch_index)

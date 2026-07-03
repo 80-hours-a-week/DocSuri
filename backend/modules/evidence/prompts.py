@@ -55,15 +55,19 @@ def _format_papers(doc_models: list[tuple[str, DocModel]]) -> str:
 
 
 def _extract_block_text(doc_model: DocModel) -> str:
-    lines = []
-    sections = getattr(doc_model, 'sections', None) or []
-    for section in sections:
-        heading = getattr(section, 'heading', '') or ''
-        if heading:
-            lines.append(f'## {heading}')
-        blocks = getattr(section, 'blocks', None) or []
-        for block in blocks:
-            text = getattr(block, 'text', '') or ''
-            if text:
-                lines.append(text[:2000])
+    lines: list[str] = []
+    for section in getattr(doc_model, 'sections', None) or []:
+        _collect_section_text(section, lines)
     return '\n'.join(lines)[:8000]
+
+
+def _collect_section_text(section: object, lines: list[str]) -> None:
+    title = getattr(section, 'title', '') or ''
+    if title:
+        lines.append(f'## {title}')
+    for block in getattr(section, 'blocks', None) or []:
+        text = getattr(block.root, 'text', '') or ''
+        if text:
+            lines.append(text[:2000])
+    for nested in getattr(section, 'sections', None) or []:
+        _collect_section_text(nested, lines)
