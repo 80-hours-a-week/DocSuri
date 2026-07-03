@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from threading import RLock
 from typing import Any
@@ -18,6 +19,8 @@ from .models import (
     TurnSuccessResult,
     _utc_now,
 )
+
+log = logging.getLogger('docsuri.evidence.repository')
 
 # ---------------------------------------------------------------------------
 # Port (Protocol)
@@ -130,6 +133,15 @@ class InMemoryEvidenceRepository:
                         s = self._sessions.get(turn.session_id)
                         if not s or s.owner_id != owner_id:
                             raise KeyError(turn_id)
+                        # idempotency guard (PR #338 리뷰 Blocking #4): 이미 terminal
+                        # 상태인 turn은 덮어쓰지 않는다 — 중복 배달된 job이 먼저 끝난
+                        # 결과를 나중 결과로 clobber하는 것을 방지.
+                        if not isinstance(turn.result, TurnPendingResult):
+                            log.info(
+                                'evidence turn %s already resolved; skipping duplicate update',
+                                turn_id,
+                            )
+                            return
                         turn.result = result
                         s.updated_at = _utc_now()
                         return
@@ -296,14 +308,32 @@ class SqlEvidenceRepository:
         row = self._s.get(EvidenceTurnTable, turn_id)
         if row is None or row.owner_id != str(owner_id):
             raise KeyError(turn_id)
+
         data, state = _serialize_result(result)
         attachments = list(row.attachments or [])
         if attachments:
             attachments[0] = {**attachments[0], 'result': data, 'result_state': state}
         else:
             attachments = [{'result': data, 'result_state': state}]
-        row.attachments = attachments
-        row.content = state or ''
+
+        # idempotency guard (PR #338 리뷰 Blocking #4): content='pending' 조건부 UPDATE로
+        # 원자적으로 처리한다. SQS at-least-once 중복 배달로 두 worker가 동시에 같은
+        # job을 처리해도, 먼저 커밋된 terminal 결과가 나중 결과로 clobber되지 않는다 —
+        # 단순 SELECT 후 조건 확인은 두 트랜잭션이 모두 'pending'을 본 뒤 커밋하는
+        # race를 못 막으므로, WHERE 절이 포함된 UPDATE 문 자체로 원자성을 보장한다.
+        updated = (
+            self._s.query(EvidenceTurnTable)
+            .filter(
+                EvidenceTurnTable.turn_id == turn_id,
+                EvidenceTurnTable.owner_id == owner_id,
+                EvidenceTurnTable.content == 'pending',
+            )
+            .update({'attachments': attachments, 'content': state or ''}, synchronize_session=False)
+        )
+        if not updated:
+            log.info('evidence turn %s already resolved; skipping duplicate update', turn_id)
+            return
+
         session_row = self._s.get(EvidenceSessionTable, row.session_id)
         if session_row:
             session_row.updated_at = _ensure_utc(datetime.now(UTC))

@@ -13,6 +13,7 @@ from backend.modules.evidence import controller
 from backend.modules.evidence.assembler import EvidenceComparisonAssembler
 from backend.modules.evidence.models import (
     EvidenceSession,
+    EvidenceTurn,
     TurnAbstainResult,
     TurnErrorResult,
     TurnSuccessResult,
@@ -56,18 +57,65 @@ def _client(monkeypatch, principal: Principal | None = None, repo=None) -> TestC
 # ---------------------------------------------------------------------------
 
 @given(st.just([]))  # claims 항상 빈 리스트
-def test_empty_claims_yields_abstain(claims) -> None:
+def test_assembler_itself_does_not_gate_empty_claims(claims) -> None:
+    """assembler 단독 호출은 빈 claims도 그대로 통과시킨다 — INV-EV-2 강제는
+    orchestrator.run()의 책임이지 assembler의 책임이 아니다. 이 테스트는 그 경계를
+    문서화할 뿐, INV-EV-2 자체의 실제 강제는 아래
+    test_orchestrator_abstains_when_extractor_returns_no_items가 검증한다
+    (PR #338 리뷰 Medium #17 — 기존에는 이 테스트 하나만 "empty claims yields abstain"이라는
+    이름으로 존재해 실제로는 정반대(ok 반환)를 assert하고 있었고, orchestrator 레벨
+    강제는 전혀 테스트되지 않고 있었다)."""
     from backend.modules.evidence.models import PaperSearchResult
 
     assembler = EvidenceComparisonAssembler()
     search_result = PaperSearchResult(records=(), query_used='test', scope='auto')
 
-    # abstain 경로: orchestrator가 items=[] 시 TurnAbstainResult를 직접 반환
-    # assembler는 항상 ok를 반환하고 orchestrator가 INV-EV-2 강제
-    # 여기서는 assembler 결과가 ok지만 claims=[]인 경우 orchestrator 코드 경로 확인
     result = assembler.assemble(claims, search_result, paper_count=0)
     assert result.state == 'ok'
-    assert result.claims == claims  # assembler 자체는 빈 리스트 허용 — orchestrator가 강제
+    assert result.claims == claims
+
+
+def test_orchestrator_abstains_when_extractor_returns_no_items() -> None:
+    """PBT-EV-1 실검증 — INV-EV-2("claims=[] 이면 abstain")는 orchestrator.run()이 강제한다."""
+    from types import SimpleNamespace
+
+    from docsuri_shared._generated.dtos.evidence_schema import EvidenceRequest
+
+    from backend.modules.evidence.models import AgentRunContext, PaperSearchResult
+    from backend.modules.evidence.orchestrator import EvidenceAgentOrchestrator
+
+    class _StubSearchTool:
+        def search(self, *, topic, scope, paper_ids):
+            return PaperSearchResult(
+                records=(SimpleNamespace(arxivId='p1'),), query_used=topic, scope='auto'
+            )
+
+    class _StubDocModelTool:
+        def get_doc_model(self, paper_id, version=1):
+            return SimpleNamespace()
+
+    class _EmptyExtractor:
+        def extract(self, topic, doc_models):
+            return []  # INV-EV-2 트리거 조건
+
+    orchestrator = EvidenceAgentOrchestrator(
+        search_tool=_StubSearchTool(),
+        doc_model_tool=_StubDocModelTool(),
+        extractor=_EmptyExtractor(),
+        assembler=EvidenceComparisonAssembler(),
+    )
+    request = EvidenceRequest(topic='test', scope='auto', paperIds=[])
+    session = EvidenceSession(owner_id='owner-1')
+    turn = EvidenceTurn(session_id=session.session_id, request=request)
+    ctx = AgentRunContext(
+        session=session, current_turn=turn, owner_id='owner-1',
+        request_id='req-1', budget_signal={'state': 'ok'},
+    )
+
+    result = orchestrator.run(ctx, request)
+
+    assert isinstance(result, TurnAbstainResult)
+    assert result.outcome.abstainReason == 'insufficient_evidence'
 
 
 # ---------------------------------------------------------------------------

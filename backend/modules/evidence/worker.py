@@ -28,7 +28,7 @@ from typing import Any
 
 from docsuri_shared._generated.dtos.evidence_schema import EvidenceRequest, EvidenceScope
 
-from .models import AgentRunContext, EvidenceTurn, TurnErrorResult
+from .models import AgentRunContext, EvidenceTurn, TurnErrorResult, TurnPendingResult
 from .orchestrator import EvidenceAgentOrchestrator
 from .repository import EvidenceRepository
 
@@ -69,6 +69,33 @@ def parse_sqs_payload(body: str | bytes | dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def parse_received_messages(
+    raw_messages: list[dict[str, Any]],
+    *,
+    on_poison: Callable[[dict[str, Any]], None],
+) -> list[_Message]:
+    """SQS receive_message() 원본 응답 → 파싱된 메시지 목록.
+
+    poison message(파싱 불가한 Body) 하나가 예외를 밖으로 전파해 같은 배치의 정상
+    메시지까지 unacked로 남기고 crash loop을 유발하던 문제를 방지한다(PR #338 리뷰
+    Blocking #3). 실패한 메시지는 즉시 ``on_poison``으로 넘겨 삭제하고, 나머지는 정상
+    처리한다.
+    """
+    messages: list[_Message] = []
+    for msg in raw_messages:
+        try:
+            body = json.loads(msg['Body'])
+        except (json.JSONDecodeError, TypeError):
+            log.exception(
+                'evidence worker: dropping poison message (invalid JSON body), receiptHandle=%s',
+                msg.get('ReceiptHandle'),
+            )
+            on_poison(msg)
+            continue
+        messages.append(_Message(body, msg.get('ReceiptHandle')))
+    return messages
+
+
 def process_sqs_payload(
     repo: EvidenceRepository,
     body: str | bytes | dict[str, Any],
@@ -103,6 +130,17 @@ def process_job(
     turn: EvidenceTurn | None = next((t for t in turns if t.turn_id == turn_id), None)
     if turn is None:
         log.warning('evidence job %s: turn %s not found', job_id, turn_id)
+        return
+
+    # idempotency guard (PR #338 리뷰 Blocking #4): SQS at-least-once 특성상 동일 job이
+    # visibility_timeout 초과 등으로 중복 배달될 수 있다. turn이 이미 pending을 벗어나
+    # terminal 상태(성공/기권/에러)면 재실행하지 않고 스킵 — orchestrator 이중 실행과
+    # update_turn_result의 결과 clobber를 함께 방지한다.
+    if not isinstance(turn.result, TurnPendingResult):
+        log.info(
+            'evidence job %s: turn %s already resolved, skipping duplicate delivery',
+            job_id, turn_id,
+        )
         return
 
     request = EvidenceRequest(
@@ -224,10 +262,12 @@ def main(argv: list[str] | None = None) -> int:
             MaxNumberOfMessages=10,
             WaitTimeSeconds=20,
         )
-        return [
-            _Message(json.loads(msg['Body']), msg['ReceiptHandle'])
-            for msg in resp.get('Messages', [])
-        ]
+        return parse_received_messages(
+            resp.get('Messages', []),
+            on_poison=lambda msg: sqs.delete_message(
+                QueueUrl=queue_url, ReceiptHandle=msg['ReceiptHandle']
+            ),
+        )
 
     def ack(message: _Message) -> None:
         if message.receipt_handle:

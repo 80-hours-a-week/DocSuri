@@ -25,13 +25,6 @@ app = cdk.App()
 env = cdk.Environment(account="028317349537", region="ap-northeast-2")
 
 
-def _required_context(key: str) -> str:
-    value = app.node.try_get_context(key)
-    if not value:
-        raise ValueError(f"Missing required CDK context '{key}' — pass via -c {key}=<value>")
-    return value
-
-
 network = NetworkStack(app, "Docsuri-Network", env=env)
 search = SearchStack(app, "Docsuri-Search", vpc=network.vpc, env=env)
 compute = ComputeStack(
@@ -65,14 +58,14 @@ novelty = NoveltyStack(
 )
 # Deploy unit ④ — U11 evidence formation agent worker. Code/synth only; deploy remains
 # team-owned. The unit is active when DOCSURI_EVIDENCE_ASYNC_ENABLED=true is configured.
+# NoveltyStack과 동일 패턴으로 db/opensearch_domain construct를 직접 참조 — 이전에는
+# -c evidence_db_*/evidence_docmodel_bucket 문자열 context 5개가 없으면 evidence 스택을
+# 배포할 의도가 없어도 다른 모든 cdk 명령이 실패했다(PR #338 리뷰 Blocking #8).
 evidence = EvidenceStack(
     app, 'Docsuri-Evidence',
     vpc=network.vpc,
-    db_endpoint=_required_context('evidence_db_endpoint'),
-    db_port=int(_required_context('evidence_db_port')),
-    db_security_group_id=_required_context('evidence_db_security_group_id'),
-    db_secret_arn=_required_context('evidence_db_secret_arn'),
-    docmodel_bucket=_required_context('evidence_docmodel_bucket'),
+    db=compute.db,
+    opensearch_domain=search.domain,
     env=env,
 )
 # Deploy unit ④ — U5 frontend. The BFF (server-side) calls the backend gateway over its

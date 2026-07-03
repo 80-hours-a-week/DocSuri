@@ -48,7 +48,10 @@ def build_evidence_extraction_prompt(
 def _format_papers(doc_models: list[tuple[str, DocModel]]) -> str:
     parts = []
     for paper_id, doc_model in doc_models:
-        title = getattr(doc_model, 'title', '') or paper_id
+        # DocModel에는 top-level title이 없고 meta.title에 있다 — 존재하지 않는
+        # doc_model.title을 getattr(default='')로 조용히 삼키던 것과 같은 패턴의
+        # 버그였다(PR #338 리뷰 Medium #10, prompts.py 본문 추출 버그와 동일 유형).
+        title = getattr(getattr(doc_model, 'meta', None), 'title', '') or paper_id
         blocks_text = _extract_block_text(doc_model)
         parts.append(f'[PAPER:{paper_id}] {title}\n{blocks_text}')
     return '\n\n'.join(parts)

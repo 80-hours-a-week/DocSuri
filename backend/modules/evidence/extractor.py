@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from typing import Any
 
@@ -151,6 +152,33 @@ def _build_paper_texts(doc_models: list[tuple[str, DocModel]]) -> dict[str, str]
     return result
 
 
+# INV-EV-3 substring 검사만으로는 'the', '0.9' 같은 1~2토큰 quote가 trivially 통과해
+# fullText에 우연히 존재하는 숫자로 날조된 statement를 그라운딩할 수 있다(PR #338 리뷰
+# Medium #14). 완전한 문장 단위는 아니지만, 짧은 조각 인용을 걸러내는 최소 방어선.
+_MIN_QUOTE_LENGTH = 20
+
+_NUMBER_PATTERN = re.compile(r'\d+(?:\.\d+)?%?')
+
+
+def _numbers_in(text: str) -> set[str]:
+    return set(_NUMBER_PATTERN.findall(text))
+
+
+def _statement_grounded(statement: str, verified_quotes: list[str]) -> bool:
+    """INV-EV-3: statement이 검증된 quote가 뒷받침하지 않는 수치를 날조하지 않았는지 확인.
+
+    statement은 질의 언어로 의역/번역되는 경우가 흔하다(예: 한국어 질문 → 한국어 statement +
+    영어 원문 quote). 전체 텍스트 overlap은 언어가 다르면 항상 0에 가까워 신뢰할 수 없으므로,
+    언어에 무관한 숫자만 대조한다 — LLM이 실제 quote에 없는 수치(정확도, 복잡도 지수 등)를
+    statement에 지어내는 가장 피해가 큰 날조 패턴을 막는 최소 게이트(PR #338 리뷰 Blocking #2).
+    """
+    statement_numbers = _numbers_in(statement)
+    if not statement_numbers:
+        return True
+    quote_numbers = _numbers_in(' '.join(verified_quotes))
+    return statement_numbers.issubset(quote_numbers)
+
+
 def _filter_hallucinated(
     raw_items: list[dict],
     paper_texts: dict[str, str],
@@ -168,6 +196,14 @@ def _filter_hallucinated(
         # supporting이 하나도 없으면 해당 item 제거(날조 위험)
         if not supporting:
             logger.warning('dropping EvidenceItem — no valid supporting refs: %.80s', statement)
+            continue
+
+        verified_quotes = [ref.quote for ref in supporting if ref.quote]
+        if not _statement_grounded(statement, verified_quotes):
+            logger.warning(
+                'INV-EV-3 violation — statement cites a number absent from verified quotes: %.80s',
+                statement,
+            )
             continue
 
         items.append(
@@ -193,15 +229,30 @@ def _validate_refs(
         if not paper_id or not record_ref:
             continue
 
-        # INV-EV-3: quote가 있으면 원문 존재 여부 검증
-        if quote:
-            paper_text = paper_texts.get(paper_id, '')
-            if quote not in paper_text:
-                logger.warning(
-                    'INV-EV-3 violation — quote not found in paper %s, dropping ref',
-                    paper_id,
-                )
-                continue
+        # INV-EV-3: quote 없는 ref는 grounding으로 인정하지 않는다. SourceRef.quote가
+        # optional인 건 DTO 계약(D5) 상 이유이지, LLM이 quote를 생략해 verbatim 검증
+        # 자체를 우회해도 된다는 뜻이 아니다(PR #338 리뷰 Blocking #1).
+        if not quote:
+            logger.warning(
+                'INV-EV-3 violation — ref for paper %s has no quote, dropping (ungrounded)',
+                paper_id,
+            )
+            continue
+
+        if len(quote) < _MIN_QUOTE_LENGTH:
+            logger.warning(
+                'INV-EV-3 violation — quote too short (%d chars) for paper %s, dropping ref',
+                len(quote), paper_id,
+            )
+            continue
+
+        paper_text = paper_texts.get(paper_id, '')
+        if quote not in paper_text:
+            logger.warning(
+                'INV-EV-3 violation — quote not found in paper %s, dropping ref',
+                paper_id,
+            )
+            continue
 
         valid.append(
             SourceRef(
