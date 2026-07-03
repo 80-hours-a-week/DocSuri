@@ -60,6 +60,11 @@ class EvidenceTurn:
     request: EvidenceRequest | None = None
     result: TurnResult | None = None
     created_at: datetime = field(default_factory=_utc_now)
+    # 비동기 잡 폴링용 식별자(BR-EV-6) — TurnPendingResult.job_id에서 생성 시 한 번만
+    # 복사해온다. result가 terminal로 교체된 뒤에도 get_turn_by_job_id가 계속 조회할 수
+    # 있어야 하는데, job_id가 result 안에만 있으면 완료 즉시 사라져 404가 났었다
+    # (PR #338 리뷰 Blocking #2).
+    job_id: str | None = None
 
 
 @dataclass

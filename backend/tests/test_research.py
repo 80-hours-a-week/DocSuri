@@ -72,6 +72,30 @@ def test_research_sessions_are_owner_scoped(monkeypatch) -> None:
     assert client_b.get("/api/research/jobs").json()["jobs"] == []
 
 
+def test_research_job_transitions_to_completed_after_message(monkeypatch) -> None:
+    """PR #338 리뷰 Blocking #3 — job.state가 active로 남으면 FE가 이를 running으로
+    매핑해 답변이 저장돼도 폴링을 멈추지 않는다."""
+    from backend.modules.research.models import ResearchJobState
+
+    principal = _principal()
+    repo = InMemoryResearchRepository()
+    client = _client(monkeypatch, principal, repo)
+
+    created = client.post("/api/research/jobs", json={"content": "test question"})
+    assert created.json()["state"] == ResearchJobState.COMPLETED.value
+
+    job_id = created.json()["jobId"]
+    detail = client.get(f"/api/research/jobs/{job_id}")
+    assert detail.json()["job"]["state"] == ResearchJobState.COMPLETED.value
+
+    followup = client.post(
+        f"/api/research/jobs/{job_id}/messages", json={"content": "follow-up"}
+    )
+    assert followup.status_code == 200
+    detail_after_followup = client.get(f"/api/research/jobs/{job_id}")
+    assert detail_after_followup.json()["job"]["state"] == ResearchJobState.COMPLETED.value
+
+
 def test_sql_repositories_bind_postgres_uuid_ids() -> None:
     dialect = postgresql.dialect()
 

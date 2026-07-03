@@ -101,6 +101,7 @@ class EvidenceChatService:
             # 비동기 경로(BR-EV-6): pending 상태로 즉시 반환
             job_id = _new_id()
             turn.result = TurnPendingResult(job_id=job_id, started_at=_utc_now())
+            turn.job_id = job_id
             self._repo.add_turn(turn)
             self._sqs_enqueue({
                 'ownerId': owner_id,

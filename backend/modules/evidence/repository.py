@@ -116,10 +116,7 @@ class InMemoryEvidenceRepository:
         with self._lock:
             for turn_list in self._turns.values():
                 for turn in turn_list:
-                    if (
-                        isinstance(turn.result, TurnPendingResult)
-                        and turn.result.job_id == job_id
-                    ):
+                    if turn.job_id == job_id:
                         s = self._sessions.get(turn.session_id)
                         if s and s.owner_id == owner_id:
                             return turn
@@ -166,27 +163,27 @@ class Base(DeclarativeBase):
 
 
 class EvidenceSessionTable(Base):
-    # research_jobs 테이블 재사용 — job_id=session_id, state=active|deleted
-    __tablename__ = 'research_jobs'
+    # 전용 테이블(evidence/migrations/001) — PR #338 리뷰 Blocking #1: research_jobs를
+    # 재사용하면 evidence 세션이 /api/research/jobs에 노출되고, evidence의
+    # status='deleted'가 ResearchJobState(연구 전용 enum, DELETED 없음)를 깨뜨렸음.
+    __tablename__ = 'evidence_sessions'
 
-    session_id: Mapped[str] = mapped_column('job_id', Uuid(as_uuid=False), primary_key=True)
+    session_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
     owner_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False, index=True)
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column('state', String(32), nullable=False, default='active')
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default='active')
     created_at: Mapped[Any] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[Any] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class EvidenceTurnTable(Base):
-    # research_messages 테이블 재사용 — message_id=turn_id, role='turn', attachments=turn data
-    __tablename__ = 'research_messages'
+    # 전용 테이블(evidence/migrations/001) — research_messages 재사용 시 필요했던
+    # role='turn' 구분자가 더 이상 필요 없음(이 테이블엔 evidence turn만 존재).
+    __tablename__ = 'evidence_turns'
 
-    turn_id: Mapped[str] = mapped_column('message_id', Uuid(as_uuid=False), primary_key=True)
-    session_id: Mapped[str] = mapped_column(
-        'job_id', Uuid(as_uuid=False), nullable=False, index=True
-    )
+    turn_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
+    session_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False, index=True)
     owner_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False, index=True)
-    role: Mapped[str] = mapped_column(String(32), nullable=False, default='turn')
     content: Mapped[str] = mapped_column(String(12000), nullable=False, default='')
     attachments: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[Any] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -264,7 +261,6 @@ class SqlEvidenceRepository:
                 turn_id=turn.turn_id,
                 session_id=turn.session_id,
                 owner_id=row.owner_id,
-                role='turn',
                 content=result_state or '',
                 attachments=attachments,
                 created_at=turn.created_at,
@@ -281,7 +277,6 @@ class SqlEvidenceRepository:
             .filter(
                 EvidenceTurnTable.owner_id == owner_id,
                 EvidenceTurnTable.session_id == session_id,
-                EvidenceTurnTable.role == 'turn',
             )
             .order_by(EvidenceTurnTable.created_at.asc(), EvidenceTurnTable.turn_id.asc())
             .all()
@@ -289,14 +284,16 @@ class SqlEvidenceRepository:
         return [_turn_from_row(row) for row in rows]
 
     def get_turn_by_job_id(self, owner_id: str, job_id: str) -> EvidenceTurn:
-        # attachments[0].result.job_id 매칭
+        # job_id는 attachments[0]['job_id']에 생성 시점부터 고정 저장된다(result 내부가
+        # 아님) — PR #338 리뷰 Blocking #2: job_id가 TurnPendingResult 안에만 있으면
+        # update_turn_result가 terminal 결과로 교체할 때 job_id 자체가 사라져서, 완료
+        # 직후부터 이 조회가 영원히 404가 됐음. content='pending' 조건도 함께 제거해
+        # pending이든 완료든 동일한 job_id로 조회 가능하게 함.
         row = (
             self._s.query(EvidenceTurnTable)
             .filter(
                 EvidenceTurnTable.owner_id == owner_id,
-                EvidenceTurnTable.role == 'turn',
-                EvidenceTurnTable.content == 'pending',
-                EvidenceTurnTable.attachments[0]['result']['job_id'].as_string() == job_id,
+                EvidenceTurnTable.attachments[0]['job_id'].as_string() == job_id,
             )
             .first()
         )
@@ -377,13 +374,19 @@ def _turn_from_row(row: EvidenceTurnTable) -> EvidenceTurn:
         request=request,
         result=result,
         created_at=_ensure_utc(row.created_at),
+        job_id=payload.get('job_id'),
     )
 
 
 def _pack_turn(turn: EvidenceTurn) -> list[dict]:
     result_data, result_state = _serialize_result(turn.result)
+    # job_id는 'result' 안이 아니라 최상위에 한 번만 기록한다 — update_turn_result가
+    # terminal 결과로 교체해도 이 키는 그대로 남아(dict 병합 시 result/result_state만
+    # 덮어씀) get_turn_by_job_id가 완료 후에도 계속 조회 가능하다(PR #338 Blocking #2).
+    job_id = turn.result.job_id if isinstance(turn.result, TurnPendingResult) else None
     return [{
         'request': turn.request.model_dump() if turn.request else None,
+        'job_id': job_id,
         'result': result_data,
         'result_state': result_state,
     }]

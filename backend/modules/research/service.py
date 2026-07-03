@@ -12,6 +12,7 @@ from .models import (
     ResearchJobCreateResponse,
     ResearchJobDetailResponse,
     ResearchJobListResponse,
+    ResearchJobState,
     ResearchJobSummary,
     ResearchMessageCreateRequest,
     ResearchMessageListResponse,
@@ -34,7 +35,10 @@ class ResearchService:
             ResearchJob(ownerId=owner_id, title=title_from_content(dto.content))
         )
         await self.add_message(owner_id, job.jobId, dto, orchestrator)
-        return ResearchJobCreateResponse(jobId=job.jobId, state=job.state)
+        # add_message가 처리 완료 후 항상 COMPLETED로 전이시키므로(PR #338 Blocking #3)
+        # 응답도 그 최종 상태를 반영해야 한다 — job은 create_job 호출 시점의 스냅샷이라
+        # 그대로 두면 항상 ACTIVE로 보고된다.
+        return ResearchJobCreateResponse(jobId=job.jobId, state=ResearchJobState.COMPLETED)
 
     def list_jobs(self, owner_id: str, limit: int = 50) -> ResearchJobListResponse:
         jobs = self._repo.list_jobs(owner_id, max(1, min(limit, 100)))
@@ -78,10 +82,11 @@ class ResearchService:
             )
         )
         if orchestrator is None:
+            self._repo.mark_completed(owner_id, job_id)
             return user_msg
         result = await _run_evidence(orchestrator, owner_id, dto.content)
         content = _format_turn_result(result)
-        return self._repo.add_message(
+        assistant_msg = self._repo.add_message(
             ResearchChatMessage(
                 jobId=job_id,
                 ownerId=owner_id,
@@ -90,6 +95,11 @@ class ResearchService:
                 attachments=[],
             )
         )
+        # 이 요청이 반환되는 시점에는 이미 모든 처리(evidence 추출 포함)가 끝난
+        # 상태다 — job.state를 ACTIVE로 남겨두면 FE가 running으로 매핑해 답변이
+        # 저장된 뒤에도 폴링을 멈추지 않는다(PR #338 리뷰 Blocking #3).
+        self._repo.mark_completed(owner_id, job_id)
+        return assistant_msg
 
     def list_messages(self, owner_id: str, job_id: str) -> ResearchMessageListResponse:
         return ResearchMessageListResponse(messages=self._repo.list_messages(owner_id, job_id))
@@ -97,6 +107,7 @@ class ResearchService:
 
 async def _run_evidence(orchestrator: Any, owner_id: str, topic: str) -> Any:
     from docsuri_shared._generated.dtos.evidence_schema import EvidenceRequest, EvidenceScope
+
     from backend.modules.evidence.models import AgentRunContext, EvidenceSession, EvidenceTurn
 
     request = EvidenceRequest(topic=topic, scope=EvidenceScope.auto, paperIds=[])
@@ -113,7 +124,7 @@ async def _run_evidence(orchestrator: Any, owner_id: str, topic: str) -> Any:
 
 
 def _format_turn_result(result: Any) -> str:
-    from backend.modules.evidence.models import TurnSuccessResult, TurnAbstainResult
+    from backend.modules.evidence.models import TurnAbstainResult, TurnSuccessResult
 
     if isinstance(result, TurnSuccessResult):
         return json.dumps(result.outcome.model_dump(), ensure_ascii=False)
