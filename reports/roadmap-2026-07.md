@@ -11,7 +11,7 @@
 | Plan item | Status | Notes |
 |---|---|---|
 | 논문 검색 | ✅ Live | Hybrid search over ~1.5M-chunk corpus; daily auto-harvest (EventBridge 15:00 KST); pre-2026 historical drain in progress |
-| 논문 요약/번역 | ✅ Live | Grounded summaries/translation; glossary system redesigned (PR #334); map parallelism + shared-base overlay landed; source-anchor structural resolution + stale-docmodel self-heal (PR #351) |
+| 논문 요약/번역 | ✅ Live | Grounded summaries/translation; glossary system redesigned (PR #334); map parallelism + shared-base overlay landed; source-anchor structural resolution + stale-docmodel self-heal (PR #351); Bedrock output elicitation → tool-use structured output, killing the JSON-parse abstain failure class (**PR #356**, open, no linked issue) |
 | 프로필 페이지 | 🟡 Live w/ mocks | U10 merged; 최근 본 논문/ORCID still mock (#347) |
 | 인용 그래프 → 각주 트리 | 🟡 Live w/ bug | DOI node expansion returns 500 (#342) |
 | 트렌드/알림 | ❌ Not started | Never entered requirements — needs inception re-entry |
