@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from collections.abc import Sequence
 
 from ..domain.models import (
@@ -37,14 +38,22 @@ def _strip_delimiters(text: str) -> str:
 
 # User-writable glossary terms ride into the SYSTEM prompt's "사용자 선호 매핑" line. Neutralize
 # them so a crafted term can't break out of the line and inject instructions (Prompt Injection):
-# drop delimiter tags, our field separators (→ ;), and control chars, then collapse whitespace
-# (newlines included) to a single space. Seed terms are trusted (code-authored) — only user
-# overrides are sanitized.
-_TERM_STRIP_RE = re.compile(r"[\x00-\x1f\x7f→;]")  # C0/DEL controls + '→' + ';'
+# drop delimiter tags and our field separators (→ ;), strip every Unicode control (Cc — C0/C1/DEL)
+# and format (Cf — zero-width joiners, word-joiner, BOM…) char, then collapse whitespace (newlines
+# and LS/PS/NBSP included) to a single space. Removing Cf also stops an invisible char (e.g. ZWSP
+# in "atte​ntion") from dodging seed de-dup and re-introducing a double instruction. Seed
+# terms are trusted (code-authored) — only user overrides are sanitized.
 
 
 def _sanitize_term(text: str) -> str:
-    return re.sub(r"\s+", " ", _TERM_STRIP_RE.sub(" ", _strip_delimiters(text))).strip()
+    out: list[str] = []
+    for c in _strip_delimiters(text):
+        cat = unicodedata.category(c)
+        if cat == "Cf":
+            continue  # DELETE zero-width/format chars so an invisible char can't dodge seed de-dup
+        # controls (Cc — C0/C1/DEL) and our field separators become a space (word boundary kept)
+        out.append(" " if (c in "→;" or cat == "Cc") else c)
+    return re.sub(r"\s+", " ", "".join(out)).strip()
 
 # Persona only shapes WORDING/treatment within the §3 fields — the JSON structure is identical
 # for both (no extra/missing fields). All grounding rules in the system prompt still apply, so

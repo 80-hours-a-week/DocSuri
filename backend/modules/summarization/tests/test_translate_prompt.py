@@ -116,6 +116,35 @@ def test_weak_user_term_absent_from_glossary_block() -> None:
     assert "사용자 선호 매핑" not in _glossary_block(g)  # weak terms never enter the prompt
 
 
+def test_zero_width_char_does_not_evade_seed_override_dedup() -> None:
+    # A zero-width space (U+200B, Unicode Cf) inside the override term_from must be stripped so it
+    # still keys on "attention" and suppresses the seed mapping — otherwise the prompt carries BOTH
+    # the seed and the user rendering (contradictory double instruction).
+    g = Glossary(
+        seed_mappings=(TermMapping("attention", "\uc5b4\ud150\uc158", prompt_enforced=True),),
+        user_overrides=(TermMapping("atte\u200bntion", "\uc8fc\ubaa9", prompt_enforced=True),),
+    )
+    lines = _glossary_block(g).splitlines()
+    maps_line = next(ln for ln in lines if ln.startswith("\uc6a9\uc5b4 \ub9e4\ud551:"))
+    user_pre = "\uc0ac\uc6a9\uc790 \uc120\ud638 \ub9e4\ud551:"
+    user_line = next(ln for ln in lines if ln.startswith(user_pre))
+    assert "attention\u2192\uc5b4\ud150\uc158" not in maps_line  # seed suppressed despite ZWSP
+    assert "\u200b" not in user_line  # zero-width char stripped
+    assert "attention\u2192\uc8fc\ubaa9" in user_line  # override key matched after strip
+
+
+def test_c1_control_char_is_stripped_from_glossary_block() -> None:
+    # C1 controls (U+0080-U+009F) are non-printing and must not reach the Bedrock prompt.
+    g = Glossary(user_overrides=(TermMapping("term", "\uc8fc\u0080\ubaa9", prompt_enforced=True),))
+    user_line = next(
+        ln
+        for ln in _glossary_block(g).splitlines()
+        if ln.startswith("\uc0ac\uc6a9\uc790 \uc120\ud638 \ub9e4\ud551:")
+    )
+    assert "\u0080" not in user_line  # C1 removed
+    assert "\uc8fc \ubaa9" in user_line  # replaced by a space, then collapsed
+
+
 def test_user_strong_override_replaces_seed_mapping() -> None:
     # A personal strong override of a seed term (attention) drops the seed mapping so the prompt
     # carries the user's rendering only — no contradictory double mapping (BR-S4).

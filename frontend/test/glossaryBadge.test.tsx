@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TranslationView } from '@/components/TranslationView';
+import { ApiClient } from '@/lib/api';
 import { resetMockGlossary } from '@/mocks/summarizeFixtures';
 import type { TranslationVM } from '@/types/generated';
 
@@ -60,6 +61,10 @@ describe('GlossaryTermBadge (via TranslationView)', () => {
   beforeEach(() => {
     resetMockGlossary();
     sessionStorage.clear(); // start with no pending draft
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('renders both groups; the mapping is an editable 표준 badge', () => {
@@ -179,6 +184,47 @@ describe('GlossaryTermBadge (via TranslationView)', () => {
     await user.click(await screen.findByTestId('remount'));
     await waitFor(() =>
       expect(screen.queryByTestId('glossary-apply-weak')).not.toBeInTheDocument(),
+    );
+  });
+
+  it('stages with NO network call, and applies via POST with the right promptEnforced flag', async () => {
+    const user = userEvent.setup();
+    // Spy the real ApiClient so we assert the network contract (not just UI state).
+    const upsert = vi
+      .spyOn(ApiClient.prototype, 'upsertGlossaryTerm')
+      .mockResolvedValue({ status: 'ok', glossaryVer: 1 });
+    vi.spyOn(ApiClient.prototype, 'listGlossaryTerms').mockResolvedValue([]);
+    renderView(); // onRegenerate is a no-op here, so the view stays mounted after apply
+
+    // (1) Saving a term only STAGES it — no POST yet.
+    await user.click(badge('encoder')); // 원어 유지 → weak
+    await user.type(await screen.findByTestId('glossary-input'), '인코더');
+    await user.click(screen.getByTestId('glossary-save'));
+    expect(upsert).not.toHaveBeenCalled();
+
+    // (2) Applying the 원어 유지 group POSTs it as WEAK (promptEnforced: false).
+    await user.click(await screen.findByTestId('glossary-apply-weak'));
+    await waitFor(() =>
+      expect(upsert).toHaveBeenCalledWith({
+        termFrom: 'encoder',
+        termTo: '인코더',
+        promptEnforced: false,
+      }),
+    );
+
+    // (3) A 표준 용어 applies as STRONG (promptEnforced: true).
+    upsert.mockClear();
+    await user.click(badge('Transformer'));
+    await user.type(await screen.findByTestId('glossary-input'), '트랜스포머');
+    await user.click(screen.getByTestId('glossary-save'));
+    expect(upsert).not.toHaveBeenCalled(); // still staging-only
+    await user.click(await screen.findByTestId('glossary-apply-strong'));
+    await waitFor(() =>
+      expect(upsert).toHaveBeenCalledWith({
+        termFrom: 'Transformer',
+        termTo: '트랜스포머',
+        promptEnforced: true,
+      }),
     );
   });
 

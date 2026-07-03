@@ -48,9 +48,15 @@ D(논란) → 제외
 |---|---|---|---|
 | attention | 어텐션 | 높음('주의/주목') | B |
 | embedding | 임베딩 | 높음('매장/삽입') | B |
-| latent space | 잠재 공간 | 낮음(무해·유지) | B |
+| latent space | 잠재 공간 | 낮음 — **일관성 위해 강제(예외)** | B |
 
-경계 부류(음차 개념어)를 전수 점검한 결과, **강제 실익이 큰 것은 위 3개가 전부**다. `self-attention`은
+> **latent space 예외 근거(§3 규칙 명시적 예외):** 개별 오번역 위험은 낮지만(대개 '잠재 공간'으로 무난히
+> 번역됨), attention·embedding과 함께 생성모델 핵심 음차 개념어 3종의 **표기 일관성**을 위해 강제에 포함한다.
+> 즉 이 항목은 "고빈도 오번역 위험"이 아니라 "일관성"이 채택 사유다 — §3의 위험-기반 규칙을 문자 그대로
+> 적용해 제거하지 말 것.
+
+경계 부류(음차 개념어)를 전수 점검한 결과, **강제 대상은 위 3개가 전부**다(attention·embedding=오번역
+위험, latent space=일관성 예외). `self-attention`은
 attention이 강제되면 자동으로 따라오고(셀프 어텐션), `token·prompt·tokenization·encoder/decoder`는
 LLM이 이미 음차하며, `inference·hallucination`은 정번역이라 강제 불필요.
 
