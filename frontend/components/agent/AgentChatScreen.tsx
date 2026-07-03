@@ -35,7 +35,8 @@ const JOB_STATE_LABEL: Record<AgentJobState, string> = {
   failed: '실패',
   degraded: '저하',
 };
-const AGENT_REFRESH_MS = 2000;
+const AGENT_REFRESH_MS = 1000;
+const STREAM_CHAR_MS = 8;
 const RESEARCH_MODE_ENABLED =
   !process.env.NEXT_PUBLIC_DOCSURI_REAL_API ||
   process.env.NEXT_PUBLIC_DOCSURI_RESEARCH_AGENT_ENABLED === '1';
@@ -70,7 +71,7 @@ export function AgentChatScreen() {
   useEffect(() => {
     if (
       !activeSessionId ||
-      state.submitting ||
+      !activeSessionId.includes(':') ||
       (state.jobState !== 'queued' && state.jobState !== 'running')
     ) {
       return;
@@ -87,12 +88,12 @@ export function AgentChatScreen() {
         if (alive) timer = setTimeout(refresh, AGENT_REFRESH_MS);
       }
     };
-    timer = setTimeout(refresh, AGENT_REFRESH_MS);
+    void refresh();
     return () => {
       alive = false;
       if (timer) clearTimeout(timer);
     };
-  }, [activeSessionId, api, state.jobState, state.submitting]);
+  }, [activeSessionId, api, state.jobState]);
 
   function startMode(mode: AgentMode) {
     dispatch({ type: 'startSession', session: createDraftSession(mode) });
@@ -170,7 +171,7 @@ export function AgentChatScreen() {
         <div className={styles.status}>
           <span>{state.mode ? MODE_LABEL[state.mode] : '에이전트'}</span>
           {state.jobState !== 'idle' ? (
-            <small data-state={state.jobState}>{JOB_STATE_LABEL[state.jobState]}</small>
+            <JobStateBadge state={state.jobState} />
           ) : null}
         </div>
       </div>
@@ -180,7 +181,7 @@ export function AgentChatScreen() {
       ) : null}
 
       <AgentMessageList messages={state.messages} />
-      <AgentProgressTimeline events={state.events} />
+      <AgentProgressTimeline events={state.events} jobState={state.jobState} />
 
       {state.error ? (
         <p className={styles.error} role="status" data-testid="agent-error">
@@ -342,34 +343,79 @@ function AgentSessionDrawer({
 }
 
 function AgentMessageList({ messages }: { messages: AgentMessage[] }) {
+  const streamingId = [...messages].reverse().find((message) => message.role === 'agent')?.id;
   return (
     <div className={styles.messages} data-testid="agent-message-list">
       {messages.length === 0 ? <p className={styles.empty}>대화를 시작하세요.</p> : null}
       {messages.map((message) => (
-        <article
+        <AgentMessageItem
           key={message.id}
-          className={styles.message}
-          data-role={message.role}
-          data-status={message.status ?? 'sent'}
-          data-testid="agent-message"
-        >
-          <p>{message.content}</p>
-          {message.attachments?.length ? (
-            <div className={styles.messageFiles}>
-              {message.attachments.map((file) => (
-                <span key={file.id}>{file.name}</span>
-              ))}
-            </div>
-          ) : null}
-        </article>
+          message={message}
+          streaming={message.id === streamingId}
+        />
       ))}
     </div>
   );
 }
 
-function AgentProgressTimeline({ events }: { events: AgentTimelineEvent[] }) {
+function AgentMessageItem({
+  message,
+  streaming,
+}: {
+  message: AgentMessage;
+  streaming: boolean;
+}) {
+  const content = useStreamingText(message.content, streaming && message.role === 'agent');
+  return (
+    <article
+      className={styles.message}
+      data-role={message.role}
+      data-status={message.status ?? 'sent'}
+      data-streaming={streaming && message.role === 'agent'}
+      data-testid="agent-message"
+    >
+      <p>{content}</p>
+      {message.attachments?.length ? (
+        <div className={styles.messageFiles}>
+          {message.attachments.map((file) => (
+            <span key={file.id}>{file.name}</span>
+          ))}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function useStreamingText(content: string, enabled: boolean): string {
+  const [visible, setVisible] = useState(enabled ? '' : content);
+
+  useEffect(() => {
+    if (!enabled) {
+      setVisible(content);
+      return;
+    }
+    let index = 0;
+    setVisible('');
+    const timer = setInterval(() => {
+      index += 1;
+      setVisible(content.slice(0, index));
+      if (index >= content.length) clearInterval(timer);
+    }, STREAM_CHAR_MS);
+    return () => clearInterval(timer);
+  }, [content, enabled]);
+
+  return visible;
+}
+
+function AgentProgressTimeline({
+  events,
+  jobState,
+}: {
+  events: AgentTimelineEvent[];
+  jobState: AgentJobState;
+}) {
   if (events.length === 0) return null;
-  const displayEvents = normalizeTimelineDisplay(events);
+  const displayEvents = normalizeTimelineDisplay(events, jobState);
   return (
     <section className={styles.timeline} aria-label="탐구 프로세스" data-testid="agent-timeline">
       {displayEvents.map((event) => (
@@ -379,7 +425,10 @@ function AgentProgressTimeline({ events }: { events: AgentTimelineEvent[] }) {
   );
 }
 
-export function normalizeTimelineDisplay(events: AgentTimelineEvent[]): AgentTimelineEvent[] {
+export function normalizeTimelineDisplay(
+  events: AgentTimelineEvent[],
+  jobState: AgentJobState = 'running',
+): AgentTimelineEvent[] {
   let lastTerminalIndex = -1;
   for (let i = events.length - 1; i >= 0; i -= 1) {
     if (events[i].state !== 'running') {
@@ -387,12 +436,21 @@ export function normalizeTimelineDisplay(events: AgentTimelineEvent[]): AgentTim
       break;
     }
   }
+  if (lastTerminalIndex < 0 && isTerminalJobState(jobState)) {
+    return events.map((event) =>
+      event.state === 'running' ? { ...event, state: 'completed' } : event,
+    );
+  }
   if (lastTerminalIndex <= 0) return events;
   return events.map((event, index) =>
     index < lastTerminalIndex && event.state === 'running'
       ? { ...event, state: 'completed' satisfies AgentTimelineState }
       : event,
   );
+}
+
+function isTerminalJobState(state: AgentJobState): boolean {
+  return state === 'completed' || state === 'failed' || state === 'degraded';
 }
 
 function AgentTimelineItem({ event }: { event: AgentTimelineEvent }) {
@@ -407,10 +465,21 @@ function AgentTimelineItem({ event }: { event: AgentTimelineEvent }) {
     >
       <summary>
         <span>{event.label}</span>
-        <small>{JOB_STATE_LABEL[event.state]}</small>
+        <JobStateBadge state={event.state} />
       </summary>
       {event.detail ? <p>{event.detail}</p> : null}
     </details>
+  );
+}
+
+function JobStateBadge({ state }: { state: AgentTimelineState | AgentJobState }) {
+  return (
+    <small className={styles.stateBadge} data-state={state}>
+      {state === 'queued' || state === 'running' ? (
+        <span className={styles.spinner} aria-hidden="true" />
+      ) : null}
+      {JOB_STATE_LABEL[state]}
+    </small>
   );
 }
 

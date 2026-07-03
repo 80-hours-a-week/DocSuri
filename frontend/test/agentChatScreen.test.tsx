@@ -25,8 +25,8 @@ describe('AgentChatScreen', () => {
     await user.click(screen.getByTestId('agent-composer-submit'));
 
     expect(await screen.findByText(/차별점은 데이터셋 조건/)).toBeInTheDocument();
-    expect(screen.getByText(/Novelty 분석 결과/)).toBeInTheDocument();
-    expect(screen.getByText(/도메인 지식 기반 실패 유형 분해/)).toBeInTheDocument();
+    expect(await screen.findByText(/Novelty 분석 결과/)).toBeInTheDocument();
+    expect(await screen.findByText(/도메인 지식 기반 실패 유형 분해/)).toBeInTheDocument();
     expect(screen.getByTestId('agent-timeline')).toBeInTheDocument();
     expect(screen.getAllByTestId('agent-timeline-event').length).toBeGreaterThan(0);
     expect(screen.getByText(/소스: corpus/)).toBeInTheDocument();
