@@ -53,8 +53,14 @@ class ArxivHttpSource:
         oai_base_url: str = "https://oaipmh.arxiv.org/oai",
         pdf_base_url: str = "https://arxiv.org/pdf",
         html_base_urls: Sequence[str] = (
-            "https://arxiv.org/html",
+            # ar5iv (LaTeXML) first: its HTML is what the doc-model parser's LaTeX/macro
+            # sanitizer is built and tested against. Native arXiv HTML (arxiv.org/html) is a
+            # different toolchain whose raw TeX/pgf markup (\ref, \begin{aligned},
+            # \pgfsys@color, {subsection}{toc} …) leaks through that sanitizer straight into
+            # fullText and breaks multi-panel figure wiring. Keep it only as a last-resort
+            # fallback for papers ar5iv cannot render, until the parser handles it natively.
             "https://ar5iv.labs.arxiv.org/html",
+            "https://arxiv.org/html",
         ),
         timeout_seconds: float = 30.0,
         rate_limiter: TokenBucket | None = None,
@@ -191,7 +197,7 @@ class ArxivHttpSource:
     def fetch_html_source(self, arxiv_id: str) -> tuple[str, SourceTier] | None:
         """Fetch deterministic-parseable HTML for the doc-model (BR-30, Q6 ladder).
 
-        Walks the configured HTML bases (native arXiv HTML → ar5iv) and returns the first
+        Walks the configured HTML bases (ar5iv → native arXiv HTML) and returns the first
         ``(html, source_tier)`` that yields HTML, or ``None`` when no rung produced HTML
         (the builder maps that to ``source_unavailable``). e-print/PDF rungs are additive.
         """
@@ -202,7 +208,7 @@ class ArxivHttpSource:
         return None
 
     def _try_get_html(self, arxiv_id: str) -> tuple[str | None, str]:
-        """Best-effort HTML fetch across configured bases (arXiv native → ar5iv).
+        """Best-effort HTML fetch across configured bases (ar5iv → arXiv native).
 
         HTML is preferred-but-optional — not every paper compiles to HTML — so any non-200,
         non-HTML, or transport error degrades to ``None`` (→ PDF fallback) rather than raising.

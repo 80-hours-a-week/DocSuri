@@ -1,4 +1,9 @@
-"""ArxivHttpSource.fetch_html_source (BR-30, Q6 ladder): native HTML -> ar5iv tiering."""
+"""ArxivHttpSource.fetch_html_source (BR-30, Q6 ladder): ar5iv -> native HTML tiering.
+
+ar5iv is preferred: its LaTeXML HTML is what the doc-model parser's sanitizer is built for,
+whereas native arXiv HTML leaks raw TeX/pgf into fullText. Native HTML stays a last-resort
+rung so a paper ar5iv cannot render still yields a doc-model source.
+"""
 
 from __future__ import annotations
 
@@ -17,16 +22,27 @@ def _source_with(html_by_base: dict[str, str]) -> ArxivHttpSource:
     return src
 
 
-def test_prefers_native_html_tier() -> None:
-    src = _source_with({"https://arxiv.org/html": "<html>native</html>"})
+def test_prefers_ar5iv_when_both_available() -> None:
+    src = _source_with(
+        {
+            "https://ar5iv.labs.arxiv.org/html": "<html>ar5iv</html>",
+            "https://arxiv.org/html": "<html>native</html>",
+        }
+    )
     result = src.fetch_html_source("2401.00001v1")
-    assert result == ("<html>native</html>", SourceTier.native_html)
+    assert result == ("<html>ar5iv</html>", SourceTier.ar5iv)
 
 
-def test_falls_back_to_ar5iv_tier() -> None:
+def test_uses_ar5iv_tier() -> None:
     src = _source_with({"https://ar5iv.labs.arxiv.org/html": "<html>ar5iv</html>"})
     result = src.fetch_html_source("2401.00001v1")
     assert result == ("<html>ar5iv</html>", SourceTier.ar5iv)
+
+
+def test_falls_back_to_native_html_when_ar5iv_unavailable() -> None:
+    src = _source_with({"https://arxiv.org/html": "<html>native</html>"})
+    result = src.fetch_html_source("2401.00001v1")
+    assert result == ("<html>native</html>", SourceTier.native_html)
 
 
 def test_returns_none_when_no_html_rung_yields() -> None:

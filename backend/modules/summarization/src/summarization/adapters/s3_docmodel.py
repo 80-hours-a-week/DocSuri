@@ -66,6 +66,13 @@ class S3DocModelReader:
             raise
 
 
+# Parser versions whose doc-models we still serve. The current version is always accepted; @2
+# is also accepted because its ar5iv-sourced text is clean, and rejecting it blanks the
+# full-text view for every paper not yet rebuilt to the current version — a slow drain to sit
+# behind. Schema is NOT relaxed: a schema bump is a genuine breaking change, not a cache-bust.
+_ACCEPTED_PARSER_VERSIONS = frozenset({"docmodel-parser@2", DOCMODEL_PARSER_VERSION})
+
+
 def _is_current_doc_model(payload: object) -> bool:
     if not isinstance(payload, dict):
         return True
@@ -74,6 +81,6 @@ def _is_current_doc_model(payload: object) -> bool:
     if not isinstance(provenance, dict):
         return False
     return (
-        provenance.get("parserVersion") == DOCMODEL_PARSER_VERSION
+        provenance.get("parserVersion") in _ACCEPTED_PARSER_VERSIONS
         and provenance.get("schemaVersion") == DOCMODEL_SCHEMA_VERSION
     )
