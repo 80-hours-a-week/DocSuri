@@ -18,6 +18,7 @@ from __future__ import annotations
 import logging
 from dataclasses import replace
 
+from docsuri_shared.docmodel_contract import DOCMODEL_PARSER_VERSION
 from docsuri_shared.dtos import DocModel
 from docsuri_shared.ports import CostGuardCircuitBreaker, ObservabilityHub
 
@@ -36,6 +37,7 @@ from ..domain.models import (
     PendingDTO,
     RequestContext,
     Scope,
+    SourceText,
     SourceUnavailableDTO,
     SummaryRequest,
     SummaryResponse,
@@ -58,6 +60,24 @@ logger = logging.getLogger(__name__)
 
 # Client poll backoff hint after a lazy build was (re)triggered on a miss (BR-30/D6).
 _BUILD_POLL_BACKOFF_MS = 2000
+
+
+def _doc_parser_version(doc: DocModel) -> str | None:
+    """Parser version a served doc-model was built with (None if the shape is unexpected)."""
+    meta = getattr(doc, "meta", None)
+    provenance = getattr(meta, "provenance", None)
+    return getattr(provenance, "parserVersion", None)
+
+
+def _source_doc_is_stale(source: SourceText) -> bool:
+    """True when the selected source is a doc-model built by an OLDER parser generation than the
+    current one. The reader still serves such docs (older-but-servable, so the viewer is not blank),
+    but a summary/translation derived from one must NOT be cached: it would pin stale-parser output
+    (e.g. the @2/@3 LaTeX-garbled algorithm blocks that @4 retires) under a key that carries no
+    doc-model parser dimension, outliving the doc-model's own self-heal. Skipping the write lets the
+    next request regenerate once the background rebuild has healed the doc."""
+    doc = getattr(source, "doc_model", None)
+    return doc is not None and _doc_parser_version(doc) != DOCMODEL_PARSER_VERSION
 # Client poll backoff hint after a long summary was enqueued as a background job (BR-S6/BR-S8).
 _SUMMARY_POLL_BACKOFF_MS = 3000
 # Generation above this input size is dispatched to the async job (pending → poll) instead of
@@ -169,6 +189,19 @@ class SummarizationOrchestrationService:
         if source is None:
             return SourceUnavailableDTO(reason="no_full_text_or_abstract")
 
+        # Self-heal parity with doc_model() (BR-30): the summary/translation input path also
+        # consumes servable doc-models straight from the reader. If an older-parser doc was
+        # selected, ALSO enqueue a background rebuild so it heals to the current parser — otherwise
+        # a user who only ever summarizes/translates (never opens the rich view) would pin the stale
+        # doc forever. The stale doc is still used for THIS response; the derived result is left
+        # uncached below (see _source_doc_is_stale) so it does not outlive the heal.
+        if (
+            self._docmodel_build_queue is not None
+            and source.doc_model is not None
+            and _doc_parser_version(source.doc_model) != DOCMODEL_PARSER_VERSION
+        ):
+            self._docmodel_build_queue.enqueue_build(request.paper_id, request.version)
+
         # 3. refine (structure-aware; doc-model direct or legacy .txt regex — D2) → 5. length
         #    route (shape; over-cap or map-reduce → abstain).
         refined = self._refiner.refine_source(source)
@@ -244,7 +277,10 @@ class SummarizationOrchestrationService:
                 # (table/paraphrase/math spans) are dropped, not abstained on.
                 draft = replace(draft, anchors=verdict.kept_anchors)
                 result = self._assembler.assemble_summary(draft, source)
-                self._store.put(key, result.to_dict())  # write-through
+                # Write-through — but never cache output derived from a stale-parser doc-model
+                # (it would outlive the doc's self-heal; the key has no parser dimension).
+                if not _source_doc_is_stale(source):
+                    self._store.put(key, result.to_dict())
                 self._emit("u7.summary.ok", 1.0, request)
                 return result
             if attempt == 2:
@@ -303,7 +339,10 @@ class SummarizationOrchestrationService:
                     if m.prompt_enforced
                 }
             )
-            self._store.put(key, base)  # write-through (base)
+            # Write-through (base) — but never cache output derived from a stale-parser doc-model
+            # (it would outlive the doc's self-heal; the key has no parser dimension).
+            if not _source_doc_is_stale(source):
+                self._store.put(key, base)
             self._emit("u7.translate.ok", 1.0, request)
             view = self._assembler.overlay_translation(base, glossary)
             return _PayloadResult(self._assembler.filter_kept_terms(view))
@@ -344,6 +383,15 @@ class SummarizationOrchestrationService:
             return DocModelLookup()
         doc = self._docmodel_reader.get_doc_model(paper_id, version)
         if doc is not None:
+            # Serve the clean doc now. If an older parser built it, ALSO enqueue a background
+            # rebuild so it heals to the current parser (BR-30 self-heal) — otherwise accepting
+            # older-but-servable docs would pin them forever. The doc is still served meanwhile,
+            # so there is no blank screen while the rebuild runs.
+            if (
+                self._docmodel_build_queue is not None
+                and _doc_parser_version(doc) != DOCMODEL_PARSER_VERSION
+            ):
+                self._docmodel_build_queue.enqueue_build(paper_id, version)
             return DocModelLookup(doc=doc)
         if self._docmodel_build_queue is not None:
             self._docmodel_build_queue.enqueue_build(paper_id, version)

@@ -100,6 +100,11 @@ class SummaryCacheKey:
     # baseline (path unchanged → existing objects stay valid); a seed edit makes it non-empty so
     # the path changes and exactly the affected objects invalidate (see seed_cache_segment).
     seed_ver: str = ""
+    # Doc-model parser generation the summary/translation input was produced under (e.g. "4" for
+    # docmodel-parser@4). Part of the path so a parser bump — which changes the fullText the
+    # artifact was derived from — forces a miss → regenerate, healing summaries built from an
+    # older, since-superseded doc-model (BR-30). Empty (no segment) only for keys built without it.
+    docmodel_ver: str = ""
 
     def object_path(self) -> str:
         """S3 object path (infrastructure-design §2.1). Immutable → permanent (INV-5).
@@ -114,10 +119,11 @@ class SummaryCacheKey:
         """
         owner = f"_u{self.owner_id}" if self.owner_id else ""
         seed = f"_s{self.seed_ver}" if self.seed_ver else ""
+        docmodel = f"_d{self.docmodel_ver}" if self.docmodel_ver else ""
         return (
             f"summaries/{self.paper_id}/v{self.version}/"
             f"{self.task}_{self.target_lang}_{self.scope}_{self.persona}"
-            f"_g{self.glossary_ver}{owner}{seed}_{self.model_ver}_{self.prompt_ver}.json"
+            f"_g{self.glossary_ver}{owner}{seed}_{self.model_ver}_{self.prompt_ver}{docmodel}.json"
         )
 
     def redis_key(self) -> str:
