@@ -1,7 +1,8 @@
 # DocSuri Production Roadmap — 2026-07
 
 > **Date**: 2026-07-03 · **Baseline**: develop `573ad494` (main at v1.2.3, 13 commits behind)
-> **Updated**: 2026-07-03 pm — PR #337 merged; PR #349 (novelty progress UX + queue ownership) opened.
+> **Updated**: 2026-07-04 — PR #351 merged (summary-anchor structural resolution + stale-docmodel self-heal). PRs #338/#349 reviewed → **CHANGES_REQUESTED** (author fixes pending): #338 4 blocking (turn persistence, dropped attachments/context, input-length 500s, unwired async worker stack), #349 1 blocking (SSE mapper overwrites richer timeline detail).
+> _Prev 2026-07-03 pm — PR #337 merged; PR #349 opened._
 > Snapshot of where the product stands against the team's initial plan, and the path to
 > production-level completion of our goals. Tracking issues: #339–#348.
 
@@ -10,15 +11,15 @@
 | Plan item | Status | Notes |
 |---|---|---|
 | 논문 검색 | ✅ Live | Hybrid search over ~1.5M-chunk corpus; daily auto-harvest (EventBridge 15:00 KST); pre-2026 historical drain in progress |
-| 논문 요약/번역 | ✅ Live | Grounded summaries/translation; glossary system redesigned (PR #334); map parallelism + shared-base overlay landed |
+| 논문 요약/번역 | ✅ Live | Grounded summaries/translation; glossary system redesigned (PR #334); map parallelism + shared-base overlay landed; source-anchor structural resolution + stale-docmodel self-heal (PR #351) |
 | 프로필 페이지 | 🟡 Live w/ mocks | U10 merged; 최근 본 논문/ORCID still mock (#347) |
 | 인용 그래프 → 각주 트리 | 🟡 Live w/ bug | DOI node expansion returns 500 (#342) |
 | 트렌드/알림 | ❌ Not started | Never entered requirements — needs inception re-entry |
 | 구독제 | ❌ Not started | Never entered requirements — needs inception re-entry |
 | 로그 수집 | ✅ Live | U9 collection healthy (944 events/7d, 0 failures); KPI funnel view missing (#346) |
 | 개인화 추천 | 🟡 Shadow | Search boost applied in shadow mode (PR #300); go-live judgment pending (#345); US-P5 deferred |
-| 에이전트: 문헌탐색/근거형성 | 🚧 One PR away | PR #338 — full pipeline E2E-verified on real AWS; `Docsuri-Evidence` stack deployed idle; FE renders raw JSON (#339) |
-| (charter add) 연구아이디어 novelty 에이전트 | 🚧 In construction | Code in develop, `Docsuri-Novelty` stack built; US-NV stories (#251–259) open; PR #349 (progress UX + queue ownership) in review |
+| 에이전트: 문헌탐색/근거형성 | 🚧 One PR away (changes requested) | PR #338 — reviewed → **CHANGES_REQUESTED** (4 blocking, author fixes pending); `Docsuri-Evidence` stack deployed idle; FE renders raw JSON (#339) |
+| (charter add) 연구아이디어 novelty 에이전트 | 🚧 In construction | Code in develop, `Docsuri-Novelty` stack built; US-NV stories (#251–259) open; PR #349 reviewed → **CHANGES_REQUESTED** (1 blocking: SSE mapper overwrites timeline detail) |
 | 웹검색 레퍼런스 (고려) | ❌ Not started | Novelty agent has GitHub+datasets search; web/news deferred to next cycle |
 | 온보딩 (고려) | ❌ Not started | Candidate fix for personalization cold-start |
 
@@ -30,7 +31,7 @@ Production deploys now go through CI on main push — the manual-buildx era is o
 | # | Action | Tracking |
 |---|---|---|
 | 1 | ✅ **PR #337 merged** (2026-07-03 13:00 UTC) — revert-on-promote trap closed | PR #337 |
-| 2 | Review + merge **PR #338** (U11 evidence agent; infra already live-but-idle) | PR #338 |
+| 2 | Review + merge **PR #338** (U11 evidence agent; infra already live-but-idle) — reviewed 07-04 → 4 blocking, awaiting author | PR #338 |
 | 3 | Promote develop→main + tag (ships glossary redesign + #337 + #338 via real CD) | #340 |
 | 4 | Fix AgentChatScreen raw-JSON rendering — start **after** #338 and #349 land (both rewrite `AgentChatScreen.tsx`); base the fix on #349's version | #339 |
 
