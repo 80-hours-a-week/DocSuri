@@ -96,8 +96,18 @@ def _node_to_latex(node: Tag | NavigableString) -> str:
     name = (node.name or "").lower()
     if name in {"mi", "mn", "mo", "mtext", "ms"}:
         return node.get_text().strip()
-    if name in {"math", "mrow", "mstyle", "mpadded", "menclose", "semantics"}:
+    if name in {"math", "mrow", "mstyle", "mpadded", "menclose"}:
         return "".join(_node_to_latex(c) for c in _children(node))
+    if name == "semantics":
+        # <semantics> holds the presentation MathML (first child) plus <annotation>/
+        # <annotation-xml> metadata (TeX + content MathML). Render ONLY the presentation
+        # child: rendering the annotations too doubles the output and leaks content-symbol
+        # names ("subscript", "italic-…") into the text — the algorithm/pseudocode garble
+        # that appears when a <math> carries no alttext to short-circuit this walker.
+        children = _children(node)
+        return _node_to_latex(children[0]) if children else ""
+    if name in {"annotation", "annotation-xml"}:
+        return ""
     if name == "msup":
         base, sup = _pair(node)
         return f"{_wrap(base)}^{_wrap(sup)}"
