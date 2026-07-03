@@ -277,3 +277,67 @@ def test_api_requires_authentication(monkeypatch) -> None:
     )
 
     assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# FR-38: 동기 경로 턴 영속화 (PR #338 리뷰 Blocking #1)
+# ---------------------------------------------------------------------------
+
+def test_api_sync_turn_is_persisted(monkeypatch) -> None:
+    """동기 경로 실행 후 반환된 turnId가 세션 이력(list_turns)에서 조회돼야 한다.
+    회귀: 동기 분기가 add_turn을 빠뜨려 저장된 턴이 0건이라 turnId를 되찾을 수 없었다."""
+    principal = _principal()
+    repo = InMemoryEvidenceRepository()
+    client = _client(monkeypatch, principal, repo)  # sqs_enqueue 미주입 → 동기 경로
+
+    resp = client.post(
+        '/api/evidence/turns',
+        json={'topic': 'transformer attention', 'scope': 'auto'},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+
+    turns = repo.list_turns(principal.user_id, body['sessionId'])
+    assert [t.turn_id for t in turns] == [body['turnId']]
+
+
+# ---------------------------------------------------------------------------
+# SEC-5: topic 길이 검증 정렬 — 500 금지 (PR #338 리뷰 Blocking #3)
+# ---------------------------------------------------------------------------
+
+def test_api_topic_2000_succeeds_not_500(monkeypatch) -> None:
+    """controller(2000)와 DTO(옛 1000) 상한 불일치로 1001~2000자 topic이 handler 내부
+    Pydantic ValidationError→HTTP 500으로 떨어지던 회귀. DTO를 2000으로 정렬 후 200(abstain)."""
+    client = _client(monkeypatch, _principal(), InMemoryEvidenceRepository())
+
+    resp = client.post('/api/evidence/turns', json={'topic': 'a' * 2000, 'scope': 'auto'})
+
+    assert resp.status_code == 200
+    assert resp.json()['result']['state'] == 'abstain'
+
+
+def test_api_topic_over_2000_rejected_with_422(monkeypatch) -> None:
+    """topic 경계(2000) 초과는 요청 검증(422)에서 걸러진다 — 500이 아니다."""
+    client = _client(monkeypatch, _principal(), InMemoryEvidenceRepository())
+
+    resp = client.post('/api/evidence/turns', json={'topic': 'a' * 2001})
+
+    assert resp.status_code == 422
+
+
+def test_run_evidence_degrades_on_overlong_topic() -> None:
+    """research content 상한(12000) > evidence topic 상한(2000). 긴 메시지가 _run_evidence에서
+    EvidenceRequest 검증에 걸려 500 나던 걸 degrade(None→'[error]')로 막는다(Blocking #3).
+    orchestrator까지 도달하면 안 된다."""
+    import asyncio
+
+    from backend.modules.research.service import _format_turn_result, _run_evidence
+
+    class _Orch:
+        def run(self, ctx, request):
+            raise AssertionError('overlong topic must not reach the orchestrator')
+
+    result = asyncio.run(_run_evidence(_Orch(), 'owner-1', 'a' * 2001))
+
+    assert result is None
+    assert _format_turn_result(result) == '[error] evidence_unavailable'

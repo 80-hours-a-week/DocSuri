@@ -113,9 +113,12 @@ class EvidenceChatService:
                 'paperIds': list(request.paperIds or []),
             })
         else:
-            # 동기 경로
+            # 동기 경로: async 분기와 달리 add_turn을 빠뜨려 저장된 턴이 0건이었다 —
+            # 응답의 turnId를 이후 세션 이력(list_turns)에서 되찾을 수 없었다
+            # (PR #338 리뷰 Blocking #1/FR-38).
             result = self._orchestrator.run(ctx, request)
             turn.result = result
+            self._repo.add_turn(turn)
 
         self._repo.commit()
         return TurnResponse(

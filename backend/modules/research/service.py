@@ -107,10 +107,17 @@ class ResearchService:
 
 async def _run_evidence(orchestrator: Any, owner_id: str, topic: str) -> Any:
     from docsuri_shared._generated.dtos.evidence_schema import EvidenceRequest, EvidenceScope
+    from pydantic import ValidationError
 
     from backend.modules.evidence.models import AgentRunContext, EvidenceSession, EvidenceTurn
 
-    request = EvidenceRequest(topic=topic, scope=EvidenceScope.auto, paperIds=[])
+    try:
+        # research content 한도(12000) > evidence topic 한도(2000)라, 긴 메시지가 여기서
+        # EvidenceRequest Pydantic 검증에 걸려 HTTP 500이 나던 걸 degrade로 막는다
+        # (PR #338 리뷰 Blocking #3/SEC-5). controller 경로는 경계(2000)에서 422로 처리.
+        request = EvidenceRequest(topic=topic, scope=EvidenceScope.auto, paperIds=[])
+    except ValidationError:
+        return None
     session = EvidenceSession(owner_id=owner_id)
     turn = EvidenceTurn(session_id=session.session_id, request=request)
     ctx = AgentRunContext(
