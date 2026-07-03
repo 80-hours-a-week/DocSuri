@@ -95,6 +95,11 @@ def _resolve_location(anchor: Anchor, index: list[tuple[str, list[str]]]) -> str
     lbl = _label_tokens(anchor.label)
     if not hint and not lbl:
         return None
+    # Exact token match first — prefer the precise block over a shorter sub-phrase (so
+    # "Additional Experimental Results" resolves to itself, not to "Experimental Results").
+    for canonical, key in index:
+        if key == hint or key == lbl:
+            return canonical
     for canonical, key in index:
         if _contiguous(key, hint) or _contiguous(key, lbl):
             return canonical
