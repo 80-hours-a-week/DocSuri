@@ -268,6 +268,9 @@ def _to_summary_draft(payload: dict) -> SummaryDraft:
             target=_anchor_target(a.get("target", "section")),
             span=str(a.get("span", "")),
             label=str(a.get("label", "")),
+            # Keep the raw target string (the grounding gate resolves it against real doc-model
+            # structure); ``target`` above is only the coarse 3-value display type.
+            target_hint=str(a.get("target", "")),
         )
         for a in payload.get("anchors", [])
     )
