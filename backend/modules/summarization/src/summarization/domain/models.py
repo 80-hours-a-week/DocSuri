@@ -8,6 +8,7 @@ in until it is promoted (U4 library precedent).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -99,6 +100,11 @@ class SummaryCacheKey:
     # baseline (path unchanged → existing objects stay valid); a seed edit makes it non-empty so
     # the path changes and exactly the affected objects invalidate (see seed_cache_segment).
     seed_ver: str = ""
+    # Doc-model parser generation the summary/translation input was produced under (e.g. "4" for
+    # docmodel-parser@4). Part of the path so a parser bump — which changes the fullText the
+    # artifact was derived from — forces a miss → regenerate, healing summaries built from an
+    # older, since-superseded doc-model (BR-30). Empty (no segment) only for keys built without it.
+    docmodel_ver: str = ""
 
     def object_path(self) -> str:
         """S3 object path (infrastructure-design §2.1). Immutable → permanent (INV-5).
@@ -113,10 +119,11 @@ class SummaryCacheKey:
         """
         owner = f"_u{self.owner_id}" if self.owner_id else ""
         seed = f"_s{self.seed_ver}" if self.seed_ver else ""
+        docmodel = f"_d{self.docmodel_ver}" if self.docmodel_ver else ""
         return (
             f"summaries/{self.paper_id}/v{self.version}/"
             f"{self.task}_{self.target_lang}_{self.scope}_{self.persona}"
-            f"_g{self.glossary_ver}{owner}{seed}_{self.model_ver}_{self.prompt_ver}.json"
+            f"_g{self.glossary_ver}{owner}{seed}_{self.model_ver}_{self.prompt_ver}{docmodel}.json"
         )
 
     def redis_key(self) -> str:
@@ -285,8 +292,12 @@ class SummaryResultDTO:
     meta: dict[str, str] = field(default_factory=dict)
     cached: bool = False
 
-    def to_dict(self) -> dict:
-        """SEC-9 whitelist — only user-facing fields (no tokens/cost/cache-key/model id)."""
+    def to_dict(self, strong_overrides: Mapping[str, str] | None = None) -> dict:
+        """SEC-9 whitelist — only user-facing fields (no tokens/cost/cache-key/model id).
+
+        ``strong_overrides`` = the user's effective prompt-enforced terms (term_from lower →
+        term_to) for this fork; the translation branch needs them so a 표준 용어 whose seed
+        rendering an override replaced keeps its (editable) chip (BR-S4)."""
         out: dict = {
             "status": "ok",
             "task": str(self.task),
@@ -315,11 +326,52 @@ class SummaryResultDTO:
         if self.translation is not None:
             # Mirror the doc-model read path (router): emit the translated doc-model with
             # ``exclude_none`` so absent optional fields stay absent (schema parity).
+            # ``standardGlossary`` = shared-seed standard terms present in THIS paper (BR-S4).
+            # Presence is judged by EFFECTIVE rendering so a strong personal override keeps its
+            # (editable) chip instead of vanishing when it replaces the seed value in the text:
+            #  · keep-as-is seed — overridden → present iff the override rendering is in the text
+            #    (an editable strong chip, pre-filled); else → present iff the model kept it in
+            #    English (``kept_terms``).
+            #  · mapping seed — present iff its effective rendering (override, else the seed Korean)
+            #    is in the text. Without this, attention→주목 drops 어텐션 and the chip would
+            #    vanish, breaking the 표준 용어 edit path. Lazy import avoids a cycle.
+            from .glossary import SEED_KEEP_AS_IS, SEED_MAPPINGS, is_glossary_worthy
+
+            doc = self.translation.doc_model.model_dump(mode="json", exclude_none=True)
+            translated_text = doc.get("fullText") or ""
+            overrides = strong_overrides or {}
+            std_glossary: list[dict] = []
+            seen: set[str] = set()
+            # Drop math notation the model reported as "kept" (Greek vars, W_q, L(w+delta)…) so the
+            # 원어 유지 용어 list shows keywords/names, not symbols (BR-S4). Seeds pass the filter.
+            display_kept = [t for t in self.translation.kept_terms if is_glossary_worthy(t)]
+            kept_by_lower: dict[str, str] = {}
+            for t in display_kept:  # first-seen casing wins (case-insensitive dedup)
+                kept_by_lower.setdefault(t.lower(), t)
+            for s in SEED_KEEP_AS_IS:  # keep-as-is standard (English) or its strong override
+                key = s.lower()
+                if key in seen:
+                    continue
+                eff = overrides.get(key)
+                if eff:
+                    if eff in translated_text:
+                        std_glossary.append({"term": s, "translated": eff})
+                        seen.add(key)
+                elif key in kept_by_lower:
+                    std_glossary.append({"term": kept_by_lower[key]})
+                    seen.add(key)
+            for m in SEED_MAPPINGS:  # mapping standard (en→ko), by effective rendering
+                key = m.term_from.lower()
+                if key in seen:  # keep-as-is and mapping are disjoint — guard a double chip anyway
+                    continue
+                eff = overrides.get(key) or m.term_to
+                if eff and eff in translated_text:
+                    std_glossary.append({"term": m.term_from, "translated": eff})
+                    seen.add(key)
             out["translation"] = {
-                "docModel": self.translation.doc_model.model_dump(
-                    mode="json", exclude_none=True
-                ),
-                "keptTerms": list(self.translation.kept_terms),
+                "docModel": doc,
+                "keptTerms": display_kept,
+                "standardGlossary": std_glossary,
             }
         return out
 

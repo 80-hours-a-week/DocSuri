@@ -28,6 +28,26 @@ def test_fallback_converts_presentation_mathml() -> None:
     assert latex == "x^2+1"
 
 
+def test_semantics_renders_presentation_only_dropping_annotations() -> None:
+    # LaTeXML wraps math in <semantics> with the presentation MathML (first child) plus
+    # <annotation-xml> (content MathML) and <annotation> (TeX). With no alttext — common in
+    # algorithm/pseudocode math — walking every child doubled the output and leaked
+    # content-symbol names ("subscript", "italic-…") into the text. Only the presentation
+    # child must render.
+    html = (
+        "<math><semantics>"
+        "<msub><mi>ϕ</mi><mi>k</mi></msub>"
+        '<annotation-xml encoding="MathML-Content">'
+        "<csymbol>subscript</csymbol><ci>italic-ϕ</ci><ci>italic-k</ci>"
+        "</annotation-xml>"
+        '<annotation encoding="application/x-tex">\\phi_{k}</annotation>'
+        "</semantics></math>"
+    )
+    latex = mathml_to_latex(_math(html))
+    assert latex == "ϕ_k"
+    assert "subscript" not in latex and "italic-" not in latex
+
+
 def test_fallback_handles_fraction_and_sqrt() -> None:
     assert (
         mathml_to_latex(_math("<math><mfrac><mn>1</mn><mn>2</mn></mfrac></math>")) == "\\frac{1}{2}"

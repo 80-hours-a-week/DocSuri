@@ -221,24 +221,37 @@ function DocTOC({ sections }: { sections: DocSection[] }) {
 
 // ---- tap-to-enlarge (figures / tables / formulas) -----------------------
 
-// Adjacent zoom-in control (D1, BR-U5-21). Previously this wrapped the ENTIRE block
-// (table/figure/formula) in a `role="button"` <div>, which made the whole thing an opaque,
-// unlabeled control to screen readers — the table's rows/cells, the figure's alt text, and
-// the formula were all swallowed into "크게 보기" and lost. Now it is a small standalone
-// <button> rendered NEXT TO the block's own (untouched) markup, so the content stays
-// directly in the accessibility tree and the zoom affordance is just an extra control.
+// Tap-to-enlarge (D1, BR-U5-21). Tapping anywhere on the figure/table/formula zooms it — no visible
+// button chrome. The pointer affordance lives on the WRAPPER's onClick (a scroll drag on a wide
+// formula/table produces no click, so horizontal scrolling still works — the overlay button was
+// eating those drags), while a real transparent, keyboard-focusable <button> is kept purely for
+// keyboard/screen-reader access. The button is `pointer-events: none` (see CSS) so it never blocks
+// touch scroll; it sits as a SIBLING (not a wrapper) so the block's own markup (table cells, figure
+// alt, formula) stays directly in the accessibility tree (never swallowed — the D1 regression).
+function Zoomable({ onZoom, children }: { onZoom: () => void; children: React.ReactNode }) {
+  return (
+    <div className={styles.zoomable} onClick={onZoom}>
+      {children}
+      <ZoomButton onZoom={onZoom} />
+    </div>
+  );
+}
+
 function ZoomButton({ onZoom }: { onZoom: () => void }) {
   return (
     <button
       type="button"
-      className={styles.zoomButton}
-      onClick={onZoom}
+      className={styles.zoomTapTarget}
+      // Keyboard activation only (pointer taps are handled by the wrapper); stop the resulting click
+      // from bubbling to the wrapper's onClick so a keypress doesn't zoom twice.
+      onClick={(e) => {
+        e.stopPropagation();
+        onZoom();
+      }}
       title="탭하면 크게 볼 수 있어요"
       aria-label="크게 보기"
       data-testid="docmodel-zoom-trigger"
-    >
-      <span aria-hidden="true">⤢</span>
-    </button>
+    />
   );
 }
 
@@ -470,10 +483,9 @@ function BlockView({
       }
       return (
         <div className={`${cls} ${styles.formula}`} data-block={block.id} tabIndex={-1}>
-          <div className={styles.zoomable}>
+          <Zoomable onZoom={() => onZoom(inner)}>
             <div className={styles.formulaInner}>{inner}</div>
-            <ZoomButton onZoom={() => onZoom(inner)} />
-          </div>
+          </Zoomable>
           {block.anchorLabel ? <span className={styles.eqno}>{block.anchorLabel}</span> : null}
         </div>
       );
@@ -494,16 +506,15 @@ function BlockView({
       return (
         <figure className={`${cls} ${styles.figure}`} data-block={block.id} tabIndex={-1}>
           {asset?.url ? (
-            <div className={styles.zoomable}>
+            <Zoomable
+              onZoom={() =>
+                // eslint-disable-next-line @next/next/no-img-element -- signed S3 url
+                onZoom(<img src={asset.url} alt={alt} className={styles.zoomImg} />)
+              }
+            >
               {/* eslint-disable-next-line @next/next/no-img-element -- signed S3 url, not a static asset */}
               <img src={asset.url} alt={alt} loading="lazy" />
-              <ZoomButton
-                onZoom={() =>
-                  // eslint-disable-next-line @next/next/no-img-element -- signed S3 url
-                  onZoom(<img src={asset.url} alt={alt} className={styles.zoomImg} />)
-                }
-              />
-            </div>
+            </Zoomable>
           ) : null}
           {caption(block.anchorLabel, block.caption, macros)}
         </figure>
@@ -585,10 +596,9 @@ function TableBlockView({
   const canToggle = hasRows && Boolean(asset?.url);
   return (
     <figure className={cls} data-block={block.id} tabIndex={-1}>
-      <div className={styles.zoomable}>
+      <Zoomable onZoom={() => onZoom(shown)}>
         <div className={styles.tableWrap}>{shown}</div>
-        <ZoomButton onZoom={() => onZoom(shown)} />
-      </div>
+      </Zoomable>
       {canToggle ? (
         <button
           type="button"

@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from docsuri_shared.dtos import SourceTier
 from docsuri_shared.vector_spec import DIMENSIONS, IndexRecord
 
 from .enums import DedupDecision, DedupStateKind, JobKind, SourceName
@@ -88,6 +89,11 @@ class RawDocument:
     text: str  # normalized plain text (BR-29: from HTML-preferred source, PDF fallback)
     source_url: str
     content_type: str = "text/plain"
+    # Which rung actually produced ``text`` (ar5iv / native_html / pdf). Consumers that store the
+    # text as a doc-model use this to keep native arXiv HTML text out of a servable doc-model (its
+    # raw TeX/pgf leaks past the parser sanitizer): the doc-model text-fallback refuses native_html.
+    # ``None`` when the producer does not tag it (treated as non-native by consumers).
+    source_tier: SourceTier | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -15,8 +15,8 @@ import type { SummarizeRequest } from '@/types/generated';
 
 // A full-paper summary (one long LLM call) or a multi-chunk full translation runs tens of
 // seconds — and a very long paper can take past a minute. At the 3s server backoff, ~50 polls
-// covers ~2.5 min, matching the "1~2분 걸릴 수 있어요" the UI promises, so the surface doesn't
-// give up while the job is still legitimately running.
+// covers ~2.5 min — a generous ceiling for even a long paper, so the surface doesn't give up
+// while the job is still legitimately running. (This is the poll budget, not a user-facing ETA.)
 const MAX_SUMMARY_POLLS = 50;
 const DEFAULT_POLL_BACKOFF_MS = 3000;
 

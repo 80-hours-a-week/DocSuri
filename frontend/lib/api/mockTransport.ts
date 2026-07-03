@@ -24,6 +24,7 @@ import {
   assetsResponse,
   mockUpsertGlossaryTerm,
   mockListGlossaryTerms,
+  withWeakOverlay,
 } from '@/mocks/summarizeFixtures';
 import { mockPaperMeta } from '@/mocks/paperFixtures';
 import { mockSignup, mockLogin, mockLogout, mockCurrentSession } from '@/mocks/accountFixtures';
@@ -144,7 +145,10 @@ export class MockTransport implements Transport {
       if (body.task === 'translate') {
         return {
           status: 200,
-          body: body.scope === 'full' ? fullTranslationResponse : abstractTranslationResponse,
+          body:
+            body.scope === 'full'
+              ? withWeakOverlay(fullTranslationResponse) // reflect applied 원어 유지 terms in dev
+              : abstractTranslationResponse,
         };
       }
       return {
@@ -156,11 +160,16 @@ export class MockTransport implements Transport {
       return { status: 200, body: { status: 'ok', terms: mockListGlossaryTerms() } };
     }
     if (req.path === '/api/glossary' && req.method === 'POST') {
-      const body = (req.body ?? {}) as { termFrom?: unknown; termTo?: unknown };
+      const body = (req.body ?? {}) as {
+        termFrom?: unknown;
+        termTo?: unknown;
+        promptEnforced?: unknown;
+      };
       const termFrom = String(body.termFrom ?? '').trim();
       const termTo = String(body.termTo ?? '').trim();
+      const promptEnforced = body.promptEnforced === true; // strict boolean (mirror the backend)
       if (!termFrom || !termTo) return { status: 400, body: { message: '용어를 입력해 주세요.' } };
-      return { status: 201, body: mockUpsertGlossaryTerm(termFrom, termTo) };
+      return { status: 201, body: mockUpsertGlossaryTerm(termFrom, termTo, promptEnforced) };
     }
     if (/^\/api\/papers\/[^/]+\/assets$/.test(path) && req.method === 'GET') {
       return { status: 200, body: assetsResponse };

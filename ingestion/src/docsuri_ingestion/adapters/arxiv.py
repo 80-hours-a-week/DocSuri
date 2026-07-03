@@ -53,8 +53,14 @@ class ArxivHttpSource:
         oai_base_url: str = "https://oaipmh.arxiv.org/oai",
         pdf_base_url: str = "https://arxiv.org/pdf",
         html_base_urls: Sequence[str] = (
-            "https://arxiv.org/html",
+            # ar5iv (LaTeXML) first: its HTML is what the doc-model parser's LaTeX/macro
+            # sanitizer is built and tested against. Native arXiv HTML (arxiv.org/html) is a
+            # different toolchain whose raw TeX/pgf markup (\ref, \begin{aligned},
+            # \pgfsys@color, {subsection}{toc} …) leaks through that sanitizer straight into
+            # fullText and breaks multi-panel figure wiring. Keep it only as a last-resort
+            # fallback for papers ar5iv cannot render, until the parser handles it natively.
             "https://ar5iv.labs.arxiv.org/html",
+            "https://arxiv.org/html",
         ),
         timeout_seconds: float = 30.0,
         rate_limiter: TokenBucket | None = None,
@@ -149,12 +155,18 @@ class ArxivHttpSource:
         arxiv_id = metadata.identifier.arxiv_id
         html, html_url = self._try_get_html(arxiv_id)
         html_text = html_to_text(html) if html is not None else ""
+        # Tag which HTML rung produced the text so a doc-model text-fallback consumer can keep
+        # native arXiv HTML out of a servable doc-model (its raw TeX/pgf leaks past the parser
+        # sanitizer). Mirror the __init__ base→tier mapping ("ar5iv" in the base URL ⇒ ar5iv).
+        html_tier = SourceTier.ar5iv if "ar5iv" in html_url else SourceTier.native_html
         # A COMPLETE HTML conversion is the preferred source. A truncated one (ar5iv LaTeXML
         # failure — HTTP 200 but only the abstract + a sentence, below the floor) is worse than
         # the PDF text, so fall through to PDF and keep the short HTML only if the PDF is
         # unavailable too (better a fragment than nothing).
         if html_text and len(html_text) >= _MIN_HTML_FULLTEXT_CHARS:
-            return RawDocument(metadata=metadata, text=html_text, source_url=html_url)
+            return RawDocument(
+                metadata=metadata, text=html_text, source_url=html_url, source_tier=html_tier
+            )
 
         pdf_url = f"{self._pdf_base_url}/{arxiv_id}"
         try:
@@ -168,7 +180,9 @@ class ArxivHttpSource:
             # propagates so a later retry can still recover the full PDF instead of prematurely
             # settling for the fragment.
             if html_text:
-                return RawDocument(metadata=metadata, text=html_text, source_url=html_url)
+                return RawDocument(
+                    metadata=metadata, text=html_text, source_url=html_url, source_tier=html_tier
+                )
             if isinstance(exc, PermanentIngestionError):
                 raise
             raise PermanentIngestionError(
@@ -178,10 +192,16 @@ class ArxivHttpSource:
             ) from exc
         if text:
             return RawDocument(
-                metadata=metadata, text=text, source_url=pdf_url, content_type="text/plain"
+                metadata=metadata,
+                text=text,
+                source_url=pdf_url,
+                content_type="text/plain",
+                source_tier=SourceTier.pdf,
             )
         if html_text:  # PDF empty — fall back to the (short) HTML text rather than erroring.
-            return RawDocument(metadata=metadata, text=html_text, source_url=html_url)
+            return RawDocument(
+                metadata=metadata, text=html_text, source_url=html_url, source_tier=html_tier
+            )
         raise PermanentIngestionError(
             "full text extraction yielded empty text",
             reason=FailureReason.PARSE_FAILURE,
@@ -191,18 +211,22 @@ class ArxivHttpSource:
     def fetch_html_source(self, arxiv_id: str) -> tuple[str, SourceTier] | None:
         """Fetch deterministic-parseable HTML for the doc-model (BR-30, Q6 ladder).
 
-        Walks the configured HTML bases (native arXiv HTML → ar5iv) and returns the first
-        ``(html, source_tier)`` that yields HTML, or ``None`` when no rung produced HTML
-        (the builder maps that to ``source_unavailable``). e-print/PDF rungs are additive.
+        Doc-model source is **ar5iv only**. Native arXiv HTML is deliberately excluded here:
+        its raw TeX/pgf markup leaks through the parser's sanitizer into fullText and breaks
+        multi-panel figure wiring, so it must never become a doc-model source (it stays a
+        full-text plain-text rung in ``_try_get_html``). When ar5iv yields nothing this returns
+        ``None`` → the builder degrades to the PDF/text fallback rather than parsing native HTML.
         """
         for base, tier in self._html_source_tiers:
+            if tier is not SourceTier.ar5iv:
+                continue
             html = self._get_html_at(base, arxiv_id)
             if html:
                 return html, tier
         return None
 
     def _try_get_html(self, arxiv_id: str) -> tuple[str | None, str]:
-        """Best-effort HTML fetch across configured bases (arXiv native → ar5iv).
+        """Best-effort HTML fetch across configured bases (ar5iv → arXiv native).
 
         HTML is preferred-but-optional — not every paper compiles to HTML — so any non-200,
         non-HTML, or transport error degrades to ``None`` (→ PDF fallback) rather than raising.
