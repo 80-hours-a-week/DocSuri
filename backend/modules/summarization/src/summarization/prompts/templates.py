@@ -3,7 +3,9 @@
 The system instruction and the paper data are kept in distinct regions; the paper is
 wrapped in a ``<paper>`` block and the model is told the block is DATA, not instructions.
 Grounding is instructed ("only within the provided text; cite section/span; abstain if no
-basis"), persona rules applied, glossary enforced, and the §3 JSON contract requested.
+basis"), persona rules applied, and glossary enforced. The §3 summary / BR-S18 translate output
+shape is a **forced tool call** — ``SUMMARY_TOOL`` / ``TRANSLATE_TOOL`` here are the schema SSOT;
+the model returns a schema-shaped ``tool_use.input`` dict (no free-text JSON to escape/parse).
 Returns a ``(system, user)`` pair — adapters map it onto the Bedrock message format.
 """
 
@@ -76,12 +78,80 @@ _PERSONA_RULES = {
     ),
 }
 
-_JSON_CONTRACT = (
-    '{"tldr": str, "contributions": [str], "method": str, "results": str, '
-    '"limitations": str, "reproducibility": {"code": str, "data": str}, '
-    '"anchors": [{"field": str, "target": "section|table|figure", '
-    '"label": "원문의 정확한 섹션 제목 또는 Figure N/Table N", "span": str}]}'
-)
+# Output contract as Bedrock tool (structured output). The model is forced to CALL these tools
+# (tool_choice), so it returns a schema-shaped ``input`` dict directly — no free-text JSON to
+# escape/parse. This is the single source of truth for the §3 summary / BR-S18 translate shape;
+# the adapter (bedrock_llm) imports these and never restates the fields.
+SUMMARY_TOOL = {
+    "name": "emit_summary",
+    "description": "구조화 요약 결과를 반환한다. 모든 필드는 제공된 논문 텍스트 안에서만.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "tldr": {"type": "string"},
+            "contributions": {"type": "array", "items": {"type": "string"}},
+            "method": {"type": "string"},
+            "results": {"type": "string"},
+            "limitations": {"type": "string"},
+            "reproducibility": {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string"},
+                    "data": {"type": "string"},
+                },
+                "required": ["code", "data"],
+            },
+            "anchors": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "field": {"type": "string"},
+                        "target": {
+                            "type": "string",
+                            "enum": ["section", "table", "figure"],
+                        },
+                        "label": {
+                            "type": "string",
+                            "description": (
+                                "원문에 실제로 있는 섹션 제목을 원문 표기 그대로,"
+                                " 또는 'Figure N'/'Table N'"
+                            ),
+                        },
+                        "span": {"type": "string"},
+                    },
+                    "required": ["field", "target", "label", "span"],
+                },
+            },
+        },
+        "required": [
+            "tldr",
+            "contributions",
+            "method",
+            "results",
+            "limitations",
+            "reproducibility",
+            "anchors",
+        ],
+    },
+}
+
+TRANSLATE_TOOL = {
+    "name": "emit_translations",
+    "description": "각 세그먼트의 번역 결과를 id→번역텍스트로 이 도구로 반환한다.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            # id는 동적 키라 열거할 수 없으므로 additionalProperties로 값 타입만 강제.
+            "translations": {
+                "type": "object",
+                "additionalProperties": {"type": "string"},
+            },
+            "keptTerms": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["translations", "keptTerms"],
+    },
+}
 
 
 def _glossary_block(glossary: Glossary) -> str:
@@ -137,7 +207,9 @@ def build_summary_prompt(
         " 리터럴 '\\n' 문자열은 쓰지 마라.\n"
         f"- 수준 규칙: {_PERSONA_RULES[request.persona]}\n"
         f"- 용어집:\n{_glossary_block(glossary)}\n"
-        f"- 출력은 다음 JSON 계약을 정확히 따른다: {_JSON_CONTRACT}"
+        # 구조는 emit_summary 도구가 강제한다(tool_choice). 위 규칙(근거·anchors·수식·불릿)만 지키고
+        # 결과는 그 도구를 호출해 반환한다.
+        "- 결과는 emit_summary 도구를 호출해 반환하라."
     )
     user = f"<paper>\n{_strip_delimiters(refined.body)}\n</paper>"
     return system, user
@@ -162,7 +234,8 @@ def build_translate_segments_prompt(
         "- 각 세그먼트의 text만 번역하고 새 내용을 추가하지 마라. id는 절대 바꾸지 마라.\n"
         "- 수식(LaTeX, `\\( ... \\)` 포함)·숫자·코드·식별자는 번역하지 말고 그대로 보존하라.\n"
         f"- 용어집:\n{_glossary_block(glossary)}\n"
-        '- 출력은 {"translations": {"<id>": "<번역텍스트>"}, "keptTerms": [str]} JSON으로 한다.'
+        # 구조(translations: id→번역텍스트, keptTerms)는 emit_translations 도구가 강제한다.
+        "- 결과는 emit_translations 도구를 호출해 반환하라."
     )
     payload = json.dumps(
         [{"id": s.id, "text": _strip_delimiters(s.text)} for s in segments], ensure_ascii=False
