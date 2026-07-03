@@ -45,6 +45,7 @@ export type AgentChatAction =
   | { type: 'startSession'; session: AgentSessionSummary }
   | { type: 'loadSession'; snapshot: AgentSessionSnapshot }
   | { type: 'refreshSession'; snapshot: AgentSessionSnapshot }
+  | { type: 'eventsReceived'; events: AgentTimelineEvent[] }
   | { type: 'newChat' }
   | { type: 'setDraft'; draft: string }
   | { type: 'addAttachment'; attachment: AgentAttachment }
@@ -94,6 +95,10 @@ export function agentReducer(state: AgentChatState, action: AgentChatAction): Ag
         jobState: action.snapshot.session.state,
         error: jobStateMessage(action.snapshot.session.state),
       };
+    case 'eventsReceived':
+      return action.events.length
+        ? { ...state, events: mergeTimelineEvents(state.events, action.events) }
+        : state;
     case 'newChat':
       return { ...initialAgentChatState, sessions: state.sessions };
     case 'setDraft':

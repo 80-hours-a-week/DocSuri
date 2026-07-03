@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { AgentChatScreen, normalizeTimelineDisplay } from '@/components/agent/AgentChatScreen';
+import {
+  AgentChatScreen,
+  normalizeTimelineDisplay,
+  parseNoveltySseEvents,
+} from '@/components/agent/AgentChatScreen';
 
 describe('AgentChatScreen', () => {
   it('marks previous running timeline steps complete when a terminal event arrives', () => {
@@ -12,6 +16,35 @@ describe('AgentChatScreen', () => {
         { id: '3', stage: 'degraded', label: 'done', state: 'degraded' },
       ]).map((event) => event.state),
     ).toEqual(['completed', 'completed', 'degraded']);
+  });
+
+  it('parses Novelty progress events from SSE frames', () => {
+    const events = parseNoveltySseEvents(
+      [
+        'event: progress',
+        'data: {"eventId":"evt-1","state":"retrieving_external","message":"외부 검색","payload":{"source":"github","count":2}}',
+        '',
+        'event: progress',
+        'data: {"eventId":"evt-2","state":"completed","message":"완료"}',
+        '',
+      ].join('\n'),
+    );
+
+    expect(events).toEqual([
+      {
+        id: 'evt-1',
+        stage: 'retrieving_external',
+        label: '외부 검색',
+        state: 'running',
+      },
+      {
+        id: 'evt-2',
+        stage: 'completed',
+        label: '완료',
+        detail: undefined,
+        state: 'completed',
+      },
+    ]);
   });
 
   it('starts in novelty mode and sends a multi-turn message through the mock transport', async () => {
@@ -44,6 +77,11 @@ describe('AgentChatScreen', () => {
     await user.click(screen.getByText('LLM 평가 근거 정리'));
 
     expect(await screen.findByText(/벤치마크 신뢰도/)).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByTestId('agent-message')
+        .every((message) => message.getAttribute('data-streaming') === 'false'),
+    ).toBe(true);
   });
 
   it('shows rejected attachments and blocks send until they are removed', async () => {

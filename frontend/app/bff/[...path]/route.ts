@@ -17,6 +17,8 @@ import type { Transport, TransportMethod } from '@/lib/api/transport';
 // principal (request.state.principal) for /library/* and /api/search; that gateway
 // auth-injection is tracked separately (backend coordination zone, system-infra step).
 
+const SSE_PROXY_TIMEOUT_MS = 15000;
+
 function buildTransport(req: NextRequest): Transport | null {
   const baseUrl = process.env.DOCSURI_GATEWAY_URL;
   if (baseUrl) {
@@ -33,9 +35,80 @@ function forwardedHeaders(req: NextRequest): Record<string, string> | undefined 
   return recaptchaToken ? { 'X-Recaptcha-Token': recaptchaToken } : undefined;
 }
 
+function isNoveltyEventStream(method: TransportMethod, path: string[]): boolean {
+  return (
+    method === 'GET' &&
+    path.length === 5 &&
+    path[0] === 'api' &&
+    path[1] === 'novelty' &&
+    path[2] === 'jobs' &&
+    path[4] === 'events'
+  );
+}
+
+async function proxyEventStream(req: NextRequest, upstreamPath: string): Promise<NextResponse> {
+  const baseUrl = process.env.DOCSURI_GATEWAY_URL;
+  if (!baseUrl) {
+    if (process.env.NODE_ENV === 'production' && process.env.DOCSURI_BFF_ALLOW_MOCK !== '1') {
+      return NextResponse.json(
+        { message: '일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' },
+        { status: 503 },
+      );
+    }
+    return new NextResponse(null, {
+      status: 204,
+      headers: {
+        'cache-control': 'no-store',
+        'content-type': 'text/event-stream',
+      },
+    });
+  }
+
+  const headers = new Headers({ accept: 'text/event-stream' });
+  const cookie = req.headers.get('cookie');
+  if (cookie) headers.set('cookie', cookie);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SSE_PROXY_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${baseUrl}${upstreamPath}`, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    const out = new NextResponse(res.body, {
+      status: res.status,
+      headers: {
+        'cache-control': 'no-store',
+        'content-type': res.headers.get('content-type') ?? 'text/event-stream',
+      },
+    });
+    const getSetCookie = (res.headers as Headers & { getSetCookie?: () => string[] })
+      .getSetCookie;
+    const cookies = getSetCookie?.call(res.headers) ?? [];
+    const fallbackCookie = res.headers.get('set-cookie');
+    for (const setCookie of cookies.length ? cookies : fallbackCookie ? [fallbackCookie] : []) {
+      out.headers.append('set-cookie', setCookie);
+    }
+    return out;
+  } catch {
+    return NextResponse.json(
+      { message: '일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' },
+      { status: 502 },
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
   const method = req.method as TransportMethod;
   const upstreamPath = `/${path.join('/')}${req.nextUrl.search}`;
+
+  if (isNoveltyEventStream(method, path)) {
+    return proxyEventStream(req, upstreamPath);
+  }
 
   let body: unknown;
   if (method !== 'GET' && method !== 'DELETE') {

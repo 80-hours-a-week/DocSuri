@@ -37,6 +37,7 @@ const JOB_STATE_LABEL: Record<AgentJobState, string> = {
 };
 const AGENT_REFRESH_MS = 1000;
 const STREAM_CHAR_MS = 8;
+const SSE_FETCH_TIMEOUT_MS = 5000;
 const RESEARCH_MODE_ENABLED =
   !process.env.NEXT_PUBLIC_DOCSURI_REAL_API ||
   process.env.NEXT_PUBLIC_DOCSURI_RESEARCH_AGENT_ENABLED === '1';
@@ -45,8 +46,13 @@ export function AgentChatScreen() {
   const api = useMemo(() => getApiClient(), []);
   const [state, dispatch] = useReducer(agentReducer, initialAgentChatState);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const awaitingAgentResponseRef = useRef(false);
+  const lastSseEventIdRef = useRef<string | null>(null);
+  const seenAgentMessageIdsRef = useRef<Set<string>>(new Set());
   const activeSessionId = state.session?.id;
+  const activeMode = state.session?.mode;
 
   useEffect(() => {
     let alive = true;
@@ -67,6 +73,27 @@ export function AgentChatScreen() {
       alive = false;
     };
   }, [api]);
+
+  useEffect(() => {
+    lastSseEventIdRef.current = null;
+  }, [activeSessionId]);
+
+  useEffect(() => {
+    const agentMessageIds = state.messages
+      .filter((message) => message.role === 'agent')
+      .map((message) => message.id);
+    const newestAgentMessageId = agentMessageIds.at(-1);
+    const seen = seenAgentMessageIdsRef.current;
+    const shouldStream =
+      awaitingAgentResponseRef.current &&
+      Boolean(newestAgentMessageId) &&
+      !seen.has(newestAgentMessageId ?? '');
+    for (const id of agentMessageIds) seen.add(id);
+    if (shouldStream && newestAgentMessageId) {
+      awaitingAgentResponseRef.current = false;
+      setStreamingMessageId(newestAgentMessageId);
+    }
+  }, [state.messages]);
 
   useEffect(() => {
     if (
@@ -95,12 +122,45 @@ export function AgentChatScreen() {
     };
   }, [activeSessionId, api, state.jobState]);
 
+  useEffect(() => {
+    if (
+      !activeSessionId ||
+      activeMode !== 'novelty' ||
+      (state.jobState !== 'queued' && state.jobState !== 'running')
+    ) {
+      return;
+    }
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refreshEvents = async () => {
+      try {
+        const events = await loadNoveltySseEvents(activeSessionId, lastSseEventIdRef.current);
+        if (!alive) return;
+        if (events.length) {
+          lastSseEventIdRef.current = events.at(-1)?.id ?? lastSseEventIdRef.current;
+          dispatch({ type: 'eventsReceived', events });
+        }
+      } catch {
+        // The full session poll remains the fallback if the event stream is unavailable.
+      } finally {
+        if (alive) timer = setTimeout(refreshEvents, AGENT_REFRESH_MS);
+      }
+    };
+    void refreshEvents();
+    return () => {
+      alive = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [activeMode, activeSessionId, state.jobState]);
+
   function startMode(mode: AgentMode) {
+    resetStreamingState();
     dispatch({ type: 'startSession', session: createDraftSession(mode) });
   }
 
   async function loadSession(session: AgentSessionSummary) {
     try {
+      resetStreamingState();
       const snapshot = await api.loadAgentSession(session.id);
       dispatch({ type: 'loadSession', snapshot });
       setDrawerOpen(false);
@@ -125,6 +185,8 @@ export function AgentChatScreen() {
     const content = state.draft.trim();
     const attachments = state.attachments.filter((item) => item.status === 'ready');
     const userMessage = createUserMessage(content, attachments);
+    awaitingAgentResponseRef.current = true;
+    setStreamingMessageId(null);
     dispatch({ type: 'sendStart', message: userMessage });
 
     try {
@@ -135,6 +197,7 @@ export function AgentChatScreen() {
       });
       dispatch({ type: 'sendSuccess', result });
     } catch (error) {
+      awaitingAgentResponseRef.current = false;
       dispatch({
         type: 'sendFailure',
         message:
@@ -154,6 +217,12 @@ export function AgentChatScreen() {
       });
     });
     if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  function resetStreamingState() {
+    awaitingAgentResponseRef.current = false;
+    seenAgentMessageIdsRef.current = new Set();
+    setStreamingMessageId(null);
   }
 
   return (
@@ -180,7 +249,7 @@ export function AgentChatScreen() {
         <AgentModePicker onSelect={startMode} researchEnabled={RESEARCH_MODE_ENABLED} />
       ) : null}
 
-      <AgentMessageList messages={state.messages} />
+      <AgentMessageList messages={state.messages} streamingMessageId={streamingMessageId} />
       <AgentProgressTimeline events={state.events} jobState={state.jobState} />
 
       {state.error ? (
@@ -240,6 +309,7 @@ export function AgentChatScreen() {
           activeId={state.session?.id ?? null}
           onClose={() => setDrawerOpen(false)}
           onNew={() => {
+            resetStreamingState();
             dispatch({ type: 'newChat' });
             setDrawerOpen(false);
           }}
@@ -342,8 +412,13 @@ function AgentSessionDrawer({
   );
 }
 
-function AgentMessageList({ messages }: { messages: AgentMessage[] }) {
-  const streamingId = [...messages].reverse().find((message) => message.role === 'agent')?.id;
+function AgentMessageList({
+  messages,
+  streamingMessageId,
+}: {
+  messages: AgentMessage[];
+  streamingMessageId: string | null;
+}) {
   return (
     <div className={styles.messages} data-testid="agent-message-list">
       {messages.length === 0 ? <p className={styles.empty}>대화를 시작하세요.</p> : null}
@@ -351,7 +426,7 @@ function AgentMessageList({ messages }: { messages: AgentMessage[] }) {
         <AgentMessageItem
           key={message.id}
           message={message}
-          streaming={message.id === streamingId}
+          streaming={message.id === streamingMessageId}
         />
       ))}
     </div>
@@ -451,6 +526,87 @@ export function normalizeTimelineDisplay(
 
 function isTerminalJobState(state: AgentJobState): boolean {
   return state === 'completed' || state === 'failed' || state === 'degraded';
+}
+
+async function loadNoveltySseEvents(
+  sessionId: string,
+  afterEventId: string | null,
+): Promise<AgentTimelineEvent[]> {
+  const url = noveltySseUrl(sessionId, afterEventId);
+  if (!url) return [];
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SSE_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      headers: { accept: 'text/event-stream' },
+      credentials: 'same-origin',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    if (!res.ok) return [];
+    return parseNoveltySseEvents(await res.text());
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function noveltySseUrl(sessionId: string, afterEventId: string | null): string | null {
+  const prefix = 'novelty:';
+  if (!sessionId.startsWith(prefix)) return null;
+  const rawId = sessionId.slice(prefix.length);
+  if (!rawId) return null;
+  const params = new URLSearchParams();
+  if (afterEventId) params.set('after', afterEventId);
+  const query = params.toString();
+  return `/bff/api/novelty/jobs/${encodeURIComponent(rawId)}/events${query ? `?${query}` : ''}`;
+}
+
+export function parseNoveltySseEvents(text: string): AgentTimelineEvent[] {
+  return text
+    .split(/\r?\n\r?\n/)
+    .map(parseSseBlock)
+    .filter((event): event is AgentTimelineEvent => Boolean(event));
+}
+
+function parseSseBlock(block: string): AgentTimelineEvent | null {
+  let eventName = 'message';
+  const data: string[] = [];
+  for (const line of block.split(/\r?\n/)) {
+    if (line.startsWith('event:')) eventName = line.slice('event:'.length).trim();
+    if (line.startsWith('data:')) data.push(line.slice('data:'.length).trimStart());
+  }
+  if (eventName !== 'progress' || data.length === 0) return null;
+  try {
+    const raw = JSON.parse(data.join('\n'));
+    return mapSseProgressEvent(raw);
+  } catch {
+    return null;
+  }
+}
+
+function mapSseProgressEvent(raw: unknown): AgentTimelineEvent | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const record = raw as Record<string, unknown>;
+  const id = stringValue(record.eventId);
+  const stage = stringValue(record.state) ?? 'running';
+  if (!id) return null;
+  return {
+    id,
+    stage,
+    label: stringValue(record.message) ?? stage,
+    state: mapSseTimelineState(stage),
+  };
+}
+
+function mapSseTimelineState(stage: string): AgentTimelineState {
+  if (stage === 'failed' || stage === 'cancelled') return 'failed';
+  if (stage === 'degraded') return 'degraded';
+  if (stage === 'completed') return 'completed';
+  return 'running';
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 function AgentTimelineItem({ event }: { event: AgentTimelineEvent }) {

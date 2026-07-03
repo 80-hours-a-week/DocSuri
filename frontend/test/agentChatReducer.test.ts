@@ -64,6 +64,25 @@ describe('agent chat reducer/helpers', () => {
     expect(merged[1].label).toBe('B done');
   });
 
+  it('merges SSE progress events into the active timeline', () => {
+    const running = agentReducer(initialAgentChatState, {
+      type: 'startSession',
+      session: { ...noveltySession, state: 'running' },
+    });
+    const withEvent = agentReducer(running, {
+      type: 'eventsReceived',
+      events: [{ id: 'evt-1', stage: 'retrieving', label: '검색 중', state: 'running' }],
+    });
+    const updated = agentReducer(withEvent, {
+      type: 'eventsReceived',
+      events: [{ id: 'evt-1', stage: 'completed', label: '검색 완료', state: 'completed' }],
+    });
+
+    expect(updated.events).toEqual([
+      { id: 'evt-1', stage: 'completed', label: '검색 완료', state: 'completed' },
+    ]);
+  });
+
   it('keeps unsequenced timeline events in received order', () => {
     fc.assert(
       fc.property(fc.uniqueArray(fc.string({ minLength: 1 }), { minLength: 1 }), (ids) => {
