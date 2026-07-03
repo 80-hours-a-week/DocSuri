@@ -20,9 +20,10 @@ def test_valid_draft_passes(sample_paper: str, valid_draft: SummaryDraft) -> Non
 
 
 def test_fabricated_anchor_dropped(sample_paper: str, valid_draft: SummaryDraft) -> None:
-    # Option D: a fabricated anchor (span absent from the source) is DROPPED, not abstained on —
-    # the summary still passes, the anchor is excluded from kept_anchors, and a soft anchor_missing
-    # violation is recorded (telemetry). The numeric guard still blocks fabricated *figures*.
+    # Option D: an anchor that resolves to no real location (no label, no target_hint) is DROPPED,
+    # not abstained on — the summary still passes, the anchor is excluded from kept_anchors, and a
+    # soft anchor_missing violation is recorded (telemetry). Fabricated *figures* stay blocked by
+    # the HARD numeric gate.
     bad = replace(
         valid_draft,
         anchors=(Anchor("results", AnchorTarget.TABLE, span="99.9% on CIFAR-100"),),
@@ -55,7 +56,8 @@ def test_truncated_fails(sample_paper: str, valid_draft: SummaryDraft) -> None:
 
 
 def test_anchor_label_missing_dropped(sample_paper: str, valid_draft: SummaryDraft) -> None:
-    # A missing label makes the anchor unverifiable → dropped (option D), not whole-summary abstain.
+    # A label that matches no real section (and no target_hint) resolves to nothing → dropped
+    # (option D), not whole-summary abstain.
     bad = replace(
         valid_draft,
         anchors=(
@@ -72,29 +74,54 @@ def test_anchor_label_missing_dropped(sample_paper: str, valid_draft: SummaryDra
     assert any(v.kind == "anchor_missing" for v in verdict.violations)
 
 
-def test_formula_anchor_exempt_from_existence(sample_paper: str, valid_draft: SummaryDraft) -> None:
-    # A math/formula span can't be verbatim-matched (LaTeX vs unicode) → exempt → KEPT.
-    bad = replace(
-        valid_draft,
-        anchors=(Anchor("method", AnchorTarget.SECTION, span=r"\mathcal{L}=\{1y,1w,1d\}"),),
-    )
-    verdict = GroundingValidator().validate(_gi(bad, sample_paper))
-    assert verdict.ok and len(verdict.kept_anchors) == 1
-    assert not any(v.kind == "anchor_missing" for v in verdict.violations)
-
-
-def test_prose_arrow_span_not_exempt(sample_paper: str, valid_draft: SummaryDraft) -> None:
-    # A ``→`` is common in prose, not just formulas. An absent arrow span must NOT be exempted as
-    # a formula — it stays subject to the existence check and is dropped (regression for the
-    # widened grounding hole when arrows were in _MATH_RE).
+def test_anchor_resolves_by_target_hint_localized_label_kept(
+    sample_paper: str, valid_draft: SummaryDraft
+) -> None:
+    # THE production regression: the model writes a Korean, source-absent ``label`` but puts the
+    # real location in its raw ``target`` (target_hint). The anchor must resolve via target_hint
+    # to the real section and be KEPT, with its label rewritten to the canonical doc-model label.
     bad = replace(
         valid_draft,
         anchors=(
-            Anchor("method", AnchorTarget.SECTION, span="pretrain → finetune on FakeSet-999"),
+            Anchor(
+                field_name="results",
+                target=AnchorTarget.SECTION,
+                span=r"\mathcal{L}=\{1y,1w,1d\}",  # a formula span — no longer needs verbatim match
+                label="정확도 결과 섹션",  # Korean, absent from the English source
+                target_hint="Section: 5.2 Results",
+            ),
         ),
     )
     verdict = GroundingValidator().validate(_gi(bad, sample_paper))
-    assert verdict.ok and verdict.kept_anchors == ()  # dropped, not exempted
+    assert verdict.ok
+    assert len(verdict.kept_anchors) == 1
+    assert verdict.kept_anchors[0].label == "5.2 Results"  # rewritten to canonical
+    assert not any(v.kind == "anchor_missing" for v in verdict.violations)
+
+
+def test_anchor_caption_target_resolves(sample_paper: str, valid_draft: SummaryDraft) -> None:
+    # A figure/table target resolves against caption-derived labels ("Table 1: …" → "Table 1").
+    bad = replace(
+        valid_draft,
+        anchors=(Anchor("results", AnchorTarget.TABLE, span="", label="정확도 표",
+                        target_hint="Table 1"),),
+    )
+    verdict = GroundingValidator().validate(_gi(bad, sample_paper))
+    assert verdict.ok and len(verdict.kept_anchors) == 1
+    assert verdict.kept_anchors[0].label == "Table 1"
+
+
+def test_anchor_unresolvable_target_dropped(sample_paper: str, valid_draft: SummaryDraft) -> None:
+    # A target that resolves to no real doc-model location is dropped (SOFT) — the summary still
+    # passes and a fabricated pointer never surfaces. Anti-fabrication of *figures* stays with the
+    # HARD numeric gate.
+    bad = replace(
+        valid_draft,
+        anchors=(Anchor("method", AnchorTarget.SECTION, span="", label="없는 섹션",
+                        target_hint="Section: Nonexistent Section 9.9"),),
+    )
+    verdict = GroundingValidator().validate(_gi(bad, sample_paper))
+    assert verdict.ok and verdict.kept_anchors == ()
     assert any(v.kind == "anchor_missing" for v in verdict.violations)
 
 

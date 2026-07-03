@@ -17,32 +17,76 @@ grounding only*. Deterministic checks ONLY; no LLM-judge (Q15):
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 
-from .models import Anchor, AnchorVerdict, GroundingInput, Violation
+from .models import Anchor, AnchorVerdict, GroundingInput, RefinedSource, Violation
 
 # Match plain decimals AND thousand-separated forms ("1,200", "1,234.5") as a single token, so
 # "1,200" is not split into "1" + "200" (which would mis-ground). Longest-alternative-first.
 _NUM_RE = re.compile(r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?")
 
-# A math/formula span (e.g. ``𝓛={1y,1w,…}`` or ``\mathcal{L}``) can't be verbatim-matched against
-# the refined source, which stores math as LaTeX/MathML — a different string representation. Such
-# spans are EXEMPTED from the anchor-existence check (option B) to avoid false-positive abstains on
-# correctly-grounded math; numeric grounding (rule 2) still guards the reported result figures.
-# (Alternatives weighed: normalize math on both sides, or steer the prompt off formula anchors —
-# see PR discussion. Trade-off: a hallucinated formula anchor would now pass span-existence.)
-# NOTE: arrows (U+2190–U+21FF) are deliberately EXCLUDED — ``→`` is common in prose
-# ("pretrain → finetune"), so including it would exempt ordinary text spans from the existence
-# check and widen the grounding hole. Real formula signal comes from operators / math-alphanumeric
-# / LaTeX, which remain below.
-_MATH_RE = re.compile(
-    r"[∀-⋿⨀-⫿\U0001D400-\U0001D7FF]"  # math unicode (operators/symbols/alphanumerics)
-    r"|\\[A-Za-z]+"  # LaTeX command (\mathcal, \sum, …)
-    r"|[_^]\{"  # LaTeX sub/superscript group
-)
+# --- anchor location resolution (BR-S7) --------------------------------------
+# An anchor points at a doc-model LOCATION (a section / table / figure), not at a verbatim prose
+# quote. The summary is Korean, so the model localizes/paraphrases its ``label`` ("free-riding
+# penalty 수식") and a verbatim substring check against the English source rejects almost every
+# real anchor. Instead we resolve the model's raw ``target`` string (``target_hint``) against the
+# doc-model's ACTUAL section titles + table/figure labels; a resolved anchor is kept and its label
+# rewritten to the canonical doc-model label (so the chip jumps to the real block). Deterministic,
+# no LLM-judge (Q15). Anti-fabrication stays with the HARD numeric gate below — a hallucinated
+# location simply fails to resolve and is dropped (SOFT), never surfacing a fabricated figure.
+_LABEL_PREFIX_RE = re.compile(r"^\s*(?:section|sec\.?|§)\s*[:.\-]?\s*", re.IGNORECASE)
+_FIGTBL_RE = re.compile(r"\b(figure|fig\.?|table)\s*(\d+)", re.IGNORECASE)
 
 
-def _is_formula_span(text: str) -> bool:
-    return bool(_MATH_RE.search(text))
+def _normalize_label(text: str) -> str:
+    """Casefold + strip a leading 'Section:'/'§' prefix + drop punctuation → collapsed spaces, so
+    'Section: Eliminating Free Riding' matches the title 'Eliminating Free Riding' and 'FACT: …'
+    matches 'Fact: …' (case) without verbatim-substring brittleness."""
+    t = _LABEL_PREFIX_RE.sub("", text.strip())
+    t = re.sub(r"[^\w\s]", " ", t, flags=re.UNICODE)  # § : , . / → space
+    return re.sub(r"\s+", " ", t).strip().lower()
+
+
+def _structural_index(refined: RefinedSource) -> list[tuple[str, str]]:
+    """(canonical label, normalized key) for every citable doc-model location, most specific first
+    (figures/tables before sections) so a compound target resolves to the precise block."""
+    index: list[tuple[str, str]] = []
+    seen: set[str] = set()
+
+    def add(canonical: str, raw_key: str) -> None:
+        key = _normalize_label(raw_key)
+        if key and key not in seen:
+            seen.add(key)
+            index.append((canonical, key))
+
+    # Figure / Table labels — from caption prefixes ("Figure 1: …") + structured tables.
+    for cap in refined.captions:
+        m = _FIGTBL_RE.match(cap.strip())
+        if m:
+            kind = "Table" if m.group(1).lower().startswith("tab") else "Figure"
+            add(f"{kind} {m.group(2)}", f"{kind} {m.group(2)}")
+    for tbl in refined.tables:
+        if tbl.label:
+            add(tbl.label, tbl.label)
+    # Section titles.
+    for sec in refined.sections:
+        if sec.label:
+            add(sec.label, sec.label)
+    return index
+
+
+def _resolve_location(anchor: Anchor, index: list[tuple[str, str]]) -> str | None:
+    """Canonical doc-model label the anchor points at, or None if it resolves to nothing real.
+    Matches the model's ``target_hint`` (raw location string) against the index; the Korean
+    ``label`` is a fallback signal only."""
+    hint = _normalize_label(anchor.target_hint)
+    lbl = _normalize_label(anchor.label)
+    if not hint and not lbl:
+        return None
+    for canonical, key in index:
+        if (hint and (key in hint or hint in key)) or (lbl and key in lbl):
+            return canonical
+    return None
 
 
 # Numeric grounding is fraction-based: abstain only when MORE than this share of a draft's result
@@ -109,12 +153,12 @@ class GroundingValidator:
 
     def validate(self, gi: GroundingInput) -> AnchorVerdict:
         draft, refined = gi.draft, gi.refined
-        # HARD violations abstain the whole summary (fail-closed, INV-4). The anchor-existence
-        # check is SOFT (option D): an anchor whose span isn't verbatim in the source — a table
-        # re-rendering, a paraphrase, or LaTeX-vs-unicode math — is DROPPED, not abstained on, so
-        # the grounded summary text + the verifiable anchors are still shown. The numeric guard
-        # (rule 2) stays HARD, so dropping an unverifiable pointer can never surface a fabricated
-        # figure. fail-closed is thus per-anchor here, not whole-summary.
+        # HARD violations abstain the whole summary (fail-closed, INV-4). The anchor-location
+        # check is SOFT (option D): an anchor that doesn't resolve to a real doc-model section /
+        # table / figure is DROPPED, not abstained on, so the grounded summary text + the
+        # verifiable anchors are still shown. The numeric guard (rule 2) stays HARD, so dropping an
+        # unresolved pointer can never surface a fabricated figure. fail-closed is thus per-anchor
+        # here, not whole-summary.
         hard: list[Violation] = []
         soft: list[Violation] = []
 
@@ -128,34 +172,16 @@ class GroundingValidator:
         if "code" not in draft.reproducibility or "data" not in draft.reproducibility:
             hard.append(Violation("schema_incomplete", "reproducibility"))
 
-        # (1) anchor existence — SOFT: keep verifiable anchors, drop the rest (Step 35)
-        haystack = refined.body
-        captions = "\n".join(refined.captions)
-        # preserved (Appendix/Supplementary, Step 36) is source content too — include it so an
-        # anchor into an appendix span/label is not falsely flagged anchor_missing.
-        preserved = "\n".join(refined.preserved)
-        section_labels = {s.label.strip() for s in refined.sections if s.label.strip()}
+        # (1) anchor location — SOFT: keep anchors that resolve to a REAL doc-model location
+        # (section/table/figure), rewriting the label to the canonical one; drop the rest. The
+        # model localizes/paraphrases its own ``label`` (Korean), so resolve its raw ``target``
+        # against real structure instead of verbatim-matching prose (Step 35 / BR-S7).
+        index = _structural_index(refined)
         kept: list[Anchor] = []
         for a in draft.anchors:
-            span = a.span.strip()
-            label = a.label.strip()
-            # Verify span — formula spans are exempt (verbatim-unmatchable vs LaTeX source).
-            span_ok = (
-                not span
-                or _is_formula_span(span)
-                or (span in haystack or span in captions or span in preserved)
-            )
-            # Verify label
-            label_ok = (
-                not label
-                or _is_formula_span(label)
-                or label in haystack
-                or label in captions
-                or label in section_labels
-                or label in preserved
-            )
-            if span_ok and label_ok:
-                kept.append(a)
+            canonical = _resolve_location(a, index)
+            if canonical is not None:
+                kept.append(replace(a, label=canonical))
             else:
                 soft.append(Violation("anchor_missing", a.field_name))
 
@@ -163,6 +189,8 @@ class GroundingValidator:
         # a few stray numbers (a mis-transcribed table cell, a rounded value) shouldn't abstain an
         # otherwise-grounded summary, while a draft whose figures are MOSTLY fabricated still must.
         # Abstain only when the ungrounded share exceeds the threshold (anti-fabrication intact).
+        haystack = refined.body
+        captions = "\n".join(refined.captions)
         result_nums = _NUM_RE.findall(draft.results)
         if result_nums:
             src_forms = _source_numbers(haystack, captions)

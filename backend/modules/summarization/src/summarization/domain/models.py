@@ -208,6 +208,11 @@ class Anchor:
     target: AnchorTarget
     span: str
     label: str = ""  # "" when section derivation failed → span-only (Q6)
+    # Raw location string the LLM emits in its ``target`` field (e.g. "Section: Method",
+    # "Figure 1", "Table 1, Table 2 / Appendix B"). The grounding gate resolves THIS against
+    # the doc-model's real sections/tables/figures (BR-S7); ``label`` is then rewritten to the
+    # matched canonical label. Preserved separately because ``target`` alone is a 3-value enum.
+    target_hint: str = ""
 
 
 @dataclass(frozen=True, slots=True)
