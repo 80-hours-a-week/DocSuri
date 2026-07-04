@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
@@ -42,8 +43,14 @@ def get_principal(request: Request) -> Principal:
     return principal
 
 
+def get_evidence_orchestrator(request: Request) -> Any:
+    bundle = getattr(request.app.state, 'evidence_bundle', None)
+    return bundle.orchestrator if bundle else None
+
+
 PRINCIPAL_DEP = Depends(get_principal)
 REPO_DEP = Depends(get_repo)
+EVIDENCE_ORCHESTRATOR_DEP = Depends(get_evidence_orchestrator)
 
 
 @router.post("/jobs", response_model=ResearchJobCreateResponse)
@@ -51,8 +58,9 @@ async def create_job(
     dto: ResearchJobCreateRequest,
     principal: Principal = PRINCIPAL_DEP,
     repo: ResearchRepository = REPO_DEP,
+    orchestrator: Any = EVIDENCE_ORCHESTRATOR_DEP,
 ) -> ResearchJobCreateResponse:
-    return ResearchService(repo).create_job(principal.user_id, dto)
+    return await ResearchService(repo).create_job(principal.user_id, dto, orchestrator)
 
 
 @router.get("/jobs", response_model=ResearchJobListResponse)
@@ -107,9 +115,10 @@ async def add_message(
     dto: ResearchMessageCreateRequest,
     principal: Principal = PRINCIPAL_DEP,
     repo: ResearchRepository = REPO_DEP,
+    orchestrator: Any = EVIDENCE_ORCHESTRATOR_DEP,
 ) -> ResearchChatMessage:
     try:
-        return ResearchService(repo).add_message(principal.user_id, job_id, dto)
+        return await ResearchService(repo).add_message(principal.user_id, job_id, dto, orchestrator)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="job not found") from exc
 

@@ -20,6 +20,12 @@ import type {
   AgentTimelineEvent,
   AgentTimelineState,
 } from '@/lib/agentChat/types';
+import {
+  abstainReasonLabel,
+  parseAgentContent,
+  type EvidenceResultPayload,
+  type EvidenceSourceRef,
+} from '@/lib/agentChat/evidenceResult';
 import styles from './AgentChatScreen.module.css';
 
 const MODE_LABEL: Record<AgentMode, string> = {
@@ -201,9 +207,7 @@ export function AgentChatScreen() {
       dispatch({
         type: 'sendFailure',
         message:
-          error instanceof UserFacingError
-            ? error.message
-            : '에이전트 요청을 처리하지 못했습니다.',
+          error instanceof UserFacingError ? error.message : '에이전트 요청을 처리하지 못했습니다.',
       });
     }
   }
@@ -226,7 +230,11 @@ export function AgentChatScreen() {
   }
 
   return (
-    <section className={styles.shell} data-mode={state.mode ?? undefined} data-testid="agent-chat-screen">
+    <section
+      className={styles.shell}
+      data-mode={state.mode ?? undefined}
+      data-testid="agent-chat-screen"
+    >
       <div className={styles.toolbar}>
         <button
           type="button"
@@ -239,9 +247,7 @@ export function AgentChatScreen() {
         </button>
         <div className={styles.status}>
           <span>{state.mode ? MODE_LABEL[state.mode] : '에이전트'}</span>
-          {state.jobState !== 'idle' ? (
-            <JobStateBadge state={state.jobState} />
-          ) : null}
+          {state.jobState !== 'idle' ? <JobStateBadge state={state.jobState} /> : null}
         </div>
       </div>
 
@@ -433,14 +439,7 @@ function AgentMessageList({
   );
 }
 
-function AgentMessageItem({
-  message,
-  streaming,
-}: {
-  message: AgentMessage;
-  streaming: boolean;
-}) {
-  const content = useStreamingText(message.content, streaming && message.role === 'agent');
+function AgentMessageItem({ message, streaming }: { message: AgentMessage; streaming: boolean }) {
   return (
     <article
       className={styles.message}
@@ -449,7 +448,7 @@ function AgentMessageItem({
       data-streaming={streaming && message.role === 'agent'}
       data-testid="agent-message"
     >
-      <p>{content}</p>
+      <AgentMessageContent message={message} streaming={streaming} />
       {message.attachments?.length ? (
         <div className={styles.messageFiles}>
           {message.attachments.map((file) => (
@@ -459,6 +458,40 @@ function AgentMessageItem({
       ) : null}
     </article>
   );
+}
+
+function AgentMessageContent({
+  message,
+  streaming,
+}: {
+  message: AgentMessage;
+  streaming: boolean;
+}) {
+  // evidence orchestrator 결과(JSON/[abstain]/[error])는 agent(assistant) 메시지에서만 나온다.
+  // 사용자가 타이핑한 텍스트가 우연히 JSON처럼 보여도 파싱을 시도하지 않도록 role로 분기한다.
+  if (message.role !== 'agent') {
+    return <p>{message.content}</p>;
+  }
+
+  const parsed = parseAgentContent(message.content);
+
+  // 구조화 결과(근거 카드/보류/오류)는 스트리밍하지 않고 즉시 렌더링한다 — JSON을 한 글자씩
+  // 노출하면 완성 전까지 깨져 보인다. 일반 텍스트 답변만 타자기 효과로 스트리밍한다.
+  if (parsed.kind === 'evidence') {
+    return <EvidenceResultView result={parsed.result} />;
+  }
+  if (parsed.kind === 'abstain') {
+    return <p className={styles.abstainNotice}>{abstainReasonLabel(parsed.reason)}</p>;
+  }
+  if (parsed.kind === 'error') {
+    return <p className={styles.abstainNotice}>일시적인 오류로 답변을 생성하지 못했습니다.</p>;
+  }
+  return <StreamingText text={parsed.text} streaming={streaming} />;
+}
+
+function StreamingText({ text, streaming }: { text: string; streaming: boolean }) {
+  const visible = useStreamingText(text, streaming);
+  return <p>{visible}</p>;
 }
 
 function useStreamingText(content: string, enabled: boolean): string {
@@ -480,6 +513,46 @@ function useStreamingText(content: string, enabled: boolean): string {
   }, [content, enabled]);
 
   return visible;
+}
+
+function EvidenceResultView({ result }: { result: EvidenceResultPayload }) {
+  if (result.claims.length === 0) {
+    return <p className={styles.abstainNotice}>제시할 수 있는 근거를 찾지 못했습니다.</p>;
+  }
+  return (
+    <div className={styles.evidenceClaims}>
+      {result.claims.map((claim, idx) => (
+        <article key={idx} className={styles.evidenceClaim}>
+          <p className={styles.evidenceStatement}>{claim.statement}</p>
+          <EvidenceRefList refs={claim.supporting} />
+          {claim.conflicting.length > 0 ? (
+            <div className={styles.evidenceConflict}>
+              <strong>상충하는 근거</strong>
+              <EvidenceRefList refs={claim.conflicting} />
+            </div>
+          ) : null}
+        </article>
+      ))}
+      <p className={styles.evidenceCoverage}>
+        참고 논문 {result.coverage.paperCount}편
+        {result.coverage.queryUsed ? ` · 검색어: ${result.coverage.queryUsed}` : ''}
+      </p>
+    </div>
+  );
+}
+
+function EvidenceRefList({ refs }: { refs: EvidenceSourceRef[] }) {
+  if (refs.length === 0) return null;
+  return (
+    <ul className={styles.evidenceRefs}>
+      {refs.map((ref, idx) => (
+        <li key={idx} className={styles.evidenceRef}>
+          <span className={styles.evidencePaperId}>{ref.paperId}</span>
+          {ref.quote ? <blockquote>{ref.quote}</blockquote> : null}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function AgentProgressTimeline({

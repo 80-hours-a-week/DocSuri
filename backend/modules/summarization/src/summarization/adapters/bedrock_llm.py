@@ -1,10 +1,13 @@
 """BedrockLlmGateway — real LLM adapter (TD-S3/S4), streaming Sonnet/Haiku.
 
-task → model tier (BR-S5): summary=Sonnet, translate=Haiku. Uses Bedrock
-``invoke_model_with_response_stream`` and buffers the token stream into a complete JSON
-draft so the U7 grounding gate can validate the whole structured output before exposure
-(Q5/BR-S8). Explicit timeout + ONE retry; persistent failure raises ``LlmUnavailable`` so
-the orchestrator abstains (Q1/RES-9). No Production Mock — this is the single shipped impl.
+task → model tier (BR-S5): summary=Sonnet, translate=Haiku. Output is elicited as a **forced
+tool call** (structured output): ``tool_choice`` pins the model to ``emit_summary`` /
+``emit_translations``, so the streamed ``input_json_delta`` fragments accumulate into a
+schema-shaped JSON object the model can't wrap in prose or corrupt with unescaped quotes / raw
+LaTeX backslashes (the old free-text-JSON failure mode that abstained whole summaries). The full
+input is buffered before parsing so the U7 grounding gate can validate the complete structured
+output before exposure (Q5/BR-S8). Explicit timeout + ONE retry; persistent failure raises
+``LlmUnavailable`` so the orchestrator abstains (Q1/RES-9). No Production Mock — the shipped impl.
 """
 
 from __future__ import annotations
@@ -26,7 +29,12 @@ from ..domain.models import (
     TranslationSegmentsResult,
 )
 from ..ports.ports import LlmUnavailable
-from ..prompts import build_summary_prompt, build_translate_segments_prompt
+from ..prompts import (
+    SUMMARY_TOOL,
+    TRANSLATE_TOOL,
+    build_summary_prompt,
+    build_translate_segments_prompt,
+)
 
 
 class LocalCircuitBreaker:
@@ -104,7 +112,9 @@ class BedrockLlmGateway:
         # full paper's JSON past the old 2000-token default — it truncated mid-JSON → parse
         # failure → abstain. max_tokens is a cap (the model stops when done), so a generous
         # ceiling costs nothing for short outputs while preventing truncation on long ones.
-        payload = self._invoke_json(self._summary_model, system, user, max_tokens=8192)
+        payload = self._invoke_json(
+            self._summary_model, system, user, SUMMARY_TOOL, max_tokens=8192
+        )
         return _to_summary_draft(payload)
 
     def translate_segments(
@@ -118,7 +128,8 @@ class BedrockLlmGateway:
         # StructuredTranslator chunks upstream (output-bounded) so each call stays within this 8192
         # ceiling — the same cap the summary path uses to avoid mid-JSON truncation.
         payload = self._invoke_json(
-            self._translate_model, system, user, max_tokens=8192, graceful_truncation=True
+            self._translate_model, system, user, TRANSLATE_TOOL,
+            max_tokens=8192, graceful_truncation=True,
         )
         raw = payload.get("translations", {})
         translations = {str(k): str(v) for k, v in raw.items()} if isinstance(raw, dict) else {}
@@ -136,6 +147,7 @@ class BedrockLlmGateway:
         model_id: str,
         system: str,
         user: str,
+        tool: dict,
         *,
         max_tokens: int = 2000,
         graceful_truncation: bool = False,
@@ -143,28 +155,35 @@ class BedrockLlmGateway:
         if not self._cb.allow_request():
             raise LlmUnavailable("Bedrock LLM circuit breaker is OPEN")
 
+        # Force the structured-output tool: the model must call ``tool`` and return its arguments
+        # as ``tool_use.input``, so the response is a schema-shaped object rather than free-text
+        # JSON we have to slice out of prose and repair (unescaped quotes / raw LaTeX backslashes).
         body = {
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": max_tokens,
             "system": system,
             "messages": [{"role": "user", "content": [{"type": "text", "text": user}]}],
+            "tools": [tool],
+            "tool_choice": {"type": "tool", "name": tool["name"]},
         }
         last_exc: Exception | None = None
         for attempt in range(self._max_retries + 1):
             if attempt > 0:
                 time.sleep(2 ** attempt * 0.5)
             try:
-                text, truncated = self._stream_text(model_id, body)
+                text, truncated = self._stream_tool_input(model_id, body)
                 try:
-                    payload = _parse_json(text)
+                    payload = json.loads(text)
+                    if not isinstance(payload, dict):
+                        raise ValueError("tool input is not a JSON object")
                 except (ValueError, json.JSONDecodeError):
-                    # A response stopped at max_tokens is usually cut MID-STRING, so its JSON can't
-                    # be parsed at all — a raw re-raise loses the truncation signal and the whole
-                    # batch hard-fails (the observed full-translation abstain on long papers). For a
-                    # re-splittable caller (translate), surface the truncation so the chunk is split
-                    # into smaller batches — each emits less output and fits the cap — instead of
-                    # abstaining. A parse failure on a COMPLETE response is genuine bad output and
-                    # still raises (retry then abstain).
+                    # A response stopped at max_tokens is cut MID-JSON, so the accumulated tool
+                    # arguments are incomplete and don't parse — a raw re-raise loses the truncation
+                    # signal and the whole batch hard-fails (the observed full-translation abstain
+                    # on long papers). For a re-splittable caller (translate), surface truncation so
+                    # the chunk is split into smaller batches — each emits less output and fits the
+                    # cap — instead of abstaining. A parse failure on a COMPLETE response is genuine
+                    # bad output and still raises (retry then abstain).
                     if not (graceful_truncation and truncated):
                         raise
                     self._cb.record_success()  # the call succeeded; only the batch was oversized
@@ -177,8 +196,15 @@ class BedrockLlmGateway:
         self._cb.record_failure()
         raise LlmUnavailable("Bedrock generation failed") from last_exc
 
-    def _stream_text(self, model_id: str, body: dict) -> tuple[str, bool]:
-        """Buffer the response stream into the full text (buffer-validate-stream, Q5)."""
+    def _stream_tool_input(self, model_id: str, body: dict) -> tuple[str, bool]:
+        """Buffer the forced tool call's ``input`` JSON from the stream (buffer-validate, Q5).
+
+        Under ``tool_choice`` the model emits a single ``tool_use`` block whose arguments arrive
+        as ``input_json_delta`` fragments (``partial_json``) — concatenated they form the complete
+        arguments object. Non-tool-use deltas (there are none under a forced tool, but a stray text
+        block is possible) are ignored. ``stop_reason == "max_tokens"`` marks an output-cap
+        truncation, so the accumulated ``partial_json`` is a cut-off (unparseable) prefix.
+        """
         response = self._client.invoke_model_with_response_stream(
             modelId=model_id,
             body=json.dumps(body).encode("utf-8"),
@@ -193,72 +219,14 @@ class BedrockLlmGateway:
                 continue
             data = json.loads(raw.decode("utf-8"))
             if data.get("type") == "content_block_delta":
-                chunks.append(data.get("delta", {}).get("text", ""))
+                delta = data.get("delta", {})
+                if delta.get("type") == "input_json_delta":
+                    chunks.append(delta.get("partial_json", ""))
             elif data.get("type") == "message_delta":
                 stop_reason = data.get("delta", {}).get("stop_reason")
                 if stop_reason == "max_tokens":
                     truncated = True
-        text = "".join(chunks)
-        return text, truncated
-
-
-_STRUCTURAL_ESCAPE = set('"\\/')
-_HEX_DIGITS = set("0123456789abcdefABCDEF")
-
-
-def _escape_stray_backslashes(blob: str) -> str:
-    """Escape stray backslashes so raw LaTeX in a JSON string value survives ``json.loads``.
-
-    Math-heavy translations make the model echo raw LaTeX (``\\mathcal``, ``\\rho``, ``\\nabla``)
-    into JSON string values. An unescaped ``\\`` is invalid JSON and fails the strict parse — the
-    whole batch then abstains (generation_unavailable), the observed full-translation failure on
-    equation-heavy papers. Walk the blob and double every stray backslash, preserving ONLY:
-      • the structural escapes ``\\"`` ``\\\\`` ``\\/``, and
-      • a *true* ``\\uXXXX`` (backslash-u followed by exactly four hex digits).
-    Crucially, the single-letter escapes ``\\b \\f \\n \\r \\t`` are NOT treated as valid here:
-    countless LaTeX commands begin with those letters (``\\rho`` ``\\nabla`` ``\\theta`` ``\\beta``
-    ``\\frac``), and a translation value carries no real control characters — so ``\\r`` is far more
-    likely the start of ``\\rho`` than a carriage return. This runs ONLY after the strict parse has
-    already failed, so a well-formed payload (where ``\\n`` really is a newline) never reaches it.
-    Backslashes appear only inside string values, so scanning the whole blob is safe."""
-    out: list[str] = []
-    i, n = 0, len(blob)
-    while i < n:
-        ch = blob[i]
-        if ch == "\\":
-            nxt = blob[i + 1] if i + 1 < n else ""
-            if nxt in _STRUCTURAL_ESCAPE:
-                out.append(ch)
-                out.append(nxt)
-                i += 2
-                continue
-            if nxt == "u" and i + 6 <= n and all(c in _HEX_DIGITS for c in blob[i + 2 : i + 6]):
-                out.append(blob[i : i + 6])  # genuine \uXXXX unicode escape
-                i += 6
-                continue
-            out.append("\\\\")  # stray backslash → escape it so the LaTeX survives as a literal
-            i += 1
-            continue
-        out.append(ch)
-        i += 1
-    return "".join(out)
-
-
-def _parse_json(text: str) -> dict:
-    start, end = text.find("{"), text.rfind("}")
-    if start == -1 or end == -1:
-        raise ValueError("no JSON object in model output")
-    blob = text[start : end + 1]
-    # Sanitize BEFORE the first parse, not only on failure: LaTeX commands that begin with a JSON
-    # escape letter (``\r``ho, ``\n``abla, ``\t``heta, ``\b``eta, ``\f``rac) are *valid* JSON, so a
-    # raw parse would SILENTLY corrupt them (``\r`` → carriage return) instead of raising. Escaping
-    # stray backslashes first preserves the LaTeX; fall back to the raw parse if sanitizing somehow
-    # yields invalid JSON (it only adds escapes, so this is defensive). Fail-closed: still raises →
-    # retry/abstain upstream.
-    try:
-        return json.loads(_escape_stray_backslashes(blob))
-    except json.JSONDecodeError:
-        return json.loads(blob)
+        return "".join(chunks), truncated
 
 
 def _to_summary_draft(payload: dict) -> SummaryDraft:
@@ -268,6 +236,9 @@ def _to_summary_draft(payload: dict) -> SummaryDraft:
             target=_anchor_target(a.get("target", "section")),
             span=str(a.get("span", "")),
             label=str(a.get("label", "")),
+            # Keep the raw target string (the grounding gate resolves it against real doc-model
+            # structure); ``target`` above is only the coarse 3-value display type.
+            target_hint=str(a.get("target", "")),
         )
         for a in payload.get("anchors", [])
     )
