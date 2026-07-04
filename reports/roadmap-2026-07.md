@@ -2,14 +2,15 @@
 
 > **Date**: 2026-07-03 · **Baseline**: develop `573ad494` (main at v1.2.3, 13 commits behind) · **main now at v1.4.0** (2026-07-04 promotion)
 > **Updated**: 2026-07-04 — current status:
-> - ✅ **v1.4.0 promoted to main** (PR #360, merge `45651d0`) — ships #351 / #356 / #338 / #349; `release.yml` auto-tagged `v1.4.0`, `cd.yml` ECS rolling deploy (API · ingestion · frontend).
+> - ✅ **v1.4.0 promoted to main** (PR #360, merge `45651d0`) — ships #351 / #356 / #338 / #349; `release.yml` auto-tagged `v1.4.0`, `cd.yml` ECS rolling deploy **succeeded** (API · Ingestion · Novelty worker · Frontend stable, no rollback).
+> - ✅ **CI Node 20→24 bump** (PR #361, merge `6fae4a3`) — `actions/checkout` v4→v5, `aws-actions/configure-aws-credentials` v4→v6.2.1 (node24; 13/13 CI green). `amazon-ecr-login` already node24. `mathieudutour/github-tag-action` can't bump yet (no upstream node24 release) → tracked follow-up.
 > - PR #351 merged (summary-anchor structural resolution + stale-docmodel self-heal).
 > - **PRs #338 and #349 are MERGED to develop** (2026-07-04): #338 evidence agent (merge `f12990d`) and #349 novelty agent (merge `e5e1e19`); both re-reviewed → APPROVED before merge.
 > - Roadmap execution started: **PR #353** opened for ALB + CloudFront access logs (#341 step ①); **PR #355** opened for the S3/OAC-backed edge 5xx branded error page (#341 step ②); **PR #357** opened for 각주트리 DOI node expansion 500 (#342).
 > - **PR #359 merged** into #338 (all 5 blockers + multi-turn context); attachment ingestion → tracked follow-up. #349's timeline-detail overwrite fixed (#358), and the #338↔#349 `AgentChatScreen.tsx` conflict was integrated at merge (evidence cards + streaming + jobState timeline; tsc + 231 vitest + CI build green).
 > _Prev 2026-07-03 pm — PR #337 merged; PR #349 opened._
 > Snapshot of where the product stands against the team's initial plan, and the path to
-> production-level completion of our goals. Tracking references: #337–#359 where cited below.
+> production-level completion of our goals. Tracking references: #337–#361 where cited below.
 
 ## 1. Status vs. the initial plan
 
