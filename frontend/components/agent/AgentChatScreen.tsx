@@ -547,7 +547,11 @@ function EvidenceRefList({ refs }: { refs: EvidenceSourceRef[] }) {
     <ul className={styles.evidenceRefs}>
       {refs.map((ref, idx) => (
         <li key={idx} className={styles.evidenceRef}>
-          <span className={styles.evidencePaperId}>{ref.paperId}</span>
+          <span className={styles.evidenceSource}>
+            <span className={styles.evidencePaperId}>{ref.paperId}</span>
+            {/* 인용 앵커(#339). recordRef는 내부 식별자라 노출하지 않는다. */}
+            {ref.anchor ? <span className={styles.evidenceAnchor}>§ {ref.anchor}</span> : null}
+          </span>
           {ref.quote ? <blockquote>{ref.quote}</blockquote> : null}
         </li>
       ))}

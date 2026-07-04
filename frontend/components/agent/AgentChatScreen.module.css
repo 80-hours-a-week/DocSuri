@@ -288,6 +288,17 @@
   color: var(--color-accent);
 }
 
+.evidenceSource {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.evidenceAnchor {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
 .evidenceRef blockquote {
   margin: 0;
   padding: 4px 8px;
