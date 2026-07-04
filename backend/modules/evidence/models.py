@@ -85,6 +85,9 @@ class AgentRunContext:
     owner_id: str
     request_id: str
     budget_signal: dict[str, Any] = field(default_factory=dict)
+    # 멀티턴 검색 맥락화용 — 같은 세션의 이전 턴 topic들(PR #338 리뷰 Blocking #2/FR-37).
+    # 단발 경로(U12 form_evidence)·새 세션은 비어 있다.
+    prior_topics: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

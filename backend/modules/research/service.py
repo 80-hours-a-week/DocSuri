@@ -72,6 +72,12 @@ class ResearchService:
         orchestrator: Any = None,
     ) -> ResearchChatMessage:
         self._repo.get_job(owner_id, job_id)
+        # 멀티턴 맥락(PR #338 리뷰 Blocking #2/FR-37): 현재 메시지 추가 전 이전 사용자 질문들.
+        prior_topics = tuple(
+            m.content
+            for m in self._repo.list_messages(owner_id, job_id)
+            if m.role == ChatRole.USER and m.content
+        )
         user_msg = self._repo.add_message(
             ResearchChatMessage(
                 jobId=job_id,
@@ -84,7 +90,7 @@ class ResearchService:
         if orchestrator is None:
             self._repo.mark_completed(owner_id, job_id)
             return user_msg
-        result = await _run_evidence(orchestrator, owner_id, dto.content)
+        result = await _run_evidence(orchestrator, owner_id, dto.content, prior_topics)
         content = _format_turn_result(result)
         assistant_msg = self._repo.add_message(
             ResearchChatMessage(
@@ -105,12 +111,21 @@ class ResearchService:
         return ResearchMessageListResponse(messages=self._repo.list_messages(owner_id, job_id))
 
 
-async def _run_evidence(orchestrator: Any, owner_id: str, topic: str) -> Any:
+async def _run_evidence(
+    orchestrator: Any, owner_id: str, topic: str, prior_topics: tuple[str, ...] = ()
+) -> Any:
     from docsuri_shared._generated.dtos.evidence_schema import EvidenceRequest, EvidenceScope
+    from pydantic import ValidationError
 
     from backend.modules.evidence.models import AgentRunContext, EvidenceSession, EvidenceTurn
 
-    request = EvidenceRequest(topic=topic, scope=EvidenceScope.auto, paperIds=[])
+    try:
+        # research content 한도(12000) > evidence topic 한도(2000)라, 긴 메시지가 여기서
+        # EvidenceRequest Pydantic 검증에 걸려 HTTP 500이 나던 걸 degrade로 막는다
+        # (PR #338 리뷰 Blocking #3/SEC-5). controller 경로는 경계(2000)에서 422로 처리.
+        request = EvidenceRequest(topic=topic, scope=EvidenceScope.auto, paperIds=[])
+    except ValidationError:
+        return None
     session = EvidenceSession(owner_id=owner_id)
     turn = EvidenceTurn(session_id=session.session_id, request=request)
     ctx = AgentRunContext(
@@ -119,6 +134,7 @@ async def _run_evidence(orchestrator: Any, owner_id: str, topic: str) -> Any:
         owner_id=owner_id,
         request_id='',
         budget_signal={'state': 'ok'},
+        prior_topics=prior_topics,
     )
     return await asyncio.to_thread(orchestrator.run, ctx, request)
 
