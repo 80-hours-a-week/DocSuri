@@ -239,7 +239,11 @@ def main(argv: list[str] | None = None) -> int:
         log.error('DOCSURI_DOCMODEL_BUCKET not set; evidence real path not configured')
         return 1
 
-    bundle = build_evidence_orchestrator(ev_settings)
+    # NFR-C1: 워커 프로세스별 cost guard (novelty/summarization 워커와 동일 패턴).
+    # ponytail: 프로세스별 근사 카운터 — 공유 예산 권위가 생기면 교체.
+    from docsuri_ops.cost_guard import CostGuardCircuitBreaker
+
+    bundle = build_evidence_orchestrator(ev_settings, cost_guard=CostGuardCircuitBreaker())
     orchestrator = bundle.orchestrator
 
     settings = Settings.from_env()

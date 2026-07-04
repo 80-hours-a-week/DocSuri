@@ -53,6 +53,7 @@ class EvidenceExtractor:
         region_name: str | None = None,
         client: Any | None = None,
         max_retries: int = _MAX_RETRIES,
+        cost_guard: Any | None = None,
     ) -> None:
         if client is None:
             import boto3
@@ -68,6 +69,8 @@ class EvidenceExtractor:
         self._model_id = model_id
         self._max_retries = max_retries
         self._cb = _LocalCircuitBreaker()
+        # NFR-C1: Bedrock 사용량(USD 추정)을 기록할 cost guard — None이면 계측 생략.
+        self._cost_guard = cost_guard
 
     def extract(
         self,
@@ -120,6 +123,7 @@ class EvidenceExtractor:
             contentType='application/json',
         )
         chunks: list[str] = []
+        invocation_metrics: dict = {}
         for event in response['body']:
             chunk = event.get('chunk', {})
             raw = chunk.get('bytes', b'')
@@ -129,7 +133,37 @@ class EvidenceExtractor:
                     delta = data.get('delta', {})
                     if delta.get('type') == 'text_delta':
                         chunks.append(delta.get('text', ''))
+                # 마지막 청크에 실리는 Bedrock 사용량 — NFR-C1 지출 기록용.
+                metrics = data.get('amazon-bedrock-invocationMetrics')
+                if metrics:
+                    invocation_metrics = metrics
+        self._record_spend(invocation_metrics)
         return ''.join(chunks)
+
+    def _record_spend(self, metrics: dict) -> None:
+        """NFR-C1 — invocationMetrics를 cost guard 지출로 기록. 계측 실패가 추출을 막지 않는다."""
+        if self._cost_guard is None or not metrics:
+            return
+        try:
+            from uuid import uuid4
+
+            from docsuri_ops.cost_guard import estimate_bedrock_usd
+            from docsuri_ops.domain.models import UsageEvent
+
+            amount = estimate_bedrock_usd(
+                input_tokens=int(metrics.get('inputTokenCount') or 0),
+                output_tokens=int(metrics.get('outputTokenCount') or 0),
+            )
+            if amount > 0:
+                self._cost_guard.record_spend(
+                    UsageEvent(
+                        event_id=f'evidence-extract-{uuid4()}',
+                        amount_usd=amount,
+                        source='evidence.extractor',
+                    )
+                )
+        except Exception:  # noqa: BLE001 — 지출 계측은 best-effort
+            logger.warning('failed to record evidence Bedrock spend', exc_info=True)
 
 
 def _parse_json(text: str) -> dict:

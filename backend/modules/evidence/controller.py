@@ -7,6 +7,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
+from backend.middleware.agent_quota import enforce_evidence_turn_quota
 from backend.modules.accounts.models import Principal
 
 from .models import (
@@ -118,7 +119,12 @@ class TurnOut(BaseModel):
 # 엔드포인트
 # ---------------------------------------------------------------------------
 
-@router.post('/turns', response_model=TurnOut)
+@router.post(
+    '/turns',
+    response_model=TurnOut,
+    # NFR-C1: research 경로와 동일 키(agent:evidence:{user})로 일일 쿼터 공유.
+    dependencies=[Depends(enforce_evidence_turn_quota)],
+)
 async def create_turn(
     body: TurnCreateRequest,
     request: Request,
