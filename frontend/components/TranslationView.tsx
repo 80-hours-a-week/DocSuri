@@ -16,7 +16,9 @@ import styles from './TranslationView.module.css';
 // text is Korean. Below it, the glossary is split into two INDEPENDENT groups (BR-S4):
 //   · 원어 유지 용어 — the other terms the model kept in English → weak (read-time overlay).
 //   · 표준 용어 — DocSuri standard seed terms present in this paper (keep-as-is + mapping chips, the
-//     latter pre-filled) → strong (prompt-enforced, needs a re-generate).
+//     latter pre-filled) → strong (prompt-enforced, needs a re-generate). A strong term rides into the
+//     prompt for BOTH tasks, so it also invalidates the summary cache (reflected lazily on next open);
+//     the hint tells the reader so the summary re-generating later isn't a surprise.
 // Editing a chip does NOT hit the server; it stages the rendering into a per-paper draft
 // (`useGlossaryDraft`, sessionStorage) so a pending edit — and its group's "반영" button — survive
 // leaving and re-entering this page, and nothing reflects until applied. Each group has its OWN apply
@@ -146,7 +148,7 @@ export function TranslationView({
       <div className={styles.apply}>
         <span className={styles.applyNote}>
           {isStrong
-            ? `바꾼 표준 용어 ${keys.length}개 · 누르면 번역을 다시 만들어 반영해요`
+            ? `바꾼 표준 용어 ${keys.length}개 · 누르면 번역을 다시 만들어 반영하고 요약에도 적용돼요`
             : `바꾼 용어 ${keys.length}개 · 누르면 번역에 반영해요`}
         </span>
         <button
@@ -207,7 +209,7 @@ export function TranslationView({
               <h3 className={styles.glossaryTitle}>표준 용어</h3>
               <p className={styles.glossaryHint}>
                 DocSuri가 표준으로 정한 용어예요. 바꾼 뒤 아래 버튼을 누르면 번역을 다시 만들어
-                반영해요.
+                반영하고, 이 용어는 요약에도 함께 적용돼요(다음에 요약을 열 때 갱신).
               </p>
               <div className={styles.terms}>
                 {standardKeepAsIs.map((g) => (
