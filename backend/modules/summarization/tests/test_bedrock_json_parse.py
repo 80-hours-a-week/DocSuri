@@ -80,6 +80,33 @@ def test_summarize_parses_forced_tool_input_with_anchors() -> None:
     assert body["tools"][0]["name"] == "emit_summary"
 
 
+def test_summarize_survives_off_schema_field_shapes() -> None:
+    # The model deviated from the tool schema: reproducibility came back as a bare STRING (not
+    # {code, data}), contributions as a bare string, and an anchors entry as a non-object. The old
+    # code did ``reproducibility.get(...)`` on the string and crashed the whole job
+    # (``'str' object has no attribute 'get'``) → infinite redelivery / eternal pending. Now each
+    # off-schema shape degrades gracefully instead of raising.
+    payload = {
+        "tldr": "요약",
+        "contributions": "단일 기여 문자열",
+        "method": "방법",
+        "results": "결과",
+        "limitations": "한계",
+        "reproducibility": "코드는 github.com/x/y 에 공개",
+        "anchors": ["not-an-object", {"field": "results", "target": "table", "label": "T3"}],
+    }
+    gw, _ = _gw(_tool_use_events(payload, name="emit_summary"))
+    draft = gw.summarize(RefinedSource(body="paper text"), _SUMMARY_REQ, Glossary())
+
+    # A bare-string reproducibility is kept under 'code' (not dropped, not a crash).
+    assert draft.reproducibility == {"code": "코드는 github.com/x/y 에 공개", "data": ""}
+    # A bare-string contributions becomes ONE element, never a per-character split.
+    assert draft.contributions == ("단일 기여 문자열",)
+    # The stray non-object anchor is skipped; the valid one survives.
+    (anchor,) = draft.anchors
+    assert anchor.label == "T3"
+
+
 def test_translate_segments_parses_forced_tool_input() -> None:
     payload = {"translations": {"0": "첫 번째", "1": "두 번째"}, "keptTerms": ["Transformer"]}
     gw, _ = _gw(_tool_use_events(payload, name="emit_translations"))
