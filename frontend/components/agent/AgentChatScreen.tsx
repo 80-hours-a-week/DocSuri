@@ -26,6 +26,13 @@ import {
   type EvidenceResultPayload,
   type EvidenceSourceRef,
 } from '@/lib/agentChat/evidenceResult';
+import { itemsOf, listField, sourceRefsOf, textField } from '@/lib/agentChat/noveltyResult';
+import type {
+  NoveltyArtifact,
+  NoveltyPayloadItem,
+  NoveltyResultPayload,
+  NoveltySourceRef,
+} from '@/lib/agentChat/noveltyResult';
 import styles from './AgentChatScreen.module.css';
 
 const MODE_LABEL: Record<AgentMode, string> = {
@@ -480,6 +487,9 @@ function AgentMessageContent({
   if (parsed.kind === 'evidence') {
     return <EvidenceResultView result={parsed.result} />;
   }
+  if (parsed.kind === 'novelty') {
+    return <NoveltyResultView result={parsed.result} />;
+  }
   if (parsed.kind === 'abstain') {
     return <p className={styles.abstainNotice}>{abstainReasonLabel(parsed.reason)}</p>;
   }
@@ -555,6 +565,191 @@ function EvidenceRefList({ refs }: { refs: EvidenceSourceRef[] }) {
           {ref.quote ? <blockquote>{ref.quote}</blockquote> : null}
         </li>
       ))}
+    </ul>
+  );
+}
+
+function NoveltyResultView({ result }: { result: NoveltyResultPayload }) {
+  if (result.artifacts.length === 0) {
+    return <p className={styles.abstainNotice}>표시할 분석 결과가 없습니다.</p>;
+  }
+  return (
+    <div className={styles.noveltyArtifacts}>
+      {result.artifacts.map((artifact) => (
+        <section key={artifact.artifactId} className={styles.noveltyArtifact}>
+          <h4 className={styles.noveltyArtifactTitle}>{artifact.title}</h4>
+          <NoveltyArtifactBody artifact={artifact} />
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function NoveltyArtifactBody({ artifact }: { artifact: NoveltyArtifact }) {
+  if (artifact.kind === 'similar_works') {
+    return <SimilarWorksTable items={itemsOf(artifact.payload)} />;
+  }
+  if (artifact.kind === 'risk_signals') {
+    return <RiskSignalList items={itemsOf(artifact.payload)} />;
+  }
+  if (artifact.kind === 'experiment_plan') {
+    return <ExperimentPlanView plan={artifact.payload} />;
+  }
+  // novelty_candidates·external_findings·알 수 없는 kind — 공통 목록 렌더링.
+  return <NoveltyItemList items={itemsOf(artifact.payload)} />;
+}
+
+function SimilarWorksTable({ items }: { items: NoveltyPayloadItem[] }) {
+  if (items.length === 0) {
+    return <p className={styles.abstainNotice}>정리할 유사 연구를 찾지 못했습니다.</p>;
+  }
+  return (
+    <div className={styles.noveltyTableWrap}>
+      <table className={styles.noveltyTable}>
+        <thead>
+          <tr>
+            <th>연구</th>
+            <th>요약</th>
+            <th>근거</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item, idx) => (
+            <tr key={idx}>
+              <td>{item.title}</td>
+              <td>{item.summary ?? item.rationale ?? ''}</td>
+              <td>
+                <EvidenceStatusBadge status={item.evidenceStatus} />
+                <NoveltySourceRefLinks refs={sourceRefsOf(item.sourceRefs)} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function NoveltyItemList({ items }: { items: NoveltyPayloadItem[] }) {
+  if (items.length === 0) {
+    return <p className={styles.abstainNotice}>표시할 항목이 없습니다.</p>;
+  }
+  return (
+    <ul className={styles.noveltyItems}>
+      {items.map((item, idx) => (
+        <li key={idx} className={styles.noveltyItem}>
+          <div className={styles.noveltyItemHead}>
+            <strong>{item.title}</strong>
+            <EvidenceStatusBadge status={item.evidenceStatus} />
+          </div>
+          {item.summary || item.rationale ? <p>{item.summary ?? item.rationale}</p> : null}
+          <NoveltySourceRefLinks refs={sourceRefsOf(item.sourceRefs)} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+const RISK_TYPE_LABEL: Record<string, string> = {
+  sentence_similarity: '문장 유사도',
+  ai_style: 'AI 문체 신호',
+};
+
+function RiskSignalList({ items }: { items: NoveltyPayloadItem[] }) {
+  if (items.length === 0) {
+    return <p className={styles.abstainNotice}>감지된 위험 신호가 없습니다.</p>;
+  }
+  return (
+    <div className={styles.noveltyRisks}>
+      {/* US-NV5 AC: 판정이 아닌 검토 신호임을 명시 — 오탐 가능성 고지. */}
+      <p className={styles.noveltyRiskCaveat}>
+        아래 항목은 검토가 필요한 신호일 뿐, 표절·AI 작성 여부에 대한 판정이 아닙니다. 오탐이 있을
+        수 있습니다.
+      </p>
+      <ul className={styles.noveltyItems}>
+        {items.map((item, idx) => (
+          <li key={idx} className={styles.noveltyItem}>
+            <div className={styles.noveltyItemHead}>
+              <strong>{item.title}</strong>
+              {item.riskType ? (
+                <span className={styles.noveltyRiskType}>
+                  {RISK_TYPE_LABEL[item.riskType] ?? item.riskType}
+                </span>
+              ) : null}
+            </div>
+            {item.summary ? <p>{item.summary}</p> : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+const PLAN_LIST_FIELDS: Array<{ key: string; label: string }> = [
+  { key: 'hypotheses', label: '가설' },
+  { key: 'baselines', label: '베이스라인' },
+  { key: 'procedure', label: '절차' },
+  { key: 'datasets', label: '데이터셋' },
+  { key: 'metrics', label: '지표' },
+  { key: 'resources', label: '자원' },
+  { key: 'risks', label: '리스크' },
+];
+
+function ExperimentPlanView({ plan }: { plan: Record<string, unknown> }) {
+  return (
+    <div className={styles.noveltyPlan}>
+      <p className={styles.noveltyPlanQuestion}>{textField(plan, 'researchQuestion')}</p>
+      {textField(plan, 'noveltyAngle') ? (
+        <p className={styles.noveltyPlanAngle}>{textField(plan, 'noveltyAngle')}</p>
+      ) : null}
+      {PLAN_LIST_FIELDS.map(({ key, label }) => {
+        const values = listField(plan, key);
+        if (values.length === 0) return null;
+        return (
+          <div key={key} className={styles.noveltyPlanField}>
+            <strong>{label}</strong>
+            <ul>
+              {values.map((value, idx) => (
+                <li key={idx}>{value}</li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+      <NoveltySourceRefLinks refs={sourceRefsOf(plan.sourceRefs)} />
+    </div>
+  );
+}
+
+function EvidenceStatusBadge({ status }: { status?: string }) {
+  if (!status) return null;
+  const supported = status === 'supported';
+  return (
+    <span className={supported ? styles.noveltyBadgeSupported : styles.noveltyBadgeInsufficient}>
+      {supported ? '근거 있음' : '근거 부족'}
+    </span>
+  );
+}
+
+function NoveltySourceRefLinks({ refs }: { refs: NoveltySourceRef[] }) {
+  if (refs.length === 0) return null;
+  return (
+    <ul className={styles.noveltyRefs}>
+      {refs.map((ref, idx) => {
+        const label = ref.title || ref.identifier || ref.url || '출처';
+        const href = ref.url && /^https?:\/\//.test(ref.url) ? ref.url : null;
+        return (
+          <li key={idx}>
+            {href ? (
+              <a href={href} target="_blank" rel="noopener noreferrer">
+                {label}
+              </a>
+            ) : (
+              <span>{label}</span>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }

@@ -519,6 +519,37 @@ function noveltyArtifacts(snapshot: AgentSessionSnapshot) {
   const now = snapshot.session.updatedAt;
   return [
     {
+      artifactId: `${snapshot.session.id}-similar`,
+      jobId: snapshot.session.id,
+      kind: 'similar_works',
+      title: '유사 연구 표',
+      objectKey: `mock/${snapshot.session.id}/similar.json`,
+      payload: {
+        items: [
+          {
+            title: '평가셋 자동 생성 연구',
+            summary: '기존 축은 평가셋 자동 생성과 검색 품질 진단에 집중되어 있습니다.',
+            evidenceStatus: 'supported',
+            sourceRefs: [
+              {
+                type: 'url',
+                identifier: '2401.00001',
+                title: 'Prior RAG benchmark',
+                url: 'https://arxiv.org/abs/2401.00001',
+              },
+            ],
+          },
+          {
+            title: '실패 유형 분석 연구',
+            summary: '도메인 실패 유형 분해는 아직 약한 축입니다.',
+            evidenceStatus: 'insufficient',
+            sourceRefs: [],
+          },
+        ],
+      },
+      createdAt: now,
+    },
+    {
       artifactId: `${snapshot.session.id}-ideas`,
       jobId: snapshot.session.id,
       kind: 'novelty_candidates',
@@ -530,6 +561,24 @@ function noveltyArtifacts(snapshot: AgentSessionSnapshot) {
             title: '도메인 지식 기반 실패 유형 분해',
             evidenceStatus: 'supported',
             sourceRefs: ['mock:corpus'],
+          },
+        ],
+      },
+      createdAt: now,
+    },
+    {
+      artifactId: `${snapshot.session.id}-risk`,
+      jobId: snapshot.session.id,
+      kind: 'risk_signals',
+      title: '원고 위험 신호',
+      objectKey: `mock/${snapshot.session.id}/risk.json`,
+      payload: {
+        items: [
+          {
+            title: '문장 유사도 신호',
+            riskType: 'sentence_similarity',
+            summary: '기존 논문과 유사한 문장 패턴이 감지되었습니다.',
+            sourceRefs: [],
           },
         ],
       },
