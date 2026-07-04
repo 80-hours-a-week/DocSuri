@@ -745,6 +745,84 @@ _Resiliency 옵트인은 `requirements.md` 확정 전에 필수 요구사항 명
   - `cd ops/cdk; cdk synth` -> passed with existing CDK warnings
 - Current gate: Build and Test review/approval. Next stage per AI-DLC is Operations placeholder.
 
+## Evidence Formation Agent (U11) — Code Generation Complete
+
+- Date: 2026-07-01
+- Stage: CONSTRUCTION / Code Generation
+- Branch: `feature/u11-evidence-agent-construction`
+- Created application code:
+  - `backend/modules/evidence/tools.py`
+  - `backend/modules/evidence/prompts.py`
+  - `backend/modules/evidence/extractor.py`
+  - `backend/modules/evidence/assembler.py`
+  - `backend/modules/evidence/orchestrator.py`
+  - `backend/modules/evidence/repository.py`
+  - `backend/modules/evidence/service.py`
+  - `backend/modules/evidence/controller.py`
+  - `backend/modules/evidence/settings.py`
+  - `backend/modules/evidence/real_wiring.py`
+  - `backend/modules/evidence/migrations/001_create_evidence_tables.sql`
+  - `backend/tests/test_evidence.py`
+- Modified application code:
+  - `backend/wiring.py` (`_mount_evidence` 추가, `_INTEGRATIONS` 등재)
+  - `backend/migrations/__main__.py` (evidence migration 경로 등재)
+- Verification:
+  - `./backend/.venv/bin/ruff check backend/modules/evidence/ backend/tests/test_evidence.py` -> passed (0 errors)
+  - `PYTHONPATH='shared/python/src:ops/src:backend/modules/discovery/src:backend/modules/summarization/src' ./backend/.venv/bin/pytest backend/tests/test_evidence.py -v` -> 12 passed
+- Key invariants enforced:
+  - INV-EV-1: session ownership (wrong owner → KeyError → 404, SEC-9)
+  - INV-EV-2: empty claims → TurnAbstainResult (not TurnSuccessResult)
+  - INV-EV-3: no hallucination — quote must appear in paper fullText
+  - INV-EV-5: internal fields (score, chunk_id, vector, llm_meta) excluded from all API responses
+  - BR-EV-2/7/8/9/10/12 모두 구현
+  - D5: EvidenceFormationPort — asyncio.to_thread으로 sync Orchestrator 연결
+- Current gate: Code Generation review/approval. Next recommended stage: Build and Test after approval.
+
+## Evidence Formation Agent (U11) — Build and Test Complete
+
+- Date: 2026-07-01
+- Stage: CONSTRUCTION / Build and Test
+- Code Generation approval: 사용자 "Build & Test 단계 진행해" 요청으로 진행
+- Branch: `feature/u11-evidence-agent-construction`
+- Build/test documents updated:
+  - `aidlc-docs/construction/build-and-test/build-instructions.md` (U11 Evidence 섹션 추가)
+  - `aidlc-docs/construction/build-and-test/unit-test-instructions.md` (U11 Evidence 섹션 추가)
+  - `aidlc-docs/construction/build-and-test/integration-test-instructions.md` (U11 Evidence 섹션 추가)
+  - `aidlc-docs/construction/build-and-test/performance-test-instructions.md` (U11 Evidence 섹션 추가)
+  - `aidlc-docs/construction/build-and-test/contract-test-instructions.md` (U11 Evidence 섹션 추가)
+  - `aidlc-docs/construction/build-and-test/security-test-instructions.md` (U11 Evidence 섹션 추가)
+  - `aidlc-docs/construction/build-and-test/build-and-test-summary.md` (U11 Evidence 섹션 추가)
+- Application code fix:
+  - `backend/wiring.py`: 미사용 `EvidenceAgentOrchestrator` import 제거 (ruff F401)
+  - `backend/tests/test_app_shell.py`: expected module set에 `"evidence"` 추가
+- Verification:
+  - `./backend/.venv/bin/python -m compileall backend/modules/evidence/ backend/wiring.py backend/migrations/__main__.py` → PASS
+  - `./backend/.venv/bin/ruff check backend/modules/evidence/ backend/wiring.py backend/migrations/__main__.py backend/tests/test_evidence.py backend/tests/test_app_shell.py` → PASS (0 errors)
+  - `PYTHONPATH='...' ./backend/.venv/bin/pytest backend/tests/test_evidence.py -v` → **12 passed**
+  - `PYTHONPATH='...' ./backend/.venv/bin/pytest backend/tests/ --ignore=backend/tests/test_mypage.py` → **93 passed**, 1 failed (pre-existing: `cryptography` absent on macOS), 1 skipped
+- Environment note: `test_discovery_and_accounts_actually_mount` 1건 실패는 macOS 환경에 `cryptography` 패키지 미설치로 accounts/mypage가 스킵되는 기존 환경 제약 — U11 변경과 무관
+- Current gate: Build and Test review/approval. Next stage per AI-DLC is Operations placeholder.
+
+## Evidence Formation Agent (U11) — AgentWorker + CDK Stack 추가
+
+- Date: 2026-07-01
+- Stage: CONSTRUCTION / Code Generation (보완)
+- Branch: `feature/u11-evidence-agent-construction`
+- Created:
+  - `backend/modules/evidence/worker.py` — SQS polling AgentWorker (BR-EV-6)
+  - `ops/cdk/stacks/evidence_stack.py` — SQS + ECS Fargate CDK stack
+- Modified:
+  - `backend/modules/evidence/repository.py` — `update_turn_result` 추가 (Protocol + InMemory + SQL)
+  - `backend/modules/evidence/service.py` — `sqs_enqueue` 콜백 주입 + async path(BR-EV-6)
+  - `backend/modules/evidence/controller.py` — `get_sqs_enqueue` 의존성 + POST /turns 주입
+  - `backend/wiring.py` — `_mount_evidence`에 sqs_enqueue boto3 콜백 연결
+  - `ops/cdk/app.py` — EvidenceStack 등록
+- Verification:
+  - `./backend/.venv/bin/ruff check backend/modules/evidence/ backend/wiring.py ops/cdk/stacks/evidence_stack.py ops/cdk/app.py` → PASS
+  - `./backend/.venv/bin/python -m compileall backend/modules/evidence/ backend/wiring.py ops/cdk/stacks/evidence_stack.py ops/cdk/app.py` → PASS
+  - `PYTHONPATH='...' ./backend/.venv/bin/pytest backend/tests/test_evidence.py backend/tests/test_app_shell.py -v` → 26 passed, 1 failed (pre-existing cryptography 환경 제약)
+- Construction 완료: Code Generation 전 범위(코어 모듈 + AgentWorker + CDK IaC) 모두 작성됨
+
 ## U9 Personalization — Search-Boost Application (Shadow) Increment
 
 - Date: 2026-07-01
