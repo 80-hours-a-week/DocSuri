@@ -14,6 +14,7 @@ from backend.config import Settings
 from backend.modules.accounts.models import Principal, UserRole
 from backend.modules.novelty import controller
 from backend.modules.novelty.adapters import (
+    SIMILAR_WORK_DETAIL_FIELDS,
     BedrockNoveltyLlmClient,
     ExternalApiSearchClient,
     NoveltyAdapters,
@@ -452,7 +453,19 @@ def test_bedrock_llm_adapter_maps_similar_work_detail_columns() -> None:
                         "limitations": "small cohort",
                         # overlap 키 자체가 없음 → null(기권)로 정규화되어야 한다
                         "sourceRefIndexes": [0],
-                    }
+                    },
+                    {
+                        # 유효한 sourceRef가 없는 row — 상세 칸이 전부 기권되어야 한다
+                        "title": "Ungrounded speculation",
+                        "summary": "No valid refs.",
+                        "problem": "invented problem",
+                        "method": "invented method",
+                        "dataset": "invented dataset",
+                        "results": "invented results",
+                        "limitations": "invented limitations",
+                        "overlap": "invented overlap",
+                        "sourceRefIndexes": [99],
+                    },
                 ],
                 "noveltyCandidates": [
                     {"title": "Freshness-aware evaluation", "sourceRefIndexes": [0]}
@@ -500,6 +513,10 @@ def test_bedrock_llm_adapter_maps_similar_work_detail_columns() -> None:
     assert item["dataset"] == "RAG-Bench"
     assert item["results"] is None
     assert item["overlap"] is None
+    # 리뷰 반영 — sourceRef 없는 row는 상세 칸 전부 기권(null): 근거 없는 값 노출 금지
+    ungrounded = draft.similarWorks["items"][1]
+    assert ungrounded["evidenceStatus"] == EvidenceStatus.ABSTAINED.value
+    assert all(ungrounded[column] is None for column in SIMILAR_WORK_DETAIL_FIELDS)
     # 상세 칼럼은 유사 연구 표 전용 — novelty candidates에는 붙지 않는다
     assert "method" not in draft.noveltyCandidates["items"][0]
     # 프롬프트 계약과 추측 금지 지시가 실제 호출 본문에 실려 나간다

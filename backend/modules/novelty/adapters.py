@@ -624,7 +624,9 @@ def _llm_items_payload(
             value = item.get(column)
             text = value.strip() if isinstance(value, str) else ""
             # 키는 항상 실어 null=기권을 명시한다 — FE가 '근거 부족' 칸으로 구분(#253).
-            entry[column] = text[:500] or None
+            # sourceRef가 하나도 없는 row는 상세 칸 전부 기권 — 근거 없는 LLM 값이
+            # 표에서 근거 있는 것처럼 노출되면 안 된다(리뷰 반영).
+            entry[column] = (text[:500] or None) if item_refs else None
         items.append(entry)
     if not items:
         return fallback
