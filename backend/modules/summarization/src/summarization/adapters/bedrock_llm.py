@@ -94,9 +94,16 @@ class BedrockLlmGateway:
             import boto3  # lazy: only the `real` extra needs boto3
             from botocore.config import Config
 
+            # read_timeout is per-read (the gap between streamed events), so it must cover the
+            # model's time-to-first-token, not the total generation. A full-paper translation sends
+            # a large prompt under forced tool-use and emits an input-sized (up to 8192-token)
+            # chunk, whose TTFT routinely exceeds 30s → ReadTimeout → retry → abstain (the observed
+            # full-translation "generation_unavailable"). Summaries are short and were unaffected.
+            # These calls run in the background worker (no gateway deadline), so a generous ceiling
+            # is safe; it bounds a genuine hang without cutting a slow-to-start large generation.
             config = Config(
                 connect_timeout=5.0,
-                read_timeout=30.0,
+                read_timeout=120.0,
                 retries={"max_attempts": 1},
             )
             client = boto3.client("bedrock-runtime", region_name=region_name, config=config)
