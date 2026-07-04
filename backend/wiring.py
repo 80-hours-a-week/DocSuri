@@ -592,7 +592,7 @@ def _mount_novelty(app: FastAPI, settings: Settings, result: MountResult) -> Non
             corpus=corpus,
             external=build_external_adapter(),
             similarity=build_similarity_adapter(corpus),
-            llm=build_llm_adapter(),
+            llm=build_llm_adapter(cost_guard=getattr(app.state, "cost_guard", None)),
         )
         log.info("app-shell: novelty wired U2 full-search corpus adapter")
     for router in novelty.routers:

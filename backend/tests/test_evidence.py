@@ -483,8 +483,44 @@ def test_orchestrator_abstains_with_cost_degraded_reason_when_signal_degraded() 
     assert result.outcome.abstainReason == 'cost_degraded'
 
 
-def test_orchestrator_gates_on_wired_cost_guard_without_external_signal() -> None:
-    """NFR-C1 — U6 단일 권위(cost guard)를 직접 물면 budget_signal 없이도 게이트된다."""
+def test_orchestrator_does_not_gate_wired_cost_guard_at_warning() -> None:
+    """NFR-C1 — agent hard gate는 warning(80%)이 아니라 critical(95%)부터 발화한다."""
+    from types import SimpleNamespace
+
+    from docsuri_ops.cost_guard import CostGuardCircuitBreaker
+    from docsuri_ops.domain.models import UsageEvent
+
+    from backend.modules.evidence.models import PaperSearchResult, TurnAbstainResult
+    from backend.modules.evidence.orchestrator import EvidenceAgentOrchestrator
+
+    class _Search:
+        called = False
+
+        def search(self, *, topic, scope, paper_ids):
+            self.called = True
+            return PaperSearchResult(records=(), query_used=topic, scope='auto')
+
+    guard = CostGuardCircuitBreaker()
+    guard.record_spend(UsageEvent(event_id='seed', amount_usd=1280.0, source='test'))
+    search = _Search()
+    orchestrator = EvidenceAgentOrchestrator(
+        search_tool=search,
+        doc_model_tool=SimpleNamespace(),
+        extractor=SimpleNamespace(),
+        assembler=SimpleNamespace(),
+        cost_guard=guard,
+    )
+    ctx, request = _cost_gate_ctx({})
+
+    result = orchestrator.run(ctx, request)
+
+    assert search.called is True
+    assert isinstance(result, TurnAbstainResult)
+    assert result.outcome.abstainReason == 'out_of_corpus'
+
+
+def test_orchestrator_gates_on_critical_wired_cost_guard_without_external_signal() -> None:
+    """NFR-C1 — U6 단일 권위(cost guard)를 직접 물면 critical부터 게이트된다."""
     from docsuri_ops.cost_guard import CostGuardCircuitBreaker
     from docsuri_ops.domain.models import UsageEvent
 
@@ -492,7 +528,7 @@ def test_orchestrator_gates_on_wired_cost_guard_without_external_signal() -> Non
     from backend.modules.evidence.orchestrator import EvidenceAgentOrchestrator
 
     guard = CostGuardCircuitBreaker()
-    guard.record_spend(UsageEvent(event_id='seed', amount_usd=1600.0, source='test'))
+    guard.record_spend(UsageEvent(event_id='seed', amount_usd=1520.0, source='test'))
     orchestrator = EvidenceAgentOrchestrator(
         search_tool=_NoToolAllowed(),
         doc_model_tool=_NoToolAllowed(),

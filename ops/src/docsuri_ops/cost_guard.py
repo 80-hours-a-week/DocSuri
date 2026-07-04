@@ -74,10 +74,18 @@ _USD_PER_1M_OUTPUT_DEFAULT = 15.0
 
 
 def is_cost_degraded(budget: object) -> bool:
-    """비-normal degrade 모드거나 회로가 열리면 LLM 지출을 게이트한다 (U7 BR-S13과 동일 술어)."""
+    """U7-style soft degradation predicate: warning(80%)부터 비-normal로 본다."""
     mode = str(getattr(budget, "degrade_mode", "normal") or "normal").lower().replace("_", "-")
     circuit = str(getattr(budget, "circuit_state", "closed") or "closed").lower()
     return mode not in ("normal", "none") or circuit == "open"
+
+
+def is_cost_critical(budget: object) -> bool:
+    """Agent Bedrock 하드 게이트: critical(95%) 이상 또는 open circuit에서만 차단한다."""
+    tier = str(getattr(budget, "tier", "normal") or "normal").lower().replace("_", "-")
+    mode = str(getattr(budget, "degrade_mode", "normal") or "normal").lower().replace("_", "-")
+    circuit = str(getattr(budget, "circuit_state", "closed") or "closed").lower()
+    return tier in {"critical", "hard-cap"} or mode == "lexical-only" or circuit == "open"
 
 
 def estimate_bedrock_usd(*, input_tokens: int, output_tokens: int) -> float:

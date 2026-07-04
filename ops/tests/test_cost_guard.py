@@ -105,14 +105,20 @@ def test_cost_guard_spend_is_monotonic(amounts: list[float]) -> None:
 
 
 def test_is_cost_degraded_predicate_matches_guard_tiers() -> None:
-    from docsuri_ops.cost_guard import is_cost_degraded
+    from docsuri_ops.cost_guard import is_cost_critical, is_cost_degraded
 
     guard = CostGuardCircuitBreaker()
     assert is_cost_degraded(guard.get_budget_state()) is False
+    assert is_cost_critical(guard.get_budget_state()) is False
 
     guard.record_spend(UsageEvent(event_id="u1", amount_usd=1280.0, source="bedrock"))
-    # warning(80%) → RERANK_OFF부터 게이트 (U7 BR-S13과 동일 술어)
+    # warning(80%) → U7-style soft degradation, but agent hard-gate stays open.
     assert is_cost_degraded(guard.get_budget_state()) is True
+    assert is_cost_critical(guard.get_budget_state()) is False
+
+    guard.record_spend(UsageEvent(event_id="u2", amount_usd=240.0, source="bedrock"))
+    assert guard.get_budget_state().tier == "critical"
+    assert is_cost_critical(guard.get_budget_state()) is True
 
 
 def test_estimate_bedrock_usd_default_rates_and_env_override(

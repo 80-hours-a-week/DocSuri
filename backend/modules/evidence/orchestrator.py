@@ -50,9 +50,9 @@ class EvidenceAgentOrchestrator:
     def _cost_gated(self) -> bool:
         if self._cost_guard is None:
             return False
-        from docsuri_ops.cost_guard import is_cost_degraded
+        from docsuri_ops.cost_guard import is_cost_critical
 
-        return is_cost_degraded(self._cost_guard.get_budget_state())
+        return is_cost_critical(self._cost_guard.get_budget_state())
 
     def run(self, ctx: AgentRunContext, request: EvidenceRequest) -> TurnResult:
         # --- 1. 비용 게이트 확인(BR-EV-7) — 외부 신호 우선, 없으면 U6 cost guard 직접 조회.

@@ -366,12 +366,12 @@ class NoopNoveltyLlmClient:
 
 
 def _cost_gated(cost_guard: Any) -> bool:
-    """NFR-C1 — U6 cost guard가 게이트 상태인지 (None이면 게이트 없음)."""
+    """NFR-C1 — agent LLM hard gate는 critical 이상에서만 발화(None이면 게이트 없음)."""
     if cost_guard is None:
         return False
-    from docsuri_ops.cost_guard import is_cost_degraded
+    from docsuri_ops.cost_guard import is_cost_critical
 
-    return is_cost_degraded(cost_guard.get_budget_state())
+    return is_cost_critical(cost_guard.get_budget_state())
 
 
 def _record_bedrock_spend(cost_guard: Any, usage: dict[str, Any]) -> None:

@@ -771,8 +771,35 @@ def test_api_rejects_blank_topic_before_job_is_created(monkeypatch) -> None:
     assert repo.list_jobs(principal.user_id) == []
 
 
-def test_bedrock_llm_client_degrades_without_invoke_when_cost_guard_gated() -> None:
-    """NFR-C1 — cost guard가 게이트 상태면 Bedrock 호출 없이 cost_degraded로 저하한다."""
+def test_bedrock_llm_client_invokes_at_cost_guard_warning() -> None:
+    """NFR-C1 — agent hard gate는 warning(80%)에서는 Bedrock을 막지 않는다."""
+    from docsuri_ops.cost_guard import CostGuardCircuitBreaker
+    from docsuri_ops.domain.models import UsageEvent
+
+    class _Invoke:
+        called = False
+
+        def invoke_model(self, **kwargs):
+            self.called = True
+            return {"body": BytesIO(json.dumps({"content": [{"text": "{}"}]}).encode("utf-8"))}
+
+    guard = CostGuardCircuitBreaker()
+    guard.record_spend(UsageEvent(event_id="seed", amount_usd=1280.0, source="test"))
+    ref = {"type": "url", "identifier": "2401.00001", "url": "https://arxiv.org/abs/2401.00001"}
+    client = _Invoke()
+
+    draft = BedrockNoveltyLlmClient(model_id="m", client=client, cost_guard=guard).draft(
+        topic="t",
+        corpus=RetrievalBundle(items=[{"title": "Prior", "sourceRefs": [ref]}]),
+        external=RetrievalBundle(items=[]),
+    )
+
+    assert client.called is True
+    assert draft.degradedReason is None
+
+
+def test_bedrock_llm_client_degrades_without_invoke_when_cost_guard_critical() -> None:
+    """NFR-C1 — critical cost guard 상태면 Bedrock 호출 없이 cost_degraded로 저하한다."""
     from docsuri_ops.cost_guard import CostGuardCircuitBreaker
     from docsuri_ops.domain.models import UsageEvent
 
@@ -781,7 +808,7 @@ def test_bedrock_llm_client_degrades_without_invoke_when_cost_guard_gated() -> N
             raise AssertionError("LLM must not be invoked while the cost guard is gated")
 
     guard = CostGuardCircuitBreaker()
-    guard.record_spend(UsageEvent(event_id="seed", amount_usd=1600.0, source="test"))
+    guard.record_spend(UsageEvent(event_id="seed", amount_usd=1520.0, source="test"))
     ref = {"type": "url", "identifier": "2401.00001", "url": "https://arxiv.org/abs/2401.00001"}
 
     draft = BedrockNoveltyLlmClient(model_id="m", client=_NoInvoke(), cost_guard=guard).draft(
