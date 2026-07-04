@@ -299,11 +299,6 @@ class FrontendStack(Stack):
             # Add auto_delete_objects=True if teardown cleanliness ever matters.
             removal_policy=RemovalPolicy.RETAIN,
         )
-        s3deploy.BucketDeployment(
-            self, "WebErrorPageDeploy",
-            destination_bucket=error_bucket,
-            sources=[s3deploy.Source.data("__edge/error.html", _EDGE_ERROR_HTML)],
-        )
         error_origin = origins.S3BucketOrigin.with_origin_access_control(error_bucket)
         self.cdn = cloudfront.Distribution(
             self, "WebCdn",
@@ -355,6 +350,13 @@ class FrontendStack(Stack):
                 )
                 for code in (500, 502, 503, 504)
             ],
+        )
+        s3deploy.BucketDeployment(
+            self, "WebErrorPageDeploy",
+            destination_bucket=error_bucket,
+            sources=[s3deploy.Source.data("__edge/error.html", _EDGE_ERROR_HTML)],
+            distribution=self.cdn,
+            distribution_paths=["/__edge/*"],
         )
 
         # Apex docsuri.org → CloudFront (Route53 alias supports apex; CNAME would not).
