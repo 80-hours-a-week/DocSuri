@@ -45,6 +45,7 @@ export type AgentChatAction =
   | { type: 'startSession'; session: AgentSessionSummary }
   | { type: 'loadSession'; snapshot: AgentSessionSnapshot }
   | { type: 'refreshSession'; snapshot: AgentSessionSnapshot }
+  | { type: 'eventsReceived'; events: AgentTimelineEvent[] }
   | { type: 'newChat' }
   | { type: 'setDraft'; draft: string }
   | { type: 'addAttachment'; attachment: AgentAttachment }
@@ -94,6 +95,10 @@ export function agentReducer(state: AgentChatState, action: AgentChatAction): Ag
         jobState: action.snapshot.session.state,
         error: jobStateMessage(action.snapshot.session.state),
       };
+    case 'eventsReceived':
+      return action.events.length
+        ? { ...state, events: mergeTimelineEvents(state.events, action.events) }
+        : state;
     case 'newChat':
       return { ...initialAgentChatState, sessions: state.sessions };
     case 'setDraft':
@@ -202,8 +207,27 @@ export function mergeTimelineEvents(
   incoming: AgentTimelineEvent[],
 ): AgentTimelineEvent[] {
   const byId = new Map(current.map((event) => [event.id, event]));
-  for (const event of incoming) byId.set(event.id, event);
+  for (const event of incoming) {
+    const existing = byId.get(event.id);
+    byId.set(event.id, existing ? mergeTimelineEvent(existing, event) : event);
+  }
   return sortTimelineEvents([...byId.values()]);
+}
+
+// A lean SSE snapshot (id/stage/label/state only) must not erase the richer detail that the
+// polling path already resolved for the same event id. Incoming stage/label/state win, but
+// detail/sequence fall back to the prior event when the snapshot omits them (#349).
+// `??` (not `||`) so a valid sequence of 0 is not discarded as falsy.
+function mergeTimelineEvent(
+  prev: AgentTimelineEvent,
+  next: AgentTimelineEvent,
+): AgentTimelineEvent {
+  return {
+    ...prev,
+    ...next,
+    detail: next.detail ?? prev.detail,
+    sequence: next.sequence ?? prev.sequence,
+  };
 }
 
 export function sortTimelineEvents(events: AgentTimelineEvent[]): AgentTimelineEvent[] {

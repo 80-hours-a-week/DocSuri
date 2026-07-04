@@ -637,6 +637,81 @@ def _mount_research(app: FastAPI, settings: Settings, result: MountResult) -> No
     result.mounted.append("research")
 
 
+def _mount_evidence(app: FastAPI, settings: Settings, result: MountResult) -> None:
+    from backend.modules.evidence import controller as evidence
+    from backend.modules.evidence.repository import (
+        InMemoryEvidenceRepository,
+        SqlEvidenceRepository,
+    )
+    from backend.modules.evidence.settings import EvidenceSettings
+
+    ev_settings = EvidenceSettings.from_env()
+
+    if _is_postgres(settings.database_url):
+        from .db import make_engine, make_session_factory
+
+        engine = getattr(app.state, "db_engine", None) or make_engine(settings.database_url)
+        app.state.db_engine = engine
+        session_factory = make_session_factory(engine)
+
+        def get_evidence_repo():
+            session = session_factory()
+            try:
+                yield SqlEvidenceRepository(session)
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
+            finally:
+                session.close()
+    else:
+        repo = InMemoryEvidenceRepository()
+        app.state.evidence_repo = repo
+
+        def get_evidence_repo():
+            return repo
+
+    if ev_settings.evidence_enabled:
+        from backend.modules.evidence.real_wiring import build_evidence_orchestrator
+
+        bundle = build_evidence_orchestrator(ev_settings)
+        app.state.evidence_bundle = bundle
+
+        def get_evidence_orchestrator():
+            return bundle.orchestrator
+    else:
+        def get_evidence_orchestrator():
+            raise RuntimeError("evidence real path not configured (no S3 DocModel bucket)")
+
+        log.info("app-shell: evidence real path not configured — running in repo-only mode")
+
+    # 비동기 잡 경로(BR-EV-6): sqs_enqueue 콜백을 chat service에 주입
+    sqs_enqueue = None
+    if ev_settings.async_enabled and ev_settings.job_queue_url:
+        import json as _json
+
+        import boto3 as _boto3
+
+        _sqs = _boto3.client('sqs', region_name=ev_settings.region_name or 'ap-northeast-2')
+        _queue_url = ev_settings.job_queue_url
+
+        def sqs_enqueue(payload: dict) -> None:
+            _sqs.send_message(QueueUrl=_queue_url, MessageBody=_json.dumps(payload))
+
+    app.state.evidence_sqs_enqueue = sqs_enqueue
+
+    app.dependency_overrides[evidence.get_repo] = get_evidence_repo
+    app.dependency_overrides[evidence.get_orchestrator] = get_evidence_orchestrator
+    for router in evidence.routers:
+        app.include_router(router)
+    result.mounted.append("evidence")
+    log.info(
+        "app-shell: evidence mounted (real_agent=%s, async=%s)",
+        ev_settings.evidence_enabled,
+        ev_settings.async_enabled,
+    )
+
+
 # The real registry. Each entry is a `(app, settings, result) -> None` mounter whose name
 # (minus the `_mount_` prefix) labels it in MountResult / `/readyz`.
 _INTEGRATIONS = (
@@ -650,4 +725,5 @@ _INTEGRATIONS = (
     _mount_research,
     _mount_novelty,
     _mount_summarization,
+    _mount_evidence,
 )

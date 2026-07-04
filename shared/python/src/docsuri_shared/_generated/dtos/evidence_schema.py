@@ -124,7 +124,7 @@ class EvidenceRequest(BaseModel):
     topic: str = Field(
         ...,
         description='연구 주제 또는 근거형성 질문. Trace: FR-1, SEC-5.',
-        max_length=1000,
+        max_length=2000,
         min_length=1,
     )
     scope: EvidenceScope | None = Field(

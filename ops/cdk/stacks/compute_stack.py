@@ -264,10 +264,23 @@ class ComputeStack(Stack):
                 f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-summary-job-queue"
             ),
             "DOCSURI_NOVELTY_JOB_QUEUE_URL": self.novelty_queue.queue_url,
+            # U11 evidence async worker (NFR-P6/RES-10): the API only enqueues when BOTH of these
+            # are set (wiring.py gate). Without them the long evidence job runs synchronously in the
+            # API task and the EvidenceStack worker queue is never used (PR #338 리뷰 Blocking #4).
+            # Queue is owned by EvidenceStack; referenced by name here (repo pattern, no cross-stack
+            # export) — SendMessage granted below.
+            "DOCSURI_EVIDENCE_ASYNC_ENABLED": "true",
+            "DOCSURI_EVIDENCE_JOB_QUEUE_URL": (
+                f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-evidence-agent-job-queue"
+            ),
             # Activation: mounting the U7 read path (summarization_enabled = bool(bucket)). The
             # papers bucket is Ingestion-owned (same name the summary worker carries); the IAM for
             # S3 read/write + Bedrock invoke is already granted to this task role below.
             "DOCSURI_SUMMARY_BUCKET": f"docsuri-papers-fulltext-{self.account}",
+            # U11 evidence formation — same papers bucket, doc-model/ prefix (IAM below already
+            # grants s3:GetObject on doc-model/*). evidence_enabled = bool(docmodel_bucket); this
+            # is the sole gate that wires the real orchestrator into research/jobs.
+            "DOCSURI_DOCMODEL_BUCKET": f"docsuri-papers-fulltext-{self.account}",
             "DOCSURI_NOVELTY_ARTIFACT_BUCKET": f"docsuri-papers-fulltext-{self.account}",
             "DOCSURI_NOVELTY_ARTIFACT_PREFIX": "novelty/",
             # doc-model rich view (본문): on a read miss the API enqueues a BUILD_DOC_MODEL job to
@@ -583,6 +596,8 @@ class ComputeStack(Stack):
                     f"arn:aws:sqs:{self.region}:{self.account}:docsuri-docmodel-queue",
                     f"arn:aws:sqs:{self.region}:{self.account}:docsuri-ingestion-queue",
                     f"arn:aws:sqs:{self.region}:{self.account}:docsuri-summary-job-queue",
+                    # U11 evidence async job enqueue (PR #338 리뷰 Blocking #4/NFR-P6)
+                    f"arn:aws:sqs:{self.region}:{self.account}:docsuri-evidence-agent-job-queue",
                 ],
             )
         )

@@ -202,6 +202,23 @@ class FrontendStack(Stack):
         # safe ALB liveness probe; a 3xx redirect from it is still "healthy" to the ALB.
         self.service.target_group.configure_health_check(path="/")
 
+        # Edge/origin access logs (#341): the paper page returns intermittent SSR 5xx and we
+        # can't yet correlate a failing request against the SSR server's CloudWatch container
+        # logs. ALB logs give the failing path+timestamp at the origin; CloudFront logs add
+        # edge-vs-origin attribution. BUCKET_OWNER_PREFERRED (ACLs on) is required for CloudFront
+        # standard S3 logging; ALB writes via bucket policy. RETAIN so incident evidence survives
+        # a stack replace; a 90-day lifecycle caps storage cost.
+        edge_logs = s3.Bucket(
+            self, "WebEdgeLogs",
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            object_ownership=s3.ObjectOwnership.BUCKET_OWNER_PREFERRED,
+            enforce_ssl=True,
+            removal_policy=RemovalPolicy.RETAIN,
+            lifecycle_rules=[s3.LifecycleRule(expiration=Duration.days(90))],
+        )
+        self.service.load_balancer.log_access_logs(edge_logs, prefix="alb")
+
         # Network lockdown: ALB :443 only from CloudFront edge IPs (dedicated SG — the 45-entry
         # prefix list vs the 60-rule SG quota; see compute_stack). Necessary but not sufficient —
         # the secret-header rule below is the real origin-auth (shared-prefix-list confused-deputy).
@@ -305,6 +322,11 @@ class FrontendStack(Stack):
             comment="docsuri frontend (U5) - trusted HTTPS edge + authenticated origin",
             domain_names=[_APP_DOMAIN],
             certificate=viewer_cert,
+            # Access logs (#341) — same bucket as the ALB logs, under a cf/ prefix.
+            enable_logging=True,
+            log_bucket=edge_logs,
+            log_file_prefix="cf/",
+            log_includes_cookies=False,
             default_behavior=cloudfront.BehaviorOptions(
                 origin=origin,
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
