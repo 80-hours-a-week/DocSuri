@@ -26,7 +26,14 @@ import {
   type EvidenceResultPayload,
   type EvidenceSourceRef,
 } from '@/lib/agentChat/evidenceResult';
-import { itemsOf, listField, sourceRefsOf, textField } from '@/lib/agentChat/noveltyResult';
+import {
+  SIMILAR_WORK_COLUMNS,
+  detailCell,
+  itemsOf,
+  listField,
+  sourceRefsOf,
+  textField,
+} from '@/lib/agentChat/noveltyResult';
 import type {
   NoveltyArtifact,
   NoveltyPayloadItem,
@@ -603,6 +610,11 @@ function SimilarWorksTable({ items }: { items: NoveltyPayloadItem[] }) {
   if (items.length === 0) {
     return <p className={styles.abstainNotice}>정리할 유사 연구를 찾지 못했습니다.</p>;
   }
+  // US-NV3(#253) — 새 스키마(칼럼 키 존재) 아티팩트에서만 상세 칼럼을 편다. null 칸은
+  // 추측하지 않았다는 뜻이라 '근거 부족'으로 표시한다(기권 우선, 추측 금지).
+  const showDetails = items.some((item) =>
+    SIMILAR_WORK_COLUMNS.some((column) => column.key in item),
+  );
   return (
     <div className={styles.noveltyTableWrap}>
       <table className={styles.noveltyTable}>
@@ -610,6 +622,9 @@ function SimilarWorksTable({ items }: { items: NoveltyPayloadItem[] }) {
           <tr>
             <th>연구</th>
             <th>요약</th>
+            {showDetails
+              ? SIMILAR_WORK_COLUMNS.map((column) => <th key={column.key}>{column.label}</th>)
+              : null}
             <th>근거</th>
           </tr>
         </thead>
@@ -618,6 +633,16 @@ function SimilarWorksTable({ items }: { items: NoveltyPayloadItem[] }) {
             <tr key={idx}>
               <td>{item.title}</td>
               <td>{item.summary ?? item.rationale ?? ''}</td>
+              {showDetails
+                ? SIMILAR_WORK_COLUMNS.map((column) => {
+                    const value = detailCell(item, column.key);
+                    return (
+                      <td key={column.key}>
+                        {value ?? <span className={styles.noveltyCellAbstain}>근거 부족</span>}
+                      </td>
+                    );
+                  })
+                : null}
               <td>
                 <EvidenceStatusBadge status={item.evidenceStatus} />
                 <NoveltySourceRefLinks refs={sourceRefsOf(item.sourceRefs)} />

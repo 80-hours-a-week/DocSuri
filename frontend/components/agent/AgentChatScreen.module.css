@@ -376,6 +376,12 @@
   border: 1px solid var(--color-border);
 }
 
+/* US-NV3(#253) — 유사 연구 표에서 근거 없는 칸(기권) 표시 */
+.noveltyCellAbstain {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
 .noveltyRisks {
   display: grid;
   gap: 8px;

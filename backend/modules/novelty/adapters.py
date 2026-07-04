@@ -454,6 +454,7 @@ class BedrockNoveltyLlmClient:
                 payload.get("similarWorks"),
                 refs,
                 fallback=_fallback_similar_works(),
+                detail_fields=SIMILAR_WORK_DETAIL_FIELDS,
             ),
             noveltyCandidates=_llm_items_payload(
                 payload.get("noveltyCandidates"),
@@ -500,10 +501,25 @@ def _source_ref_catalog(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return refs[:12]
 
 
+# US-NV3(#253) — 유사 연구 표 상세 칼럼. 근거 없는 칸은 null(기권)로 남기고 FE가
+# '근거 부족'으로 표시한다. 추측 금지는 시스템 프롬프트와 정규화가 함께 강제한다.
+SIMILAR_WORK_DETAIL_FIELDS = (
+    "problem",
+    "method",
+    "dataset",
+    "results",
+    "limitations",
+    "overlap",
+)
+
+
 def _novelty_system_prompt() -> str:
     return (
         "You are DocSuri's novelty-analysis assistant. Return only valid JSON. "
-        "Use only the supplied sourceRefIndexes; never invent URLs, titles, datasets, or papers."
+        "Use only the supplied sourceRefIndexes; never invent URLs, titles, datasets, or papers. "
+        "For each similarWorks entry, fill problem, method, dataset, results, limitations, and "
+        "overlap (how it overlaps the user's topic) only when the supplied sources support the "
+        "value; otherwise set the field to null. Never guess."
     )
 
 
@@ -529,7 +545,17 @@ def _novelty_user_prompt(
     }
     contract = {
         "similarWorks": [
-            {"title": "string", "summary": "string", "sourceRefIndexes": [0]}
+            {
+                "title": "string",
+                "summary": "string",
+                "problem": "string|null",
+                "method": "string|null",
+                "dataset": "string|null",
+                "results": "string|null",
+                "limitations": "string|null",
+                "overlap": "string|null",
+                "sourceRefIndexes": [0],
+            }
         ],
         "noveltyCandidates": [
             {"title": "string", "rationale": "string", "sourceRefIndexes": [0]}
@@ -572,6 +598,7 @@ def _llm_items_payload(
     refs: list[dict[str, Any]],
     *,
     fallback: dict[str, Any],
+    detail_fields: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     if not isinstance(raw, list):
         return fallback
@@ -583,18 +610,22 @@ def _llm_items_payload(
         if not title:
             continue
         item_refs = _refs_by_indexes(item.get("sourceRefIndexes"), refs)
-        items.append(
-            {
-                "title": title[:240],
-                "summary": str(item.get("summary") or item.get("rationale") or "")[:1000],
-                "evidenceStatus": (
-                    EvidenceStatus.SUPPORTED.value
-                    if item_refs
-                    else EvidenceStatus.ABSTAINED.value
-                ),
-                "sourceRefs": item_refs,
-            }
-        )
+        entry: dict[str, Any] = {
+            "title": title[:240],
+            "summary": str(item.get("summary") or item.get("rationale") or "")[:1000],
+            "evidenceStatus": (
+                EvidenceStatus.SUPPORTED.value
+                if item_refs
+                else EvidenceStatus.ABSTAINED.value
+            ),
+            "sourceRefs": item_refs,
+        }
+        for column in detail_fields:
+            value = item.get(column)
+            text = value.strip() if isinstance(value, str) else ""
+            # 키는 항상 실어 null=기권을 명시한다 — FE가 '근거 부족' 칸으로 구분(#253).
+            entry[column] = text[:500] or None
+        items.append(entry)
     if not items:
         return fallback
     return _items_payload(items)
