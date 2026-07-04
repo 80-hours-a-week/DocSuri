@@ -34,6 +34,10 @@ _ECS_SERVICES = [
     (_ECS_CLUSTER, "docsuri-api"),
     (_ECS_CLUSTER, "docsuri-ingestion"),
     (_ECS_CLUSTER, "docsuri-novelty-agent-worker"),
+    # Writer for async long-summary + full-translation results (summarization_stack). CD must
+    # force-deploy it each release so it stays image-aligned with the API reader; without this
+    # grant the new cd.yml deploy step is denied ecs:UpdateService on the service.
+    (_ECS_CLUSTER, "docsuri-summary-worker"),
     ("docsuri-frontend", "docsuri-frontend"),
 ]
 

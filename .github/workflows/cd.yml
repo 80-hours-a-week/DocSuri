@@ -166,6 +166,20 @@ jobs:
             --force-new-deployment --no-cli-pager
           echo "Novelty worker deployment initiated."
 
+      # The summary worker reuses the docsuri-api image (summarization_stack) and is the WRITER for
+      # async long-summary + full-translation results; the API service is the READER. It has no
+      # build job of its own (shares the API image) and is scale-to-zero, so nothing here refreshed
+      # it — a release could move the API's async cache-key/result contract forward while the worker
+      # kept running an older image, so it wrote results under a key the API never read and every
+      # long summary + full translation sat in permanent "pending". Force a new deployment so the
+      # worker pulls the same freshly-pushed :latest as every other unit, keeping the writer/reader
+      # in lockstep on each release.
+      - name: Deploy Summary worker (deploy unit ④)
+        run: |
+          aws ecs update-service --cluster docsuri --service docsuri-summary-worker \
+            --force-new-deployment --no-cli-pager
+          echo "Summary worker deployment initiated."
+
       - name: Deploy Frontend (deploy unit ④)
         run: |
           aws ecs update-service --cluster docsuri-frontend --service docsuri-frontend \
@@ -175,10 +189,11 @@ jobs:
       - name: Wait for services to stabilize
         run: |
           aws ecs wait services-stable --cluster docsuri \
-            --services docsuri-api docsuri-ingestion docsuri-novelty-agent-worker --no-cli-pager
+            --services docsuri-api docsuri-ingestion docsuri-novelty-agent-worker \
+            docsuri-summary-worker --no-cli-pager
           aws ecs wait services-stable --cluster docsuri-frontend \
             --services docsuri-frontend --no-cli-pager
-          echo "✅ API, ingestion, novelty worker and frontend services stable."
+          echo "✅ API, ingestion, novelty worker, summary worker and frontend services stable."
 
       - name: Rollback on failure
         if: failure()
