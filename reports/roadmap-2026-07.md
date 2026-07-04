@@ -1,7 +1,8 @@
 # DocSuri Production Roadmap — 2026-07
 
-> **Date**: 2026-07-03 · **Baseline**: develop `573ad494` (main at v1.2.3, 13 commits behind)
+> **Date**: 2026-07-03 · **Baseline**: develop `573ad494` (main at v1.2.3, 13 commits behind) · **main now at v1.4.0** (2026-07-04 promotion)
 > **Updated**: 2026-07-04 — current status:
+> - ✅ **v1.4.0 promoted to main** (PR #360, merge `45651d0`) — ships #351 / #356 / #338 / #349; `release.yml` auto-tagged `v1.4.0`, `cd.yml` ECS rolling deploy (API · ingestion · frontend).
 > - PR #351 merged (summary-anchor structural resolution + stale-docmodel self-heal).
 > - **PRs #338 and #349 are MERGED to develop** (2026-07-04): #338 evidence agent (merge `f12990d`) and #349 novelty agent (merge `e5e1e19`); both re-reviewed → APPROVED before merge.
 > - Roadmap execution started: **PR #353** opened for ALB + CloudFront access logs (#341 step ①); **PR #355** opened for the S3/OAC-backed edge 5xx branded error page (#341 step ②); **PR #357** opened for 각주트리 DOI node expansion 500 (#342).
@@ -36,7 +37,7 @@ Production deploys now go through CI on main push — the manual-buildx era is o
 |---|---|---|
 | 1 | ✅ **PR #337 merged** (2026-07-03 13:00 UTC) — revert-on-promote trap closed | PR #337 |
 | 2 | ✅ **PR #338 merged** (`f12990d`, 2026-07-04) — #359 landed all 4 blockers + whitespace + multi-turn context; independently re-reviewed → APPROVED. Attachments → tracked follow-up | PR #338, #359 |
-| 3 | Promote develop→main + tag (ships glossary redesign + #337 + #338 + #349 via real CD) | #340 |
+| 3 | ✅ **Promoted develop→main → `v1.4.0`** (2026-07-04) — PR #360 merged (`45651d0`); `release.yml` auto-tagged `v1.4.0` (ships #351 anchor, #356 tool-use, #338 evidence agent, #349 novelty agent), `cd.yml` ECS rolling deploy | #340 · `v1.4.0` |
 | 4 | Fix AgentChatScreen raw-JSON rendering — **#338 and #349 have landed**; their `AgentChatScreen.tsx` conflict was integrated at merge (evidence cards + streaming + jobState timeline), so build the fix on develop's merged component | #339 |
 
 ## 3. Phase 1 — Weeks 1–2: agent GA (the 차별화)
