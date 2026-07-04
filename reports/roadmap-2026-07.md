@@ -3,9 +3,9 @@
 > **Date**: 2026-07-03 · **Baseline**: develop `573ad494` (main at v1.2.3, 13 commits behind)
 > **Updated**: 2026-07-04 — current status:
 > - PR #351 merged (summary-anchor structural resolution + stale-docmodel self-heal).
-> - PRs #338/#349 are still **CHANGES_REQUESTED**: #338 has 4 blocking items plus whitespace open after re-review of head `d05e0ad`; #349 has 1 blocking SSE timeline-detail overwrite.
+> - **PRs #338 and #349 are MERGED to develop** (2026-07-04): #338 evidence agent (merge `f12990d`) and #349 novelty agent (merge `e5e1e19`); both re-reviewed → APPROVED before merge.
 > - Roadmap execution started: **PR #353** opened for ALB + CloudFront access logs (#341 step ①); **PR #355** opened for the S3/OAC-backed edge 5xx branded error page (#341 step ②); **PR #357** opened for 각주트리 DOI node expansion 500 (#342).
-> - **PR #359** drafts the #338 fixes into the author's branch: turn persistence, topic-length 500, async worker queue wiring, whitespace, and multi-turn context; attachment ingestion remains a tracked follow-up.
+> - **PR #359 merged** into #338 (all 5 blockers + multi-turn context); attachment ingestion → tracked follow-up. #349's timeline-detail overwrite fixed (#358), and the #338↔#349 `AgentChatScreen.tsx` conflict was integrated at merge (evidence cards + streaming + jobState timeline; tsc + 231 vitest + CI build green).
 > _Prev 2026-07-03 pm — PR #337 merged; PR #349 opened._
 > Snapshot of where the product stands against the team's initial plan, and the path to
 > production-level completion of our goals. Tracking references: #337–#359 where cited below.
@@ -22,8 +22,8 @@
 | 구독제 | ❌ Not started | Never entered requirements — needs inception re-entry |
 | 로그 수집 | ✅ Live | U9 collection healthy (944 events/7d, 0 failures); KPI funnel view missing (#346) |
 | 개인화 추천 | 🟡 Shadow | Search boost applied in shadow mode (PR #300); go-live judgment pending (#345); US-P5 deferred |
-| 에이전트: 문헌탐색/근거형성 | 🚧 Blocked (re-review found 4 open) | PR #338 — 1st-round 7 fixed, but the **2nd review (head `d05e0ad`) still had 4 blocking + whitespace**; author idle since. **PR #359** drafts fixes into the author branch: #1 turn-persist, #3 length-500, #4 async-queue wiring, #5 whitespace + **multi-turn context** built (RED→GREEN, synth, ruff); attachment ingestion → tracked follow-up (comment on #359). #338 blocked pending #359 → re-review. `Docsuri-Evidence` idle; #339 still behind |
-| (charter add) 연구아이디어 novelty 에이전트 | 🚧 In construction | Code in develop, `Docsuri-Novelty` stack built; US-NV stories (#251–259) open; PR #349 reviewed → **CHANGES_REQUESTED** (1 blocking: SSE mapper overwrites timeline detail). Author had **not** pushed since review (head == reviewed commit) → drafted suggestion **PR #358** into the author's branch (field-preserving `mergeTimelineEvents` + regression test; logic RED→GREEN verified, vitest pending in ELSAPHABA's env), awaiting their re-test/merge |
+| 에이전트: 문헌탐색/근거형성 | ✅ Merged to develop | **PR #338 merged** (`f12990d`, 2026-07-04) after #359 landed all fixes: #1 turn-persist, #3 length-500, #4 async-queue wiring, #5 whitespace + **multi-turn context** (RED→GREEN, synth, ruff); independently re-reviewed → APPROVED. Attachment ingestion → tracked follow-up (on #359). `Docsuri-Evidence` stack live; #339 (AgentChatScreen raw-JSON) can now proceed |
+| (charter add) 연구아이디어 novelty 에이전트 | ✅ Merged to develop | **PR #349 merged** (`e5e1e19`, 2026-07-04). SSE timeline-detail overwrite fixed via **#358** (field-preserving `mergeTimelineEvents` + regression test) → re-reviewed APPROVED. The #338↔#349 `AgentChatScreen.tsx` conflict was resolved at merge (evidence cards + streaming + jobState timeline integrated; tsc + 231 vitest + CI frontend build green). US-NV stories (#251–259) remain; queue-swap rollout coordination still applies |
 | 웹검색 레퍼런스 (고려) | ❌ Not started | Novelty agent has GitHub+datasets search; web/news deferred to next cycle |
 | 온보딩 (고려) | ❌ Not started | Candidate fix for personalization cold-start |
 
@@ -35,9 +35,9 @@ Production deploys now go through CI on main push — the manual-buildx era is o
 | # | Action | Tracking |
 |---|---|---|
 | 1 | ✅ **PR #337 merged** (2026-07-03 13:00 UTC) — revert-on-promote trap closed | PR #337 |
-| 2 | Review + merge **PR #338** (U11 evidence agent; infra already live-but-idle) — 1st-round 7 fixed, but re-review of `d05e0ad` found **4 blocking + whitespace still open**; **PR #359** drafts them into the author branch (fixed + verified, multi-turn built, attachments → follow-up). Merge **#359** → re-review #338 | PR #338, #359 |
-| 3 | Promote develop→main + tag (ships glossary redesign + #337 + #338 via real CD) | #340 |
-| 4 | Fix AgentChatScreen raw-JSON rendering — start **after** #338 and #349 land (both rewrite `AgentChatScreen.tsx`); base the fix on #349's version | #339 |
+| 2 | ✅ **PR #338 merged** (`f12990d`, 2026-07-04) — #359 landed all 4 blockers + whitespace + multi-turn context; independently re-reviewed → APPROVED. Attachments → tracked follow-up | PR #338, #359 |
+| 3 | Promote develop→main + tag (ships glossary redesign + #337 + #338 + #349 via real CD) | #340 |
+| 4 | Fix AgentChatScreen raw-JSON rendering — **#338 and #349 have landed**; their `AgentChatScreen.tsx` conflict was integrated at merge (evidence cards + streaming + jobState timeline), so build the fix on develop's merged component | #339 |
 
 ## 3. Phase 1 — Weeks 1–2: agent GA (the 차별화)
 
@@ -48,7 +48,7 @@ The differentiator is ~90% built. Finish it before starting anything new.
 - **Agent chat frontend** (#293–299): nav entry, mode select, session drawer,
   exploration timeline, attachment UX, mock/real transport boundary, quality gate.
 - **Novelty agent stories** (#251–259): manuscript upload, 유사 연구 표, 차별화
-  후보/실험 계획, Notion export, progress display. **PR #349 (in review)** largely
+  후보/실험 계획, Notion export, progress display. **PR #349 (merged `e5e1e19`)** largely
   lands progress display (US-NV7 #257), the DLQ+alarm half of observability
   (US-NV9 #259), and timeline normalization toward US-AG4 #296.
   ⚠️ Its queue swap (stack-owned SQS, RETAIN) needs rollout coordination — worker
