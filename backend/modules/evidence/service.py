@@ -112,6 +112,7 @@ class EvidenceChatService:
                 'topic': request.topic,
                 'scope': (request.scope.value if request.scope else 'auto'),
                 'paperIds': list(request.paperIds or []),
+                'attachments': list(request.attachments or []),
             })
         else:
             # 동기 경로: async 분기와 달리 add_turn을 빠뜨려 저장된 턴이 0건이었다 —

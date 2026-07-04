@@ -66,7 +66,9 @@ class TurnCreateRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     topic: str = Field(..., min_length=1, max_length=2000)
-    scope: str | None = Field(None, description='auto | explicit | mixed')
+    scope: Literal['auto', 'explicit', 'mixed'] | None = Field(
+        None, description='auto | explicit | mixed'
+    )
     paper_ids: list[str] | None = Field(None, alias='paperIds')
     session_id: str | None = Field(None, alias='sessionId')
     # US-AG5(#297)/US-EV4(#268) — 형식·크기를 요청 파싱 단계에서 검증(422). 종전

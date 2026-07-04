@@ -16,10 +16,12 @@ from backend.modules.evidence.models import (
     EvidenceTurn,
     TurnAbstainResult,
     TurnErrorResult,
+    TurnPendingResult,
     TurnSuccessResult,
 )
 from backend.modules.evidence.repository import InMemoryEvidenceRepository
 from backend.modules.evidence.service import (
+    EvidenceChatService,
     EvidenceSessionManagementService,
 )
 
@@ -324,6 +326,17 @@ def test_api_turn_rejects_oversized_attachment_with_422(monkeypatch) -> None:
     assert resp.status_code == 422
 
 
+def test_api_turn_rejects_invalid_scope_with_422(monkeypatch) -> None:
+    client = _client(monkeypatch, _principal(), InMemoryEvidenceRepository())
+
+    resp = client.post(
+        '/api/evidence/turns',
+        json={'topic': 'attachment handling', 'scope': 'invalid'},
+    )
+
+    assert resp.status_code == 422
+
+
 # ---------------------------------------------------------------------------
 # API: 인증 없으면 401
 # ---------------------------------------------------------------------------
@@ -362,6 +375,31 @@ def test_api_sync_turn_is_persisted(monkeypatch) -> None:
 
     turns = repo.list_turns(principal.user_id, body['sessionId'])
     assert [t.turn_id for t in turns] == [body['turnId']]
+
+
+def test_async_turn_enqueue_preserves_attachment_handles() -> None:
+    from docsuri_shared._generated.dtos.evidence_schema import EvidenceRequest
+
+    repo = InMemoryEvidenceRepository()
+    enqueued: list[dict] = []
+    service = EvidenceChatService(
+        repo=repo,
+        orchestrator=object(),
+        sqs_enqueue=enqueued.append,
+    )
+
+    resp = service.run_turn(
+        owner_id='owner-1',
+        request=EvidenceRequest(
+            topic='attachment handling',
+            scope='auto',
+            paperIds=[],
+            attachments=['att-1', 'att-2'],
+        ),
+    )
+
+    assert isinstance(resp.result, TurnPendingResult)
+    assert enqueued[0]['attachments'] == ['att-1', 'att-2']
 
 
 # ---------------------------------------------------------------------------

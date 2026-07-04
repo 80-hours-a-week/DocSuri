@@ -16,6 +16,7 @@ from backend.modules.evidence.repository import InMemoryEvidenceRepository
 from backend.modules.evidence.worker import (
     JobProcessingFailed,
     parse_received_messages,
+    parse_sqs_payload,
     process_job,
 )
 
@@ -62,9 +63,11 @@ def test_all_valid_messages_pass_through_untouched() -> None:
 class _StubOrchestrator:
     def __init__(self) -> None:
         self.calls = 0
+        self.requests: list[EvidenceRequest] = []
 
     def run(self, ctx: AgentRunContext, request: EvidenceRequest):
         self.calls += 1
+        self.requests.append(request)
         return TurnAbstainResult(
             outcome=EvidenceAbstainResult(state='abstain', abstainReason='out_of_corpus')
         )
@@ -90,6 +93,34 @@ def test_pending_turn_is_processed_once() -> None:
     assert orchestrator.calls == 1
     resolved = repo.list_turns('owner-1', session_id)[0]
     assert isinstance(resolved.result, TurnAbstainResult)
+
+
+def test_parse_sqs_payload_preserves_attachment_handles() -> None:
+    fields = parse_sqs_payload(
+        json.dumps({
+            'ownerId': 'owner-1',
+            'sessionId': 'session-1',
+            'turnId': 'turn-1',
+            'jobId': 'job-1',
+            'topic': 'attachment handling',
+            'attachments': ['att-1', 'att-2'],
+        })
+    )
+
+    assert fields['attachments'] == ['att-1', 'att-2']
+
+
+def test_worker_passes_attachment_handles_to_evidence_request() -> None:
+    repo, session_id, turn_id = _seeded_repo()
+    orchestrator = _StubOrchestrator()
+
+    process_job(
+        repo, orchestrator=orchestrator, owner_id='owner-1', session_id=session_id,
+        turn_id=turn_id, job_id='job-1', topic='attachment handling',
+        attachments=['att-1', 'att-2'],
+    )
+
+    assert orchestrator.requests[0].attachments == ['att-1', 'att-2']
 
 
 def test_duplicate_delivery_of_already_resolved_turn_is_skipped() -> None:
