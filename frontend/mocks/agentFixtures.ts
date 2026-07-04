@@ -270,6 +270,8 @@ function responseFor(mode: AgentMode, degraded: boolean, attachmentCount: number
   if (mode === 'evidence') {
     return `${prefix}관련 논문을 주제, 방법, 데이터셋 기준으로 묶고 서로 확인되는 근거를 우선 제시했습니다.${attachmentNote}`;
   }
+  // 채팅 assistant 메시지는 텍스트 ack — 구조화 아티팩트는 /result seam(mockTransport
+  // noveltyArtifacts → 실제 apiClient 매퍼)으로만 흐른다. 실 백엔드와 동일한 분리.
   return `${prefix}유사 연구는 이미 완료된 축과 아직 약한 축으로 나뉩니다. 차별점은 데이터셋 조건, 실패 유형 분해, 재현 가능한 비교 실험으로 잡는 것이 좋습니다.${attachmentNote}`;
 }
 

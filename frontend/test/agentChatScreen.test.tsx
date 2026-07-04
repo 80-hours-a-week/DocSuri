@@ -57,9 +57,17 @@ describe('AgentChatScreen', () => {
     await user.type(screen.getByTestId('agent-composer-input'), 'RAG 평가 자동화 아이디어');
     await user.click(screen.getByTestId('agent-composer-submit'));
 
-    expect(await screen.findByText(/차별점은 데이터셋 조건/)).toBeInTheDocument();
-    expect(await screen.findByText(/Novelty 분석 결과/)).toBeInTheDocument();
-    expect(await screen.findByText(/도메인 지식 기반 실패 유형 분해/)).toBeInTheDocument();
+    // 구조화 novelty 아티팩트가 카드로 렌더링된다(#253~#256) — 플랫 텍스트·raw JSON이 아니라.
+    expect(await screen.findByText('유사 연구 표')).toBeInTheDocument();
+    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(screen.getByText('근거 부족')).toBeInTheDocument();
+    expect(screen.getByText(/차별점은 데이터셋 조건/)).toBeInTheDocument();
+    expect(screen.getByText('도메인 지식 기반 실패 유형 분해')).toBeInTheDocument();
+    expect(screen.getByText(/판정이 아닙니다/)).toBeInTheDocument();
+    expect(
+      screen.getByText('유사 연구 대비 실패 유형을 더 세밀하게 분해한다.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/"artifacts"/)).not.toBeInTheDocument();
     expect(screen.getByTestId('agent-timeline')).toBeInTheDocument();
     expect(screen.getAllByTestId('agent-timeline-event').length).toBeGreaterThan(0);
     expect(screen.getByText(/소스: corpus/)).toBeInTheDocument();

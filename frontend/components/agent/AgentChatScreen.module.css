@@ -299,6 +299,138 @@
   color: var(--color-text-muted);
 }
 
+.noveltyArtifacts {
+  display: grid;
+  gap: 14px;
+}
+
+.noveltyArtifact {
+  display: grid;
+  gap: 8px;
+}
+
+.noveltyArtifactTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.noveltyTableWrap {
+  overflow-x: auto;
+}
+
+.noveltyTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.noveltyTable th,
+.noveltyTable td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.noveltyItems {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.noveltyItem {
+  display: grid;
+  gap: 4px;
+}
+
+.noveltyItem p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.noveltyItemHead {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.noveltyBadgeSupported,
+.noveltyBadgeInsufficient {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+
+.noveltyBadgeSupported {
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+}
+
+.noveltyBadgeInsufficient {
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+}
+
+.noveltyRisks {
+  display: grid;
+  gap: 8px;
+}
+
+.noveltyRiskCaveat {
+  margin: 0;
+  padding: 6px 8px;
+  border-left: 2px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.noveltyRiskType {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.noveltyPlan {
+  display: grid;
+  gap: 8px;
+}
+
+.noveltyPlanQuestion {
+  margin: 0;
+  font-weight: 700;
+}
+
+.noveltyPlanAngle {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.noveltyPlanField {
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.noveltyPlanField ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.noveltyRefs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
 .evidenceRef blockquote {
   margin: 0;
   padding: 4px 8px;
