@@ -1,10 +1,14 @@
 # DocSuri Production Roadmap — 2026-07
 
 > **Date**: 2026-07-03 · **Baseline**: develop `573ad494` (main at v1.2.3, 13 commits behind)
-> **Updated**: 2026-07-04 — PR #351 merged (summary-anchor structural resolution + stale-docmodel self-heal). PRs #338/#349 reviewed → **CHANGES_REQUESTED** (author fixes pending): #338 4 blocking (turn persistence, dropped attachments/context, input-length 500s, unwired async worker stack), #349 1 blocking (SSE mapper overwrites richer timeline detail). Roadmap execution started — **PR #353** opened: ALB + CloudFront access logs (#341 step ①); **PR #355** opened: edge 5xx branded error page, S3/OAC-backed so it survives an origin outage (#341 step ②). **PR #357** opened: 각주트리 DOI 노드 확장 500 → Semantic Scholar 페이로드 fail-closed (#342). **#338 re-check (this session)**: status was stale — author (shr8596) pushed **2 rounds** (`f15eee6`, `d05e0ad`) addressing **all 7** review blockers (INV-EV-3 grounding bypass ×2, worker poison-message + idempotency/clobber, CDK IAM ARN + endpoint env + SG path) with a named regression test each; locally **27 evidence tests green + Docsuri-Evidence synth clean**. **Correction (re-review this session)**: the 1st-round 7 were fixed, but the **2nd review (10:31, head `d05e0ad`) found 4 blocking + 1 whitespace still open** and the author pushed nothing since → #338 is **still blocked, not merge-ready**. **PR #359** drafts the fixes into the author's branch: #1 sync turn-persist (FR-38), #3 topic-length 500 (SEC-5), #4 async worker-queue wiring (NFR-P6), #5 whitespace — all fixed + verified (RED→GREEN ×10, `cdk synth`, ruff), **plus #2 multi-turn search context built**; attachment ingestion split to a tracked follow-up (no upload subsystem/file bytes exist — noted on #359). #338 unblocks only after **#359 merges → re-review** (then #340 promote, #339).
+> **Updated**: 2026-07-04 — current status:
+> - PR #351 merged (summary-anchor structural resolution + stale-docmodel self-heal).
+> - PRs #338/#349 are still **CHANGES_REQUESTED**: #338 has 4 blocking items plus whitespace open after re-review of head `d05e0ad`; #349 has 1 blocking SSE timeline-detail overwrite.
+> - Roadmap execution started: **PR #353** opened for ALB + CloudFront access logs (#341 step ①); **PR #355** opened for the S3/OAC-backed edge 5xx branded error page (#341 step ②); **PR #357** opened for 각주트리 DOI node expansion 500 (#342).
+> - **PR #359** drafts the #338 fixes into the author's branch: turn persistence, topic-length 500, async worker queue wiring, whitespace, and multi-turn context; attachment ingestion remains a tracked follow-up.
 > _Prev 2026-07-03 pm — PR #337 merged; PR #349 opened._
 > Snapshot of where the product stands against the team's initial plan, and the path to
-> production-level completion of our goals. Tracking issues: #339–#348.
+> production-level completion of our goals. Tracking references: #337–#359 where cited below.
 
 ## 1. Status vs. the initial plan
 
@@ -64,7 +68,7 @@ Ordered by user impact:
 | Docmodel backlog self-heal — re-enqueue contaminated docmodels @3 (embedding-cost-free) + drain DLQ 111 | #343 |
 | Finish pre-2026 backfill drain → restore ingestion autoscale; decide on separate doc-model queue | #344 |
 | Personalization shadow→real flip after metric review; then US-P5 + keywordWeights | #345 |
-| KPI funnel dashboard (AI 호출 > 검색 > 완동률) from existing U9 events — build **before** Phase 3 prioritization | #346 |
+| KPI funnel dashboard (AI 호출 > 검색 > 완독률) from existing U9 events — build **before** Phase 3 prioritization | #346 |
 | U10 mypage mocks: 최근 본 논문/ORCID real data or cut | #347 |
 | Email strategy decision: SES production access vs. Resend commitment | #348 |
 | Authz contract → `docsuri_shared` refactor | #167 |
