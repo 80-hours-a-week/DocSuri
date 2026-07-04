@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
+from backend.middleware.agent_quota import enforce_evidence_turn_quota
 from backend.modules.accounts.models import Principal
 
 from .models import (
@@ -109,7 +110,12 @@ async def get_messages(
         raise HTTPException(status_code=404, detail="job not found") from exc
 
 
-@router.post("/jobs/{job_id}/messages", response_model=ResearchChatMessage)
+@router.post(
+    "/jobs/{job_id}/messages",
+    response_model=ResearchChatMessage,
+    # NFR-C1: evidence 턴은 Bedrock 지출을 유발 — 사용자별 일일 쿼터.
+    dependencies=[Depends(enforce_evidence_turn_quota)],
+)
 async def add_message(
     job_id: str,
     dto: ResearchMessageCreateRequest,

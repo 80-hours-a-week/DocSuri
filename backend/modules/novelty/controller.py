@@ -6,6 +6,7 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
+from backend.middleware.agent_quota import enforce_novelty_job_quota
 from backend.modules.accounts.models import Principal
 
 from .adapters import NoveltyAdapters
@@ -65,7 +66,12 @@ PRINCIPAL_DEP = Depends(get_principal)
 REPO_DEP = Depends(get_repo)
 
 
-@router.post("/jobs", response_model=CreateJobResponse)
+@router.post(
+    "/jobs",
+    response_model=CreateJobResponse,
+    # NFR-C1: novelty job은 Bedrock 지출을 유발 — 사용자별 일일 쿼터.
+    dependencies=[Depends(enforce_novelty_job_quota)],
+)
 async def create_job(
     dto: NoveltyJobRequest,
     request: Request,

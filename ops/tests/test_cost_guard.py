@@ -102,3 +102,29 @@ def test_cost_guard_spend_is_monotonic(amounts: list[float]) -> None:
         previous = state.spend_usd
 
     assert guard.get_budget_state().spend_usd == pytest.approx(sum(amounts), abs=0.000001)
+
+
+def test_is_cost_degraded_predicate_matches_guard_tiers() -> None:
+    from docsuri_ops.cost_guard import is_cost_degraded
+
+    guard = CostGuardCircuitBreaker()
+    assert is_cost_degraded(guard.get_budget_state()) is False
+
+    guard.record_spend(UsageEvent(event_id="u1", amount_usd=1280.0, source="bedrock"))
+    # warning(80%) → RERANK_OFF부터 게이트 (U7 BR-S13과 동일 술어)
+    assert is_cost_degraded(guard.get_budget_state()) is True
+
+
+def test_estimate_bedrock_usd_default_rates_and_env_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from docsuri_ops.cost_guard import estimate_bedrock_usd
+
+    # 기본 단가: $3/1M input + $15/1M output (Bedrock Claude Sonnet 4.x)
+    assert estimate_bedrock_usd(input_tokens=1_000_000, output_tokens=0) == pytest.approx(3.0)
+    assert estimate_bedrock_usd(input_tokens=0, output_tokens=1_000_000) == pytest.approx(15.0)
+    assert estimate_bedrock_usd(input_tokens=-5, output_tokens=0) == 0.0
+
+    monkeypatch.setenv("DOCSURI_BEDROCK_USD_PER_1M_INPUT", "6.0")
+    monkeypatch.setenv("DOCSURI_BEDROCK_USD_PER_1M_OUTPUT", "30.0")
+    assert estimate_bedrock_usd(input_tokens=500_000, output_tokens=100_000) == pytest.approx(6.0)

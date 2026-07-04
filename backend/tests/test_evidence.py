@@ -436,3 +436,116 @@ def test_run_evidence_forwards_prior_topics() -> None:
     asyncio.run(_run_evidence(_Orch(), 'o', 'current', ('p1', 'p2')))
 
     assert captured['prior'] == ('p1', 'p2')
+
+
+def _cost_gate_ctx(budget_signal: dict):
+    """비용 게이트 테스트용 최소 ctx/request — research 경로와 동일한 구성."""
+    from docsuri_shared._generated.dtos.evidence_schema import EvidenceRequest
+
+    from backend.modules.evidence.models import AgentRunContext, EvidenceSession, EvidenceTurn
+
+    request = EvidenceRequest(topic='t', paperIds=[])
+    session = EvidenceSession(owner_id='o')
+    ctx = AgentRunContext(
+        session=session,
+        current_turn=EvidenceTurn(session_id=session.session_id, request=request),
+        owner_id='o',
+        request_id='',
+        budget_signal=budget_signal,
+    )
+    return ctx, request
+
+
+class _NoToolAllowed:
+    """비용 게이트 이후 어떤 tool도 호출되면 안 된다 — 속성 접근 자체가 실패."""
+
+    def __getattr__(self, name: str):
+        raise AssertionError('cost gate must run before any tool call')
+
+
+def test_orchestrator_abstains_with_cost_degraded_reason_when_signal_degraded() -> None:
+    """BR-EV-7/US-EV6 — 비용 게이트는 error가 아니라 abstain(cost_degraded)로 떨어져야
+    research 경로가 '[abstain] cost_degraded'로 영속하고 FE 라벨에 닿는다."""
+    from backend.modules.evidence.models import TurnAbstainResult
+    from backend.modules.evidence.orchestrator import EvidenceAgentOrchestrator
+
+    orchestrator = EvidenceAgentOrchestrator(
+        search_tool=_NoToolAllowed(),
+        doc_model_tool=_NoToolAllowed(),
+        extractor=_NoToolAllowed(),
+        assembler=_NoToolAllowed(),
+    )
+    ctx, request = _cost_gate_ctx({'state': 'degraded'})
+
+    result = orchestrator.run(ctx, request)
+
+    assert isinstance(result, TurnAbstainResult)
+    assert result.outcome.abstainReason == 'cost_degraded'
+
+
+def test_orchestrator_gates_on_wired_cost_guard_without_external_signal() -> None:
+    """NFR-C1 — U6 단일 권위(cost guard)를 직접 물면 budget_signal 없이도 게이트된다."""
+    from docsuri_ops.cost_guard import CostGuardCircuitBreaker
+    from docsuri_ops.domain.models import UsageEvent
+
+    from backend.modules.evidence.models import TurnAbstainResult
+    from backend.modules.evidence.orchestrator import EvidenceAgentOrchestrator
+
+    guard = CostGuardCircuitBreaker()
+    guard.record_spend(UsageEvent(event_id='seed', amount_usd=1600.0, source='test'))
+    orchestrator = EvidenceAgentOrchestrator(
+        search_tool=_NoToolAllowed(),
+        doc_model_tool=_NoToolAllowed(),
+        extractor=_NoToolAllowed(),
+        assembler=_NoToolAllowed(),
+        cost_guard=guard,
+    )
+    ctx, request = _cost_gate_ctx({})
+
+    result = orchestrator.run(ctx, request)
+
+    assert isinstance(result, TurnAbstainResult)
+    assert result.outcome.abstainReason == 'cost_degraded'
+
+
+def test_extractor_records_bedrock_spend_into_cost_guard() -> None:
+    """NFR-C1 — 스트리밍 응답 마지막 청크의 invocationMetrics가 cost guard 지출로 기록된다."""
+    import json
+
+    from docsuri_ops.cost_guard import CostGuardCircuitBreaker
+
+    from backend.modules.evidence.extractor import EvidenceExtractor
+
+    def _chunk(payload: dict) -> dict:
+        return {'chunk': {'bytes': json.dumps(payload).encode('utf-8')}}
+
+    class _FakeStream:
+        def invoke_model_with_response_stream(self, **kwargs):
+            return {
+                'body': [
+                    _chunk(
+                        {
+                            'type': 'content_block_delta',
+                            'delta': {'type': 'text_delta', 'text': '{"items": []}'},
+                        }
+                    ),
+                    _chunk(
+                        {
+                            'type': 'message_stop',
+                            'amazon-bedrock-invocationMetrics': {
+                                'inputTokenCount': 1_000_000,
+                                'outputTokenCount': 200_000,
+                            },
+                        }
+                    ),
+                ]
+            }
+
+    guard = CostGuardCircuitBreaker()
+    extractor = EvidenceExtractor(model_id='m', client=_FakeStream(), cost_guard=guard)
+
+    payload = extractor._invoke_json('system', 'user')
+
+    assert payload == {'items': []}
+    # 기본 단가 $3/1M input + $15/1M output → 1M in + 0.2M out = $6
+    assert abs(guard.get_budget_state().spend_usd - 6.0) < 1e-9

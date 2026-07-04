@@ -674,7 +674,9 @@ def _mount_evidence(app: FastAPI, settings: Settings, result: MountResult) -> No
     if ev_settings.evidence_enabled:
         from backend.modules.evidence.real_wiring import build_evidence_orchestrator
 
-        bundle = build_evidence_orchestrator(ev_settings)
+        bundle = build_evidence_orchestrator(
+            ev_settings, cost_guard=getattr(app.state, "cost_guard", None)
+        )
         app.state.evidence_bundle = bundle
 
         def get_evidence_orchestrator():

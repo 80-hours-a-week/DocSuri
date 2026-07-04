@@ -769,3 +769,55 @@ def test_api_rejects_blank_topic_before_job_is_created(monkeypatch) -> None:
 
     assert resp.status_code == 422
     assert repo.list_jobs(principal.user_id) == []
+
+
+def test_bedrock_llm_client_degrades_without_invoke_when_cost_guard_gated() -> None:
+    """NFR-C1 — cost guard가 게이트 상태면 Bedrock 호출 없이 cost_degraded로 저하한다."""
+    from docsuri_ops.cost_guard import CostGuardCircuitBreaker
+    from docsuri_ops.domain.models import UsageEvent
+
+    class _NoInvoke:
+        def invoke_model(self, **kwargs):
+            raise AssertionError("LLM must not be invoked while the cost guard is gated")
+
+    guard = CostGuardCircuitBreaker()
+    guard.record_spend(UsageEvent(event_id="seed", amount_usd=1600.0, source="test"))
+    ref = {"type": "url", "identifier": "2401.00001", "url": "https://arxiv.org/abs/2401.00001"}
+
+    draft = BedrockNoveltyLlmClient(model_id="m", client=_NoInvoke(), cost_guard=guard).draft(
+        topic="t",
+        corpus=RetrievalBundle(items=[{"title": "Prior", "sourceRefs": [ref]}]),
+        external=RetrievalBundle(items=[]),
+    )
+
+    assert draft.degradedReason == "cost_degraded"
+
+
+def test_bedrock_llm_client_records_spend_from_usage() -> None:
+    """NFR-C1 — invoke_model 응답의 usage 토큰이 cost guard 지출로 기록된다."""
+    from docsuri_ops.cost_guard import CostGuardCircuitBreaker
+
+    class _FakeBedrock:
+        def invoke_model(self, **kwargs):
+            return {
+                "body": BytesIO(
+                    json.dumps(
+                        {
+                            "content": [{"type": "text", "text": json.dumps({})}],
+                            "usage": {"input_tokens": 1_000_000, "output_tokens": 200_000},
+                        }
+                    ).encode("utf-8")
+                )
+            }
+
+    guard = CostGuardCircuitBreaker()
+    ref = {"type": "url", "identifier": "2401.00001", "url": "https://arxiv.org/abs/2401.00001"}
+
+    BedrockNoveltyLlmClient(model_id="m", client=_FakeBedrock(), cost_guard=guard).draft(
+        topic="t",
+        corpus=RetrievalBundle(items=[{"title": "Prior", "sourceRefs": [ref]}]),
+        external=RetrievalBundle(items=[]),
+    )
+
+    # 기본 단가 $3/1M input + $15/1M output → 1M in + 0.2M out = $6
+    assert abs(guard.get_budget_state().spend_usd - 6.0) < 1e-9

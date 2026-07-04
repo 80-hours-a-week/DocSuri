@@ -15,7 +15,6 @@ from .extractor import EvidenceExtractor, LlmUnavailable
 from .models import (
     AgentRunContext,
     TurnAbstainResult,
-    TurnErrorResult,
     TurnResult,
     TurnSuccessResult,
 )
@@ -26,6 +25,7 @@ logger = logging.getLogger(__name__)
 _ABSTAIN_NO_CORPUS = 'out_of_corpus'
 _ABSTAIN_INSUFFICIENT = 'insufficient_evidence'
 _ABSTAIN_LLM_FAILURE = 'llm_unavailable'
+_ABSTAIN_COST_DEGRADED = 'cost_degraded'
 
 
 class EvidenceAgentOrchestrator:
@@ -38,17 +38,33 @@ class EvidenceAgentOrchestrator:
         doc_model_tool: EvidenceDocModelTool,
         extractor: EvidenceExtractor,
         assembler: EvidenceComparisonAssembler,
+        cost_guard: object | None = None,
     ) -> None:
         self._search = search_tool
         self._doc_model = doc_model_tool
         self._extractor = extractor
         self._assembler = assembler
+        # NFR-C1: U6 단일 권위(cost guard) — None이면 외부 budget_signal만으로 게이트.
+        self._cost_guard = cost_guard
+
+    def _cost_gated(self) -> bool:
+        if self._cost_guard is None:
+            return False
+        from docsuri_ops.cost_guard import is_cost_degraded
+
+        return is_cost_degraded(self._cost_guard.get_budget_state())
 
     def run(self, ctx: AgentRunContext, request: EvidenceRequest) -> TurnResult:
-        # --- 1. 비용 게이트 확인(BR-EV-7) ---
-        budget_state = ctx.budget_signal.get('state', 'ok')
-        if budget_state != 'ok':
-            return TurnErrorResult(error_code='cost_degraded')
+        # --- 1. 비용 게이트 확인(BR-EV-7) — 외부 신호 우선, 없으면 U6 cost guard 직접 조회.
+        # error가 아닌 abstain(cost_degraded): research 경로가 '[abstain] cost_degraded'로
+        # 영속해 FE 라벨('일시적으로 서비스 이용량이 제한…')에 닿는다(US-EV6).
+        if ctx.budget_signal.get('state', 'ok') != 'ok' or self._cost_gated():
+            return TurnAbstainResult(
+                outcome=EvidenceAbstainResult(
+                    state='abstain',
+                    abstainReason=_ABSTAIN_COST_DEGRADED,
+                )
+            )
 
         # --- 2. 논문 검색(BR-EV-2 scope 분기) ---
         scope = EvidenceScope(request.scope) if request.scope else EvidenceScope.auto
