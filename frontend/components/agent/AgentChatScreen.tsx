@@ -18,7 +18,14 @@ import type {
   AgentMode,
   AgentSessionSummary,
   AgentTimelineEvent,
+  AgentTimelineState,
 } from '@/lib/agentChat/types';
+import {
+  abstainReasonLabel,
+  parseAgentContent,
+  type EvidenceResultPayload,
+  type EvidenceSourceRef,
+} from '@/lib/agentChat/evidenceResult';
 import styles from './AgentChatScreen.module.css';
 
 const MODE_LABEL: Record<AgentMode, string> = {
@@ -34,7 +41,9 @@ const JOB_STATE_LABEL: Record<AgentJobState, string> = {
   failed: '실패',
   degraded: '저하',
 };
-const AGENT_REFRESH_MS = 2000;
+const AGENT_REFRESH_MS = 1000;
+const STREAM_CHAR_MS = 8;
+const SSE_FETCH_TIMEOUT_MS = 5000;
 const RESEARCH_MODE_ENABLED =
   !process.env.NEXT_PUBLIC_DOCSURI_REAL_API ||
   process.env.NEXT_PUBLIC_DOCSURI_RESEARCH_AGENT_ENABLED === '1';
@@ -43,8 +52,13 @@ export function AgentChatScreen() {
   const api = useMemo(() => getApiClient(), []);
   const [state, dispatch] = useReducer(agentReducer, initialAgentChatState);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const awaitingAgentResponseRef = useRef(false);
+  const lastSseEventIdRef = useRef<string | null>(null);
+  const seenAgentMessageIdsRef = useRef<Set<string>>(new Set());
   const activeSessionId = state.session?.id;
+  const activeMode = state.session?.mode;
 
   useEffect(() => {
     let alive = true;
@@ -67,9 +81,30 @@ export function AgentChatScreen() {
   }, [api]);
 
   useEffect(() => {
+    lastSseEventIdRef.current = null;
+  }, [activeSessionId]);
+
+  useEffect(() => {
+    const agentMessageIds = state.messages
+      .filter((message) => message.role === 'agent')
+      .map((message) => message.id);
+    const newestAgentMessageId = agentMessageIds.at(-1);
+    const seen = seenAgentMessageIdsRef.current;
+    const shouldStream =
+      awaitingAgentResponseRef.current &&
+      Boolean(newestAgentMessageId) &&
+      !seen.has(newestAgentMessageId ?? '');
+    for (const id of agentMessageIds) seen.add(id);
+    if (shouldStream && newestAgentMessageId) {
+      awaitingAgentResponseRef.current = false;
+      setStreamingMessageId(newestAgentMessageId);
+    }
+  }, [state.messages]);
+
+  useEffect(() => {
     if (
       !activeSessionId ||
-      state.submitting ||
+      !activeSessionId.includes(':') ||
       (state.jobState !== 'queued' && state.jobState !== 'running')
     ) {
       return;
@@ -86,19 +121,52 @@ export function AgentChatScreen() {
         if (alive) timer = setTimeout(refresh, AGENT_REFRESH_MS);
       }
     };
-    timer = setTimeout(refresh, AGENT_REFRESH_MS);
+    void refresh();
     return () => {
       alive = false;
       if (timer) clearTimeout(timer);
     };
-  }, [activeSessionId, api, state.jobState, state.submitting]);
+  }, [activeSessionId, api, state.jobState]);
+
+  useEffect(() => {
+    if (
+      !activeSessionId ||
+      activeMode !== 'novelty' ||
+      (state.jobState !== 'queued' && state.jobState !== 'running')
+    ) {
+      return;
+    }
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refreshEvents = async () => {
+      try {
+        const events = await loadNoveltySseEvents(activeSessionId, lastSseEventIdRef.current);
+        if (!alive) return;
+        if (events.length) {
+          lastSseEventIdRef.current = events.at(-1)?.id ?? lastSseEventIdRef.current;
+          dispatch({ type: 'eventsReceived', events });
+        }
+      } catch {
+        // The full session poll remains the fallback if the event stream is unavailable.
+      } finally {
+        if (alive) timer = setTimeout(refreshEvents, AGENT_REFRESH_MS);
+      }
+    };
+    void refreshEvents();
+    return () => {
+      alive = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [activeMode, activeSessionId, state.jobState]);
 
   function startMode(mode: AgentMode) {
+    resetStreamingState();
     dispatch({ type: 'startSession', session: createDraftSession(mode) });
   }
 
   async function loadSession(session: AgentSessionSummary) {
     try {
+      resetStreamingState();
       const snapshot = await api.loadAgentSession(session.id);
       dispatch({ type: 'loadSession', snapshot });
       setDrawerOpen(false);
@@ -123,6 +191,8 @@ export function AgentChatScreen() {
     const content = state.draft.trim();
     const attachments = state.attachments.filter((item) => item.status === 'ready');
     const userMessage = createUserMessage(content, attachments);
+    awaitingAgentResponseRef.current = true;
+    setStreamingMessageId(null);
     dispatch({ type: 'sendStart', message: userMessage });
 
     try {
@@ -133,12 +203,11 @@ export function AgentChatScreen() {
       });
       dispatch({ type: 'sendSuccess', result });
     } catch (error) {
+      awaitingAgentResponseRef.current = false;
       dispatch({
         type: 'sendFailure',
         message:
-          error instanceof UserFacingError
-            ? error.message
-            : '에이전트 요청을 처리하지 못했습니다.',
+          error instanceof UserFacingError ? error.message : '에이전트 요청을 처리하지 못했습니다.',
       });
     }
   }
@@ -154,8 +223,18 @@ export function AgentChatScreen() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
+  function resetStreamingState() {
+    awaitingAgentResponseRef.current = false;
+    seenAgentMessageIdsRef.current = new Set();
+    setStreamingMessageId(null);
+  }
+
   return (
-    <section className={styles.shell} data-mode={state.mode ?? undefined} data-testid="agent-chat-screen">
+    <section
+      className={styles.shell}
+      data-mode={state.mode ?? undefined}
+      data-testid="agent-chat-screen"
+    >
       <div className={styles.toolbar}>
         <button
           type="button"
@@ -168,9 +247,7 @@ export function AgentChatScreen() {
         </button>
         <div className={styles.status}>
           <span>{state.mode ? MODE_LABEL[state.mode] : '에이전트'}</span>
-          {state.jobState !== 'idle' ? (
-            <small data-state={state.jobState}>{JOB_STATE_LABEL[state.jobState]}</small>
-          ) : null}
+          {state.jobState !== 'idle' ? <JobStateBadge state={state.jobState} /> : null}
         </div>
       </div>
 
@@ -178,8 +255,8 @@ export function AgentChatScreen() {
         <AgentModePicker onSelect={startMode} researchEnabled={RESEARCH_MODE_ENABLED} />
       ) : null}
 
-      <AgentMessageList messages={state.messages} />
-      <AgentProgressTimeline events={state.events} />
+      <AgentMessageList messages={state.messages} streamingMessageId={streamingMessageId} />
+      <AgentProgressTimeline events={state.events} jobState={state.jobState} />
 
       {state.error ? (
         <p className={styles.error} role="status" data-testid="agent-error">
@@ -238,6 +315,7 @@ export function AgentChatScreen() {
           activeId={state.session?.id ?? null}
           onClose={() => setDrawerOpen(false)}
           onNew={() => {
+            resetStreamingState();
             dispatch({ type: 'newChat' });
             setDrawerOpen(false);
           }}
@@ -340,41 +418,268 @@ function AgentSessionDrawer({
   );
 }
 
-function AgentMessageList({ messages }: { messages: AgentMessage[] }) {
+function AgentMessageList({
+  messages,
+  streamingMessageId,
+}: {
+  messages: AgentMessage[];
+  streamingMessageId: string | null;
+}) {
   return (
     <div className={styles.messages} data-testid="agent-message-list">
       {messages.length === 0 ? <p className={styles.empty}>대화를 시작하세요.</p> : null}
       {messages.map((message) => (
-        <article
+        <AgentMessageItem
           key={message.id}
-          className={styles.message}
-          data-role={message.role}
-          data-status={message.status ?? 'sent'}
-          data-testid="agent-message"
-        >
-          <p>{message.content}</p>
-          {message.attachments?.length ? (
-            <div className={styles.messageFiles}>
-              {message.attachments.map((file) => (
-                <span key={file.id}>{file.name}</span>
-              ))}
-            </div>
-          ) : null}
-        </article>
+          message={message}
+          streaming={message.id === streamingMessageId}
+        />
       ))}
     </div>
   );
 }
 
-function AgentProgressTimeline({ events }: { events: AgentTimelineEvent[] }) {
+function AgentMessageItem({ message, streaming }: { message: AgentMessage; streaming: boolean }) {
+  return (
+    <article
+      className={styles.message}
+      data-role={message.role}
+      data-status={message.status ?? 'sent'}
+      data-streaming={streaming && message.role === 'agent'}
+      data-testid="agent-message"
+    >
+      <AgentMessageContent message={message} streaming={streaming} />
+      {message.attachments?.length ? (
+        <div className={styles.messageFiles}>
+          {message.attachments.map((file) => (
+            <span key={file.id}>{file.name}</span>
+          ))}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function AgentMessageContent({
+  message,
+  streaming,
+}: {
+  message: AgentMessage;
+  streaming: boolean;
+}) {
+  // evidence orchestrator 결과(JSON/[abstain]/[error])는 agent(assistant) 메시지에서만 나온다.
+  // 사용자가 타이핑한 텍스트가 우연히 JSON처럼 보여도 파싱을 시도하지 않도록 role로 분기한다.
+  if (message.role !== 'agent') {
+    return <p>{message.content}</p>;
+  }
+
+  const parsed = parseAgentContent(message.content);
+
+  // 구조화 결과(근거 카드/보류/오류)는 스트리밍하지 않고 즉시 렌더링한다 — JSON을 한 글자씩
+  // 노출하면 완성 전까지 깨져 보인다. 일반 텍스트 답변만 타자기 효과로 스트리밍한다.
+  if (parsed.kind === 'evidence') {
+    return <EvidenceResultView result={parsed.result} />;
+  }
+  if (parsed.kind === 'abstain') {
+    return <p className={styles.abstainNotice}>{abstainReasonLabel(parsed.reason)}</p>;
+  }
+  if (parsed.kind === 'error') {
+    return <p className={styles.abstainNotice}>일시적인 오류로 답변을 생성하지 못했습니다.</p>;
+  }
+  return <StreamingText text={parsed.text} streaming={streaming} />;
+}
+
+function StreamingText({ text, streaming }: { text: string; streaming: boolean }) {
+  const visible = useStreamingText(text, streaming);
+  return <p>{visible}</p>;
+}
+
+function useStreamingText(content: string, enabled: boolean): string {
+  const [visible, setVisible] = useState(enabled ? '' : content);
+
+  useEffect(() => {
+    if (!enabled) {
+      setVisible(content);
+      return;
+    }
+    let index = 0;
+    setVisible('');
+    const timer = setInterval(() => {
+      index += 1;
+      setVisible(content.slice(0, index));
+      if (index >= content.length) clearInterval(timer);
+    }, STREAM_CHAR_MS);
+    return () => clearInterval(timer);
+  }, [content, enabled]);
+
+  return visible;
+}
+
+function EvidenceResultView({ result }: { result: EvidenceResultPayload }) {
+  if (result.claims.length === 0) {
+    return <p className={styles.abstainNotice}>제시할 수 있는 근거를 찾지 못했습니다.</p>;
+  }
+  return (
+    <div className={styles.evidenceClaims}>
+      {result.claims.map((claim, idx) => (
+        <article key={idx} className={styles.evidenceClaim}>
+          <p className={styles.evidenceStatement}>{claim.statement}</p>
+          <EvidenceRefList refs={claim.supporting} />
+          {claim.conflicting.length > 0 ? (
+            <div className={styles.evidenceConflict}>
+              <strong>상충하는 근거</strong>
+              <EvidenceRefList refs={claim.conflicting} />
+            </div>
+          ) : null}
+        </article>
+      ))}
+      <p className={styles.evidenceCoverage}>
+        참고 논문 {result.coverage.paperCount}편
+        {result.coverage.queryUsed ? ` · 검색어: ${result.coverage.queryUsed}` : ''}
+      </p>
+    </div>
+  );
+}
+
+function EvidenceRefList({ refs }: { refs: EvidenceSourceRef[] }) {
+  if (refs.length === 0) return null;
+  return (
+    <ul className={styles.evidenceRefs}>
+      {refs.map((ref, idx) => (
+        <li key={idx} className={styles.evidenceRef}>
+          <span className={styles.evidencePaperId}>{ref.paperId}</span>
+          {ref.quote ? <blockquote>{ref.quote}</blockquote> : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function AgentProgressTimeline({
+  events,
+  jobState,
+}: {
+  events: AgentTimelineEvent[];
+  jobState: AgentJobState;
+}) {
   if (events.length === 0) return null;
+  const displayEvents = normalizeTimelineDisplay(events, jobState);
   return (
     <section className={styles.timeline} aria-label="탐구 프로세스" data-testid="agent-timeline">
-      {events.map((event) => (
+      {displayEvents.map((event) => (
         <AgentTimelineItem key={event.id} event={event} />
       ))}
     </section>
   );
+}
+
+export function normalizeTimelineDisplay(
+  events: AgentTimelineEvent[],
+  jobState: AgentJobState = 'running',
+): AgentTimelineEvent[] {
+  let lastTerminalIndex = -1;
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    if (events[i].state !== 'running') {
+      lastTerminalIndex = i;
+      break;
+    }
+  }
+  if (lastTerminalIndex < 0 && isTerminalJobState(jobState)) {
+    return events.map((event) =>
+      event.state === 'running' ? { ...event, state: 'completed' } : event,
+    );
+  }
+  if (lastTerminalIndex <= 0) return events;
+  return events.map((event, index) =>
+    index < lastTerminalIndex && event.state === 'running'
+      ? { ...event, state: 'completed' satisfies AgentTimelineState }
+      : event,
+  );
+}
+
+function isTerminalJobState(state: AgentJobState): boolean {
+  return state === 'completed' || state === 'failed' || state === 'degraded';
+}
+
+async function loadNoveltySseEvents(
+  sessionId: string,
+  afterEventId: string | null,
+): Promise<AgentTimelineEvent[]> {
+  const url = noveltySseUrl(sessionId, afterEventId);
+  if (!url) return [];
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SSE_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      headers: { accept: 'text/event-stream' },
+      credentials: 'same-origin',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    if (!res.ok) return [];
+    return parseNoveltySseEvents(await res.text());
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function noveltySseUrl(sessionId: string, afterEventId: string | null): string | null {
+  const prefix = 'novelty:';
+  if (!sessionId.startsWith(prefix)) return null;
+  const rawId = sessionId.slice(prefix.length);
+  if (!rawId) return null;
+  const params = new URLSearchParams();
+  if (afterEventId) params.set('after', afterEventId);
+  const query = params.toString();
+  return `/bff/api/novelty/jobs/${encodeURIComponent(rawId)}/events${query ? `?${query}` : ''}`;
+}
+
+export function parseNoveltySseEvents(text: string): AgentTimelineEvent[] {
+  return text
+    .split(/\r?\n\r?\n/)
+    .map(parseSseBlock)
+    .filter((event): event is AgentTimelineEvent => Boolean(event));
+}
+
+function parseSseBlock(block: string): AgentTimelineEvent | null {
+  let eventName = 'message';
+  const data: string[] = [];
+  for (const line of block.split(/\r?\n/)) {
+    if (line.startsWith('event:')) eventName = line.slice('event:'.length).trim();
+    if (line.startsWith('data:')) data.push(line.slice('data:'.length).trimStart());
+  }
+  if (eventName !== 'progress' || data.length === 0) return null;
+  try {
+    const raw = JSON.parse(data.join('\n'));
+    return mapSseProgressEvent(raw);
+  } catch {
+    return null;
+  }
+}
+
+function mapSseProgressEvent(raw: unknown): AgentTimelineEvent | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const record = raw as Record<string, unknown>;
+  const id = stringValue(record.eventId);
+  const stage = stringValue(record.state) ?? 'running';
+  if (!id) return null;
+  return {
+    id,
+    stage,
+    label: stringValue(record.message) ?? stage,
+    state: mapSseTimelineState(stage),
+  };
+}
+
+function mapSseTimelineState(stage: string): AgentTimelineState {
+  if (stage === 'failed' || stage === 'cancelled') return 'failed';
+  if (stage === 'degraded') return 'degraded';
+  if (stage === 'completed') return 'completed';
+  return 'running';
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 function AgentTimelineItem({ event }: { event: AgentTimelineEvent }) {
@@ -389,10 +694,21 @@ function AgentTimelineItem({ event }: { event: AgentTimelineEvent }) {
     >
       <summary>
         <span>{event.label}</span>
-        <small>{JOB_STATE_LABEL[event.state]}</small>
+        <JobStateBadge state={event.state} />
       </summary>
       {event.detail ? <p>{event.detail}</p> : null}
     </details>
+  );
+}
+
+function JobStateBadge({ state }: { state: AgentTimelineState | AgentJobState }) {
+  return (
+    <small className={styles.stateBadge} data-state={state}>
+      {state === 'queued' || state === 'running' ? (
+        <span className={styles.spinner} aria-hidden="true" />
+      ) : null}
+      {JOB_STATE_LABEL[state]}
+    </small>
   );
 }
 

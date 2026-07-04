@@ -4,8 +4,9 @@ Code/synth only; deploy remains a team-controlled operation. The unit is activat
 deployment configuration, not by a later manual toggle: NOVELTY_AGENT_ENABLED is always true.
 """
 
-from aws_cdk import Stack
+from aws_cdk import Duration, RemovalPolicy, Stack
 from aws_cdk import aws_applicationautoscaling as appscaling
+from aws_cdk import aws_cloudwatch as cloudwatch
 from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_ecr as ecr
 from aws_cdk import aws_ecs as ecs
@@ -32,7 +33,36 @@ class NoveltyStack(Stack):
 
         account = Stack.of(self).account
         artifact_bucket_arn = f"arn:aws:s3:::docsuri-papers-fulltext-{account}"
-        self.queue = queue
+        # ponytail: keep ownership in this stack until a real CDK import migration moves it.
+        # Removing these resources from the template makes CloudFormation delete the live queue.
+        dlq = sqs.Queue(
+            self,
+            "NoveltyJobDlq",
+            queue_name="docsuri-novelty-agent-job-dlq",
+            retention_period=Duration.days(14),
+            encryption=sqs.QueueEncryption.SQS_MANAGED,
+        )
+        dlq.apply_removal_policy(RemovalPolicy.RETAIN)
+        self.queue = sqs.Queue(
+            self,
+            "NoveltyJobQueue",
+            queue_name="docsuri-novelty-agent-job-queue",
+            visibility_timeout=Duration.seconds(900),
+            retention_period=Duration.days(14),
+            encryption=sqs.QueueEncryption.SQS_MANAGED,
+            dead_letter_queue=sqs.DeadLetterQueue(max_receive_count=3, queue=dlq),
+        )
+        self.queue.apply_removal_policy(RemovalPolicy.RETAIN)
+        dlq.metric_approximate_number_of_messages_visible().create_alarm(
+            self,
+            "NoveltyDlqAlarm",
+            threshold=0,
+            evaluation_periods=1,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+            alarm_description="Novelty agent worker messages are landing in the DLQ",
+        )
+        queue = self.queue
 
         repo = ecr.Repository.from_repository_name(self, "ApiRepo", "docsuri-api")
         cluster = ecs.Cluster.from_cluster_attributes(

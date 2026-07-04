@@ -1,0 +1,144 @@
+from __future__ import annotations
+
+import json
+
+import pytest
+from docsuri_shared._generated.dtos.evidence_schema import EvidenceAbstainResult, EvidenceRequest
+
+from backend.modules.evidence.models import (
+    AgentRunContext,
+    EvidenceSession,
+    EvidenceTurn,
+    TurnAbstainResult,
+    TurnPendingResult,
+)
+from backend.modules.evidence.repository import InMemoryEvidenceRepository
+from backend.modules.evidence.worker import (
+    JobProcessingFailed,
+    parse_received_messages,
+    process_job,
+)
+
+# ---------------------------------------------------------------------------
+# poison message 처리 (PR #338 리뷰 Blocking #3)
+# ---------------------------------------------------------------------------
+
+def test_poison_message_is_dropped_without_blocking_the_batch() -> None:
+    dropped: list[dict] = []
+    ok_body = json.dumps({'ownerId': 'o1', 'turnId': 't1', 'topic': 'x'})
+    raw_messages = [
+        {'Body': 'not valid json', 'ReceiptHandle': 'rh-poison'},
+        {'Body': ok_body, 'ReceiptHandle': 'rh-ok'},
+    ]
+
+    messages = parse_received_messages(raw_messages, on_poison=dropped.append)
+
+    assert len(messages) == 1
+    assert messages[0].receipt_handle == 'rh-ok'
+    assert len(dropped) == 1
+    assert dropped[0]['ReceiptHandle'] == 'rh-poison'
+
+
+def test_all_valid_messages_pass_through_untouched() -> None:
+    body_a = json.dumps({'ownerId': 'o1', 'turnId': 't1', 'topic': 'a'})
+    body_b = json.dumps({'ownerId': 'o2', 'turnId': 't2', 'topic': 'b'})
+    raw_messages = [
+        {'Body': body_a, 'ReceiptHandle': 'r1'},
+        {'Body': body_b, 'ReceiptHandle': 'r2'},
+    ]
+
+    def _fail_on_poison(_msg: dict) -> None:
+        pytest.fail('should not fire')
+
+    messages = parse_received_messages(raw_messages, on_poison=_fail_on_poison)
+
+    assert len(messages) == 2
+
+
+# ---------------------------------------------------------------------------
+# idempotency guard (PR #338 리뷰 Blocking #4)
+# ---------------------------------------------------------------------------
+
+class _StubOrchestrator:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def run(self, ctx: AgentRunContext, request: EvidenceRequest):
+        self.calls += 1
+        return TurnAbstainResult(
+            outcome=EvidenceAbstainResult(state='abstain', abstainReason='out_of_corpus')
+        )
+
+
+def _seeded_repo() -> tuple[InMemoryEvidenceRepository, str, str]:
+    repo = InMemoryEvidenceRepository()
+    session = repo.create_session(EvidenceSession(owner_id='owner-1'))
+    turn = EvidenceTurn(session_id=session.session_id, result=TurnPendingResult(job_id='job-1'))
+    repo.add_turn(turn)
+    return repo, session.session_id, turn.turn_id
+
+
+def test_pending_turn_is_processed_once() -> None:
+    repo, session_id, turn_id = _seeded_repo()
+    orchestrator = _StubOrchestrator()
+
+    process_job(
+        repo, orchestrator=orchestrator, owner_id='owner-1', session_id=session_id,
+        turn_id=turn_id, job_id='job-1', topic='transformer attention',
+    )
+
+    assert orchestrator.calls == 1
+    resolved = repo.list_turns('owner-1', session_id)[0]
+    assert isinstance(resolved.result, TurnAbstainResult)
+
+
+def test_duplicate_delivery_of_already_resolved_turn_is_skipped() -> None:
+    """SQS at-least-once로 동일 job이 두 번 배달돼도 orchestrator가 두 번 실행되지 않는다."""
+    repo, session_id, turn_id = _seeded_repo()
+    orchestrator = _StubOrchestrator()
+
+    process_job(
+        repo, orchestrator=orchestrator, owner_id='owner-1', session_id=session_id,
+        turn_id=turn_id, job_id='job-1', topic='transformer attention',
+    )
+    process_job(  # 중복 배달
+        repo, orchestrator=orchestrator, owner_id='owner-1', session_id=session_id,
+        turn_id=turn_id, job_id='job-1', topic='transformer attention',
+    )
+
+    assert orchestrator.calls == 1
+
+
+def test_repository_update_turn_result_rejects_stale_overwrite() -> None:
+    """update_turn_result 자체도 pending이 아닌 turn을 덮어쓰지 않는다(worker 우회 경로 대비)."""
+    repo, session_id, turn_id = _seeded_repo()
+
+    first_result = TurnAbstainResult(
+        outcome=EvidenceAbstainResult(state='abstain', abstainReason='out_of_corpus')
+    )
+    repo.update_turn_result('owner-1', turn_id, first_result)
+    from backend.modules.evidence.models import TurnErrorResult
+
+    repo.update_turn_result('owner-1', turn_id, TurnErrorResult(error_code='llm_unavailable'))
+
+    resolved = repo.list_turns('owner-1', session_id)[0]
+    assert isinstance(resolved.result, TurnAbstainResult)  # 나중 결과로 clobber되지 않음
+
+
+def test_orchestrator_failure_stores_error_result_and_raises() -> None:
+    repo, session_id, turn_id = _seeded_repo()
+
+    class _FailingOrchestrator:
+        def run(self, ctx, request):
+            raise RuntimeError('bedrock throttled')
+
+    with pytest.raises(JobProcessingFailed):
+        process_job(
+            repo, orchestrator=_FailingOrchestrator(), owner_id='owner-1', session_id=session_id,
+            turn_id=turn_id, job_id='job-1', topic='transformer attention',
+        )
+
+    from backend.modules.evidence.models import TurnErrorResult
+
+    resolved = repo.list_turns('owner-1', session_id)[0]
+    assert isinstance(resolved.result, TurnErrorResult)
