@@ -341,3 +341,98 @@ def test_run_evidence_degrades_on_overlong_topic() -> None:
 
     assert result is None
     assert _format_turn_result(result) == '[error] evidence_unavailable'
+
+
+# ---------------------------------------------------------------------------
+# FR-37: 멀티턴 검색 맥락화 (PR #338 리뷰 Blocking #2 — buildable 절반)
+# ---------------------------------------------------------------------------
+
+def test_orchestrator_contextualizes_search_with_prior_topics() -> None:
+    """이전 topic이 검색 질의에 포함 — 후속 질문이 이전 근거를 잇는다(추출은 현재 topic만)."""
+    from types import SimpleNamespace
+
+    from docsuri_shared._generated.dtos.evidence_schema import EvidenceRequest
+
+    from backend.modules.evidence.models import AgentRunContext, PaperSearchResult
+    from backend.modules.evidence.orchestrator import EvidenceAgentOrchestrator
+
+    captured: dict[str, str] = {}
+
+    class _SpySearch:
+        def search(self, *, topic, scope, paper_ids):
+            captured['topic'] = topic
+            return PaperSearchResult(records=(), query_used=topic, scope='auto')
+
+    orchestrator = EvidenceAgentOrchestrator(
+        search_tool=_SpySearch(),
+        doc_model_tool=SimpleNamespace(get_doc_model=lambda *a, **k: None),
+        extractor=SimpleNamespace(extract=lambda **k: []),
+        assembler=EvidenceComparisonAssembler(),
+    )
+    request = EvidenceRequest(topic='current question', scope='auto', paperIds=[])
+    session = EvidenceSession(owner_id='o')
+    turn = EvidenceTurn(session_id=session.session_id, request=request)
+    ctx = AgentRunContext(
+        session=session,
+        current_turn=turn,
+        owner_id='o',
+        request_id='r',
+        budget_signal={'state': 'ok'},
+        prior_topics=('prior alpha', 'prior beta'),
+    )
+
+    orchestrator.run(ctx, request)
+
+    assert 'prior alpha' in captured['topic']
+    assert 'current question' in captured['topic']
+
+
+def test_run_turn_threads_prior_topics_across_turns() -> None:
+    """run_turn이 같은 세션의 이전 턴 topic을 orchestrator ctx.prior_topics로 넘긴다."""
+    from docsuri_shared._generated.dtos.evidence_schema import (
+        EvidenceAbstainResult,
+        EvidenceRequest,
+    )
+
+    from backend.modules.evidence.service import EvidenceChatService
+
+    captured: dict[str, tuple[str, ...]] = {}
+
+    class _SpyOrch:
+        def run(self, ctx, request):
+            captured['prior'] = ctx.prior_topics
+            return TurnAbstainResult(
+                outcome=EvidenceAbstainResult(state='abstain', abstainReason='out_of_corpus')
+            )
+
+    repo = InMemoryEvidenceRepository()
+    svc = EvidenceChatService(repo=repo, orchestrator=_SpyOrch())
+
+    r1 = svc.run_turn(
+        owner_id='o', request=EvidenceRequest(topic='first', scope='auto', paperIds=[])
+    )
+    svc.run_turn(
+        owner_id='o',
+        request=EvidenceRequest(topic='second', scope='auto', paperIds=[]),
+        session_id=r1.session_id,
+    )
+
+    assert captured['prior'] == ('first',)
+
+
+def test_run_evidence_forwards_prior_topics() -> None:
+    """research _run_evidence가 prior_topics를 orchestrator ctx로 전달한다."""
+    import asyncio
+
+    from backend.modules.research.service import _run_evidence
+
+    captured: dict[str, tuple[str, ...]] = {}
+
+    class _Orch:
+        def run(self, ctx, request):
+            captured['prior'] = ctx.prior_topics
+            return None
+
+    asyncio.run(_run_evidence(_Orch(), 'o', 'current', ('p1', 'p2')))
+
+    assert captured['prior'] == ('p1', 'p2')

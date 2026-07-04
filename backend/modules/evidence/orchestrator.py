@@ -56,7 +56,9 @@ class EvidenceAgentOrchestrator:
 
         try:
             search_result = self._search.search(
-                topic=request.topic,
+                # 멀티턴(FR-37): 이전 사용자 질문을 검색 질의에 포함해 후속 질문이 이전 근거
+                # 맥락을 잇게 한다. 추출(아래)은 현재 topic에만 근거 — 검색 corpus만 확장.
+                topic=_contextualize_topic(request.topic, ctx.prior_topics),
                 scope=scope,
                 paper_ids=paper_ids,
             )
@@ -123,6 +125,21 @@ class EvidenceAgentOrchestrator:
             paper_count=len(doc_models),
         )
         return TurnSuccessResult(outcome=result)
+
+
+# 최근 몇 개 topic만·각 얼마까지 — research content(≤12000자)를 그대로 이어붙이면 검색 질의가
+# 폭주하므로 상한을 둔다. ponytail: 3개·200자 고정, 필요하면 늘린다.
+_MAX_PRIOR_TOPICS = 3
+_PRIOR_TOPIC_CHARS = 200
+
+
+def _contextualize_topic(topic: str, prior_topics: tuple[str, ...]) -> str:
+    """멀티턴 검색 질의 = 최근 이전 topic들 + 현재 topic (PR #338 리뷰 Blocking #2/FR-37)."""
+    recent = [t.strip()[:_PRIOR_TOPIC_CHARS] for t in prior_topics if t.strip()]
+    recent = recent[-_MAX_PRIOR_TOPICS:]
+    if not recent:
+        return topic
+    return ' '.join([*recent, topic])
 
 
 def _get_paper_id(record: object) -> str | None:

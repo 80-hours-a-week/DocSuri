@@ -95,6 +95,7 @@ class EvidenceChatService:
             owner_id=owner_id,
             request_id=request_id,
             budget_signal=budget_signal or {},
+            prior_topics=_prior_topics(self._repo, owner_id, session),
         )
 
         if self._sqs_enqueue is not None:
@@ -246,3 +247,17 @@ def _derive_title(topic: str) -> str:
     if len(stripped) <= _TITLE_MAX_LEN:
         return stripped
     return stripped[:_TITLE_MAX_LEN - 1] + '…'
+
+
+def _prior_topics(
+    repo: EvidenceRepository, owner_id: str, session: EvidenceSession
+) -> tuple[str, ...]:
+    """세션의 이전 턴 topic들 — 멀티턴 검색 맥락화(PR #338 리뷰 Blocking #2/FR-37).
+    현재 턴은 아직 add_turn 전이라 list_turns에 없다. 새 세션·조회 실패는 ()."""
+    try:
+        prior = repo.list_turns(owner_id, session.session_id)
+    except KeyError:
+        return ()
+    return tuple(
+        t.request.topic for t in prior if t.request is not None and t.request.topic
+    )
