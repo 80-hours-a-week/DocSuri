@@ -11,7 +11,12 @@ from __future__ import annotations
 # @4: doc-model HTML source is ar5iv-only + MathML <semantics> renders presentation only
 # (drops the annotation-xml double-output). Both change fullText for the same paper, so old
 # @2/@3 caches (incl. LaTeX-garbled algorithm blocks on ar5iv) must rebuild.
-DOCMODEL_PARSER_VERSION = "docmodel-parser@4"
+# @5: formula LaTeX is sanitized of a broader set of never-math markup that leaks into alttext and
+# (under KaTeX throwOnError=false) collapses the WHOLE formula to raw source text: pgf/xcolor
+# colour selection (\definecolor, \color[model]{spec}), \eqref/\ref/\cite-family cross-references
+# and citations, \mathversion font switches, \leafmode, and \mbox/\hbox (rewritten to \text).
+# Changes stored LaTeX, so affected caches must rebuild.
+DOCMODEL_PARSER_VERSION = "docmodel-parser@5"
 # 1.1.0: additive optional meta.macros (consumers ignore if unset).
 DOCMODEL_SCHEMA_VERSION = "1.1.0"
 

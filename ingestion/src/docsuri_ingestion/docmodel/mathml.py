@@ -33,15 +33,51 @@ _DELIMITER_PAIRS = (("$$", "$$"), ("\\[", "\\]"), ("\\(", "\\)"), ("$", "$"))
 #   - layout/spacing macros that carry no math meaning (alignment, page/line breaks).
 #   - ``\label{…}`` equation labels (the doc-model keeps the visible number as anchorLabel).
 #   - ``[Image #n]`` LaTeXML placeholders for an un-convertible embedded graphic.
+#   - ``\definecolor`` / ``\color`` colour-selection markup (pgf/xcolor) that rides in when a
+#     paper *colours* its equations. KaTeX accepts only ``\color{name}``/``\color{#hex}``; the
+#     ``\color[model]{spec}`` optional-model form raises a fatal *Invalid color* that collapses
+#     the WHOLE expression to red source text, and ``\definecolor`` is an undefined command.
+#     Colour is decorative (no math meaning), so only the *selector* is dropped — the coloured
+#     content is kept and renders in the default colour. Removed markup becomes a single space
+#     (not ""), so a selector wedged between a control word and its operand
+#     (``\sim\color[…]{…}p``) does not fuse into a bogus ``\simp``.
+#   - ``\eqref``/``\ref``/``\cite``-family cross-references and citations that ride into alttext:
+#     each is an undefined KaTeX command, so (throwOnError=false) it collapses the WHOLE formula
+#     to source text. They carry no math meaning and the doc-model keeps its own anchors, so the
+#     command and its ``{key}`` argument are dropped.
+#   - ``\mathversion{bold}`` font switch (dropped) and ``\mbox``/``\hbox`` boxes, which are
+#     rewritten to KaTeX-supported ``\text`` (``\text`` accepts nested ``$…$`` math, so a
+#     ``\mbox{a $b$ c}`` survives instead of erroring).
 _INTERNAL_MACRO_RE = re.compile(r"\\@[A-Za-z@]+")
 _LAYOUT_MACRO_RE = re.compile(
     r"\\(?:centering|raggedright|raggedleft|centerline|noindent|par|"
     r"hfill|vfill|hfil|vfil|medskip|smallskip|bigskip|newline|linebreak|newpage|clearpage|"
-    r"protect|xspace|unskip)"
+    r"protect|xspace|unskip|leafmode)"
     r"(?![A-Za-z])"
 )
+# Cross-references / citations (undefined in KaTeX → whole-formula collapse). Command + its flat
+# ``{key}`` group dropped; citations may carry leading optional ``[...]`` args (``\citep[a][]{k}``).
+_REF_RE = re.compile(
+    r"\\(?:eqref|ref|cref|Cref|cpageref|autoref|pageref|nameref|vref|labelcref)"
+    r"\s*\{[^{}]*\}"
+)
+_CITE_RE = re.compile(
+    r"\\(?:cite|citep|citet|citeauthor|citeyear|citealp|citealt|citenum|"
+    r"footcite|parencite|textcite)\s*(?:\[[^\]]*\])*\s*\{[^{}]*\}"
+)
+_MATHVERSION_RE = re.compile(r"\\mathversion\s*\{[^{}]*\}")
+# Boxes → KaTeX ``\text`` (name-swap only; the following ``{…}`` group is left intact).
+_MBOX_RE = re.compile(r"\\(?:mbox|hbox)(?![A-Za-z])")
 _LABEL_RE = re.compile(r"\\label\s*\{[^{}]*\}")
 _IMAGE_PLACEHOLDER_RE = re.compile(r"\[Image\s*#?\s*\d+\]", re.IGNORECASE)
+# ``\definecolor[model]{name}{model}{spec}`` (optional bracket + three flat groups) — a colour
+# *definition* that carries no math; removed wholesale. ``\color[model]{spec}`` (optional bracket
+# + one flat group) — the colour *selector*; only the selector is removed, its coloured operand
+# stays. Flat ``\{[^{}]*\}`` groups suffice: colour specs never nest braces.
+_DEFINECOLOR_RE = re.compile(
+    r"\\definecolor(?![A-Za-z])\s*(?:\[[^\]]*\])?\s*\{[^{}]*\}\s*\{[^{}]*\}\s*\{[^{}]*\}"
+)
+_COLOR_SELECT_RE = re.compile(r"\\color(?![A-Za-z])\s*(?:\[[^\]]*\])?\s*\{[^{}]*\}")
 _MULTI_WS_RE = re.compile(r"[ \t]{2,}")
 
 # Security denylist (SEC-5 / BR-19): KaTeX commands that under ``trust:true`` emit links, load
@@ -70,6 +106,12 @@ def _sanitize(latex: str) -> str:
     latex = _LAYOUT_MACRO_RE.sub("", latex)
     latex = _LABEL_RE.sub("", latex)
     latex = _IMAGE_PLACEHOLDER_RE.sub("", latex)
+    latex = _DEFINECOLOR_RE.sub(" ", latex)  # colour definition (no math), drop whole
+    latex = _COLOR_SELECT_RE.sub(" ", latex)  # colour selector, keep the coloured operand
+    latex = _REF_RE.sub(" ", latex)  # \eqref/\ref/… cross-reference (no math)
+    latex = _CITE_RE.sub(" ", latex)  # \cite-family citation (no math)
+    latex = _MATHVERSION_RE.sub(" ", latex)  # \mathversion font switch (no math)
+    latex = _MBOX_RE.sub(r"\\text", latex)  # \mbox/\hbox → KaTeX-supported \text
     return _MULTI_WS_RE.sub(" ", latex).strip()
 
 
