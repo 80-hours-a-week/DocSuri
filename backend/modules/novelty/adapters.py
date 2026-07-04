@@ -419,19 +419,13 @@ class BedrockNoveltyLlmClient:
             "system": system,
             "messages": [{"role": "user", "content": [{"type": "text", "text": user}]}],
         }
-        response = self._client.invoke_model(
+        response = self._client.invoke_model_with_response_stream(
             modelId=self._model_id,
             body=json.dumps(body).encode("utf-8"),
             accept="application/json",
             contentType="application/json",
         )
-        raw_body = response["body"].read()
-        model_payload = json.loads(raw_body.decode("utf-8"))
-        text = "".join(
-            part.get("text", "")
-            for part in model_payload.get("content", [])
-            if isinstance(part, dict)
-        )
+        text = _bedrock_stream_text(response)
         return _parse_json_object(text)
 
 
@@ -669,6 +663,21 @@ def _parse_json_object(text: str) -> dict[str, Any]:
     return parsed
 
 
+def _bedrock_stream_text(response: dict[str, Any]) -> str:
+    chunks: list[str] = []
+    for event in response.get("body", []):
+        raw = event.get("chunk", {}).get("bytes")
+        if not raw:
+            continue
+        data = json.loads(raw.decode("utf-8"))
+        if data.get("type") != "content_block_delta":
+            continue
+        delta = data.get("delta", {})
+        if delta.get("type") == "text_delta":
+            chunks.append(str(delta.get("text") or ""))
+    return "".join(chunks)
+
+
 class S3ManuscriptSimilarityClient:
     def __init__(
         self,
@@ -876,7 +885,7 @@ def build_llm_adapter() -> NoveltyLlmPort:
             region_name=region,
             config=Config(
                 connect_timeout=5.0,
-                read_timeout=45.0,
+                read_timeout=300.0,
                 retries={"max_attempts": 1},
             ),
         ),

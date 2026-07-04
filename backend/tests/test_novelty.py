@@ -21,6 +21,7 @@ from backend.modules.novelty.adapters import (
     RetrievalBundle,
     S3ManuscriptSimilarityClient,
     U2FullSearchCorpusRetrievalClient,
+    build_llm_adapter,
 )
 from backend.modules.novelty.models import (
     ArtifactKind,
@@ -364,7 +365,7 @@ def test_external_adapter_queries_public_api_sources() -> None:
 
 def test_bedrock_llm_adapter_maps_source_ref_indexes_only() -> None:
     class FakeBedrock:
-        def invoke_model(self, **kwargs):
+        def invoke_model_with_response_stream(self, **kwargs):
             body = json.loads(kwargs["body"].decode("utf-8"))
             assert body["anthropic_version"] == "bedrock-2023-05-31"
             payload = {
@@ -396,12 +397,43 @@ def test_bedrock_llm_adapter_maps_source_ref_indexes_only() -> None:
                     "sourceRefIndexes": [1],
                 },
             }
+            text = json.dumps(payload)
             return {
-                "body": BytesIO(
-                    json.dumps(
-                        {"content": [{"type": "text", "text": json.dumps(payload)}]}
-                    ).encode("utf-8")
-                )
+                "body": [
+                    {
+                        "chunk": {
+                            "bytes": json.dumps(
+                                {
+                                    "type": "content_block_delta",
+                                    "delta": {
+                                        "type": "text_delta",
+                                        "text": text[: len(text) // 2],
+                                    },
+                                }
+                            ).encode("utf-8")
+                        }
+                    },
+                    {
+                        "chunk": {
+                            "bytes": json.dumps(
+                                {
+                                    "type": "content_block_delta",
+                                    "delta": {
+                                        "type": "text_delta",
+                                        "text": text[len(text) // 2 :],
+                                    },
+                                }
+                            ).encode("utf-8")
+                        }
+                    },
+                    {
+                        "chunk": {
+                            "bytes": json.dumps(
+                                {"type": "message_delta", "delta": {"stop_reason": "end_turn"}}
+                            ).encode("utf-8")
+                        }
+                    },
+                ]
             }
 
     corpus_ref = {
@@ -432,6 +464,27 @@ def test_bedrock_llm_adapter_maps_source_ref_indexes_only() -> None:
     assert draft.experimentPlan["metrics"] == ["baseline delta"]
     assert draft.experimentPlan["sourceRefs"] == [dataset_ref]
     assert "Novelty score" not in draft.experimentPlan["metrics"]
+
+
+def test_build_llm_adapter_uses_long_stream_read_timeout(monkeypatch) -> None:
+    import boto3
+
+    captured = {}
+
+    def fake_client(service_name, *, region_name, config):
+        captured["service_name"] = service_name
+        captured["region_name"] = region_name
+        captured["config"] = config
+        return object()
+
+    monkeypatch.setattr(boto3, "client", fake_client)
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "ap-northeast-2")
+
+    build_llm_adapter()
+
+    assert captured["service_name"] == "bedrock-runtime"
+    assert captured["region_name"] == "ap-northeast-2"
+    assert captured["config"].read_timeout == 300.0
 
 
 def test_worker_completes_when_adapters_are_not_degraded() -> None:
