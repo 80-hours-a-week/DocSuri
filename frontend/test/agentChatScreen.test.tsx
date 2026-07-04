@@ -84,6 +84,24 @@ describe('AgentChatScreen', () => {
     ).toBe(true);
   });
 
+  it('renders an evidence result message as a card with citation anchors', async () => {
+    const user = userEvent.setup();
+    render(<AgentChatScreen />);
+
+    await user.click(screen.getByTestId('agent-menu'));
+    await user.click(await screen.findByText('LLM 평가 근거 정리'));
+
+    // 비교표: statement + 출처(paperId · 인용 앵커 · quote). raw JSON은 노출되지 않는다(#339).
+    expect(
+      await screen.findByText('벤치마크 재사용은 데이터 누수 위험을 높인다.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('2401.01234')).toBeInTheDocument();
+    expect(screen.getByText('§ 4.2절')).toBeInTheDocument();
+    expect(screen.getByText(/benchmark reuse inflates scores/)).toBeInTheDocument();
+    expect(screen.getByText(/참고 논문 3편/)).toBeInTheDocument();
+    expect(screen.queryByText(/"claims"/)).not.toBeInTheDocument();
+  });
+
   it('shows rejected attachments and blocks send until they are removed', async () => {
     const user = userEvent.setup();
     render(<AgentChatScreen />);
