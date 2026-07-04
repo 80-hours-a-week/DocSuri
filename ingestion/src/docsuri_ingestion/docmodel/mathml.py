@@ -48,6 +48,9 @@ _DELIMITER_PAIRS = (("$$", "$$"), ("\\[", "\\]"), ("\\(", "\\)"), ("$", "$"))
 #   - ``\mathversion{bold}`` font switch (dropped) and ``\mbox``/``\hbox`` boxes, which are
 #     rewritten to KaTeX-supported ``\text`` (``\text`` accepts nested ``$…$`` math, so a
 #     ``\mbox{a $b$ c}`` survives instead of erroring).
+#   - ``\big{(}`` / ``\Big{]}`` sizing commands whose delimiter LaTeXML wrapped in a brace group;
+#     the braces are unwrapped to ``\big(`` (KaTeX rejects the braced form as an "ordgroup"
+#     delimiter and collapses the whole formula).
 _INTERNAL_MACRO_RE = re.compile(r"\\@[A-Za-z@]+")
 _LAYOUT_MACRO_RE = re.compile(
     r"\\(?:centering|raggedright|raggedleft|centerline|noindent|par|"
@@ -78,6 +81,13 @@ _DEFINECOLOR_RE = re.compile(
     r"\\definecolor(?![A-Za-z])\s*(?:\[[^\]]*\])?\s*\{[^{}]*\}\s*\{[^{}]*\}\s*\{[^{}]*\}"
 )
 _COLOR_SELECT_RE = re.compile(r"\\color(?![A-Za-z])\s*(?:\[[^\]]*\])?\s*\{[^{}]*\}")
+# ``\big{(}`` / ``\Big{]}`` — LaTeXML wraps the delimiter after a \big-family sizing command in a
+# brace group, which KaTeX rejects ("Invalid delimiter type 'ordgroup'") → whole-formula collapse.
+# Unwrap so the delimiter follows the command directly (``\big(``). Inner is a single delimiter:
+# a control word (``\langle``), an escaped brace/bar (``\{`` ``\|``), or a bare delimiter char.
+_BIG_DELIM_RE = re.compile(
+    r"(\\(?:bigg|Bigg|big|Big)[lrmLRM]?)\s*\{\s*(\\[a-zA-Z]+|\\[{}|]|[()\[\].|/])\s*\}"
+)
 _MULTI_WS_RE = re.compile(r"[ \t]{2,}")
 
 # Security denylist (SEC-5 / BR-19): KaTeX commands that under ``trust:true`` emit links, load
@@ -112,6 +122,9 @@ def _sanitize(latex: str) -> str:
     latex = _CITE_RE.sub(" ", latex)  # \cite-family citation (no math)
     latex = _MATHVERSION_RE.sub(" ", latex)  # \mathversion font switch (no math)
     latex = _MBOX_RE.sub(r"\\text", latex)  # \mbox/\hbox → KaTeX-supported \text
+    # \big{(} → "\big( " — trailing space so a control-word delimiter (\langle) does not fuse with
+    # the following letter into a bogus \langlez; _MULTI_WS_RE collapses the extra space.
+    latex = _BIG_DELIM_RE.sub(r"\1\2 ", latex)
     return _MULTI_WS_RE.sub(" ", latex).strip()
 
 

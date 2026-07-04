@@ -125,6 +125,15 @@ def test_mbox_is_rewritten_to_text() -> None:
     assert out == r"\text{a $b$ c} + \text{d}"
 
 
+def test_big_family_braced_delimiters_are_unwrapped() -> None:
+    # LaTeXML emits ``\big{(}`` (delimiter wrapped in braces); KaTeX rejects it as an "ordgroup"
+    # delimiter and collapses the whole formula. The braces are unwrapped to ``\big(``.
+    alt = r"2\big{(}x-y\Big{]} + \Bigl{\langle}z\bigr{|}"
+    out = mathml_to_latex(_math(f'<math alttext="{alt}">z</math>'))
+    # Braces unwrapped; a trailing space keeps \langle from fusing with the next letter.
+    assert out == r"2\big( x-y\Big] + \Bigl\langle z\bigr|"
+
+
 def test_colored_equation_renders_without_residual_color_markup() -> None:
     # Regression for arXiv:2410.10781, whose coloured objective leaked \color[rgb]/\definecolor
     # into stored LaTeX and collapsed the whole formula to red source text in KaTeX.

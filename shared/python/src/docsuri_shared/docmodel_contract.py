@@ -16,7 +16,12 @@ from __future__ import annotations
 # colour selection (\definecolor, \color[model]{spec}), \eqref/\ref/\cite-family cross-references
 # and citations, \mathversion font switches, \leafmode, and \mbox/\hbox (rewritten to \text).
 # Changes stored LaTeX, so affected caches must rebuild.
-DOCMODEL_PARSER_VERSION = "docmodel-parser@5"
+# @6: two more formula/listing fidelity fixes. Formula: ``\big{(}``/``\Big{]}`` sizing commands
+# whose delimiter LaTeXML brace-wrapped are unwrapped (KaTeX rejects the braced form and collapses
+# the whole formula). Code/algorithm listings: the content-MathML ``<annotation-xml>`` is dropped
+# alongside the TeX ``<annotation>`` so an inline symbol no longer triples into
+# "ηm"+"subscript"+"𝜂𝑚". Both change stored output, so affected caches must rebuild.
+DOCMODEL_PARSER_VERSION = "docmodel-parser@6"
 # 1.1.0: additive optional meta.macros (consumers ignore if unset).
 DOCMODEL_SCHEMA_VERSION = "1.1.0"
 
