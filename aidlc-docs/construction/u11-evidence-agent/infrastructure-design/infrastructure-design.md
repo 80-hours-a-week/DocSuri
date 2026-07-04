@@ -61,7 +61,7 @@ CREATE INDEX idx_ev_turns_job     ON evidence_turns ((result->>'jobId'))
 
 ### 2.2 S3 첨부 임시 처리
 - **기존 버킷 + `evidence-attachments/tmp/{jobId}/{attachmentId}` 프리픽스**.
-- 수명: 추출 완료 즉시 **삭제**(INV-EV-4 · C-1). S3 라이프사이클 정책으로 미삭제 잔여분 자동 만료(예: 1일). 
+- 수명: 추출 완료 즉시 **삭제**(INV-EV-4 · C-1). S3 라이프사이클 정책으로 미삭제 잔여분 자동 만료(예: 1일).
 - IAM: U11 task role에 `s3:PutObject`·`s3:GetObject`·`s3:DeleteObject` — 해당 프리픽스 스코프만.
 
 ### 2.3 S3 DocModel (U1 소유 — read-only 소비)
