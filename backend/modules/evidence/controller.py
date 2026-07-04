@@ -7,6 +7,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
+from backend.middleware.agent_attachments import ATTACHMENT_MAX_COUNT, AgentAttachmentIn
 from backend.middleware.agent_quota import enforce_evidence_turn_quota
 from backend.modules.accounts.models import Principal
 
@@ -68,7 +69,11 @@ class TurnCreateRequest(BaseModel):
     scope: str | None = Field(None, description='auto | explicit | mixed')
     paper_ids: list[str] | None = Field(None, alias='paperIds')
     session_id: str | None = Field(None, alias='sessionId')
-    attachments: list[Any] = Field(default_factory=list)
+    # US-AG5(#297)/US-EV4(#268) — 형식·크기를 요청 파싱 단계에서 검증(422). 종전
+    # list[Any]는 아래 EvidenceRequest(list[str]) 생성에서 ValidationError → 500이었다.
+    attachments: list[AgentAttachmentIn] = Field(
+        default_factory=list, max_length=ATTACHMENT_MAX_COUNT
+    )
 
 
 class SourceRefOut(BaseModel):
@@ -141,7 +146,8 @@ async def create_turn(
         topic=body.topic,
         scope=body.scope or EvidenceScope.auto,
         paperIds=body.paper_ids or [],
-        attachments=body.attachments or [],
+        # 공유 계약(EvidenceRequest.attachments)은 문서 핸들 문자열 목록 — 객체를 id로 변환.
+        attachments=[attachment.id for attachment in body.attachments],
     )
 
     try:

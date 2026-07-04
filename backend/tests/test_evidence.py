@@ -261,6 +261,69 @@ def test_api_create_turn_returns_turn_out(monkeypatch) -> None:
     assert 'turnId' in body
 
 
+def test_api_turn_accepts_fe_attachment_objects_not_500(monkeypatch) -> None:
+    """FE는 AgentAttachment 객체를 보낸다 — 공유 계약(list[str] 핸들)로 변환되어야 한다(#268).
+
+    종전에는 객체가 EvidenceRequest(attachments=list[str]) 생성에서 ValidationError → 500.
+    """
+    client = _client(monkeypatch, _principal(), InMemoryEvidenceRepository())
+
+    resp = client.post(
+        '/api/evidence/turns',
+        json={
+            'topic': 'attachment handling',
+            'attachments': [
+                {
+                    'id': 'att-1',
+                    'name': 'draft.pdf',
+                    'kind': 'pdf',
+                    'sizeBytes': 2048,
+                    'status': 'ready',
+                },
+            ],
+        },
+    )
+
+    assert resp.status_code == 200
+
+
+def test_api_turn_rejects_disallowed_attachment_kind_with_422(monkeypatch) -> None:
+    client = _client(monkeypatch, _principal(), InMemoryEvidenceRepository())
+
+    resp = client.post(
+        '/api/evidence/turns',
+        json={
+            'topic': 'attachment handling',
+            'attachments': [
+                {'id': 'att-1', 'name': 'x.docx', 'kind': 'unknown', 'sizeBytes': 10},
+            ],
+        },
+    )
+
+    assert resp.status_code == 422
+
+
+def test_api_turn_rejects_oversized_attachment_with_422(monkeypatch) -> None:
+    client = _client(monkeypatch, _principal(), InMemoryEvidenceRepository())
+
+    resp = client.post(
+        '/api/evidence/turns',
+        json={
+            'topic': 'attachment handling',
+            'attachments': [
+                {
+                    'id': 'att-1',
+                    'name': 'big.pdf',
+                    'kind': 'pdf',
+                    'sizeBytes': 10 * 1024 * 1024 + 1,
+                },
+            ],
+        },
+    )
+
+    assert resp.status_code == 422
+
+
 # ---------------------------------------------------------------------------
 # API: 인증 없으면 401
 # ---------------------------------------------------------------------------
