@@ -32,6 +32,31 @@ const baseSessions: AgentSessionSnapshot[] = [
         createdAt: '2026-07-01T00:10:00Z',
         status: 'sent',
       },
+      {
+        id: 'msg-demo-2b',
+        role: 'agent',
+        // U11 evidence orchestrator 결과(JSON) — 화면 테스트가 근거 카드+인용 앵커 렌더링을 검증한다(#339).
+        content: JSON.stringify({
+          state: 'ok',
+          claims: [
+            {
+              statement: '벤치마크 재사용은 데이터 누수 위험을 높인다.',
+              supporting: [
+                {
+                  paperId: '2401.01234',
+                  recordRef: 'rec-2401-01234-07',
+                  anchor: '4.2절',
+                  quote: 'benchmark reuse inflates scores across successive releases',
+                },
+              ],
+              conflicting: [],
+            },
+          ],
+          coverage: { paperCount: 3, queryUsed: 'LLM 평가 데이터 누수' },
+        }),
+        createdAt: '2026-07-01T00:10:30Z',
+        status: 'sent',
+      },
     ],
     events: [
       {

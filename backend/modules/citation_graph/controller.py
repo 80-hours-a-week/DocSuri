@@ -146,6 +146,11 @@ class SemanticScholarProvider:
             except (httpx.TimeoutException, httpx.HTTPError):
                 if attempt == len(timeouts) - 1:
                     return "unavailable", []
+            except Exception:  # noqa: BLE001 - non-JSON/misshapen 200 body degrades, never 500 (BR-CG12)
+                # S2 often answers /references 200 with a body that isn't {"data": [...]} (HTML
+                # error, JSON null, bare list). resp.json()/.get() then raises Value/Attribute/
+                # TypeError — not httpx.*, so it would 500. Retry won't fix a bad body.
+                return "unavailable", []
         return "unavailable", []
 
 
@@ -361,9 +366,19 @@ async def get_citation_tree(
         "paper_service",
         None,
     )
-    response = _build_tree(paper_id, parent, items, paper_service).model_copy(
-        update={"providerStatus": provider_status}
-    )
+    try:
+        response = _build_tree(paper_id, parent, items, paper_service).model_copy(
+            update={"providerStatus": provider_status}
+        )
+    except Exception:  # noqa: BLE001 - a misshapen provider item (e.g. string year) degrades, never 500 (BR-CG12)
+        return CitationTreeResponse(
+            status="Unavailable",
+            rootPaperId=paper_id,
+            nodes=[],
+            edges=[],
+            depthReturned=0,
+            providerStatus="unavailable",
+        )
     await store.set(key, response)
     _emit(request, response, int((time.perf_counter() - started) * 1000), depth_requested)
     return response

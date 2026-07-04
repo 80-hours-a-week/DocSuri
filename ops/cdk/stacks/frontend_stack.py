@@ -8,6 +8,7 @@ side — which is what makes the httpOnly+Secure session cookie work in a real b
 from aws_cdk import (
     CfnOutput,
     Duration,
+    RemovalPolicy,
     Stack,
 )
 from aws_cdk import (
@@ -47,6 +48,12 @@ from aws_cdk import (
     aws_route53_targets as r53_targets,
 )
 from aws_cdk import (
+    aws_s3 as s3,
+)
+from aws_cdk import (
+    aws_s3_deployment as s3deploy,
+)
+from aws_cdk import (
     aws_sns as sns,
 )
 from aws_cdk import (
@@ -69,6 +76,57 @@ _VIEWER_CERT_ARN = "arn:aws:acm:us-east-1:028317349537:certificate/8973dd50-5acb
 # com.amazonaws.global.cloudfront.origin-facing in ap-northeast-2.
 _CLOUDFRONT_PREFIX_LIST = "pl-22a6434b"
 _LIBRARY_ENTRY_PATH = "/library/saved"
+
+# Branded static error page (#341) — served from S3 at the edge when the origin returns a 5xx,
+# so users never see a raw ALB/gateway error. Self-contained: inline CSS, no external refs
+# (works even mid-incident), dark-mode aware, retry-in-place. Not under the app CSP (it bypasses
+# the Next middleware), so the one inline handler is safe here.
+_EDGE_ERROR_HTML = """<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>일시적인 오류 · DocSuri</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 2rem;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo",
+      "Noto Sans KR", sans-serif;
+    background: #fbfbfd; color: #1a1a1f;
+  }
+  main { max-width: 26rem; text-align: center; }
+  .mark { margin: 0; font-weight: 700; font-size: 0.9rem; letter-spacing: 0.02em; color: #6b6b76; }
+  h1 { margin: 0.9rem 0 0.5rem; font-size: 1.5rem; line-height: 1.3; letter-spacing: -0.02em; }
+  p.msg { margin: 0.2rem 0; color: #55555f; line-height: 1.65; }
+  button {
+    margin-top: 1.75rem; padding: 0.7rem 1.6rem; border: 0; border-radius: 999px;
+    font: inherit; font-weight: 600; color: #fff; background: #3d5afe; cursor: pointer;
+    transition: transform .15s ease, background .15s ease;
+  }
+  button:hover { background: #2f49e0; transform: translateY(-1px); }
+  button:active { transform: translateY(0); }
+  button:focus-visible { outline: 3px solid rgba(61, 90, 254, 0.45); outline-offset: 2px; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #0e0e11; color: #f2f2f5; }
+    .mark { color: #8b8b96; }
+    p.msg { color: #a8a8b3; }
+  }
+</style>
+</head>
+<body>
+  <main>
+    <p class="mark">DocSuri</p>
+    <h1>잠시 후 다시 시도해 주세요</h1>
+    <p class="msg">일시적인 문제로 페이지를 불러오지 못했어요.</p>
+    <p class="msg">잠깐 사이에 해결되는 경우가 많아요.</p>
+    <button type="button" onclick="location.reload()">새로고침</button>
+  </main>
+</body>
+</html>
+"""
 
 
 class FrontendStack(Stack):
@@ -143,6 +201,23 @@ class FrontendStack(Stack):
         # The Next.js `/` route is statically prerendered (no backend dependency), so it is a
         # safe ALB liveness probe; a 3xx redirect from it is still "healthy" to the ALB.
         self.service.target_group.configure_health_check(path="/")
+
+        # Edge/origin access logs (#341): the paper page returns intermittent SSR 5xx and we
+        # can't yet correlate a failing request against the SSR server's CloudWatch container
+        # logs. ALB logs give the failing path+timestamp at the origin; CloudFront logs add
+        # edge-vs-origin attribution. BUCKET_OWNER_PREFERRED (ACLs on) is required for CloudFront
+        # standard S3 logging; ALB writes via bucket policy. RETAIN so incident evidence survives
+        # a stack replace; a 90-day lifecycle caps storage cost.
+        edge_logs = s3.Bucket(
+            self, "WebEdgeLogs",
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            object_ownership=s3.ObjectOwnership.BUCKET_OWNER_PREFERRED,
+            enforce_ssl=True,
+            removal_policy=RemovalPolicy.RETAIN,
+            lifecycle_rules=[s3.LifecycleRule(expiration=Duration.days(90))],
+        )
+        self.service.load_balancer.log_access_logs(edge_logs, prefix="alb")
 
         # Network lockdown: ALB :443 only from CloudFront edge IPs (dedicated SG — the 45-entry
         # prefix list vs the 60-rule SG quota; see compute_stack). Necessary but not sufficient —
@@ -229,11 +304,29 @@ class FrontendStack(Stack):
             origin_ssl_protocols=[cloudfront.OriginSslPolicy.TLS_V1_2],
             custom_headers={"X-Origin-Verify": social_verify},
         )
+        # Edge error page (#341): served from S3, NOT the ALB — in the worst case (origin
+        # unreachable) the ALB can't serve its own error page. Private bucket; CloudFront reads
+        # it via OAC (no public access).
+        error_bucket = s3.Bucket(
+            self, "WebErrorAssets",
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            enforce_ssl=True,
+            # ponytail: RETAIN — trivial redeployable asset, orphans on `cdk destroy`.
+            # Add auto_delete_objects=True if teardown cleanliness ever matters.
+            removal_policy=RemovalPolicy.RETAIN,
+        )
+        error_origin = origins.S3BucketOrigin.with_origin_access_control(error_bucket)
         self.cdn = cloudfront.Distribution(
             self, "WebCdn",
             comment="docsuri frontend (U5) - trusted HTTPS edge + authenticated origin",
             domain_names=[_APP_DOMAIN],
             certificate=viewer_cert,
+            # Access logs (#341) — same bucket as the ALB logs, under a cf/ prefix.
+            enable_logging=True,
+            log_bucket=edge_logs,
+            log_file_prefix="cf/",
+            log_includes_cookies=False,
             default_behavior=cloudfront.BehaviorOptions(
                 origin=origin,
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
@@ -259,7 +352,33 @@ class FrontendStack(Stack):
                     cache_policy=cloudfront.CachePolicy.CACHING_DISABLED,
                     origin_request_policy=cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
                 ),
+                # Branded edge error page (#341) — S3-backed so it survives an origin outage.
+                "/__edge/*": cloudfront.BehaviorOptions(
+                    origin=error_origin,
+                    viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
+                    cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED,
+                ),
             },
+            # Map origin 5xx → the branded S3 page. Keep the 5xx status (don't mask as 200 —
+            # monitors and crawlers should still see the error). Short TTL lightly shields a
+            # struggling origin from retry storms.
+            # ponytail: 10s error cache; drop to 0 for fastest recovery, raise to shield harder.
+            error_responses=[
+                cloudfront.ErrorResponse(
+                    http_status=code,
+                    response_http_status=code,
+                    response_page_path="/__edge/error.html",
+                    ttl=Duration.seconds(10),
+                )
+                for code in (500, 502, 503, 504)
+            ],
+        )
+        s3deploy.BucketDeployment(
+            self, "WebErrorPageDeploy",
+            destination_bucket=error_bucket,
+            sources=[s3deploy.Source.data("__edge/error.html", _EDGE_ERROR_HTML)],
+            distribution=self.cdn,
+            distribution_paths=["/__edge/*"],
         )
 
         # Apex docsuri.org → CloudFront (Route53 alias supports apex; CNAME would not).
