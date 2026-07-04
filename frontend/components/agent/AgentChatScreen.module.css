@@ -69,6 +69,27 @@
   font-weight: 600;
 }
 
+.stateBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: agentSpin 0.7s linear infinite;
+}
+
+@keyframes agentSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .modePicker {
   --agent-picker-bg: linear-gradient(135deg, rgba(245, 250, 255, 0.96), rgba(255, 248, 244, 0.94));
   --agent-picker-border: color-mix(in srgb, var(--color-border) 70%, white);
@@ -223,6 +244,7 @@
 .error {
   margin: 0;
   line-height: 1.5;
+  white-space: pre-wrap;
   word-break: keep-all;
   overflow-wrap: anywhere;
 }
