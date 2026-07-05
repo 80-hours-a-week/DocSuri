@@ -303,6 +303,9 @@ class DocModelBuilder:
                     generated_at=self._clock.now(),
                     crops=crops,
                 )
+                if _non_abstract_body_len(doc) <= 0:
+                    self._emit("ingestion.docmodel.tei_fallback", 1.0)
+                    doc = None
             except Exception:  # noqa: BLE001 - any TEI parse fault degrades to flat text
                 self._emit("ingestion.docmodel.tei_fallback", 1.0)
                 doc = None
