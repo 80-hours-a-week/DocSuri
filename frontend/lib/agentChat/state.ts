@@ -263,7 +263,10 @@ export function sortTimelineEvents(events: AgentTimelineEvent[]): AgentTimelineE
     .map(({ event }) => event);
 }
 
-export function createAttachmentFromFile(file: { name: string; size?: number }, index = 0) {
+export function createAttachmentFromFile(
+  file: { name: string; size?: number; arrayBuffer?: Blob['arrayBuffer'] },
+  index = 0,
+) {
   const name = file.name.trim() || 'untitled';
   const kind = classifyAttachmentKind(name);
   const sizeBytes = file.size ?? 0;
@@ -273,6 +276,9 @@ export function createAttachmentFromFile(file: { name: string; size?: number }, 
     kind,
     sizeBytes,
     status: 'ready',
+    ...(kind === 'pdf' && typeof file.arrayBuffer === 'function'
+      ? { sourceFile: file as unknown as Blob }
+      : {}),
   };
 
   if (kind === 'unknown') {

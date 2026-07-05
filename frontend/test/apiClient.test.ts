@@ -1,7 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ApiClient } from '@/lib/api/apiClient';
 import { UserFacingError } from '@/lib/api/errors';
-import type { Transport, TransportRequest, TransportResponse } from '@/lib/api/transport';
+import {
+  isBinaryTransportBody,
+  type Transport,
+  type TransportRequest,
+  type TransportResponse,
+} from '@/lib/api/transport';
 import { pageResponse } from '@/mocks/searchFixtures';
 
 function transportOf(impl: (req: TransportRequest) => Promise<TransportResponse>): Transport & {
@@ -234,28 +239,140 @@ describe('ApiClient agent chat mapping', () => {
     expect(snapshot.events[0].detail).not.toContain('internal detail');
   });
 
-  it('blocks pdf novelty manuscripts until doc-model parsing ships', async () => {
-    // US-NV2(#252) — md/txt 원고는 생성 직후 본문 업로드로 흐른다(스크린 테스트가 관통 검증).
-    // PDF만 공통 doc-model 파이프라인 후속까지 차단 — 요청 전에 즉시 안내한다.
-    const t = transportOf(async () => ({ status: 200, body: null }));
-    await expect(
-      new ApiClient(t, fast).sendAgentMessage('agent-novelty-local', {
-        content: 'manuscript check',
-        mode: 'novelty',
-        attachments: [
-          {
-            id: 'a1',
-            name: 'draft.pdf',
-            kind: 'pdf',
-            sizeBytes: 100,
-            status: 'ready',
+  it('uploads research PDFs before sending attachment metadata to the job', async () => {
+    const requests: TransportRequest[] = [];
+    const uploadRef = {
+      id: 'a1',
+      name: 'scan.pdf',
+      kind: 'pdf',
+      sizeBytes: 8,
+      status: 'ready',
+      objectKey: 'evidence/u1/a1/a1/scan.pdf',
+      paperId: 'userdoc:11111111-1111-4111-8111-111111111111',
+      recordRef: 'upload:u1:userdoc-a1:a1',
+    };
+    const t = transportOf(async (req) => {
+      requests.push(req);
+      if (req.path.startsWith('/api/research/attachments?')) {
+        expect(isBinaryTransportBody(req.body)).toBe(true);
+        return { status: 200, body: uploadRef };
+      }
+      if (req.path === '/api/research/jobs') {
+        const body = req.body as { attachments?: unknown[] };
+        expect(body.attachments?.[0]).toMatchObject({
+          objectKey: uploadRef.objectKey,
+          paperId: uploadRef.paperId,
+          recordRef: uploadRef.recordRef,
+        });
+        expect(body.attachments?.[0]).not.toHaveProperty('sourceFile');
+        return { status: 201, body: { jobId: 'r1', state: 'active' } };
+      }
+      if (req.path === '/api/research/jobs/r1') {
+        return {
+          status: 200,
+          body: {
+            job: {
+              jobId: 'r1',
+              title: 'PDF evidence',
+              state: 'completed',
+              updatedAt: '2026-07-01T00:00:00Z',
+            },
+            messages: [],
           },
-        ],
-      }),
-    ).rejects.toMatchObject({
-      message: 'PDF 원고 분석은 준비 중입니다. Markdown 또는 TXT 파일로 업로드해 주세요.',
+        };
+      }
+      return { status: 500, body: null };
     });
-    expect(t.calls).toBe(0);
+
+    await new ApiClient(t, fast).sendAgentMessage('agent-evidence-local', {
+      content: 'PDF evidence',
+      mode: 'evidence',
+      attachments: [
+        {
+          id: 'a1',
+          name: 'scan.pdf',
+          kind: 'pdf',
+          sizeBytes: 8,
+          status: 'ready',
+          sourceFile: new Blob(['%PDF-1.4'], { type: 'application/pdf' }),
+        },
+      ],
+    });
+
+    expect(requests.map((req) => req.path.split('?')[0])).toEqual([
+      '/api/research/attachments',
+      '/api/research/jobs',
+      '/api/research/jobs/r1',
+    ]);
+  });
+
+  it('uploads novelty PDF manuscripts as raw PDF after creating the manuscript job', async () => {
+    const requests: TransportRequest[] = [];
+    const t = transportOf(async (req) => {
+      requests.push(req);
+      if (req.path === '/api/novelty/jobs') {
+        const body = req.body as { manuscript?: unknown };
+        expect(body.manuscript).toEqual({
+          fileName: 'draft.pdf',
+          contentType: 'application/pdf',
+          objectKey: null,
+        });
+        return { status: 201, body: { jobId: 'n1', state: 'queued' } };
+      }
+      if (req.path.startsWith('/api/novelty/jobs/n1/manuscript?')) {
+        expect(isBinaryTransportBody(req.body)).toBe(true);
+        expect(req.path).toContain('fileName=draft.pdf');
+        return {
+          status: 200,
+          body: {
+            job: {
+              jobId: 'n1',
+              topic: 'manuscript check',
+              state: 'queued',
+              updatedAt: '2026-07-01T00:00:00Z',
+            },
+            events: [],
+          },
+        };
+      }
+      if (req.path === '/api/novelty/jobs/n1') {
+        return {
+          status: 200,
+          body: {
+            job: {
+              jobId: 'n1',
+              topic: 'manuscript check',
+              state: 'queued',
+              updatedAt: '2026-07-01T00:00:00Z',
+            },
+            events: [],
+          },
+        };
+      }
+      if (req.path === '/api/novelty/jobs/n1/messages') {
+        return { status: 200, body: { messages: [] } };
+      }
+      if (req.path === '/api/novelty/jobs/n1/result') return { status: 404, body: null };
+      return { status: 500, body: null };
+    });
+
+    await new ApiClient(t, fast).sendAgentMessage('agent-novelty-local', {
+      content: 'manuscript check',
+      mode: 'novelty',
+      attachments: [
+        {
+          id: 'a1',
+          name: 'draft.pdf',
+          kind: 'pdf',
+          sizeBytes: 8,
+          status: 'ready',
+          sourceFile: new Blob(['%PDF-1.4'], { type: 'application/pdf' }),
+        },
+      ],
+    });
+
+    expect(requests[0].path).toBe('/api/novelty/jobs');
+    expect(requests[1].path.split('?')[0]).toBe('/api/novelty/jobs/n1/manuscript');
   });
 
   it('blocks real novelty follow-up sends until the backend can re-dispatch jobs', async () => {
