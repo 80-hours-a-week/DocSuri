@@ -3668,3 +3668,17 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **Context**: Code Generation follow-up completion for PR #394 review findings.
 
 ---
+## PR396 Review Start
+**Timestamp**: 2026-07-05T16:45:35Z
+**User Input**: "Review PR #396 from a clean context and apply all findings if possible. Approve PR if it's approvable/"
+**AI Response**: "Started clean-context review of PR #396. Loaded AI-DLC common rules, enabled security/resiliency/PBT extension rules, and the DocSuri unit-review skill; checked out feature/userdoc-grobid and refreshed develop before inspecting the diff and U1 ingestion context."
+**Context**: PR review and possible code-generation follow-up for ingestion user-PDF GROBID doc-model changes.
+
+---
+## PR396 Review Fix Completion
+**Timestamp**: 2026-07-05T16:49:03Z
+**User Input**: "Review PR #396 from a clean context and apply all findings if possible. Approve PR if it's approvable/"
+**AI Response**: "Reviewed PR #396 against U1 ingestion/user-docmodel DocModel rules and applied the only code finding found: syntactically valid but body-empty GROBID TEI now falls back to pdfplumber flat text instead of caching an empty DocModel. Strengthened regressions for structured user-PDF TEI success and empty-body fallback. Verification passed: focused builder/user-docmodel tests 50 passed, full ingestion suite 285 passed/1 skipped, ingestion ruff clean, compileall clean, git diff --check clean."
+**Context**: PR review fix completion for ingestion user-PDF GROBID doc-model changes.
+
+---
