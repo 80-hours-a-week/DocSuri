@@ -1,0 +1,29 @@
+from pathlib import Path
+
+STACK_SOURCE = (
+    Path(__file__).resolve().parents[1] / "cdk" / "stacks" / "ingestion_stack.py"
+).read_text()
+
+
+def test_ingestion_stack_provisions_userdoc_grobid_worker() -> None:
+    # GROBID Option B: a dedicated user-PDF build queue + worker with its own GROBID sidecar,
+    # kept separate from the lean docsuri-docmodel-builder so arXiv reader-triggered builds never
+    # inherit the ~20GB GROBID cold-pull.
+    assert 'queue_name="docsuri-userdoc-queue"' in STACK_SOURCE
+    assert 'queue_name="docsuri-userdoc-dlq"' in STACK_SOURCE
+    assert 'service_name="docsuri-userdoc-builder"' in STACK_SOURCE
+
+    # The user-PDF worker carries a GROBID sidecar (a second one, alongside the bulk worker's) and
+    # points the runtime at it.
+    assert STACK_SOURCE.count('ecs.ContainerImage.from_registry("grobid/grobid:0.8.0")') >= 2
+    assert '"DOCSURI_GROBID_URL": "http://127.0.0.1:8070"' in STACK_SOURCE
+
+    # It drains the userdoc queue via the docmodel worker mode (the worker's single priority-queue
+    # slot points at the userdoc queue).
+    assert '"DOCSURI_DOCMODEL_QUEUE_URL": self.userdoc_queue.queue_url' in STACK_SOURCE
+    assert '"DOCSURI_WORKER_QUEUE_MODE": "docmodel"' in STACK_SOURCE
+
+    # Least privilege: consume its own queue + read/write the papers bucket. No Bedrock/OpenSearch/
+    # RDS grants — the build path is S3-only.
+    assert "self.userdoc_queue.grant_consume_messages(userdoc_task_def.task_role)" in STACK_SOURCE
+    assert "self.bucket.grant_read_write(userdoc_task_def.task_role)" in STACK_SOURCE
