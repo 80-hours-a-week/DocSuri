@@ -8,6 +8,7 @@ import pytest
 
 from backend.modules.user_docmodel import (
     UserDocModelCoordinator,
+    _userdoc_build_queue_url,
     object_key_for_upload,
     ref_from_attachment,
     user_docmodel_ref,
@@ -49,6 +50,22 @@ def test_poll_doc_model_degrades_when_reader_raises() -> None:
     )
 
     assert coord.poll_doc_model(_ref()) is None
+
+
+def test_userdoc_build_queue_url_prefers_dedicated_then_falls_back(monkeypatch) -> None:
+    # GROBID Option B routing: user-PDF builds prefer the dedicated userdoc queue (its worker
+    # carries the GROBID sidecar). With only the shared doc-model queue set, an un-split
+    # deployment still enqueues there (backward compatible). Neither set → no queue.
+    monkeypatch.delenv("DOCSURI_USERDOC_BUILD_QUEUE_URL", raising=False)
+    monkeypatch.setenv("DOCSURI_DOCMODEL_BUILD_QUEUE_URL", "https://sqs/docmodel")
+    assert _userdoc_build_queue_url() == "https://sqs/docmodel"
+
+    monkeypatch.setenv("DOCSURI_USERDOC_BUILD_QUEUE_URL", "https://sqs/userdoc")
+    assert _userdoc_build_queue_url() == "https://sqs/userdoc"
+
+    monkeypatch.delenv("DOCSURI_USERDOC_BUILD_QUEUE_URL", raising=False)
+    monkeypatch.delenv("DOCSURI_DOCMODEL_BUILD_QUEUE_URL", raising=False)
+    assert _userdoc_build_queue_url() is None
 
 
 def test_upload_pdf_metadata_is_ascii_for_unicode_filename() -> None:

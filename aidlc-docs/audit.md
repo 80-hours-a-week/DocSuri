@@ -3689,3 +3689,24 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **Context**: PR review approval attempt and fallback comment for PR #396.
 
 ---
+## PR397 Review Start
+**Timestamp**: 2026-07-05T17:15:36Z
+**User Input**: "Review PR #397 from a clean context. Apply all findings. Approve the PR if approvable."
+**AI Response**: "Started clean-context review of PR #397. Loaded AI-DLC common rules, workspace detection guidance, enabled unit-review skill instructions, and refreshed develop/feature refs before reviewing the dedicated user-PDF GROBID doc-model worker and queue changes."
+**Context**: PR review and possible code-generation follow-up for ops user-PDF GROBID doc-model infrastructure.
+
+---
+## PR397 Review Fix Completion
+**Timestamp**: 2026-07-05T17:20:06Z
+**User Input**: "Review PR #397 from a clean context. Apply all findings. Approve the PR if approvable."
+**AI Response**: "Applied the PR #397 review finding: the dedicated user-PDF worker now waits for a healthy GROBID sidecar before consuming the userdoc queue, preventing first-message cold-start fallback from permanently caching a flat pdfplumber doc-model. Added an ops contract regression for the health dependency. Verification passed: focused ops contract tests, full ops suite, backend user_docmodel tests, touched ruff checks, py_compile for touched CDK stacks, git diff --check, and CDK app synth through the Python requirements path with the existing Node-version warning."
+**Context**: PR review fix completion for ops user-PDF GROBID doc-model infrastructure.
+
+---
+## PR397 Approval Attempt
+**Timestamp**: 2026-07-05T17:27:07Z
+**User Input**: "Review PR #397 from a clean context. Apply all findings. Approve the PR if approvable."
+**AI Response**: "Attempted to approve PR #397 after applying fixes and all GitHub checks passed, but GitHub rejected the formal review because the authenticated account is the PR author. Left the clean-context APPROVE verdict and verification as PR comment https://github.com/80-hours-a-week/DocSuri/pull/397#issuecomment-4886960539."
+**Context**: PR review approval attempt and fallback comment for PR #397.
+
+---

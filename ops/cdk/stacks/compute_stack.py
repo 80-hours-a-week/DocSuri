@@ -260,6 +260,14 @@ class ComputeStack(Stack):
                 # tree) are not starved behind a large backfill. Worker drains this queue first.
                 f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-docmodel-queue"
             ),
+            # User-uploaded PDF doc-model build (GROBID Option B) → its own queue, drained by the
+            # docsuri-userdoc-builder worker (GROBID sidecar). The coordinator factory prefers this
+            # over DOCSURI_DOCMODEL_BUILD_QUEUE_URL, so evidence/research/novelty user PDFs get
+            # structured TEI while the arXiv lazy-build queue above stays GROBID-free. Referenced by
+            # name (Ingestion owns the queue); SendMessage granted below.
+            "DOCSURI_USERDOC_BUILD_QUEUE_URL": (
+                f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-userdoc-queue"
+            ),
             "DOCSURI_SUMMARY_JOB_QUEUE_URL": (  # long-summary async job (BR-S12)
                 f"https://sqs.{self.region}.amazonaws.com/{self.account}/docsuri-summary-job-queue"
             ),
@@ -610,6 +618,9 @@ class ComputeStack(Stack):
                     f"arn:aws:sqs:{self.region}:{self.account}:docsuri-summary-job-queue",
                     # U11 evidence async job enqueue (PR #338 리뷰 Blocking #4/NFR-P6)
                     f"arn:aws:sqs:{self.region}:{self.account}:docsuri-evidence-agent-job-queue",
+                    # User-PDF build (GROBID Option B) — enqueued by evidence/research/novelty
+                    # controllers via DOCSURI_USERDOC_BUILD_QUEUE_URL above.
+                    f"arn:aws:sqs:{self.region}:{self.account}:docsuri-userdoc-queue",
                 ],
             )
         )

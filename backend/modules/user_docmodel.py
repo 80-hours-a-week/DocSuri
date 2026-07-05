@@ -226,6 +226,18 @@ class UserDocModelCoordinator:
         return self.poll_doc_model(ref)
 
 
+def _userdoc_build_queue_url() -> str | None:
+    """Where BUILD_USER_DOC_MODEL jobs are enqueued.
+
+    Prefer the dedicated user-PDF build queue (GROBID Option B: its worker carries the GROBID
+    sidecar) and fall back to the shared doc-model build queue so an un-split deployment — one
+    where DOCSURI_USERDOC_BUILD_QUEUE_URL is not yet set — still enqueues exactly as before.
+    """
+    return os.getenv("DOCSURI_USERDOC_BUILD_QUEUE_URL") or os.getenv(
+        "DOCSURI_DOCMODEL_BUILD_QUEUE_URL"
+    )
+
+
 def build_default_user_docmodel_coordinator() -> UserDocModelCoordinator | None:
     upload_bucket = (
         os.getenv("DOCSURI_USER_DOCUMENT_BUCKET")
@@ -252,7 +264,7 @@ def build_default_user_docmodel_coordinator() -> UserDocModelCoordinator | None:
     except ModuleNotFoundError:
         reader = None
     queue = None
-    queue_url = os.getenv("DOCSURI_DOCMODEL_BUILD_QUEUE_URL")
+    queue_url = _userdoc_build_queue_url()
     if queue_url:
         from summarization.adapters.sqs_docmodel_build import SqsDocModelBuildQueue
 
