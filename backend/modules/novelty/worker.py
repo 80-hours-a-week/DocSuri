@@ -114,12 +114,27 @@ def process_job(
         return
     try:
         degraded_reasons: list[str] = []
+        topic_preview = job.topic[:_PREVIEW_LEN]
 
-        service.advance_state(owner_id, job_id, JobState.RETRIEVING_CORPUS, "Searching U2 corpus")
+        # US-NV7(#257) — 단계 이벤트가 도구/쿼리/발견 수/저하 사유를 싣는다. 검색 단계는
+        # 시작 이벤트(도구+쿼리) 뒤 완료 이벤트(count)를 덧붙이고, LLM 단계는 draft가 이미
+        # 끝난 뒤 전이되므로 시작 이벤트 하나가 결과 수까지 나른다.
+        job = service.advance_state(
+            owner_id,
+            job_id,
+            JobState.RETRIEVING_CORPUS,
+            "Searching U2 corpus",
+            {"source": _CORPUS_SOURCE, "query": topic_preview},
+        )
         corpus = adapters.corpus.full_search(owner_id, job.topic)
         corpus_payload, degraded_reason = _payload_from_bundle(corpus)
         if degraded_reason:
             degraded_reasons.append(degraded_reason)
+        service.record_event(
+            job,
+            "U2 corpus search finished",
+            _step_result_payload(_CORPUS_SOURCE, len(corpus.items), degraded_reason),
+        )
         service.save_artifact(
             owner_id,
             job_id,
@@ -128,16 +143,22 @@ def process_job(
             corpus_payload,
         )
 
-        service.advance_state(
+        job = service.advance_state(
             owner_id,
             job_id,
             JobState.SEARCHING_EXTERNAL,
             "Searching external sources",
+            {"source": _EXTERNAL_SOURCE, "query": topic_preview},
         )
         external = adapters.external.search(job.topic)
         external_payload, degraded_reason = _payload_from_bundle(external)
         if degraded_reason:
             degraded_reasons.append(degraded_reason)
+        service.record_event(
+            job,
+            "External source search finished",
+            _step_result_payload(_EXTERNAL_SOURCE, len(external.items), degraded_reason),
+        )
         service.save_artifact(
             owner_id,
             job_id,
@@ -150,11 +171,16 @@ def process_job(
         if draft.degradedReason:
             degraded_reasons.append(draft.degradedReason)
 
-        service.advance_state(
+        job = service.advance_state(
             owner_id,
             job_id,
             JobState.SUMMARIZING_PRIOR_WORK,
             "Summarizing similar completed work",
+            _step_result_payload(
+                _LLM_SOURCE,
+                len(draft.similarWorks.get("items") or []),
+                draft.degradedReason,
+            ),
         )
         service.save_artifact(
             owner_id,
@@ -165,17 +191,23 @@ def process_job(
         )
 
         if job.inputType is InputType.MANUSCRIPT and job.manuscript is not None:
-            service.advance_state(
+            job = service.advance_state(
                 owner_id,
                 job_id,
                 JobState.CHECKING_SIMILARITY,
                 "Checking sentence similarity and AI-style risks",
+                {"source": _SIMILARITY_SOURCE, "query": job.manuscript.fileName},
             )
             similarity_ref = {**job.manuscript.model_dump(), "jobId": job_id}
             similarity = adapters.similarity.check(owner_id, similarity_ref)
             similarity_payload, degraded_reason = _payload_from_bundle(similarity)
             if degraded_reason:
                 degraded_reasons.append(degraded_reason)
+            service.record_event(
+                job,
+                "Similarity check finished",
+                _step_result_payload(_SIMILARITY_SOURCE, len(similarity.items), degraded_reason),
+            )
             service.save_artifact(
                 owner_id,
                 job_id,
@@ -184,11 +216,16 @@ def process_job(
                 similarity_payload,
             )
 
-        service.advance_state(
+        job = service.advance_state(
             owner_id,
             job_id,
             JobState.FORMING_IDEAS,
             "Forming novelty candidates",
+            _step_result_payload(
+                _LLM_SOURCE,
+                len(draft.noveltyCandidates.get("items") or []),
+                draft.degradedReason,
+            ),
         )
         service.save_artifact(
             owner_id,
@@ -198,11 +235,16 @@ def process_job(
             draft.noveltyCandidates,
         )
 
-        service.advance_state(
+        plan_summary = str(draft.experimentPlan.get("researchQuestion") or "")[:_PREVIEW_LEN]
+        planning_payload: dict[str, Any] = {"source": _LLM_SOURCE}
+        if plan_summary:
+            planning_payload["outputSummary"] = plan_summary
+        job = service.advance_state(
             owner_id,
             job_id,
             JobState.PLANNING_EXPERIMENT,
             "Drafting experiment plan",
+            planning_payload,
         )
         service.save_artifact(
             owner_id,
@@ -230,6 +272,22 @@ def process_job(
             {"error": str(exc)},
         )
         raise JobProcessingFailed(str(exc)) from exc
+
+
+# US-NV7(#257) — 이벤트 payload 키는 FE timelineDetail 계약(source/query/count/outputSummary/
+# reason)을 따른다. 값은 표시용 프리뷰라 _PREVIEW_LEN에서 자른다.
+_PREVIEW_LEN = 160
+_CORPUS_SOURCE = "U2 full search"
+_EXTERNAL_SOURCE = "GitHub · Hugging Face · Zenodo"
+_SIMILARITY_SOURCE = "manuscript similarity"
+_LLM_SOURCE = "Bedrock LLM"
+
+
+def _step_result_payload(source: str, count: int, reason: str | None) -> dict[str, Any]:
+    payload: dict[str, Any] = {"source": source, "count": count}
+    if reason:
+        payload["reason"] = reason
+    return payload
 
 
 def _payload_from_bundle(bundle: RetrievalBundle) -> tuple[dict[str, Any], str | None]:

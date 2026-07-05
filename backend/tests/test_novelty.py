@@ -14,6 +14,7 @@ from backend.config import Settings
 from backend.modules.accounts.models import Principal, UserRole
 from backend.modules.novelty import controller
 from backend.modules.novelty.adapters import (
+    SIMILAR_WORK_DETAIL_FIELDS,
     BedrockNoveltyLlmClient,
     ExternalApiSearchClient,
     NoveltyAdapters,
@@ -434,6 +435,107 @@ def test_bedrock_llm_adapter_maps_source_ref_indexes_only() -> None:
     assert "Novelty score" not in draft.experimentPlan["metrics"]
 
 
+def test_bedrock_llm_adapter_maps_similar_work_detail_columns() -> None:
+    captured_bodies: list[dict] = []
+
+    class FakeBedrock:
+        def invoke_model(self, **kwargs):
+            captured_bodies.append(json.loads(kwargs["body"].decode("utf-8")))
+            payload = {
+                "similarWorks": [
+                    {
+                        "title": "Prior RAG benchmark",
+                        "summary": "Grounded baseline.",
+                        "problem": {
+                            "value": "  benchmark leakage  ",
+                            "sourceRefIndexes": [0],
+                        },
+                        "method": {
+                            "value": "contrastive evaluation",
+                            "sourceRefIndexes": [0],
+                        },
+                        # B-001 회귀 — row 출처는 유효해도 칸 자체 근거가 비면 기권
+                        "dataset": {"value": "RAG-Bench", "sourceRefIndexes": []},
+                        "results": None,
+                        # 구형 bare string — 필드별 근거 검증 불가 → 기권
+                        "limitations": "small cohort",
+                        # overlap 키 자체가 없음 → null(기권)로 정규화되어야 한다
+                        "sourceRefIndexes": [0],
+                    },
+                    {
+                        # 유효한 sourceRef가 없는 row — 상세 칸이 전부 기권되어야 한다
+                        "title": "Ungrounded speculation",
+                        "summary": "No valid refs.",
+                        "problem": "invented problem",
+                        # 칸 형식은 맞지만 refs가 무효(범위 밖) → 기권
+                        "method": {"value": "invented method", "sourceRefIndexes": [99]},
+                        "dataset": "invented dataset",
+                        "results": "invented results",
+                        "limitations": "invented limitations",
+                        "overlap": "invented overlap",
+                        "sourceRefIndexes": [99],
+                    },
+                ],
+                "noveltyCandidates": [
+                    {"title": "Freshness-aware evaluation", "sourceRefIndexes": [0]}
+                ],
+                "experimentPlan": {
+                    "researchQuestion": "How can RAG novelty be evaluated?",
+                    "noveltyAngle": "Evaluate freshness against grounded baselines.",
+                    "hypotheses": ["Freshness signals improve differentiation."],
+                    "baselines": ["Prior RAG benchmark"],
+                    "procedure": ["Compare against corpus baselines."],
+                    "datasets": ["RAG Evaluation Dataset"],
+                    "metrics": ["baseline delta"],
+                    "resources": ["Public dataset"],
+                    "risks": ["dataset mismatch"],
+                    "sourceRefIndexes": [0],
+                },
+            }
+            return {
+                "body": BytesIO(
+                    json.dumps(
+                        {"content": [{"type": "text", "text": json.dumps(payload)}]}
+                    ).encode("utf-8")
+                )
+            }
+
+    corpus_ref = {
+        "type": "url",
+        "identifier": "2401.00001",
+        "title": "Prior RAG benchmark",
+        "url": "https://arxiv.org/abs/2401.00001",
+    }
+
+    draft = BedrockNoveltyLlmClient(
+        model_id="global.anthropic.claude-sonnet-4-6",
+        client=FakeBedrock(),
+    ).draft(
+        topic="RAG novelty evaluation",
+        corpus=RetrievalBundle(items=[{"title": "Prior", "sourceRefs": [corpus_ref]}]),
+        external=RetrievalBundle(items=[]),
+    )
+
+    item = draft.similarWorks["items"][0]
+    assert item["problem"] == "benchmark leakage"
+    assert item["method"] == "contrastive evaluation"
+    # B-001 — row 출처가 있어도 칸 자신의 근거가 없으면 기권(null)
+    assert item["dataset"] is None
+    assert item["results"] is None
+    assert item["limitations"] is None
+    assert item["overlap"] is None
+    # 리뷰 반영 — sourceRef 없는 row는 상세 칸 전부 기권(null): 근거 없는 값 노출 금지
+    ungrounded = draft.similarWorks["items"][1]
+    assert ungrounded["evidenceStatus"] == EvidenceStatus.ABSTAINED.value
+    assert all(ungrounded[column] is None for column in SIMILAR_WORK_DETAIL_FIELDS)
+    # 상세 칼럼은 유사 연구 표 전용 — novelty candidates에는 붙지 않는다
+    assert "method" not in draft.noveltyCandidates["items"][0]
+    # 프롬프트 계약과 추측 금지 지시가 실제 호출 본문에 실려 나간다
+    user_text = captured_bodies[0]["messages"][0]["content"][0]["text"]
+    assert '"limitations"' in user_text
+    assert "never guess" in captured_bodies[0]["system"].lower()
+
+
 def test_worker_completes_when_adapters_are_not_degraded() -> None:
     source_ref = {
         "type": "url",
@@ -504,6 +606,44 @@ def test_worker_completes_when_adapters_are_not_degraded() -> None:
     )
 
     assert NoveltyService(repo).result(owner_id, job_id).job.state is JobState.COMPLETED
+
+
+def test_worker_emits_step_detail_payloads() -> None:
+    source_ref = {
+        "type": "url",
+        "identifier": "2401.00002",
+        "url": "https://arxiv.org/abs/2401.00002",
+    }
+
+    class TwoItemCorpus:
+        def full_search(self, owner_id: str, query: str) -> RetrievalBundle:
+            return RetrievalBundle(
+                items=[
+                    {"title": "A", "sourceRefs": [source_ref]},
+                    {"title": "B", "sourceRefs": [source_ref]},
+                ],
+                evidenceStatus=EvidenceStatus.SUPPORTED,
+            )
+
+    repo = InMemoryNoveltyRepository()
+    _, owner_id, job_id = _service_job(repo)
+
+    process_job(repo, owner_id, job_id, adapters=NoveltyAdapters(corpus=TwoItemCorpus()))
+
+    payloads: dict[JobState, list[dict]] = {}
+    for event in repo.list_events(owner_id, job_id):
+        payloads.setdefault(event.state, []).append(event.payload)
+
+    # US-NV7(#257) — 검색 단계는 시작(도구+쿼리)·완료(count) 이벤트, LLM 단계는 결과 수 동봉
+    corpus_events = payloads[JobState.RETRIEVING_CORPUS]
+    assert corpus_events[0] == {"source": "U2 full search", "query": "privacy preserving RAG"}
+    assert corpus_events[-1]["count"] == 2
+    external_events = payloads[JobState.SEARCHING_EXTERNAL]
+    assert external_events[0]["query"] == "privacy preserving RAG"
+    assert external_events[-1]["count"] == 0
+    assert "reason" in external_events[-1]  # Noop external은 저하 사유를 실어 보낸다
+    assert payloads[JobState.SUMMARIZING_PRIOR_WORK][0]["count"] == 0
+    assert payloads[JobState.PLANNING_EXPERIMENT][0]["outputSummary"] == "privacy preserving RAG"
 
 
 def test_worker_manuscript_path_records_similarity_risk_degradation() -> None:

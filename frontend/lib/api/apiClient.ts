@@ -239,13 +239,16 @@ function mapNoveltyResultMessage(
   };
 }
 
-function timelineDetail(payload?: Record<string, unknown>): string | undefined {
+// N-001(#257) — SSE 경로(AgentChatScreen)도 동일 payload→detail 매핑을 쓰도록 export.
+export function timelineDetail(payload?: Record<string, unknown>): string | undefined {
   if (!payload) return undefined;
+  const count = countFromPayload(payload);
   const parts = [
     labeled('소스', payload.source ?? payload.sourceType ?? payload.type),
     labeled('쿼리', payload.query),
     labeled('요약', payload.outputSummary),
-    countFromPayload(payload) ? `결과 ${countFromPayload(payload)}건` : undefined,
+    // 0건도 '발견한 출처 수'다(US-NV7 #257) — falsy 체크로 삼키지 않는다.
+    count !== undefined ? `결과 ${count}건` : undefined,
     safeReason(payload),
   ];
   return parts.filter(Boolean).join(' · ') || undefined;

@@ -35,6 +35,8 @@ describe('AgentChatScreen', () => {
         id: 'evt-1',
         stage: 'retrieving_external',
         label: '외부 검색',
+        // N-001(#257) — SSE 이벤트도 payload 상세(source/count)를 표시한다.
+        detail: '소스: github · 결과 2건',
         state: 'running',
       },
       {
@@ -60,7 +62,10 @@ describe('AgentChatScreen', () => {
     // 구조화 novelty 아티팩트가 카드로 렌더링된다(#253~#256) — 플랫 텍스트·raw JSON이 아니라.
     expect(await screen.findByText('유사 연구 표')).toBeInTheDocument();
     expect(screen.getByRole('table')).toBeInTheDocument();
-    expect(screen.getByText('근거 부족')).toBeInTheDocument();
+    // US-NV3(#253) 상세 칼럼 — 값 있는 칸은 그대로, 근거 없는 칸은 '근거 부족'(기권).
+    expect(screen.getByText('문제정의')).toBeInTheDocument();
+    expect(screen.getByText('공개 RAG 벤치마크 3종')).toBeInTheDocument();
+    expect(screen.getAllByText('근거 부족').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText(/차별점은 데이터셋 조건/)).toBeInTheDocument();
     expect(screen.getByText('도메인 지식 기반 실패 유형 분해')).toBeInTheDocument();
     expect(screen.getByText(/판정이 아닙니다/)).toBeInTheDocument();

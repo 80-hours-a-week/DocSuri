@@ -529,6 +529,13 @@ function noveltyArtifacts(snapshot: AgentSessionSnapshot) {
           {
             title: '평가셋 자동 생성 연구',
             summary: '기존 축은 평가셋 자동 생성과 검색 품질 진단에 집중되어 있습니다.',
+            // US-NV3(#253) 상세 칼럼 — 실제 백엔드 스키마와 동일하게 null=기권.
+            problem: '도메인 특화 RAG 평가의 재현성 부족',
+            method: '평가셋 자동 생성 파이프라인',
+            dataset: '공개 RAG 벤치마크 3종',
+            results: '검색 품질 진단 정확도 개선',
+            limitations: '실패 유형 구분이 거칠다',
+            overlap: '평가 자동화 축이 주제와 겹친다',
             evidenceStatus: 'supported',
             sourceRefs: [
               {
@@ -542,6 +549,12 @@ function noveltyArtifacts(snapshot: AgentSessionSnapshot) {
           {
             title: '실패 유형 분석 연구',
             summary: '도메인 실패 유형 분해는 아직 약한 축입니다.',
+            problem: '실패 사례의 체계적 분류 부재',
+            method: null,
+            dataset: null,
+            results: null,
+            limitations: null,
+            overlap: null,
             evidenceStatus: 'insufficient',
             sourceRefs: [],
           },
