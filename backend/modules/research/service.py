@@ -4,6 +4,10 @@ import asyncio
 import json
 from typing import Any
 
+from fastapi.concurrency import run_in_threadpool
+
+from backend.modules.user_docmodel import EVIDENCE_PDF_DEGRADED_NOTICE
+
 from .models import (
     ChatRole,
     ResearchChatMessage,
@@ -30,11 +34,12 @@ class ResearchService:
         owner_id: str,
         dto: ResearchJobCreateRequest,
         orchestrator: Any = None,
+        user_docmodel: Any = None,
     ) -> ResearchJobCreateResponse:
         job = self._repo.create_job(
             ResearchJob(ownerId=owner_id, title=title_from_content(dto.content))
         )
-        await self.add_message(owner_id, job.jobId, dto, orchestrator)
+        await self.add_message(owner_id, job.jobId, dto, orchestrator, user_docmodel)
         # add_message가 처리 완료 후 항상 COMPLETED로 전이시키므로(PR #338 Blocking #3)
         # 응답도 그 최종 상태를 반영해야 한다 — job은 create_job 호출 시점의 스냅샷이라
         # 그대로 두면 항상 ACTIVE로 보고된다.
@@ -73,6 +78,7 @@ class ResearchService:
         job_id: str,
         dto: ResearchMessageCreateRequest,
         orchestrator: Any = None,
+        user_docmodel: Any = None,
     ) -> ResearchChatMessage:
         self._repo.get_job(owner_id, job_id)
         # 멀티턴 맥락(PR #338 리뷰 Blocking #2/FR-37): 현재 메시지 추가 전 이전 사용자 질문들.
@@ -93,8 +99,19 @@ class ResearchService:
         if orchestrator is None:
             self._repo.mark_completed(owner_id, job_id)
             return user_msg
+        attachment_inputs = await run_in_threadpool(
+            _attachment_inputs,
+            owner_id,
+            job_id,
+            dto.attachments,
+            user_docmodel,
+        )
         result = await _run_evidence(
-            orchestrator, owner_id, dto.content, prior_topics, _attachment_inputs(dto.attachments)
+            orchestrator,
+            owner_id,
+            dto.content,
+            prior_topics,
+            attachment_inputs,
         )
         content = _format_turn_result(result)
         assistant_msg = self._repo.add_message(
@@ -108,7 +125,7 @@ class ResearchService:
         )
         # US-EV4(#268) 2차 — 본문 없이 도착한 첨부(PDF 등)는 비기술 문구로 별도 안내.
         # 성공 결과 content는 FE가 JSON으로 파싱하므로(카드 렌더링, #339) 덧붙이지 않는다.
-        notice = _attachment_notice(dto.attachments)
+        notice = _attachment_notice(attachment_inputs)
         if notice:
             self._repo.add_message(
                 ResearchChatMessage(
@@ -172,35 +189,27 @@ def _format_turn_result(result: Any) -> str:
     return '[error] evidence_unavailable'
 
 
-def _attachment_inputs(attachments: list[dict[str, Any]]) -> tuple[Any, ...]:
-    """검증된 첨부 dict → orchestrator 입력(US-EV4 #268 2차). contentText(md/txt 본문)가
-    있으면 추출 대상 문서가 된다."""
-    from backend.modules.evidence.models import AttachmentInput
+def _attachment_inputs(
+    owner_id: str,
+    job_id: str,
+    attachments: list[dict[str, Any]],
+    user_docmodel: Any = None,
+) -> tuple[Any, ...]:
+    """검증된 첨부 dict → orchestrator 입력(US-EV4 #268 2차)."""
+    from backend.modules.evidence.attachments import attachment_inputs_from_dicts
 
-    inputs = []
-    for item in attachments:
-        raw_text = item.get('contentText')
-        inputs.append(
-            AttachmentInput(
-                name=str(item.get('name') or '첨부 문서'),
-                kind=str(item.get('kind') or ''),
-                text=raw_text if isinstance(raw_text, str) and raw_text.strip() else None,
-            )
-        )
-    return tuple(inputs)
-
-
-def _attachment_notice(attachments: list[dict[str, Any]]) -> str:
-    """본문 없이 도착한 첨부를 비기술 문구로 알린다(US-EV4/SEC-5 — 내부 오류 상세 미노출)."""
-    skipped = [
-        str(item.get('name') or '첨부 파일')
-        for item in attachments
-        if not (isinstance(item.get('contentText'), str) and item.get('contentText').strip())
-    ]
-    if not skipped:
-        return ''
-    names = ', '.join(skipped[:3])
-    return (
-        f'[첨부 안내] {names} — 이 형식의 본문 분석은 준비 중이라 이번 근거 형성에 '
-        '포함되지 않았습니다. Markdown·TXT 첨부는 본문까지 반영됩니다.'
+    return attachment_inputs_from_dicts(
+        owner_id=owner_id,
+        scope_id=job_id,
+        attachments=attachments,
+        user_docmodel=user_docmodel,
     )
+
+
+def _attachment_notice(attachment_inputs: tuple[Any, ...]) -> str:
+    """PDF DocModel이 준비되지 않은 첨부를 계약 문구로 알린다(SEC-5 — 내부 상세 미노출)."""
+    from backend.modules.evidence.attachments import unresolved_pdf_names
+
+    if not unresolved_pdf_names(attachment_inputs):
+        return ''
+    return EVIDENCE_PDF_DEGRADED_NOTICE

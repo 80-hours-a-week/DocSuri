@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-
 from types import SimpleNamespace
 
 from docsuri_shared._generated.dtos.docmodel_schema import DocModel
@@ -91,7 +90,9 @@ class EvidenceAgentOrchestrator:
 
         # US-EV4(#268) 2차 — 본문이 동봉된 첨부(md/txt)는 corpus가 비어도 추출 대상이 된다.
         attachment_docs = [
-            doc for doc in ctx.attachment_docs if doc.text and doc.text.strip()
+            doc
+            for doc in ctx.attachment_docs
+            if doc.doc_model is not None or (doc.text and doc.text.strip())
         ]
         if not search_result.records and not attachment_docs:
             return TurnAbstainResult(
@@ -102,7 +103,7 @@ class EvidenceAgentOrchestrator:
             )
 
         # --- 3. DocModel 로드 ---
-        doc_models: list[tuple[str, DocModel]] = []
+        doc_models: list[tuple[str, DocModel] | tuple[str, DocModel, str]] = []
         for record in search_result.records:
             paper_id = _get_paper_id(record)
             if not paper_id:
@@ -113,7 +114,23 @@ class EvidenceAgentOrchestrator:
 
         # --- 3b. 첨부 문서를 근거 추출 대상에 포함(US-EV4 AC1) ---
         for doc in attachment_docs:
-            doc_models.append((f'attachment:{doc.name}', _attachment_doc_model(doc)))
+            if doc.doc_model is not None and doc.paper_id:
+                doc_models.append(
+                    (
+                        doc.paper_id,
+                        doc.doc_model,
+                        doc.record_ref or doc.paper_id,
+                    )
+                )
+            else:
+                attachment_id = f'attachment:{doc.name}'
+                doc_models.append(
+                    (
+                        attachment_id,
+                        _attachment_doc_model(doc),
+                        doc.record_ref or attachment_id,
+                    )
+                )
 
         if not doc_models:
             return TurnAbstainResult(

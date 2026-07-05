@@ -3,7 +3,13 @@
 // All backend access goes through here -> U6 gateway (no direct module calls,
 // BR-U5-17). Applies differential retry (idempotent GET only), timeout, and
 // in-flight dedup (P-R1, P-P4, BR-U5-18); normalizes failures to UserFacingError.
-import type { Transport, TransportRequest, TransportResponse } from './transport';
+import {
+  binaryBody,
+  isBinaryTransportBody,
+  type Transport,
+  type TransportRequest,
+  type TransportResponse,
+} from './transport';
 import { UserFacingError, normalizeHttpError } from './errors';
 import { classifySearchResponse, type SearchOutcome } from './classify';
 import {
@@ -198,6 +204,10 @@ function mapAgentAttachments(attachments?: unknown[]): AgentAttachment[] | undef
       sizeBytes: numberValue(record.sizeBytes) ?? numberValue(record.size) ?? 0,
       status: attachmentStatus(record.status),
       error: stringValue(record.error),
+      contentText: stringValue(record.contentText),
+      objectKey: stringValue(record.objectKey),
+      paperId: stringValue(record.paperId),
+      recordRef: stringValue(record.recordRef),
     };
   });
 }
@@ -312,7 +322,7 @@ function toResearchBody(req: AgentSendMessageRequest) {
 }
 
 function toChatBody(req: AgentSendMessageRequest) {
-  return { content: req.content, attachments: req.attachments ?? [] };
+  return { content: req.content, attachments: attachmentsForJson(req.attachments) };
 }
 
 function toNoveltyBody(req: AgentSendMessageRequest, created: boolean) {
@@ -326,13 +336,10 @@ function toNoveltyBody(req: AgentSendMessageRequest, created: boolean) {
     return toChatBody(req);
   }
   const manuscript = req.attachments?.[0];
-  // US-NV2(#252) — 원고 본문은 잡 생성 직후 별도 업로드로 전달된다(sendAgentMessage).
-  // PDF만 아직 본문 분석 미지원(공통 doc-model 파이프라인 후속).
-  if (manuscript && manuscript.kind === 'pdf') {
-    throw new UserFacingError(
-      'unknown',
-      'PDF 원고 분석은 준비 중입니다. Markdown 또는 TXT 파일로 업로드해 주세요.',
-    );
+  // US-NV2(#252)/PR3 — 원고 본문은 잡 생성 직후 별도 업로드로 전달된다(sendAgentMessage).
+  // md/txt는 JSON contentText, PDF는 PR2 raw upload + BUILD_USER_DOC_MODEL 경로를 쓴다.
+  if (manuscript?.kind === 'pdf' && !hasPdfSourceFile(manuscript)) {
+    throw new UserFacingError('unknown', 'PDF 파일을 다시 첨부해 주세요.');
   }
   return {
     inputType: manuscript ? 'manuscript' : 'natural_language',
@@ -353,6 +360,37 @@ function contentTypeFor(attachment: AgentAttachment): string {
   if (attachment.kind === 'pdf') return 'application/pdf';
   if (attachment.kind === 'markdown') return 'text/markdown';
   return 'text/plain';
+}
+
+function attachmentForJson(attachment: AgentAttachment): AgentAttachment {
+  const jsonAttachment = { ...attachment };
+  delete jsonAttachment.sourceFile;
+  return jsonAttachment;
+}
+
+function attachmentsForJson(attachments?: AgentAttachment[]): AgentAttachment[] {
+  return (attachments ?? []).map(attachmentForJson);
+}
+
+function hasPdfSourceFile(
+  attachment: AgentAttachment | undefined,
+): attachment is AgentAttachment & { sourceFile: Blob } {
+  return attachment?.kind === 'pdf' && !!attachment.sourceFile;
+}
+
+// Client-side guard mirroring the backend USER_DOCMODEL_MAX_BYTES (10 MiB): fail fast instead
+// of streaming a too-large PDF to the backend only to get a 422 back.
+const MAX_PDF_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+function assertPdfUploadSize(file: Blob): void {
+  if (file.size > MAX_PDF_UPLOAD_BYTES) {
+    throw new UserFacingError('unknown', 'PDF 파일은 10MB 이하만 업로드할 수 있습니다.');
+  }
+}
+
+function requestBodyKey(body: unknown): string {
+  if (isBinaryTransportBody(body)) return `[binary:${body.contentType}]`;
+  return JSON.stringify(body ?? null);
 }
 
 export interface NotionConnectionStatusVM {
@@ -679,12 +717,67 @@ export class ApiClient {
     };
   }
 
+  private async withUploadedResearchAttachments(
+    req: AgentSendMessageRequest,
+  ): Promise<AgentSendMessageRequest> {
+    const attachments = req.attachments ?? [];
+    if (!attachments.some(hasPdfSourceFile)) return req;
+    return {
+      ...req,
+      attachments: await Promise.all(
+        attachments.map((attachment) =>
+          hasPdfSourceFile(attachment) ? this.uploadResearchPdfAttachment(attachment) : attachment,
+        ),
+      ),
+    };
+  }
+
+  private async uploadResearchPdfAttachment(
+    attachment: AgentAttachment & { sourceFile: Blob },
+  ): Promise<AgentAttachment> {
+    assertPdfUploadSize(attachment.sourceFile);
+    const query = new URLSearchParams({ fileName: attachment.name, id: attachment.id });
+    const uploaded = await this.request({
+      method: 'POST',
+      path: `/api/research/attachments?${query.toString()}`,
+      body: binaryBody(attachment.sourceFile, 'application/pdf'),
+      idempotent: false,
+    });
+    if (uploaded.status !== 200) {
+      throw normalizeHttpError(uploaded.status, serverMessage(uploaded.body));
+    }
+    const mapped = mapAgentAttachments([uploaded.body])?.[0];
+    if (!mapped?.objectKey || !mapped.paperId || !mapped.recordRef) {
+      throw new UserFacingError('unknown', 'PDF 업로드 응답을 확인할 수 없습니다.');
+    }
+    return { ...attachmentForJson(attachment), ...mapped };
+  }
+
+  private async uploadNoveltyPdfManuscript(
+    jobId: string,
+    manuscript: AgentAttachment & { sourceFile: Blob },
+  ): Promise<void> {
+    assertPdfUploadSize(manuscript.sourceFile);
+    const query = new URLSearchParams({ fileName: manuscript.name });
+    const uploaded = await this.request({
+      method: 'POST',
+      path: `/api/novelty/jobs/${encodeURIComponent(jobId)}/manuscript?${query.toString()}`,
+      body: binaryBody(manuscript.sourceFile, 'application/pdf'),
+      idempotent: false,
+    });
+    if (uploaded.status !== 200) {
+      throw normalizeHttpError(uploaded.status, serverMessage(uploaded.body));
+    }
+  }
+
   async sendAgentMessage(
     sessionId: string,
     req: AgentSendMessageRequest,
   ): Promise<AgentSendMessageResult> {
     const target = parseAgentSessionId(sessionId, req.mode);
     const created = sessionId.startsWith(`agent-${req.mode}-`);
+    const sendReq =
+      target.mode === 'evidence' ? await this.withUploadedResearchAttachments(req) : req;
     const path =
       target.mode === 'evidence'
         ? created
@@ -696,7 +789,7 @@ export class ApiClient {
     const res = await this.request({
       method: 'POST',
       path,
-      body: target.mode === 'evidence' ? toResearchBody(req) : toNoveltyBody(req, created),
+      body: target.mode === 'evidence' ? toResearchBody(sendReq) : toNoveltyBody(sendReq, created),
       idempotent: false,
     });
     if (res.status !== 200 && res.status !== 201) {
@@ -705,9 +798,11 @@ export class ApiClient {
     // US-NV2(#252) — 원고 잡은 생성 시 디스패치가 보류된다. 읽어둔 본문(contentText)을
     // 업로드해 objectKey를 바인딩해야 분석이 시작된다.
     if (created && target.mode === 'novelty') {
-      const manuscript = req.attachments?.[0];
-      if (manuscript?.contentText) {
-        const jobId = (res.body as { jobId: string }).jobId;
+      const manuscript = sendReq.attachments?.[0];
+      const jobId = (res.body as { jobId: string }).jobId;
+      if (hasPdfSourceFile(manuscript)) {
+        await this.uploadNoveltyPdfManuscript(jobId, manuscript);
+      } else if (manuscript?.contentText) {
         const uploaded = await this.request({
           method: 'POST',
           path: `/api/novelty/jobs/${encodeURIComponent(jobId)}/manuscript`,
@@ -1160,7 +1255,7 @@ export class ApiClient {
   }
 
   private async request(req: TransportRequest): Promise<TransportResponse> {
-    const key = `${req.method} ${req.path} ${JSON.stringify(req.body ?? null)}`;
+    const key = req.idempotent ? `${req.method} ${req.path} ${requestBodyKey(req.body)}` : '';
     if (req.idempotent) {
       const existing = this.inflight.get(key);
       if (existing) return existing;

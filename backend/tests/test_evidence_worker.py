@@ -64,10 +64,12 @@ class _StubOrchestrator:
     def __init__(self) -> None:
         self.calls = 0
         self.requests: list[EvidenceRequest] = []
+        self.contexts: list[AgentRunContext] = []
 
     def run(self, ctx: AgentRunContext, request: EvidenceRequest):
         self.calls += 1
         self.requests.append(request)
+        self.contexts.append(ctx)
         return TurnAbstainResult(
             outcome=EvidenceAbstainResult(state='abstain', abstainReason='out_of_corpus')
         )
@@ -110,6 +112,33 @@ def test_parse_sqs_payload_preserves_attachment_handles() -> None:
     assert fields['attachments'] == ['att-1', 'att-2']
 
 
+def test_parse_sqs_payload_preserves_attachment_doc_contract() -> None:
+    fields = parse_sqs_payload(
+        json.dumps({
+            'ownerId': 'owner-1',
+            'sessionId': 'session-1',
+            'turnId': 'turn-1',
+            'jobId': 'job-1',
+            'topic': 'attachment handling',
+            'attachmentDocs': [
+                {
+                    'id': 'att-1',
+                    'name': 'scan.pdf',
+                    'kind': 'pdf',
+                    'objectKey': 'uploads/evidence/owner-1/att-1/att-1/scan.pdf',
+                    'paperId': 'userdoc:11111111-1111-4111-8111-111111111111',
+                    'recordRef': (
+                        'upload:owner-1:'
+                        'userdoc-11111111-1111-4111-8111-111111111111:att-1'
+                    ),
+                },
+            ],
+        })
+    )
+
+    assert fields['attachment_docs'][0]['paperId'].startswith('userdoc:')
+
+
 def test_worker_passes_attachment_handles_to_evidence_request() -> None:
     repo, session_id, turn_id = _seeded_repo()
     orchestrator = _StubOrchestrator()
@@ -121,6 +150,49 @@ def test_worker_passes_attachment_handles_to_evidence_request() -> None:
     )
 
     assert orchestrator.requests[0].attachments == ['att-1', 'att-2']
+
+
+def test_worker_polls_user_pdf_attachment_docmodel() -> None:
+    from types import SimpleNamespace
+
+    repo, session_id, turn_id = _seeded_repo()
+    orchestrator = _StubOrchestrator()
+
+    class _FakeUserDocModel:
+        def __init__(self) -> None:
+            self.refs = []
+
+        def enqueue_and_poll(self, ref):
+            self.refs.append(ref)
+            return SimpleNamespace(fullText='PDF worker text', sections=[])
+
+    process_job(
+        repo,
+        orchestrator=orchestrator,
+        owner_id='owner-1',
+        session_id=session_id,
+        turn_id=turn_id,
+        job_id='job-1',
+        topic='attachment handling',
+        attachment_docs=[
+            {
+                'id': 'att-1',
+                'name': 'scan.pdf',
+                'kind': 'pdf',
+                'objectKey': 'uploads/evidence/owner-1/att-1/att-1/scan.pdf',
+                'paperId': 'userdoc:11111111-1111-4111-8111-111111111111',
+                'recordRef': (
+                    'upload:owner-1:'
+                    'userdoc-11111111-1111-4111-8111-111111111111:att-1'
+                ),
+            },
+        ],
+        user_docmodel=_FakeUserDocModel(),
+    )
+
+    docs = orchestrator.contexts[0].attachment_docs
+    assert docs[0].paper_id == 'userdoc:11111111-1111-4111-8111-111111111111'
+    assert docs[0].doc_model.fullText == 'PDF worker text'
 
 
 def test_duplicate_delivery_of_already_resolved_turn_is_skipped() -> None:

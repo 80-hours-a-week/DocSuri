@@ -86,6 +86,10 @@ class AttachmentInput:
     name: str
     kind: str
     text: str | None = None
+    paper_id: str | None = None
+    record_ref: str | None = None
+    object_key: str | None = None
+    doc_model: Any | None = None
 
 
 @dataclass(frozen=True)

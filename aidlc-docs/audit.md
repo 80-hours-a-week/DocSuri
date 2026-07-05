@@ -3498,3 +3498,173 @@ aidlc 개발 과정을 적용하여 개발하려고 합니다. 질문지를 형�
 **Context**: Commit and push request for PR #373.
 
 ---
+## PDF Doc-Model Design Review
+**Timestamp**: 2026-07-05T11:27:49Z
+**User Input**: "PDF 본문 처리 설계 인계 (Phase 1 마지막 항목, Q6=A: 공통 doc-model 파이프라인 경유)
+
+현재 상태: 검증 단계는 이미 PDF를 허용(PR #373 — pdf/md/txt · 10MB · 최대 8개)하지만, 본문 E2E는 md/txt만 관통(PR #376). PDF는 업로드돼도 본문이 근거 추출(evidence)·원고 분석(novelty)에 들어가지 않습니다. 원인은 빌드 계약이 arXiv 전용이라서입니다 — JobKind.BUILD_DOC_MODEL 잡은 arXiv id로 스스로 fetch(html→ar5iv→pdf 폴백)하고, backend 쪽 enqueue 포트도 enqueue_build(paper_id, version)(summarization/ports.py)이라 "이미 S3에 있는 사용자 파일"을 표현할 수 없습니다.
+
+제안: 3-서비스 변경
+
+① ingestion — 신규 JobKind (예: BUILD_USER_DOC_MODEL)
+
+payload: S3 objectKey + 요청 모듈(evidence/novelty) + synthetic paperId (+ owner)
+처리: arXiv fetch 대신 S3 GetObject → pdfplumber 파싱, DOCSURI_GROBID_URL 설정 시 GROBID 구조 추출(미설정이면 pdfplumber-only로 저하) → 통상 빌드와 동일 포맷의 doc-model을 DOCSURI_DOCMODEL_BUCKET에 적재
+신원: synthetic paperId 네임스페이스(예: user:{uuid}) + provenance tier "사용자 업로드"
+② backend — enqueue/poll 소비
+
+evidence 첨부·novelty 원고가 PDF면: S3 적재(원고는 PR #376의 POST /jobs/{id}/manuscript 경로 재사용, evidence 첨부은 동일 패턴 신설) → 기존 DOCSURI_DOCMODEL_BUILD_QUEUE_URL로 신규 kind enqueue → readiness 폴링 → 완성된 doc-model 본문을 md/txt와 같은 추출/분석 경로에 투입
+실패/타임아웃은 기존 fail-soft 재사용: evidence는 '[첨부 안내]' 메시지, novelty는 잡 저하 사유
+③ frontend — PDF 바이너리 업로드
+
+현행은 텍스트 본문 동봉(≤256KiB)이라 PDF 바이너리 경로 신설 필요. API 태스크 롤 s3:PutObject는 live 검증 완료(US-NV2 — 업로드 원고에서 novelty job 시작 #252 코멘트) — 인프라 선행 조건 없음
+리뷰 요청 — 계약 결정 4가지
+
+synthetic paperId ↔ SourceRef 규약: 사용자 문서에는 arXiv URL을 부여하지 않음(무날조 원칙) — recordRef로만 참조. 네임스페이스 표기 확정 필요
+readiness 신호: 폴링(단순, 제안) vs 완료 콜백 큐
+빌드 실패 UX: md/txt와 동일하게 부분 저하로 진행(전체 실패 아님)
+GROBID 프로비저닝: env-gated라 없이도 배포 가능(표·구조 fidelity만 저하) — 프로비저닝 여부/시점 결정
+미착수 인계 사유
+
+3-서비스 관통 + GROBID 로컬 테스트 불가 조합이라, 반쪽 구현으로 배포되는 위험이 설계 리뷰 선행 비용보다 크다고 판단했습니다. 위 4가지에 대한 결정이 서면 확정되면 구현은 스택 순서(① → ② → ③)로 PR 분할 진행이 가능합니다.
+
+cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
+
+여기에 대해서 어떻게 생각해?"
+**AI Response**: "Loaded AI-DLC common rules, extension opt-in prompts, and current state for a design-review response; no code changes requested or made. Reviewed the proposed 3-service PDF doc-model path. Recommendation: approve the direction, add a shared contract step before implementation, use a typed user-document identity rather than arXiv URL fabrication, choose bounded polling for readiness, keep fail-soft degradation, and make GROBID optional for the first user-upload PDF slice while accounting for the current light doc-model worker lacking a GROBID sidecar."
+**Context**: Design review for PDF body processing through shared user-upload doc-model pipeline.
+
+---
+## Ingestion Queue Operational Check
+**Timestamp**: 2026-07-05T12:04:32Z
+**User Input**: "check how the ingestion queue is going on"
+**AI Response**: "Checked live AWS account 028317349537 in ap-northeast-2 using profile AdministratorAccess-028317349537. Current SQS snapshot: docsuri-ingestion-queue visible=155520, in-flight=1, delayed=0; docsuri-ingestion-dlq visible=1395; docsuri-docmodel-queue visible=0; docsuri-docmodel-dlq visible=11. ECS services are active: docsuri-ingestion running 1/1 and docsuri-docmodel-builder running 2/2. Last-hour CloudWatch/Logs Insights: ingestion queue visible depth decreased slowly from about 155690 to about 155546, oldest-message age increased from about 256924s to 260230s, worker indexed 148 papers, and 18 failures were recorded, all NON_OA."
+**Context**: Production ingestion/docmodel queue status check.
+
+---
+## User PDF DocModel PR1 Start
+**Timestamp**: 2026-07-05T12:31:59Z
+**User Input**: "Now start PR①"
+**AI Response**: "Resumed the existing AI-DLC workflow, loaded common rules plus enabled security/resiliency/PBT extension rules, confirmed PR0 #388 is open and mergeable, and began the stacked ingestion PR① from the PR0 contract branch."
+**Context**: Code Generation start for ingestion BUILD_USER_DOC_MODEL consumer branch.
+
+---
+## User PDF DocModel PR1 Completion
+**Timestamp**: 2026-07-05T12:41:19Z
+**User Input**: "Now start PR①"
+**AI Response**: "Implemented PR① ingestion support for BUILD_USER_DOC_MODEL: new job kind and payload fields, strict userdoc/upload payload validation, S3 user-document source with size cap, pdfplumber-only build_user_doc_model path, production runtime wiring, worker dispatch through the existing permanent-failure DLQ path, focused tests, PBT payload round-trip, state update, and code summary. Verification passed: focused ingestion tests 29 passed; full ingestion tests 275 passed/1 skipped; ingestion ruff clean; compileall clean; git diff --check clean."
+**Context**: Code Generation completion and verification for ingestion BUILD_USER_DOC_MODEL consumer branch.
+
+---
+## PR1 Branch Name Fix
+**Timestamp**: 2026-07-05T12:48:52Z
+**User Input**: "fix the branch name. Our PR didn't pass the CI"
+**AI Response**: "Checked PR #389 and confirmed the Branch name check failed because the source branch used disallowed prefix `feat/`. Renamed the remote and local branch to `feature/pr1-userdoc-docmodel-ingestion`; GitHub closed the original PR on rename, so a replacement PR will be opened from the compliant branch."
+**Context**: Branch naming CI repair for PR1 user PDF doc-model ingestion branch.
+
+---
+## PR1 Branch Name Fix Completion
+**Timestamp**: 2026-07-05T12:55:03Z
+**User Input**: "Treat aidlc-state.md, audit.md with the AIDLC way."
+**AI Response**: "Applied the AI-DLC tracking correction: kept audit.md append-only with a completion entry, updated aidlc-state.md to reference the live replacement PR #390 and the CI-compliant `feature/pr1-userdoc-docmodel-ingestion` branch, and recorded that #389 was closed by GitHub during the remote branch rename. Confirmed PR #390 Branch name check is passing."
+**Context**: AI-DLC state/audit correction for PR1 branch-name CI repair.
+
+---
+## PR390 Contract Compliance Review
+**Timestamp**: 2026-07-05T12:58:28Z
+**User Input**: "PR #390 is connected with PR #388. check if the BUILD_USER_DOC_MODEL is implemented according to the contract."
+**AI Response**: "Started an AI-DLC unit review for U1 ingestion, comparing PR #390 against the frozen user-uploaded PDF doc-model contract from PR #388."
+**Context**: Contract compliance review for BUILD_USER_DOC_MODEL implementation.
+
+---
+## PR390 Contract Compliance Review Completion
+**Timestamp**: 2026-07-05T13:02:18Z
+**User Input**: "PR #390 is connected with PR #388. check if the BUILD_USER_DOC_MODEL is implemented according to the contract."
+**AI Response**: "Completed the contract review. PR #390 implements the main BUILD_USER_DOC_MODEL flow from PR #388: accepts the S3-sourced job without arxivRef, dispatches the new worker path, fetches the uploaded PDF from S3, parses with pdfplumber only, writes the existing doc-model format with SourceTier.pdf, and DLQs malformed or unparseable jobs. One blocking contract gap remains: job_from_payload accepts userdoc paperIds that are not UUID-backed, accepts versions greater than 1, and only prefix-checks recordRef instead of enforcing upload:{ownerId}:{jobId}:{attachmentId}. Verdict: CHANGES REQUESTED until those frozen identity invariants are rejected and tested."
+**Context**: Contract compliance verdict for BUILD_USER_DOC_MODEL implementation in PR #390.
+
+---
+## PR390 Contract Fix Start
+**Timestamp**: 2026-07-05T13:07:54Z
+**User Input**: "apply all fixes"
+**AI Response**: "Started the PR #390 contract-fix pass: extend the PR1 code-generation plan with a review-fix step, tighten BUILD_USER_DOC_MODEL frozen identity validation, add regression tests for drift rejection, rerun ingestion gates, then update AI-DLC state/audit and push the branch."
+**Context**: Code Generation follow-up for BUILD_USER_DOC_MODEL contract compliance.
+
+---
+## PR390 Contract Fix Completion
+**Timestamp**: 2026-07-05T13:10:28Z
+**User Input**: "apply all fixes"
+**AI Response**: "Applied all PR #390 contract fixes: BUILD_USER_DOC_MODEL validation now requires jobId=userdoc-{uuid}, paperId=userdoc:{uuid}, version exactly 1, and recordRef exactly upload:{ownerId}:{jobId}:{attachmentId}; added regression coverage for non-UUID ids, version drift, owner mismatch, job mismatch, malformed recordRef, and empty attachment ids; updated the property-based payload generator to emit the frozen shape; updated AI-DLC plan/state/summary. Verification passed: focused ingestion tests 35 passed, full ingestion tests 281 passed/1 skipped, ruff clean, compileall clean, git diff --check clean."
+**Context**: Code Generation follow-up completion for BUILD_USER_DOC_MODEL contract compliance.
+
+---
+## User PDF DocModel PR2 Start
+**Timestamp**: 2026-07-05T13:37:26Z
+**User Input**: "Implement PR2 in the same way,"
+**AI Response**: "Started the PR2 backend producer slice on branch feature/pr2-userdoc-docmodel-backend, stacked from the updated PR0/PR1 contract branch. Scope: S3 upload plus BUILD_USER_DOC_MODEL enqueue plus bounded doc-model polling for evidence and novelty PDF inputs, with fail-soft degradation per the frozen contract."
+**Context**: Code Generation start for backend user-uploaded PDF doc-model producer.
+
+---
+## User PDF DocModel PR2 Completion
+**Timestamp**: 2026-07-05T14:01:15Z
+**User Input**: "Implement PR2 in the same way,"
+**AI Response**: "Implemented PR2 backend support for user-uploaded PDF doc-model production: shared user-docmodel coordinator, evidence/research PDF upload endpoints, novelty PDF manuscript upload, best-effort BUILD_USER_DOC_MODEL enqueue, bounded polling into evidence extraction and novelty similarity, frozen failure UX, and no arXiv URL fabrication for userdoc sources. Verification passed: focused backend PR2 suite 103 passed, broad backend suite 453 passed/4 skipped, backend ruff clean, compileall clean, git diff --check clean."
+**Context**: Code Generation completion and verification for backend user-uploaded PDF doc-model producer.
+
+---
+## AI-DLC Untracked Workspace File Treatment
+**Timestamp**: 2026-07-05T14:17:16Z
+**User Input**: "Treat untracked workspace files by the AIDLC rules."
+**AI Response**: "Classified untracked workspace files under AI-DLC rules: local tool/cache paths `.agents/`, `.claude/worktrees/`, and `.pnpm-store/` are ignored; documentation artifacts under `aidlc-docs/inception/plans/` are tracked. Replaced non-compliant Unicode box-drawing diagrams in `hackathon-proposal.md` with text alternatives. Validation passed: D2 diagrams compile, docx integrity OK, no box-drawing characters remain in the proposal, and diff whitespace check is clean."
+**Context**: Workspace hygiene and documentation artifact treatment under AI-DLC file-placement/content-validation rules.
+
+---
+## PR2 Hardening Before PR3
+**Timestamp**: 2026-07-05T14:29:28Z
+**User Input**: "Implement PR3 in the same way."
+**AI Response**: "Before branching PR3, preserved and completed existing PR2 hardening changes: moved evidence/research user-docmodel polling into threadpool execution, percent-encoded Unicode upload filenames for S3 metadata safety, degraded doc-model reader exceptions to `None`, and added coordinator regression tests. Verification passed: focused backend tests 37 passed, touched ruff clean, git diff --check clean."
+**Context**: PR2 backend hardening cleanup discovered at PR3 start, committed before creating the frontend PR3 stack.
+
+---
+## User PDF DocModel PR3 Start
+**Timestamp**: 2026-07-05T14:31:06Z
+**User Input**: "Implement PR3 in the same way."
+**AI Response**: "Started the PR3 frontend binary-upload slice on branch feature/pr3-userdoc-docmodel-frontend, stacked from the updated PR2 backend branch. Scope: upload PDF binaries through the new backend endpoints before evidence/research send and novelty manuscript dispatch, preserve md/txt contentText behavior, add frontend regressions, update AI-DLC docs, then push/open a stacked PR."
+**Context**: Code Generation start for frontend user-uploaded PDF doc-model producer wiring.
+
+---
+## User PDF DocModel PR3 Completion
+**Timestamp**: 2026-07-05T14:39:38Z
+**User Input**: "Implement PR3 in the same way."
+**AI Response**: "Implemented PR3 frontend binary-upload wiring: added binary body support across the frontend transport seam and BFF proxy, preserved local PDF blobs only for live upload, stripped blobs from JSON payloads, uploaded evidence/research PDFs before job creation, uploaded novelty PDF manuscripts after manuscript job creation, kept md/txt contentText behavior unchanged, added regression coverage, and updated AI-DLC plan/state/summary. Verification passed: frontend tsc --noEmit clean; targeted Vitest 34 passed; full frontend Vitest 248 passed; next build passed. The default pnpm command was blocked by a local Corepack pnpm 11 vs packageManager pnpm 9.15.9 mismatch, so verification used the checked-in frontend node_modules/.bin binaries without package metadata changes."
+**Context**: Code Generation completion and verification for frontend user-uploaded PDF doc-model binary upload wiring.
+
+---
+## PR391 Review Fix Start
+**Timestamp**: 2026-07-05T15:04:04Z
+**User Input**: "apply all fixes to the PR"
+**AI Response**: "Started the PR #391 review-fix pass on `feature/pr0-userdoc-docmodel-contract`: bind evidence/research PDF attachment object keys to the authenticated owner/module/attachment scope, translate malformed attachment identity metadata to client validation errors, add regressions, and rerun focused backend gates."
+**Context**: Code Generation follow-up for PR #391 review findings.
+
+---
+## PR391 Review Fix Completion
+**Timestamp**: 2026-07-05T15:08:02Z
+**User Input**: "apply all fixes to the PR"
+**AI Response**: "Applied all PR #391 review fixes: evidence/research attachment doc-model reuse now rejects forged `objectKey` values before enqueue or polling, malformed `paperId`/`recordRef` metadata returns 422 at the API boundary, and regressions cover coordinator validation plus evidence/research endpoint behavior. Verification passed: focused review-fix suite 101 passed, broad backend tests 215 passed/1 skipped, touched backend ruff clean, compileall clean, diff check clean."
+**Context**: Code Generation follow-up completion for PR #391 review findings.
+
+---
+## PR394 Review Fix Start
+**Timestamp**: 2026-07-05T16:04:10Z
+**User Input**: "apply all changes."
+**AI Response**: "Started applying PR #394 review fixes: wire the novelty worker stack for delayed self-retry, doc-model build queue dispatch, and doc-model S3 read access; add focused regression coverage; rerun backend, ops, and CDK verification."
+**Context**: Code Generation follow-up for PR #394 review findings.
+
+---
+## PR394 Review Fix Completion
+**Timestamp**: 2026-07-05T16:04:32Z
+**User Input**: "apply all changes."
+**AI Response**: "Applied all PR #394 review fixes: the novelty worker stack now has doc-model bucket/build-queue environment, self-send permission for delayed retry, scoped doc-model queue SendMessage, and scoped doc-model S3 read access. Added an ops regression test for the stack contract. Verification passed: touched ruff clean, PR backend tests 54 passed, ops tests 49 passed, git diff --check clean, and CDK app synth succeeded with the existing Node version warning."
+**Context**: Code Generation follow-up completion for PR #394 review findings.
+
+---

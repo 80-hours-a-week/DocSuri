@@ -81,6 +81,7 @@ class ExportStatus(StrEnum):
 
 SUPPORTED_MANUSCRIPT_CONTENT_TYPES = frozenset(
     {
+        "application/pdf",
         "text/markdown",
         "text/plain",
     }
@@ -93,6 +94,8 @@ class ManuscriptRef(BaseModel):
     fileName: str = Field(min_length=1, max_length=240)
     contentType: str = Field(min_length=1, max_length=120)
     objectKey: str | None = Field(default=None, max_length=512)
+    paperId: str | None = Field(default=None, max_length=128)
+    recordRef: str | None = Field(default=None, max_length=512)
 
     @field_validator("contentType")
     @classmethod

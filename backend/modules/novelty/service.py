@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.modules.user_docmodel import (
+    USER_DOCMODEL_PDF_CONTENT_TYPE,
+    object_key_for_upload,
+    user_docmodel_ref,
+)
+
 from .models import (
     STATE_PROGRESS,
     SUPPORTED_MANUSCRIPT_CONTENT_TYPES,
@@ -70,7 +76,7 @@ class NoveltyService:
         if dto.inputType is InputType.MANUSCRIPT:
             assert dto.manuscript is not None
             if dto.manuscript.contentType not in SUPPORTED_MANUSCRIPT_CONTENT_TYPES:
-                raise ValueError("only Markdown and plain text manuscripts are supported")
+                raise ValueError("only Markdown, plain text, and PDF manuscripts are supported")
         job = NoveltyJob(
             ownerId=owner_id,
             inputType=dto.inputType,
@@ -193,10 +199,63 @@ class NoveltyService:
             raise ValueError("이미 원고가 업로드된 잡입니다.")
         if job.state is not JobState.QUEUED:
             raise ValueError("이미 분석이 시작된 잡입니다.")
+        if job.manuscript.contentType == USER_DOCMODEL_PDF_CONTENT_TYPE:
+            raise ValueError("PDF 원고는 PDF 파일로 업로드해 주세요.")
         object_key = store_manuscript_text(
             owner_id, job_id, job.manuscript.contentType, text
         )
         manuscript = job.manuscript.model_copy(update={"objectKey": object_key})
+        updated = self._repo.update_job(owner_id, job_id, manuscript=manuscript)
+        _emit_metric(self._observability, "novelty.manuscript_uploaded")
+        return updated
+
+    def attach_manuscript_pdf(
+        self,
+        owner_id: str,
+        job_id: str,
+        *,
+        file_name: str,
+        content_type: str,
+        pdf: bytes,
+        user_docmodel: Any = None,
+    ) -> NoveltyJob:
+        """PR2 — PDF 원고를 S3에 적재하고 userdoc DocModel 빌드를 enqueue한다."""
+        job = self._repo.get_job(owner_id, job_id)
+        if user_docmodel is None:
+            raise ValueError("원고 저장소가 구성되지 않아 파일 분석을 시작할 수 없습니다.")
+        if job.inputType is not InputType.MANUSCRIPT or job.manuscript is None:
+            raise ValueError("원고 업로드는 원고(manuscript) 입력 잡에서만 가능합니다.")
+        if job.manuscript.contentType != USER_DOCMODEL_PDF_CONTENT_TYPE:
+            raise ValueError("PDF 원고 업로드는 PDF 입력 잡에서만 가능합니다.")
+        if job.manuscript.objectKey:
+            raise ValueError("이미 원고가 업로드된 잡입니다.")
+        if job.state is not JobState.QUEUED:
+            raise ValueError("이미 분석이 시작된 잡입니다.")
+
+        object_key = object_key_for_upload(
+            module="novelty",
+            owner_id=owner_id,
+            scope_id=job_id,
+            attachment_id="manuscript",
+            file_name=file_name,
+        )
+        ref = user_docmodel_ref(
+            owner_id=owner_id,
+            scope_id=job_id,
+            attachment_id="manuscript",
+            object_key=object_key,
+            module="novelty",
+        )
+        user_docmodel.upload_pdf(ref, pdf, file_name=file_name, content_type=content_type)
+        user_docmodel.enqueue_build(ref)
+        manuscript = job.manuscript.model_copy(
+            update={
+                "fileName": file_name,
+                "objectKey": object_key,
+                "paperId": ref.paper_id,
+                "recordRef": ref.record_ref,
+            }
+        )
         updated = self._repo.update_job(owner_id, job_id, manuscript=manuscript)
         _emit_metric(self._observability, "novelty.manuscript_uploaded")
         return updated
