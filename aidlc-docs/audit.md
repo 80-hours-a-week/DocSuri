@@ -3682,3 +3682,10 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **Context**: PR review fix completion for ingestion user-PDF GROBID doc-model changes.
 
 ---
+## PR396 Approval Attempt
+**Timestamp**: 2026-07-05T16:50:22Z
+**User Input**: "Review PR #396 from a clean context and apply all findings if possible. Approve PR if it's approvable/"
+**AI Response**: "Attempted to approve PR #396 after pushing fixes, but GitHub rejected the review because the authenticated account is the PR author. Left the clean-context review verdict and verification as PR comment https://github.com/80-hours-a-week/DocSuri/pull/396#issuecomment-4886798546."
+**Context**: PR review approval attempt and fallback comment for PR #396.
+
+---
