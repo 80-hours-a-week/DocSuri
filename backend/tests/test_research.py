@@ -11,6 +11,7 @@ from backend.modules.accounts.models import Principal, UserRole
 from backend.modules.novelty.repository import NoveltyJobTable
 from backend.modules.research import controller
 from backend.modules.research.repository import InMemoryResearchRepository, ResearchJobTable
+from backend.modules.user_docmodel import EVIDENCE_PDF_DEGRADED_NOTICE
 
 
 def _principal(user_id: str | None = None) -> Principal:
@@ -24,6 +25,37 @@ def _client(monkeypatch, principal: Principal | None = None, repo=None) -> TestC
     if repo is not None:
         app.dependency_overrides[controller.get_repo] = lambda: repo
     return TestClient(app)
+
+
+class _FakeUserDocModel:
+    def __init__(self, doc_model=None) -> None:
+        self.doc_model = doc_model
+        self.uploads: list[dict] = []
+        self.enqueued: list[object] = []
+        self.polled: list[object] = []
+
+    def upload_pdf(self, ref, pdf: bytes, *, file_name: str, content_type: str) -> None:
+        self.uploads.append(
+            {
+                "ref": ref,
+                "pdf": pdf,
+                "file_name": file_name,
+                "content_type": content_type,
+            }
+        )
+
+    def enqueue_build(self, ref) -> None:
+        self.enqueued.append(ref)
+
+    def enqueue_and_poll(self, ref):
+        self.polled.append(ref)
+        return self.doc_model
+
+
+def _doc_model(full_text: str):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(fullText=full_text, sections=[])
 
 
 def test_research_session_lifecycle(monkeypatch) -> None:
@@ -225,8 +257,7 @@ def test_research_turn_passes_attachment_docs_and_notices_unparsed(monkeypatch) 
     ).json()["messages"]
     notices = [m["content"] for m in messages if m["content"].startswith("[첨부 안내]")]
     assert len(notices) == 1
-    assert "scan.pdf" in notices[0]
-    assert "draft.md" not in notices[0]
+    assert notices[0] == EVIDENCE_PDF_DEGRADED_NOTICE
 
     # 본문 상한(262,144자) 초과는 처리 전 422 — US-EV4 AC2 연장.
     oversized = client.post(
@@ -245,3 +276,55 @@ def test_research_turn_passes_attachment_docs_and_notices_unparsed(monkeypatch) 
         },
     )
     assert oversized.status_code == 422
+
+
+def test_research_uploads_pdf_and_uses_docmodel_attachment(monkeypatch) -> None:
+    from docsuri_shared._generated.dtos.evidence_schema import EvidenceAbstainResult
+
+    from backend.modules.evidence.models import TurnAbstainResult
+
+    captured: dict = {}
+
+    class FakeOrchestrator:
+        def run(self, ctx, request):
+            captured["ctx"] = ctx
+            return TurnAbstainResult(
+                outcome=EvidenceAbstainResult(state="abstain", abstainReason="no_corpus")
+            )
+
+    principal = _principal()
+    repo = InMemoryResearchRepository()
+    fake_user_docmodel = _FakeUserDocModel(_doc_model("Research PDF text"))
+    client = _client(monkeypatch, principal, repo)
+    client.app.dependency_overrides[controller.get_evidence_orchestrator] = (
+        lambda: FakeOrchestrator()
+    )
+    client.app.dependency_overrides[controller.get_user_docmodel] = (
+        lambda: fake_user_docmodel
+    )
+
+    uploaded = client.post(
+        "/api/research/attachments?fileName=scan.pdf&id=att-1",
+        content=b"%PDF-1.4",
+        headers={"content-type": "application/pdf"},
+    )
+    assert uploaded.status_code == 200
+    attachment = uploaded.json()
+
+    created = client.post(
+        "/api/research/jobs",
+        json={"content": "첨부 기반 근거 형성", "attachments": [attachment]},
+    )
+
+    assert created.status_code == 200
+    assert fake_user_docmodel.uploads[0]["pdf"] == b"%PDF-1.4"
+    assert fake_user_docmodel.enqueued[0].payload()["kind"] == "BUILD_USER_DOC_MODEL"
+    assert fake_user_docmodel.polled[0].paper_id == attachment["paperId"]
+    docs = captured["ctx"].attachment_docs
+    assert docs[0].paper_id == attachment["paperId"]
+    assert docs[0].record_ref == attachment["recordRef"]
+    assert docs[0].doc_model.fullText == "Research PDF text"
+    messages = client.get(
+        f"/api/research/jobs/{created.json()['jobId']}/messages"
+    ).json()["messages"]
+    assert not [m["content"] for m in messages if m["content"].startswith("[첨부 안내]")]

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from typing import Any
+
 from docsuri_shared.dtos import DocModel
+
+DocModelSource = tuple[str, DocModel] | tuple[str, DocModel, str]
 
 
 def build_evidence_extraction_prompt(
     topic: str,
-    doc_models: list[tuple[str, DocModel]],  # (paper_id, DocModel)
+    doc_models: list[DocModelSource],  # (paper_id, DocModel[, record_ref])
 ) -> tuple[str, str]:
     """DocModel 블록 → EvidenceItem 추출 LLM 프롬프트."""
     system = (
@@ -16,7 +20,9 @@ def build_evidence_extraction_prompt(
         'Do NOT generate new statements or paraphrase beyond the source text.\n'
         '2. Each statement must be directly traceable to a specific paper and block.\n'
         '3. Return valid JSON only. No explanations outside the JSON.\n'
-        '4. If no relevant evidence exists, return {"items": []}.'
+        '4. Use the exact paperId and recordRef shown for each source. '
+        'For userdoc: sources, never invent an arXiv URL or arXiv id.\n'
+        '5. If no relevant evidence exists, return {"items": []}.'
     )
 
     papers_text = _format_papers(doc_models)
@@ -32,10 +38,10 @@ def build_evidence_extraction_prompt(
         '    {\n'
         '      "statement": "<extracted statement from paper text>",\n'
         '      "supporting": [\n'
-        '        {"paperId": "<arxiv_id>", "recordRef": "<record_ref>", "quote": "<short quote>"}\n'
+        '        {"paperId": "<paperId>", "recordRef": "<recordRef>", "quote": "<short quote>"}\n'
         '      ],\n'
         '      "conflicting": [\n'
-        '        {"paperId": "<arxiv_id>", "recordRef": "<record_ref>", "quote": "<short quote>"}\n'
+        '        {"paperId": "<paperId>", "recordRef": "<recordRef>", "quote": "<short quote>"}\n'
         '      ]\n'
         '    }\n'
         '  ]\n'
@@ -45,16 +51,24 @@ def build_evidence_extraction_prompt(
     return system, user
 
 
-def _format_papers(doc_models: list[tuple[str, DocModel]]) -> str:
+def _format_papers(doc_models: list[DocModelSource]) -> str:
     parts = []
-    for paper_id, doc_model in doc_models:
+    for source in doc_models:
+        paper_id, doc_model, record_ref = _source_parts(source)
         # DocModel에는 top-level title이 없고 meta.title에 있다 — 존재하지 않는
         # doc_model.title을 getattr(default='')로 조용히 삼키던 것과 같은 패턴의
         # 버그였다(PR #338 리뷰 Medium #10, prompts.py 본문 추출 버그와 동일 유형).
         title = getattr(getattr(doc_model, 'meta', None), 'title', '') or paper_id
         blocks_text = _extract_block_text(doc_model)
-        parts.append(f'[PAPER:{paper_id}] {title}\n{blocks_text}')
+        parts.append(f'[PAPER:{paper_id}] [RECORD:{record_ref}] {title}\n{blocks_text}')
     return '\n\n'.join(parts)
+
+
+def _source_parts(source: DocModelSource) -> tuple[str, Any, str]:
+    paper_id = source[0]
+    doc_model = source[1]
+    record_ref = source[2] if len(source) >= 3 else paper_id
+    return paper_id, doc_model, record_ref
 
 
 def _extract_block_text(doc_model: DocModel) -> str:

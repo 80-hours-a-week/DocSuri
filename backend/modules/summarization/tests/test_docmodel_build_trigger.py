@@ -164,3 +164,43 @@ def test_adapter_dedups_across_raw_id_spellings_with_same_bare() -> None:
     q.enqueue_build("2304.10557v1", 1)
     q.enqueue_build("2304.10557", 1)  # same bare+version → deduped, not re-sent
     assert [b["body"]["arxivRef"] for b in sqs.sent] == ["2304.10557v1"]
+
+
+def test_adapter_sends_user_pdf_build_contract_payload() -> None:
+    sqs = _FakeSqs()
+    q = SqsDocModelBuildQueue(queue_url="https://q/url", client=sqs)
+
+    q.enqueue_user_build(
+        job_id="userdoc-11111111-1111-4111-8111-111111111111",
+        paper_id="userdoc:11111111-1111-4111-8111-111111111111",
+        version=1,
+        object_key="uploads/evidence/u1/a1/a1/scan.pdf",
+        module="evidence",
+        owner_id="u1",
+        record_ref="upload:u1:userdoc-11111111-1111-4111-8111-111111111111:a1",
+    )
+    q.enqueue_user_build(
+        job_id="userdoc-11111111-1111-4111-8111-111111111111",
+        paper_id="userdoc:11111111-1111-4111-8111-111111111111",
+        version=1,
+        object_key="uploads/evidence/u1/a1/a1/scan.pdf",
+        module="evidence",
+        owner_id="u1",
+        record_ref="upload:u1:userdoc-11111111-1111-4111-8111-111111111111:a1",
+    )
+
+    assert len(sqs.sent) == 1
+    body = sqs.sent[0]["body"]
+    assert body == {
+        "jobId": "userdoc-11111111-1111-4111-8111-111111111111",
+        "kind": "BUILD_USER_DOC_MODEL",
+        "paperId": "userdoc:11111111-1111-4111-8111-111111111111",
+        "version": 1,
+        "objectKey": "uploads/evidence/u1/a1/a1/scan.pdf",
+        "module": "evidence",
+        "ownerId": "u1",
+        "recordRef": "upload:u1:userdoc-11111111-1111-4111-8111-111111111111:a1",
+        "eventId": None,
+        "correlationId": None,
+    }
+    assert "arxivRef" not in body

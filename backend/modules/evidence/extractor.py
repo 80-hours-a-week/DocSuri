@@ -23,6 +23,9 @@ class LlmUnavailable(Exception):
     """Bedrock 호출 불가 — Orchestrator가 fail-closed로 처리(BR-EV-12)."""
 
 
+DocModelSource = tuple[str, DocModel] | tuple[str, DocModel, str]
+
+
 class _LocalCircuitBreaker:
     def __init__(self) -> None:
         self._failures = 0
@@ -75,7 +78,7 @@ class EvidenceExtractor:
     def extract(
         self,
         topic: str,
-        doc_models: list[tuple[str, DocModel]],
+        doc_models: list[DocModelSource],
     ) -> list[EvidenceItem]:
         """DocModel 블록 → EvidenceItem 목록.
 
@@ -178,10 +181,11 @@ def _parse_json(text: str) -> dict:
         return {}
 
 
-def _build_paper_texts(doc_models: list[tuple[str, DocModel]]) -> dict[str, str]:
+def _build_paper_texts(doc_models: list[DocModelSource]) -> dict[str, str]:
     """paper_id → 전체 텍스트 맵 (INV-EV-3 quote 검증용)."""
     result: dict[str, str] = {}
-    for paper_id, doc_model in doc_models:
+    for source in doc_models:
+        paper_id, doc_model = source[0], source[1]
         result[paper_id] = doc_model.fullText
     return result
 
