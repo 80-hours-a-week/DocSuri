@@ -11,8 +11,10 @@ Implemented the ingestion-side consumer for the frozen user-uploaded PDF doc-mod
 - Added `JobKind.BUILD_USER_DOC_MODEL`.
 - Extended `IngestionJob` with `objectKey`, `module`, `ownerId`, and `recordRef` payload fields.
 - Added strict queue payload validation for user doc-model jobs:
-  - `paperId` must use `userdoc:` namespace.
-  - `recordRef` must use `upload:{ownerId}:...`.
+  - `jobId` must use `userdoc-{uuid}`.
+  - `paperId` must use `userdoc:{uuid}`.
+  - `version` must be exactly `1`.
+  - `recordRef` must exactly match `upload:{ownerId}:{jobId}:{attachmentId}`.
   - `module` must be `evidence` or `novelty`.
   - `arxivRef` is not accepted for this job kind.
 - Added `UserDocumentSourcePort` and `S3UserDocumentSource`.
@@ -29,8 +31,8 @@ Implemented the ingestion-side consumer for the frozen user-uploaded PDF doc-mod
 
 ## Tests
 
-- Focused ingestion tests: 29 passed.
-- Full ingestion suite: 275 passed, 1 skipped.
+- Focused ingestion tests: 35 passed.
+- Full ingestion suite: 281 passed, 1 skipped.
 - Ruff: clean.
 - Compile check: clean.
 - Diff whitespace check: clean.

@@ -4,6 +4,7 @@ import logging
 import signal
 import sys
 import threading
+from uuid import UUID
 
 from .domain.enums import FailureClass, FailureReason, JobKind, SourceName
 from .domain.errors import IngestionError, PermanentIngestionError
@@ -17,6 +18,9 @@ log = logging.getLogger("docsuri.ingestion.worker")
 _shutdown_event = threading.Event()
 _DOCMODEL_BUILD_KINDS = {JobKind.BUILD_DOC_MODEL, JobKind.BUILD_USER_DOC_MODEL}
 _USER_DOCMODEL_MODULES = {"evidence", "novelty"}
+_USER_DOCMODEL_VERSION = 1
+_USERDOC_JOB_PREFIX = "userdoc-"
+_USERDOC_PAPER_PREFIX = "userdoc:"
 
 
 def _handle_shutdown_signal(signum, _frame):
@@ -185,20 +189,18 @@ def job_from_payload(payload) -> IngestionJob:
     owner_id = payload.get("ownerId")
     record_ref = payload.get("recordRef")
     if kind is JobKind.BUILD_USER_DOC_MODEL:
+        job_id = _required_userdoc_job_id(payload)
         if arxiv_ref is not None:
             raise _invalid_payload()
-        paper_id = _required_string(payload, "paperId")
-        if not paper_id.startswith("userdoc:"):
-            raise _invalid_payload()
-        version = _required_positive_int(payload, "version")
+        paper_id = _required_userdoc_paper_id(payload)
+        version = _required_userdoc_version(payload)
         object_key = _required_string(payload, "objectKey")
         module = _required_string(payload, "module")
         if module not in _USER_DOCMODEL_MODULES:
             raise _invalid_payload()
         owner_id = _required_string(payload, "ownerId")
         record_ref = _required_string(payload, "recordRef")
-        if not record_ref.startswith(f"upload:{owner_id}:"):
-            raise _invalid_payload()
+        _validate_userdoc_record_ref(record_ref, owner_id=owner_id, job_id=job_id)
     return IngestionJob(
         job_id=job_id,
         kind=kind,
@@ -234,6 +236,29 @@ def _required_string(payload: dict, key: str) -> str:
     return value
 
 
+def _required_userdoc_job_id(payload: dict) -> str:
+    value = _required_string(payload, "jobId")
+    if not value.startswith(_USERDOC_JOB_PREFIX):
+        raise _invalid_payload()
+    _validate_uuid_suffix(value.removeprefix(_USERDOC_JOB_PREFIX))
+    return value
+
+
+def _required_userdoc_paper_id(payload: dict) -> str:
+    value = _required_string(payload, "paperId")
+    if not value.startswith(_USERDOC_PAPER_PREFIX):
+        raise _invalid_payload()
+    _validate_uuid_suffix(value.removeprefix(_USERDOC_PAPER_PREFIX))
+    return value
+
+
+def _validate_uuid_suffix(value: str) -> None:
+    try:
+        UUID(value)
+    except (TypeError, ValueError) as exc:
+        raise _invalid_payload() from exc
+
+
 def _optional_int(payload: dict, key: str) -> int | None:
     if key not in payload or payload.get(key) is None:
         return None
@@ -248,6 +273,25 @@ def _required_positive_int(payload: dict, key: str) -> int:
     if value is None or value < 1:
         raise _invalid_payload()
     return value
+
+
+def _required_userdoc_version(payload: dict) -> int:
+    value = _required_positive_int(payload, "version")
+    if value != _USER_DOCMODEL_VERSION:
+        raise _invalid_payload()
+    return value
+
+
+def _validate_userdoc_record_ref(record_ref: str, *, owner_id: str, job_id: str) -> None:
+    parts = record_ref.split(":")
+    if (
+        len(parts) != 4
+        or parts[0] != "upload"
+        or parts[1] != owner_id
+        or parts[2] != job_id
+        or not parts[3].strip()
+    ):
+        raise _invalid_payload()
 
 
 if __name__ == "__main__":

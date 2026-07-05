@@ -27,6 +27,12 @@ _HTML = (
     '<h2 class="ltx_title ltx_title_section">Intro</h2>'
     '<div class="ltx_para"><p class="ltx_p">Body.</p></div></section></article>'
 )
+_USERDOC_UUID = "5a96a314-0fb9-45d6-96b8-2da8750120d8"
+_USERDOC_PAPER_ID = f"userdoc:{_USERDOC_UUID}"
+_USERDOC_JOB_UUID = "3e9d6b7d-24d9-4a21-8049-6ac132f5499f"
+_USERDOC_JOB_ID = f"userdoc-{_USERDOC_JOB_UUID}"
+_OTHER_USERDOC_JOB_ID = "userdoc-1f977735-652f-49b3-a281-c93f2bc17430"
+_USERDOC_RECORD_REF = f"upload:acct-1:{_USERDOC_JOB_ID}:attachment-1"
 
 
 class _FakeSource:
@@ -208,49 +214,59 @@ def test_build_doc_model_requires_arxiv_ref() -> None:
 
 def test_user_docmodel_payload_accepts_s3_source_without_arxiv_ref() -> None:
     payload = {
-        "jobId": "userdoc-1",
+        "jobId": _USERDOC_JOB_ID,
         "kind": "BUILD_USER_DOC_MODEL",
-        "paperId": "userdoc:5a96a314-0fb9-45d6-96b8-2da8750120d8",
+        "paperId": _USERDOC_PAPER_ID,
         "version": 1,
         "objectKey": "uploads/owner/job/attachment.pdf",
         "module": "novelty",
         "ownerId": "acct-1",
-        "recordRef": "upload:acct-1:job-1:attachment-1",
+        "recordRef": _USERDOC_RECORD_REF,
     }
 
     job = job_from_payload(payload)
 
     assert job.kind is JobKind.BUILD_USER_DOC_MODEL
     assert job.arxiv_ref is None
-    assert job.paper_id == "userdoc:5a96a314-0fb9-45d6-96b8-2da8750120d8"
+    assert job.job_id == _USERDOC_JOB_ID
+    assert job.paper_id == _USERDOC_PAPER_ID
     assert job.version == 1
     assert job.object_key == "uploads/owner/job/attachment.pdf"
     assert job.module == "novelty"
     assert job.owner_id == "acct-1"
-    assert job.record_ref == "upload:acct-1:job-1:attachment-1"
+    assert job.record_ref == _USERDOC_RECORD_REF
 
 
 @pytest.mark.parametrize(
     "override",
     [
         {"arxivRef": "2401.00001v1"},
+        {
+            "jobId": "userdoc-not-a-uuid",
+            "recordRef": "upload:acct-1:userdoc-not-a-uuid:attachment-1",
+        },
         {"paperId": "2401.00001"},
+        {"paperId": "userdoc:not-a-uuid"},
         {"version": 0},
+        {"version": 2},
         {"objectKey": ""},
         {"module": "summary"},
-        {"recordRef": "upload:other:job-1:attachment-1"},
+        {"recordRef": f"upload:other:{_USERDOC_JOB_ID}:attachment-1"},
+        {"recordRef": f"upload:acct-1:{_OTHER_USERDOC_JOB_ID}:attachment-1"},
+        {"recordRef": f"upload:acct-1:{_USERDOC_JOB_ID}"},
+        {"recordRef": f"upload:acct-1:{_USERDOC_JOB_ID}:"},
     ],
 )
 def test_user_docmodel_payload_rejects_contract_drift(override: dict) -> None:
     payload = {
-        "jobId": "userdoc-1",
+        "jobId": _USERDOC_JOB_ID,
         "kind": "BUILD_USER_DOC_MODEL",
-        "paperId": "userdoc:5a96a314-0fb9-45d6-96b8-2da8750120d8",
+        "paperId": _USERDOC_PAPER_ID,
         "version": 1,
         "objectKey": "uploads/owner/job/attachment.pdf",
         "module": "evidence",
         "ownerId": "acct-1",
-        "recordRef": "upload:acct-1:job-1:attachment-1",
+        "recordRef": _USERDOC_RECORD_REF,
         **override,
     }
 
@@ -290,14 +306,14 @@ def test_worker_dispatches_user_docmodel_job_and_acks(monkeypatch) -> None:
     )
     queue.send_job(
         IngestionJob(
-            job_id="userdoc-1",
+            job_id=_USERDOC_JOB_ID,
             kind=JobKind.BUILD_USER_DOC_MODEL,
-            paper_id="userdoc:5a96a314-0fb9-45d6-96b8-2da8750120d8",
+            paper_id=_USERDOC_PAPER_ID,
             version=1,
             object_key="uploads/acct-1/job-1/attachment.pdf",
             module="evidence",
             owner_id="acct-1",
-            record_ref="upload:acct-1:job-1:attachment-1",
+            record_ref=_USERDOC_RECORD_REF,
         )
     )
     message = queue.receive_messages(max_messages=1)[0]
@@ -311,7 +327,7 @@ def test_worker_dispatches_user_docmodel_job_and_acks(monkeypatch) -> None:
     assert user_source.keys == ["uploads/acct-1/job-1/attachment.pdf"]
     assert len(store.put_calls) == 1
     doc = store.put_calls[0]
-    assert doc.meta.paperId == "userdoc:5a96a314-0fb9-45d6-96b8-2da8750120d8"
+    assert doc.meta.paperId == _USERDOC_PAPER_ID
     assert doc.meta.version == 1
     assert doc.meta.provenance.sourceTier is SourceTier.pdf
     assert "User PDF body" in doc.fullText
@@ -335,14 +351,14 @@ def test_worker_dlqs_unparseable_user_docmodel_pdf(monkeypatch) -> None:
     )
     queue.send_job(
         IngestionJob(
-            job_id="userdoc-bad",
+            job_id=_OTHER_USERDOC_JOB_ID,
             kind=JobKind.BUILD_USER_DOC_MODEL,
-            paper_id="userdoc:5a96a314-0fb9-45d6-96b8-2da8750120d8",
+            paper_id=_USERDOC_PAPER_ID,
             version=1,
             object_key="uploads/acct-1/job-1/bad.pdf",
             module="novelty",
             owner_id="acct-1",
-            record_ref="upload:acct-1:job-1:attachment-1",
+            record_ref=f"upload:acct-1:{_OTHER_USERDOC_JOB_ID}:attachment-1",
         )
     )
     message = queue.receive_messages(max_messages=1)[0]
@@ -353,7 +369,7 @@ def test_worker_dlqs_unparseable_user_docmodel_pdf(monkeypatch) -> None:
     assert queue.acked == [message.message_id]
     assert queue.dlq[-1]["reason"] == "PARSE_FAILURE"
     assert observability.failures[-1] == {
-        "job_id": "userdoc-bad",
+        "job_id": _OTHER_USERDOC_JOB_ID,
         "stage": "parse",
         "error": "PARSE_FAILURE",
     }

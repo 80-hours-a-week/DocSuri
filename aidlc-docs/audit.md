@@ -3570,3 +3570,31 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **Context**: AI-DLC state/audit correction for PR1 branch-name CI repair.
 
 ---
+## PR390 Contract Compliance Review
+**Timestamp**: 2026-07-05T12:58:28Z
+**User Input**: "PR #390 is connected with PR #388. check if the BUILD_USER_DOC_MODEL is implemented according to the contract."
+**AI Response**: "Started an AI-DLC unit review for U1 ingestion, comparing PR #390 against the frozen user-uploaded PDF doc-model contract from PR #388."
+**Context**: Contract compliance review for BUILD_USER_DOC_MODEL implementation.
+
+---
+## PR390 Contract Compliance Review Completion
+**Timestamp**: 2026-07-05T13:02:18Z
+**User Input**: "PR #390 is connected with PR #388. check if the BUILD_USER_DOC_MODEL is implemented according to the contract."
+**AI Response**: "Completed the contract review. PR #390 implements the main BUILD_USER_DOC_MODEL flow from PR #388: accepts the S3-sourced job without arxivRef, dispatches the new worker path, fetches the uploaded PDF from S3, parses with pdfplumber only, writes the existing doc-model format with SourceTier.pdf, and DLQs malformed or unparseable jobs. One blocking contract gap remains: job_from_payload accepts userdoc paperIds that are not UUID-backed, accepts versions greater than 1, and only prefix-checks recordRef instead of enforcing upload:{ownerId}:{jobId}:{attachmentId}. Verdict: CHANGES REQUESTED until those frozen identity invariants are rejected and tested."
+**Context**: Contract compliance verdict for BUILD_USER_DOC_MODEL implementation in PR #390.
+
+---
+## PR390 Contract Fix Start
+**Timestamp**: 2026-07-05T13:07:54Z
+**User Input**: "apply all fixes"
+**AI Response**: "Started the PR #390 contract-fix pass: extend the PR1 code-generation plan with a review-fix step, tighten BUILD_USER_DOC_MODEL frozen identity validation, add regression tests for drift rejection, rerun ingestion gates, then update AI-DLC state/audit and push the branch."
+**Context**: Code Generation follow-up for BUILD_USER_DOC_MODEL contract compliance.
+
+---
+## PR390 Contract Fix Completion
+**Timestamp**: 2026-07-05T13:10:28Z
+**User Input**: "apply all fixes"
+**AI Response**: "Applied all PR #390 contract fixes: BUILD_USER_DOC_MODEL validation now requires jobId=userdoc-{uuid}, paperId=userdoc:{uuid}, version exactly 1, and recordRef exactly upload:{ownerId}:{jobId}:{attachmentId}; added regression coverage for non-UUID ids, version drift, owner mismatch, job mismatch, malformed recordRef, and empty attachment ids; updated the property-based payload generator to emit the frozen shape; updated AI-DLC plan/state/summary. Verification passed: focused ingestion tests 35 passed, full ingestion tests 281 passed/1 skipped, ruff clean, compileall clean, git diff --check clean."
+**Context**: Code Generation follow-up completion for BUILD_USER_DOC_MODEL contract compliance.
+
+---

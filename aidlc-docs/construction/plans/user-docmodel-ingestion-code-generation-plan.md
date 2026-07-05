@@ -21,6 +21,7 @@ Scope: PR1 ingestion-only consumer for the frozen user-uploaded PDF doc-model co
 - [x] Step 4: Route `BUILD_USER_DOC_MODEL` through the worker and existing permanent-failure DLQ path.
 - [x] Step 5: Add focused unit and property-based regression tests for the new payload and worker path.
 - [x] Step 6: Run focused ingestion verification and update code summary.
+- [x] Step 7: Tighten frozen identity-contract validation after PR #390 contract review.
 
 ## Compliance Notes
 

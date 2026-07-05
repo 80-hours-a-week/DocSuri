@@ -71,18 +71,18 @@ _HANDLE_TEXT = st.text(
 @st.composite
 def _user_docmodel_job_strategy(draw):
     owner_id = draw(_HANDLE_TEXT)
-    job_suffix = draw(_HANDLE_TEXT)
+    job_id = f"userdoc-{draw(st.uuids())}"
     attachment_id = draw(_HANDLE_TEXT)
     filename = draw(_HANDLE_TEXT)
     return IngestionJob(
-        job_id=f"userdoc-{job_suffix}",
+        job_id=job_id,
         kind=JobKind.BUILD_USER_DOC_MODEL,
         paper_id=f"userdoc:{draw(st.uuids())}",
         version=1,
-        object_key=f"uploads/{owner_id}/{job_suffix}/{attachment_id}/{filename}.pdf",
+        object_key=f"uploads/{owner_id}/{job_id}/{attachment_id}/{filename}.pdf",
         module=draw(st.sampled_from(("evidence", "novelty"))),
         owner_id=owner_id,
-        record_ref=f"upload:{owner_id}:job-{job_suffix}:{attachment_id}",
+        record_ref=f"upload:{owner_id}:{job_id}:{attachment_id}",
     )
 
 
