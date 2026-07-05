@@ -3626,3 +3626,17 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **Context**: PR2 backend hardening cleanup discovered at PR3 start, committed before creating the frontend PR3 stack.
 
 ---
+## User PDF DocModel PR3 Start
+**Timestamp**: 2026-07-05T14:31:06Z
+**User Input**: "Implement PR3 in the same way."
+**AI Response**: "Started the PR3 frontend binary-upload slice on branch feature/pr3-userdoc-docmodel-frontend, stacked from the updated PR2 backend branch. Scope: upload PDF binaries through the new backend endpoints before evidence/research send and novelty manuscript dispatch, preserve md/txt contentText behavior, add frontend regressions, update AI-DLC docs, then push/open a stacked PR."
+**Context**: Code Generation start for frontend user-uploaded PDF doc-model producer wiring.
+
+---
+## User PDF DocModel PR3 Completion
+**Timestamp**: 2026-07-05T14:39:38Z
+**User Input**: "Implement PR3 in the same way."
+**AI Response**: "Implemented PR3 frontend binary-upload wiring: added binary body support across the frontend transport seam and BFF proxy, preserved local PDF blobs only for live upload, stripped blobs from JSON payloads, uploaded evidence/research PDFs before job creation, uploaded novelty PDF manuscripts after manuscript job creation, kept md/txt contentText behavior unchanged, added regression coverage, and updated AI-DLC plan/state/summary. Verification passed: frontend tsc --noEmit clean; targeted Vitest 34 passed; full frontend Vitest 248 passed; next build passed. The default pnpm command was blocked by a local Corepack pnpm 11 vs packageManager pnpm 9.15.9 mismatch, so verification used the checked-in frontend node_modules/.bin binaries without package metadata changes."
+**Context**: Code Generation completion and verification for frontend user-uploaded PDF doc-model binary upload wiring.
+
+---

@@ -367,6 +367,25 @@ export class MockTransport implements Transport {
       mockResetAgentSessions('novelty');
       return { status: 204, body: null };
     }
+    if (path === '/api/research/attachments' && req.method === 'POST') {
+      const qIdx = req.path.indexOf('?');
+      const sp = new URLSearchParams(qIdx >= 0 ? req.path.slice(qIdx + 1) : '');
+      const attachmentId = sp.get('id') ?? `att-${Date.now()}`;
+      const fileName = sp.get('fileName') ?? 'attachment.pdf';
+      return {
+        status: 200,
+        body: {
+          id: attachmentId,
+          name: fileName,
+          kind: 'pdf',
+          sizeBytes: 0,
+          status: 'ready',
+          objectKey: `evidence/mock-user/${attachmentId}/${fileName}`,
+          paperId: 'userdoc:11111111-1111-4111-8111-111111111111',
+          recordRef: `upload:mock-user:userdoc-mock-${attachmentId}:${attachmentId}`,
+        },
+      };
+    }
     if (path === '/api/research/jobs' && req.method === 'POST') {
       const body = req.body as { content?: string; attachments?: AgentAttachment[] };
       const result = mockSendAgentMessage(`agent-evidence-${Date.now()}`, {

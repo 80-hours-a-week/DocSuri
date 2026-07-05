@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { HttpTransport } from '@/lib/api/httpTransport';
 import { MockTransport } from '@/lib/api/mockTransport';
-import type { Transport, TransportMethod } from '@/lib/api/transport';
+import { binaryBody, type Transport, type TransportMethod } from '@/lib/api/transport';
 
 // BFF (Backend-for-Frontend) — the server-side seam between the browser and the
 // U6 gateway (LC-2, P-S1, SEC-3/12).
@@ -43,6 +43,12 @@ function isNoveltyEventStream(method: TransportMethod, path: string[]): boolean 
     path[1] === 'novelty' &&
     path[2] === 'jobs' &&
     path[4] === 'events'
+  );
+}
+
+function isPdfBody(req: NextRequest): boolean {
+  return (
+    req.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() === 'application/pdf'
   );
 }
 
@@ -111,12 +117,16 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
 
   let body: unknown;
   if (method !== 'GET' && method !== 'DELETE') {
-    const text = await req.text();
-    if (text) {
-      try {
-        body = JSON.parse(text);
-      } catch {
-        return NextResponse.json({ message: '잘못된 요청 형식입니다.' }, { status: 400 });
+    if (isPdfBody(req)) {
+      body = binaryBody(new Uint8Array(await req.arrayBuffer()), 'application/pdf');
+    } else {
+      const text = await req.text();
+      if (text) {
+        try {
+          body = JSON.parse(text);
+        } catch {
+          return NextResponse.json({ message: '잘못된 요청 형식입니다.' }, { status: 400 });
+        }
       }
     }
   }

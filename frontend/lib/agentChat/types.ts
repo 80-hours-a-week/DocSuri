@@ -14,7 +14,13 @@ export interface AgentAttachment {
   sizeBytes: number;
   status: AgentAttachmentStatus;
   error?: string;
-  /** US-EV4(#268)/US-NV2(#252) — md/txt 본문(≤256KiB). PDF는 본문 분석 후속이라 없음. */
+  /** PR3 — backend upload metadata for user PDFs; origin is encoded by paperId=userdoc:{uuid}. */
+  objectKey?: string;
+  paperId?: string;
+  recordRef?: string;
+  /** Browser-local source used only for the raw PDF upload. Never sent in JSON payloads. */
+  sourceFile?: Blob;
+  /** US-EV4(#268)/US-NV2(#252) — md/txt 본문(≤256KiB). PDF는 raw upload로 전달된다. */
   contentText?: string;
 }
 
