@@ -3556,3 +3556,10 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **Context**: Code Generation completion and verification for ingestion BUILD_USER_DOC_MODEL consumer branch.
 
 ---
+## PR1 Branch Name Fix
+**Timestamp**: 2026-07-05T12:48:52Z
+**User Input**: "fix the branch name. Our PR didn't pass the CI"
+**AI Response**: "Checked PR #389 and confirmed the Branch name check failed because the source branch used disallowed prefix `feat/`. Renamed the remote and local branch to `feature/pr1-userdoc-docmodel-ingestion`; GitHub closed the original PR on rename, so a replacement PR will be opened from the compliant branch."
+**Context**: Branch naming CI repair for PR1 user PDF doc-model ingestion branch.
+
+---
