@@ -328,3 +328,75 @@ def test_research_uploads_pdf_and_uses_docmodel_attachment(monkeypatch) -> None:
         f"/api/research/jobs/{created.json()['jobId']}/messages"
     ).json()["messages"]
     assert not [m["content"] for m in messages if m["content"].startswith("[첨부 안내]")]
+
+
+def test_research_create_job_rejects_forged_pdf_object_key_without_polling(monkeypatch) -> None:
+    class FailingOrchestrator:
+        def run(self, ctx, request):
+            raise AssertionError("invalid attachment should be rejected before orchestration")
+
+    principal = _principal()
+    repo = InMemoryResearchRepository()
+    fake_user_docmodel = _FakeUserDocModel(_doc_model("Research PDF text"))
+    client = _client(monkeypatch, principal, repo)
+    client.app.dependency_overrides[controller.get_evidence_orchestrator] = (
+        lambda: FailingOrchestrator()
+    )
+    client.app.dependency_overrides[controller.get_user_docmodel] = (
+        lambda: fake_user_docmodel
+    )
+
+    uploaded = client.post(
+        "/api/research/attachments?fileName=scan.pdf&id=att-1",
+        content=b"%PDF-1.4",
+        headers={"content-type": "application/pdf"},
+    )
+    assert uploaded.status_code == 200
+    attachment = uploaded.json()
+    attachment["objectKey"] = "uploads/evidence/other-user/att-1/att-1/scan.pdf"
+
+    created = client.post(
+        "/api/research/jobs",
+        json={"content": "첨부 기반 근거 형성", "attachments": [attachment]},
+    )
+
+    assert created.status_code == 422
+    assert fake_user_docmodel.polled == []
+
+
+def test_research_message_rejects_invalid_pdf_identity_without_polling(monkeypatch) -> None:
+    class FailingOrchestrator:
+        def run(self, ctx, request):
+            raise AssertionError("invalid attachment should be rejected before orchestration")
+
+    principal = _principal()
+    repo = InMemoryResearchRepository()
+    fake_user_docmodel = _FakeUserDocModel(_doc_model("Research PDF text"))
+    client = _client(monkeypatch, principal, repo)
+    created = client.post("/api/research/jobs", json={"content": "seed"})
+    assert created.status_code == 200
+    job_id = created.json()["jobId"]
+
+    client.app.dependency_overrides[controller.get_evidence_orchestrator] = (
+        lambda: FailingOrchestrator()
+    )
+    client.app.dependency_overrides[controller.get_user_docmodel] = (
+        lambda: fake_user_docmodel
+    )
+
+    uploaded = client.post(
+        "/api/research/attachments?fileName=scan.pdf&id=att-1",
+        content=b"%PDF-1.4",
+        headers={"content-type": "application/pdf"},
+    )
+    assert uploaded.status_code == 200
+    attachment = uploaded.json()
+    attachment["recordRef"] = "upload:someone:userdoc-11111111-1111-4111-8111-111111111111:att-1"
+
+    added = client.post(
+        f"/api/research/jobs/{job_id}/messages",
+        json={"content": "첨부 기반 근거 형성", "attachments": [attachment]},
+    )
+
+    assert added.status_code == 422
+    assert fake_user_docmodel.polled == []

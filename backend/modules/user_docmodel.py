@@ -79,6 +79,9 @@ def ref_from_attachment(
     paper_id: str | None = None,
     record_ref: str | None = None,
 ) -> UserDocModelRef:
+    object_key = str(object_key or "")
+    paper_id = str(paper_id) if paper_id is not None else None
+    record_ref = str(record_ref) if record_ref is not None else None
     if paper_id or record_ref:
         if not paper_id or not record_ref:
             raise ValueError("paperId and recordRef must be supplied together")
@@ -94,7 +97,7 @@ def ref_from_attachment(
             record_ref=record_ref,
             attachment_id=clean_attachment_id,
         )
-        _validate_userdoc_ref(ref)
+        _validate_userdoc_ref(ref, validate_object_key=True)
         return ref
 
     ref = user_docmodel_ref(
@@ -104,7 +107,7 @@ def ref_from_attachment(
         object_key=object_key,
         module=module,
     )
-    _validate_userdoc_ref(ref)
+    _validate_userdoc_ref(ref, validate_object_key=True)
     return ref
 
 
@@ -254,7 +257,9 @@ def build_default_user_docmodel_coordinator() -> UserDocModelCoordinator | None:
     )
 
 
-def _validate_userdoc_ref(ref: UserDocModelRef) -> None:
+def _validate_userdoc_ref(ref: UserDocModelRef, *, validate_object_key: bool = False) -> None:
+    if ref.module not in USER_DOCMODEL_MODULES:
+        raise ValueError("unsupported user doc-model module")
     if not ref.job_id.startswith("userdoc-") or not ref.paper_id.startswith("userdoc:"):
         raise ValueError("invalid user document identity")
     if ref.job_id != _job_id_from_paper_id(ref.paper_id):
@@ -262,6 +267,27 @@ def _validate_userdoc_ref(ref: UserDocModelRef) -> None:
     expected = f"upload:{ref.owner_id}:{ref.job_id}:{ref.attachment_id}"
     if ref.record_ref != expected:
         raise ValueError("invalid upload recordRef")
+    if validate_object_key:
+        _validate_userdoc_object_key(ref)
+
+
+def _validate_userdoc_object_key(ref: UserDocModelRef) -> None:
+    expected_prefix = _expected_object_key_prefix(ref)
+    if not ref.object_key.startswith(expected_prefix):
+        raise ValueError("invalid upload objectKey")
+
+
+def _expected_object_key_prefix(ref: UserDocModelRef) -> str:
+    owner = _handle(ref.owner_id)
+    attachment = _handle(ref.attachment_id, fallback="attachment")
+    if ref.module == "novelty":
+        prefix = os.getenv("DOCSURI_NOVELTY_ARTIFACT_PREFIX", "novelty/").strip("/")
+        return f"{prefix}/{owner}/"
+
+    prefix = os.getenv("DOCSURI_USER_DOCUMENT_PREFIX", "uploads/")
+    if not prefix.rstrip("/").endswith(ref.module):
+        prefix = f"{prefix.rstrip('/')}/{ref.module}/"
+    return f"{prefix.strip('/')}/{owner}/{attachment}/{attachment}/"
 
 
 def _job_id_from_paper_id(paper_id: str) -> str:

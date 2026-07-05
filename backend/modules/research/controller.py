@@ -92,12 +92,15 @@ async def create_job(
     orchestrator: Any = EVIDENCE_ORCHESTRATOR_DEP,
     user_docmodel: Any = USER_DOCMODEL_DEP,
 ) -> ResearchJobCreateResponse:
-    return await ResearchService(repo).create_job(
-        principal.user_id,
-        dto,
-        orchestrator,
-        user_docmodel,
-    )
+    try:
+        return await ResearchService(repo).create_job(
+            principal.user_id,
+            dto,
+            orchestrator,
+            user_docmodel,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="첨부 PDF 정보가 올바르지 않습니다.") from exc
 
 
 @router.post("/attachments", response_model=AttachmentUploadOut)
@@ -225,6 +228,8 @@ async def add_message(
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="job not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="첨부 PDF 정보가 올바르지 않습니다.") from exc
 
 
 routers = (router,)

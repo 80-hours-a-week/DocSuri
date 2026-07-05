@@ -1,6 +1,6 @@
 # User DocModel Backend Code Generation Plan
 
-Status: complete
+Status: complete — PR #391 review fixes applied
 
 Scope: PR2 backend producer and bounded consumer path for the frozen user-uploaded PDF doc-model contract.
 
@@ -22,9 +22,12 @@ Scope: PR2 backend producer and bounded consumer path for the frozen user-upload
 - [x] Step 5: Add regression coverage for queue payload shape, upload response shape, polling, degradation, and no arXiv URL fabrication for `userdoc:` sources.
 - [x] Step 6: Run focused and broad backend verification gates.
 - [x] Step 7: Update code summary and AI-DLC state/audit.
+- [x] Step 8: Harden evidence/research attachment doc-model consumption so client-supplied `objectKey` is bound to the authenticated owner, module, and attachment scope before enqueue or polling.
+- [x] Step 9: Convert malformed user-docmodel attachment identities into client validation errors instead of unhandled server errors.
+- [x] Step 10: Add regression coverage for forged object keys and invalid attachment metadata, then rerun focused backend verification.
 
 ## Compliance Notes
 
-- Security: uploaded PDFs are size/type checked before S3 write; generated source references do not invent arXiv URLs for user uploads.
-- Resiliency: enqueue is best-effort; bounded polling degrades instead of failing the evidence or novelty workflow.
-- PBT partial mode: no new general property is required for this slice; contract-specific regression coverage exercises the frozen payload shape.
+- Security: uploaded PDFs are size/type checked before S3 write; re-used evidence/research attachment object keys are owner/module/attachment scoped before enqueue or polling; generated source references do not invent arXiv URLs for user uploads.
+- Resiliency: enqueue is best-effort; bounded polling degrades instead of failing the evidence or novelty workflow; malformed attachment identity metadata returns 422 instead of leaking as a server error.
+- PBT partial mode: no new general property is required for this slice; contract-specific regression coverage exercises payload identity and source-reference invariants, including forged object-key rejection.

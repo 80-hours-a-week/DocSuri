@@ -1,6 +1,6 @@
 # User DocModel Backend Code Summary
 
-Status: complete
+Status: complete — PR #391 review fixes applied
 
 ## Summary
 
@@ -20,6 +20,7 @@ Implemented the backend producer and bounded consumer path for user-uploaded PDF
   - `POST /api/research/attachments`
   - raw `application/pdf` handling on `POST /api/novelty/jobs/{jobId}/manuscript`
 - Evidence/research PDF attachments now poll the generated doc-model and pass it through the existing extraction path when ready.
+- Evidence/research PDF attachment reuse now validates that `objectKey` belongs to the authenticated owner, evidence module prefix, and attachment scope before enqueue or polling.
 - Novelty PDF manuscripts now enqueue the user doc-model build, persist `paperId`/`recordRef`, and use doc-model `fullText` for similarity checks.
 - Novelty evidence adapter no longer fabricates arXiv URLs for `userdoc:` sources.
 
@@ -29,17 +30,20 @@ Implemented the backend producer and bounded consumer path for user-uploaded PDF
   `[첨부 안내] PDF 본문을 해석하지 못해 첨부 근거는 제외했습니다.`
 - Novelty similarity degrades with `manuscript_pdf_parse_unavailable` when the PDF doc-model is unavailable.
 - Queue enqueue remains best-effort; missing or delayed doc-models do not fail the user workflow.
+- Malformed or forged PDF attachment identity metadata returns 422 at the API boundary instead of surfacing as an internal server error.
 
 ## Tests
 
 - Focused backend PR2 suite: 103 passed.
 - Broad backend suite: 453 passed, 4 skipped.
+- PR #391 focused review-fix suite: 101 passed.
+- PR #391 broad backend test directory: 215 passed, 1 skipped.
 - Backend ruff: clean.
 - Compile check: clean.
 - Diff whitespace check: clean.
 
 ## Extension Compliance
 
-- Security: compliant for this slice. PDF upload type/size is checked, S3 metadata is scoped to the owner/upload identity, and user-uploaded sources do not receive invented arXiv URLs.
-- Resiliency: compliant for this slice. Enqueue is best-effort and readiness polling is bounded with existing degradation behavior.
-- PBT partial mode: N/A for new mandatory properties in this slice; contract-specific regression coverage exercises payload identity and source-reference invariants.
+- Security: compliant for this slice. PDF upload type/size is checked, S3 metadata and re-used object keys are scoped to the owner/upload identity, and user-uploaded sources do not receive invented arXiv URLs.
+- Resiliency: compliant for this slice. Enqueue is best-effort, readiness polling is bounded with existing degradation behavior, and malformed attachment metadata is rejected as 422.
+- PBT partial mode: N/A for new mandatory properties in this slice; contract-specific regression coverage exercises payload identity, source-reference invariants, and forged object-key rejection.

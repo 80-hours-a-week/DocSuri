@@ -373,6 +373,60 @@ def test_api_uploads_user_pdf_and_turn_polls_docmodel(monkeypatch) -> None:
     assert docs[0].doc_model.fullText == "PDF extracted text"
 
 
+def test_api_turn_rejects_forged_pdf_object_key_without_polling(monkeypatch) -> None:
+    principal = _principal()
+    repo = InMemoryEvidenceRepository()
+    client = _client(monkeypatch, principal, repo)
+    fake_user_docmodel = _FakeUserDocModel(_doc_model("PDF extracted text"))
+    client.app.dependency_overrides[controller.get_user_docmodel] = (
+        lambda: fake_user_docmodel
+    )
+
+    uploaded = client.post(
+        "/api/evidence/attachments?fileName=scan.pdf&id=att-1",
+        content=b"%PDF-1.4",
+        headers={"content-type": "application/pdf"},
+    )
+    assert uploaded.status_code == 200
+    attachment = uploaded.json()
+    attachment["objectKey"] = "uploads/evidence/other-user/att-1/att-1/scan.pdf"
+
+    turn = client.post(
+        "/api/evidence/turns",
+        json={"topic": "attachment handling", "attachments": [attachment]},
+    )
+
+    assert turn.status_code == 422
+    assert fake_user_docmodel.polled == []
+
+
+def test_api_turn_rejects_invalid_pdf_identity_without_polling(monkeypatch) -> None:
+    principal = _principal()
+    repo = InMemoryEvidenceRepository()
+    client = _client(monkeypatch, principal, repo)
+    fake_user_docmodel = _FakeUserDocModel(_doc_model("PDF extracted text"))
+    client.app.dependency_overrides[controller.get_user_docmodel] = (
+        lambda: fake_user_docmodel
+    )
+
+    uploaded = client.post(
+        "/api/evidence/attachments?fileName=scan.pdf&id=att-1",
+        content=b"%PDF-1.4",
+        headers={"content-type": "application/pdf"},
+    )
+    assert uploaded.status_code == 200
+    attachment = uploaded.json()
+    attachment["paperId"] = "userdoc:not-a-uuid"
+
+    turn = client.post(
+        "/api/evidence/turns",
+        json={"topic": "attachment handling", "attachments": [attachment]},
+    )
+
+    assert turn.status_code == 422
+    assert fake_user_docmodel.polled == []
+
+
 def test_api_turn_rejects_disallowed_attachment_kind_with_422(monkeypatch) -> None:
     client = _client(monkeypatch, _principal(), InMemoryEvidenceRepository())
 

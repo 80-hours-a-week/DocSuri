@@ -3640,3 +3640,17 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **Context**: Code Generation completion and verification for frontend user-uploaded PDF doc-model binary upload wiring.
 
 ---
+## PR391 Review Fix Start
+**Timestamp**: 2026-07-05T15:04:04Z
+**User Input**: "apply all fixes to the PR"
+**AI Response**: "Started the PR #391 review-fix pass on `feature/pr0-userdoc-docmodel-contract`: bind evidence/research PDF attachment object keys to the authenticated owner/module/attachment scope, translate malformed attachment identity metadata to client validation errors, add regressions, and rerun focused backend gates."
+**Context**: Code Generation follow-up for PR #391 review findings.
+
+---
+## PR391 Review Fix Completion
+**Timestamp**: 2026-07-05T15:08:02Z
+**User Input**: "apply all fixes to the PR"
+**AI Response**: "Applied all PR #391 review fixes: evidence/research attachment doc-model reuse now rejects forged `objectKey` values before enqueue or polling, malformed `paperId`/`recordRef` metadata returns 422 at the API boundary, and regressions cover coordinator validation plus evidence/research endpoint behavior. Verification passed: focused review-fix suite 101 passed, broad backend tests 215 passed/1 skipped, touched backend ruff clean, compileall clean, diff check clean."
+**Context**: Code Generation follow-up completion for PR #391 review findings.
+
+---

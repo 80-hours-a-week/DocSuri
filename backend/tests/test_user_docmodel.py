@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from urllib.parse import unquote
 
-from backend.modules.user_docmodel import UserDocModelCoordinator, user_docmodel_ref
+import pytest
+
+from backend.modules.user_docmodel import (
+    UserDocModelCoordinator,
+    object_key_for_upload,
+    ref_from_attachment,
+    user_docmodel_ref,
+)
 
 
 def _ref():
@@ -54,3 +61,104 @@ def test_upload_pdf_metadata_is_ascii_for_unicode_filename() -> None:
     file_name_meta = s3.calls[0]["Metadata"]["file-name"]
     assert file_name_meta.isascii()
     assert unquote(file_name_meta) == "논문 초안.pdf"
+
+
+def test_ref_from_attachment_accepts_server_issued_evidence_object_key() -> None:
+    object_key = object_key_for_upload(
+        module="evidence",
+        owner_id="acct-1",
+        scope_id="att-1",
+        attachment_id="att-1",
+        file_name="doc.pdf",
+    )
+    ref = user_docmodel_ref(
+        owner_id="acct-1",
+        scope_id="att-1",
+        attachment_id="att-1",
+        object_key=object_key,
+        module="evidence",
+    )
+
+    hydrated = ref_from_attachment(
+        owner_id="acct-1",
+        scope_id="request-1",
+        attachment_id="att-1",
+        object_key=object_key,
+        module="evidence",
+        paper_id=ref.paper_id,
+        record_ref=ref.record_ref,
+    )
+
+    assert hydrated.object_key == object_key
+    assert hydrated.paper_id == ref.paper_id
+    assert hydrated.record_ref == ref.record_ref
+
+
+def test_ref_from_attachment_rejects_cross_owner_evidence_object_key() -> None:
+    object_key = object_key_for_upload(
+        module="evidence",
+        owner_id="acct-1",
+        scope_id="att-1",
+        attachment_id="att-1",
+        file_name="doc.pdf",
+    )
+    ref = user_docmodel_ref(
+        owner_id="acct-1",
+        scope_id="att-1",
+        attachment_id="att-1",
+        object_key=object_key,
+        module="evidence",
+    )
+    forged_key = object_key_for_upload(
+        module="evidence",
+        owner_id="acct-2",
+        scope_id="att-1",
+        attachment_id="att-1",
+        file_name="doc.pdf",
+    )
+
+    with pytest.raises(ValueError, match="objectKey"):
+        ref_from_attachment(
+            owner_id="acct-1",
+            scope_id="request-1",
+            attachment_id="att-1",
+            object_key=forged_key,
+            module="evidence",
+            paper_id=ref.paper_id,
+            record_ref=ref.record_ref,
+        )
+
+
+def test_ref_from_attachment_rejects_wrong_attachment_evidence_object_key() -> None:
+    object_key = object_key_for_upload(
+        module="evidence",
+        owner_id="acct-1",
+        scope_id="att-1",
+        attachment_id="att-1",
+        file_name="doc.pdf",
+    )
+    ref = user_docmodel_ref(
+        owner_id="acct-1",
+        scope_id="att-1",
+        attachment_id="att-1",
+        object_key=object_key,
+        module="evidence",
+    )
+    forged_key = object_key_for_upload(
+        module="evidence",
+        owner_id="acct-1",
+        scope_id="att-2",
+        attachment_id="att-2",
+        file_name="doc.pdf",
+    )
+
+    with pytest.raises(ValueError, match="objectKey"):
+        ref_from_attachment(
+            owner_id="acct-1",
+            scope_id="request-1",
+            attachment_id="att-1",
+            object_key=forged_key,
+            module="evidence",
+            paper_id=ref.paper_id,
+            record_ref=ref.record_ref,
+        )

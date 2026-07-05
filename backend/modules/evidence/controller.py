@@ -182,13 +182,16 @@ async def create_turn(
         # 공유 계약(EvidenceRequest.attachments)은 문서 핸들 문자열 목록 — 객체를 id로 변환.
         attachments=[attachment.id for attachment in body.attachments],
     )
-    attachment_docs = await run_in_threadpool(
-        _attachment_docs,
-        owner_id=principal.user_id,
-        scope_id=request_id or 'evidence-turn',
-        attachments=body.attachments,
-        user_docmodel=user_docmodel,
-    )
+    try:
+        attachment_docs = await run_in_threadpool(
+            _attachment_docs,
+            owner_id=principal.user_id,
+            scope_id=request_id or 'evidence-turn',
+            attachments=body.attachments,
+            user_docmodel=user_docmodel,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail='첨부 PDF 정보가 올바르지 않습니다.') from exc
 
     try:
         turn_resp: TurnResponse = EvidenceChatService(
