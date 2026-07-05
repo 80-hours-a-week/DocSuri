@@ -196,6 +196,7 @@ def build_production_runtime(settings: IngestionSettings) -> RuntimeServices:
             bucket=settings.s3_bucket or "",
             max_bytes=settings.user_document_max_bytes,
         ),
+        grobid=grobid,
         doc_model_builder=doc_model_builder,
         corpus_sources=corpus_sources,
         embedding_v2=BedrockCohereEmbeddingPort(

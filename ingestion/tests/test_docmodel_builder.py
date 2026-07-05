@@ -114,6 +114,7 @@ _TEI = (
     "<div><head>Method</head><p>Body text.</p></div>"
     "</body></text></TEI>"
 )
+_EMPTY_BODY_TEI = '<TEI xmlns="http://www.tei-c.org/ns/1.0"><text><body /></text></TEI>'
 
 
 def test_build_from_tei_produces_structured_sections() -> None:
@@ -132,6 +133,17 @@ def test_build_from_tei_falls_back_to_flat_text_on_bad_tei() -> None:
     result = builder.build_from_tei("src-2", 1, "Title", "Abs", "<TEI", "flat fallback body")
     # malformed TEI -> flat-text doc-model carrying the fallback text as a single paragraph
     assert "flat fallback body" in result.docModel.fullText
+
+
+def test_build_from_tei_falls_back_to_flat_text_on_empty_body_tei() -> None:
+    store = _FakeStore()
+    builder = _builder(_FakeSource(None), store)
+    result = builder.build_from_tei(
+        "src-3", 1, "Title", "Abs", _EMPTY_BODY_TEI, "flat fallback body"
+    )
+
+    assert "flat fallback body" in result.docModel.fullText
+    assert store.put_calls[-1].fullText == result.docModel.fullText
 
 
 _TEI_FORMULA = (
