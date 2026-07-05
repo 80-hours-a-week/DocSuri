@@ -12,7 +12,7 @@ from typing import Any
 from .adapters import NoveltyAdapters, RetrievalBundle, build_default_novelty_adapters
 from .models import TERMINAL_STATES, ArtifactKind, EvidenceStatus, InputType, JobState
 from .repository import NoveltyRepository
-from .service import NoveltyService
+from .service import NoveltyService, _emit_metric
 
 log = logging.getLogger("docsuri.novelty.worker")
 
@@ -131,6 +131,7 @@ def process_job(
             _, degraded_reason = _payload_from_bundle(evidence_bundle)
             if degraded_reason:
                 degraded_reasons.append(degraded_reason)
+                _note_degraded(observability, _EVIDENCE_SOURCE)
             service.record_event(
                 job,
                 "Evidence bundle formed",
@@ -153,6 +154,7 @@ def process_job(
         corpus_payload, degraded_reason = _payload_from_bundle(corpus)
         if degraded_reason:
             degraded_reasons.append(degraded_reason)
+            _note_degraded(observability, _CORPUS_SOURCE)
         service.record_event(
             job,
             "U2 corpus search finished",
@@ -181,6 +183,7 @@ def process_job(
         external_payload, degraded_reason = _payload_from_bundle(external)
         if degraded_reason:
             degraded_reasons.append(degraded_reason)
+            _note_degraded(observability, _EXTERNAL_SOURCE)
         service.record_event(
             job,
             "External source search finished",
@@ -197,6 +200,7 @@ def process_job(
         draft = adapters.llm.draft(topic=job.topic, corpus=corpus, external=external)
         if draft.degradedReason:
             degraded_reasons.append(draft.degradedReason)
+            _note_degraded(observability, _LLM_SOURCE)
 
         job = service.advance_state(
             owner_id,
@@ -230,6 +234,7 @@ def process_job(
             similarity_payload, degraded_reason = _payload_from_bundle(similarity)
             if degraded_reason:
                 degraded_reasons.append(degraded_reason)
+                _note_degraded(observability, _SIMILARITY_SOURCE)
             service.record_event(
                 job,
                 "Similarity check finished",
@@ -309,6 +314,11 @@ _CORPUS_SOURCE = "U2 full search"
 _EXTERNAL_SOURCE = "GitHub · Hugging Face · Zenodo"
 _SIMILARITY_SOURCE = "manuscript similarity"
 _LLM_SOURCE = "Bedrock LLM"
+
+
+def _note_degraded(observability, source: str) -> None:
+    """US-NV9(#259) — 대시보드용 소스별 저하 카운트."""
+    _emit_metric(observability, "novelty.step_degraded", tags={"source": source})
 
 
 def _step_result_payload(source: str, count: int, reason: str | None) -> dict[str, Any]:
