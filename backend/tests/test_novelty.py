@@ -40,7 +40,11 @@ from backend.modules.novelty.security import is_safe_external_url, sanitize_exte
 from backend.modules.novelty.service import NoveltyService
 from backend.modules.novelty.streaming import encode_sse
 from backend.modules.novelty.validators import normalize_source_key, validate_artifact_payload
-from backend.modules.novelty.worker import process_job, run_worker
+from backend.modules.novelty.worker import (
+    _MANUSCRIPT_DOCMODEL_MAX_ATTEMPTS,
+    process_job,
+    run_worker,
+)
 
 
 def _principal(user_id: str | None = None) -> Principal:
@@ -845,6 +849,73 @@ def test_worker_manuscript_path_records_similarity_risk_degradation() -> None:
     result = service.result(owner_id, created.jobId)
     assert result.job.state is JobState.DEGRADED
     assert ArtifactKind.RISK_SIGNALS in {artifact.kind for artifact in result.artifacts}
+
+
+def _pdf_manuscript_job(service: NoveltyService, owner_id: str):
+    return service.create_job(
+        owner_id,
+        NoveltyJobRequest(
+            inputType="manuscript",
+            topic="pdf manuscript",
+            manuscript={"fileName": "draft.pdf", "contentType": "application/pdf"},
+        ),
+    )
+
+
+def test_worker_manuscript_pdf_reenqueues_until_docmodel_ready() -> None:
+    repo = InMemoryNoveltyRepository()
+    service = NoveltyService(repo)
+    owner_id = str(uuid4())
+    created = _pdf_manuscript_job(service, owner_id)
+
+    class NotReadySimilarity:
+        def manuscript_doc_model_ready(self, owner_id: str, manuscript_ref: dict) -> bool:
+            return False
+
+        def check(self, owner_id: str, manuscript_ref: dict) -> RetrievalBundle:
+            raise AssertionError("pipeline must not run while the doc-model is not ready")
+
+    reenqueued: list[tuple[str, str, int]] = []
+    process_job(
+        repo,
+        owner_id,
+        created.jobId,
+        adapters=NoveltyAdapters(similarity=NotReadySimilarity()),
+        attempt=0,
+        reenqueue=lambda o, j, a: reenqueued.append((o, j, a)),
+    )
+
+    # Re-enqueued with attempt+1; job stays non-terminal (NOT degraded) and the pipeline never ran.
+    assert reenqueued == [(owner_id, created.jobId, 1)]
+    assert service.result(owner_id, created.jobId).job.state is not JobState.DEGRADED
+
+
+def test_worker_manuscript_pdf_degrades_after_max_attempts() -> None:
+    repo = InMemoryNoveltyRepository()
+    service = NoveltyService(repo)
+    owner_id = str(uuid4())
+    created = _pdf_manuscript_job(service, owner_id)
+
+    class NotReadySimilarity:
+        def manuscript_doc_model_ready(self, owner_id: str, manuscript_ref: dict) -> bool:
+            return False
+
+        def check(self, owner_id: str, manuscript_ref: dict) -> RetrievalBundle:
+            return RetrievalBundle(degradedReason="manuscript_pdf_parse_unavailable")
+
+    reenqueued: list = []
+    # At the attempt cap the gate does NOT re-enqueue — the pipeline runs and degrades (bounded).
+    process_job(
+        repo,
+        owner_id,
+        created.jobId,
+        adapters=NoveltyAdapters(similarity=NotReadySimilarity()),
+        attempt=_MANUSCRIPT_DOCMODEL_MAX_ATTEMPTS,
+        reenqueue=lambda o, j, a: reenqueued.append((o, j, a)),
+    )
+
+    assert reenqueued == []
+    assert service.result(owner_id, created.jobId).job.state is JobState.DEGRADED
 
 
 def test_supported_adapter_without_source_refs_degrades_not_fails() -> None:
