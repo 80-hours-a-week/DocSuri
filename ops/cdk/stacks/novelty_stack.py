@@ -96,6 +96,12 @@ class NoveltyStack(Stack):
                 "DOCSURI_DOCMODEL_BUILD_QUEUE_URL": (
                     f"https://sqs.{self.region}.amazonaws.com/{account}/docsuri-docmodel-queue"
                 ),
+                # User-PDF (manuscript) doc-model build → GROBID Option B queue, preferred by the
+                # coordinator factory over the shared queue above so novelty manuscripts get
+                # structured TEI. Referenced by name (Ingestion owns it); SendMessage granted below.
+                "DOCSURI_USERDOC_BUILD_QUEUE_URL": (
+                    f"https://sqs.{self.region}.amazonaws.com/{account}/docsuri-userdoc-queue"
+                ),
                 "DOCSURI_OPENSEARCH_ENDPOINT": f"https://{opensearch_domain.domain_endpoint}",
                 "DOCSURI_BEDROCK_MODEL_ID": "global.cohere.embed-v4:0",
                 "DOCSURI_NOVELTY_LLM_MODEL_ID": "global.anthropic.claude-sonnet-4-6",
@@ -158,6 +164,9 @@ class NoveltyStack(Stack):
                 actions=["sqs:SendMessage"],
                 resources=[
                     f"arn:aws:sqs:{self.region}:{account}:docsuri-docmodel-queue",
+                    # User-PDF (manuscript) build queue (GROBID Option B), enqueued via
+                    # DOCSURI_USERDOC_BUILD_QUEUE_URL above.
+                    f"arn:aws:sqs:{self.region}:{account}:docsuri-userdoc-queue",
                 ],
             )
         )

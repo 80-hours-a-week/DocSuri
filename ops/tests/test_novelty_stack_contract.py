@@ -16,3 +16,11 @@ def test_novelty_worker_can_retry_and_consume_user_docmodel() -> None:
 
     assert 'actions=["s3:GetObject"]' in STACK_SOURCE
     assert '/doc-model/*"' in STACK_SOURCE
+
+
+def test_novelty_worker_routes_user_pdf_builds_to_grobid_queue() -> None:
+    # GROBID Option B: novelty manuscripts enqueue to the dedicated user-PDF queue whose worker
+    # carries the GROBID sidecar; the coordinator factory prefers this over the shared doc-model
+    # queue. SendMessage on the userdoc queue is granted alongside the docmodel one.
+    assert '"DOCSURI_USERDOC_BUILD_QUEUE_URL"' in STACK_SOURCE
+    assert "docsuri-userdoc-queue" in STACK_SOURCE
