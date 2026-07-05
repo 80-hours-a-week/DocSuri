@@ -3612,3 +3612,10 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **Context**: Code Generation completion and verification for backend user-uploaded PDF doc-model producer.
 
 ---
+## AI-DLC Untracked Workspace File Treatment
+**Timestamp**: 2026-07-05T14:17:16Z
+**User Input**: "Treat untracked workspace files by the AIDLC rules."
+**AI Response**: "Classified untracked workspace files under AI-DLC rules: local tool/cache paths `.agents/`, `.claude/worktrees/`, and `.pnpm-store/` are ignored; documentation artifacts under `aidlc-docs/inception/plans/` are tracked. Replaced non-compliant Unicode box-drawing diagrams in `hackathon-proposal.md` with text alternatives. Validation passed: D2 diagrams compile, docx integrity OK, no box-drawing characters remain in the proposal, and diff whitespace check is clean."
+**Context**: Workspace hygiene and documentation artifact treatment under AI-DLC file-placement/content-validation rules.
+
+---
