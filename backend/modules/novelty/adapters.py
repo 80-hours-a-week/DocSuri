@@ -471,20 +471,14 @@ class BedrockNoveltyLlmClient:
             "system": system,
             "messages": [{"role": "user", "content": [{"type": "text", "text": user}]}],
         }
-        response = self._client.invoke_model(
+        response = self._client.invoke_model_with_response_stream(
             modelId=self._model_id,
             body=json.dumps(body).encode("utf-8"),
             accept="application/json",
             contentType="application/json",
         )
-        raw_body = response["body"].read()
-        model_payload = json.loads(raw_body.decode("utf-8"))
-        _record_bedrock_spend(self._cost_guard, model_payload.get("usage") or {})
-        text = "".join(
-            part.get("text", "")
-            for part in model_payload.get("content", [])
-            if isinstance(part, dict)
-        )
+        text, usage = _bedrock_stream_read(response)
+        _record_bedrock_spend(self._cost_guard, usage)
         return _parse_json_object(text)
 
 
@@ -764,6 +758,27 @@ def _parse_json_object(text: str) -> dict[str, Any]:
     return parsed
 
 
+def _bedrock_stream_read(response: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """스트림에서 텍스트와 usage 수집 — message_start(input) + message_delta(output 누적)."""
+    chunks: list[str] = []
+    usage: dict[str, Any] = {}
+    for event in response.get("body", []):
+        raw = event.get("chunk", {}).get("bytes")
+        if not raw:
+            continue
+        data = json.loads(raw.decode("utf-8"))
+        kind = data.get("type")
+        if kind == "message_start":
+            usage.update(data.get("message", {}).get("usage") or {})
+        elif kind == "message_delta":
+            usage.update(data.get("usage") or {})
+        elif kind == "content_block_delta":
+            delta = data.get("delta", {})
+            if delta.get("type") == "text_delta":
+                chunks.append(str(delta.get("text") or ""))
+    return "".join(chunks), usage
+
+
 class S3ManuscriptSimilarityClient:
     def __init__(
         self,
@@ -971,7 +986,7 @@ def build_llm_adapter(cost_guard: Any = None) -> NoveltyLlmPort:
             region_name=region,
             config=Config(
                 connect_timeout=5.0,
-                read_timeout=45.0,
+                read_timeout=300.0,
                 retries={"max_attempts": 1},
             ),
         ),

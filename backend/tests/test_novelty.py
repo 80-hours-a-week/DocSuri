@@ -22,6 +22,7 @@ from backend.modules.novelty.adapters import (
     RetrievalBundle,
     S3ManuscriptSimilarityClient,
     U2FullSearchCorpusRetrievalClient,
+    build_llm_adapter,
 )
 from backend.modules.novelty.models import (
     ArtifactKind,
@@ -365,7 +366,7 @@ def test_external_adapter_queries_public_api_sources() -> None:
 
 def test_bedrock_llm_adapter_maps_source_ref_indexes_only() -> None:
     class FakeBedrock:
-        def invoke_model(self, **kwargs):
+        def invoke_model_with_response_stream(self, **kwargs):
             body = json.loads(kwargs["body"].decode("utf-8"))
             assert body["anthropic_version"] == "bedrock-2023-05-31"
             payload = {
@@ -397,12 +398,43 @@ def test_bedrock_llm_adapter_maps_source_ref_indexes_only() -> None:
                     "sourceRefIndexes": [1],
                 },
             }
+            text = json.dumps(payload)
             return {
-                "body": BytesIO(
-                    json.dumps(
-                        {"content": [{"type": "text", "text": json.dumps(payload)}]}
-                    ).encode("utf-8")
-                )
+                "body": [
+                    {
+                        "chunk": {
+                            "bytes": json.dumps(
+                                {
+                                    "type": "content_block_delta",
+                                    "delta": {
+                                        "type": "text_delta",
+                                        "text": text[: len(text) // 2],
+                                    },
+                                }
+                            ).encode("utf-8")
+                        }
+                    },
+                    {
+                        "chunk": {
+                            "bytes": json.dumps(
+                                {
+                                    "type": "content_block_delta",
+                                    "delta": {
+                                        "type": "text_delta",
+                                        "text": text[len(text) // 2 :],
+                                    },
+                                }
+                            ).encode("utf-8")
+                        }
+                    },
+                    {
+                        "chunk": {
+                            "bytes": json.dumps(
+                                {"type": "message_delta", "delta": {"stop_reason": "end_turn"}}
+                            ).encode("utf-8")
+                        }
+                    },
+                ]
             }
 
     corpus_ref = {
@@ -435,11 +467,33 @@ def test_bedrock_llm_adapter_maps_source_ref_indexes_only() -> None:
     assert "Novelty score" not in draft.experimentPlan["metrics"]
 
 
+def test_build_llm_adapter_uses_long_stream_read_timeout(monkeypatch) -> None:
+    import boto3
+
+    captured = {}
+
+    def fake_client(service_name, *, region_name, config):
+        captured["service_name"] = service_name
+        captured["region_name"] = region_name
+        captured["config"] = config
+        return object()
+
+    monkeypatch.setattr(boto3, "client", fake_client)
+    monkeypatch.delenv("AWS_REGION", raising=False)
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "ap-northeast-2")
+
+    build_llm_adapter()
+
+    assert captured["service_name"] == "bedrock-runtime"
+    assert captured["region_name"] == "ap-northeast-2"
+    assert captured["config"].read_timeout == 300.0
+
+
 def test_bedrock_llm_adapter_maps_similar_work_detail_columns() -> None:
     captured_bodies: list[dict] = []
 
     class FakeBedrock:
-        def invoke_model(self, **kwargs):
+        def invoke_model_with_response_stream(self, **kwargs):
             captured_bodies.append(json.loads(kwargs["body"].decode("utf-8")))
             payload = {
                 "similarWorks": [
@@ -493,11 +547,14 @@ def test_bedrock_llm_adapter_maps_similar_work_detail_columns() -> None:
                 },
             }
             return {
-                "body": BytesIO(
-                    json.dumps(
-                        {"content": [{"type": "text", "text": json.dumps(payload)}]}
-                    ).encode("utf-8")
-                )
+                "body": [
+                    _stream_chunk(
+                        {
+                            "type": "content_block_delta",
+                            "delta": {"type": "text_delta", "text": json.dumps(payload)},
+                        }
+                    )
+                ]
             }
 
     corpus_ref = {
@@ -911,6 +968,10 @@ def test_api_rejects_blank_topic_before_job_is_created(monkeypatch) -> None:
     assert repo.list_jobs(principal.user_id) == []
 
 
+def _stream_chunk(payload: dict) -> dict:
+    return {"chunk": {"bytes": json.dumps(payload).encode("utf-8")}}
+
+
 def test_bedrock_llm_client_invokes_at_cost_guard_warning() -> None:
     """NFR-C1 — agent hard gate는 warning(80%)에서는 Bedrock을 막지 않는다."""
     from docsuri_ops.cost_guard import CostGuardCircuitBreaker
@@ -919,9 +980,18 @@ def test_bedrock_llm_client_invokes_at_cost_guard_warning() -> None:
     class _Invoke:
         called = False
 
-        def invoke_model(self, **kwargs):
+        def invoke_model_with_response_stream(self, **kwargs):
             self.called = True
-            return {"body": BytesIO(json.dumps({"content": [{"text": "{}"}]}).encode("utf-8"))}
+            return {
+                "body": [
+                    _stream_chunk(
+                        {
+                            "type": "content_block_delta",
+                            "delta": {"type": "text_delta", "text": "{}"},
+                        }
+                    )
+                ]
+            }
 
     guard = CostGuardCircuitBreaker()
     guard.record_spend(UsageEvent(event_id="seed", amount_usd=1280.0, source="test"))
@@ -944,7 +1014,7 @@ def test_bedrock_llm_client_degrades_without_invoke_when_cost_guard_critical() -
     from docsuri_ops.domain.models import UsageEvent
 
     class _NoInvoke:
-        def invoke_model(self, **kwargs):
+        def invoke_model_with_response_stream(self, **kwargs):
             raise AssertionError("LLM must not be invoked while the cost guard is gated")
 
     guard = CostGuardCircuitBreaker()
@@ -961,20 +1031,33 @@ def test_bedrock_llm_client_degrades_without_invoke_when_cost_guard_critical() -
 
 
 def test_bedrock_llm_client_records_spend_from_usage() -> None:
-    """NFR-C1 — invoke_model 응답의 usage 토큰이 cost guard 지출로 기록된다."""
+    """NFR-C1 — 스트림 usage 이벤트의 토큰이 cost guard 지출로 기록된다."""
     from docsuri_ops.cost_guard import CostGuardCircuitBreaker
 
     class _FakeBedrock:
-        def invoke_model(self, **kwargs):
+        def invoke_model_with_response_stream(self, **kwargs):
             return {
-                "body": BytesIO(
-                    json.dumps(
+                "body": [
+                    _stream_chunk(
                         {
-                            "content": [{"type": "text", "text": json.dumps({})}],
-                            "usage": {"input_tokens": 1_000_000, "output_tokens": 200_000},
+                            "type": "message_start",
+                            "message": {"usage": {"input_tokens": 1_000_000, "output_tokens": 1}},
                         }
-                    ).encode("utf-8")
-                )
+                    ),
+                    _stream_chunk(
+                        {
+                            "type": "content_block_delta",
+                            "delta": {"type": "text_delta", "text": json.dumps({})},
+                        }
+                    ),
+                    _stream_chunk(
+                        {
+                            "type": "message_delta",
+                            "delta": {"stop_reason": "end_turn"},
+                            "usage": {"output_tokens": 200_000},
+                        }
+                    ),
+                ]
             }
 
     guard = CostGuardCircuitBreaker()
