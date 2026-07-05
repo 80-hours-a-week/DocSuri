@@ -3598,3 +3598,31 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **Context**: Code Generation follow-up completion for BUILD_USER_DOC_MODEL contract compliance.
 
 ---
+## User PDF DocModel PR2 Start
+**Timestamp**: 2026-07-05T13:37:26Z
+**User Input**: "Implement PR2 in the same way,"
+**AI Response**: "Started the PR2 backend producer slice on branch feature/pr2-userdoc-docmodel-backend, stacked from the updated PR0/PR1 contract branch. Scope: S3 upload plus BUILD_USER_DOC_MODEL enqueue plus bounded doc-model polling for evidence and novelty PDF inputs, with fail-soft degradation per the frozen contract."
+**Context**: Code Generation start for backend user-uploaded PDF doc-model producer.
+
+---
+## User PDF DocModel PR2 Completion
+**Timestamp**: 2026-07-05T14:01:15Z
+**User Input**: "Implement PR2 in the same way,"
+**AI Response**: "Implemented PR2 backend support for user-uploaded PDF doc-model production: shared user-docmodel coordinator, evidence/research PDF upload endpoints, novelty PDF manuscript upload, best-effort BUILD_USER_DOC_MODEL enqueue, bounded polling into evidence extraction and novelty similarity, frozen failure UX, and no arXiv URL fabrication for userdoc sources. Verification passed: focused backend PR2 suite 103 passed, broad backend suite 453 passed/4 skipped, backend ruff clean, compileall clean, git diff --check clean."
+**Context**: Code Generation completion and verification for backend user-uploaded PDF doc-model producer.
+
+---
+## AI-DLC Untracked Workspace File Treatment
+**Timestamp**: 2026-07-05T14:17:16Z
+**User Input**: "Treat untracked workspace files by the AIDLC rules."
+**AI Response**: "Classified untracked workspace files under AI-DLC rules: local tool/cache paths `.agents/`, `.claude/worktrees/`, and `.pnpm-store/` are ignored; documentation artifacts under `aidlc-docs/inception/plans/` are tracked. Replaced non-compliant Unicode box-drawing diagrams in `hackathon-proposal.md` with text alternatives. Validation passed: D2 diagrams compile, docx integrity OK, no box-drawing characters remain in the proposal, and diff whitespace check is clean."
+**Context**: Workspace hygiene and documentation artifact treatment under AI-DLC file-placement/content-validation rules.
+
+---
+## PR2 Hardening Before PR3
+**Timestamp**: 2026-07-05T14:29:28Z
+**User Input**: "Implement PR3 in the same way."
+**AI Response**: "Before branching PR3, preserved and completed existing PR2 hardening changes: moved evidence/research user-docmodel polling into threadpool execution, percent-encoded Unicode upload filenames for S3 metadata safety, degraded doc-model reader exceptions to `None`, and added coordinator regression tests. Verification passed: focused backend tests 37 passed, touched ruff clean, git diff --check clean."
+**Context**: PR2 backend hardening cleanup discovered at PR3 start, committed before creating the frontend PR3 stack.
+
+---

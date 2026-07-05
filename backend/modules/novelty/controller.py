@@ -5,9 +5,14 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
+from pydantic import ValidationError
 
 from backend.middleware.agent_quota import enforce_novelty_job_quota
 from backend.modules.accounts.models import Principal
+from backend.modules.user_docmodel import (
+    USER_DOCMODEL_PDF_CONTENT_TYPE,
+    build_default_user_docmodel_coordinator,
+)
 
 from .adapters import NoveltyAdapters
 from .models import (
@@ -65,8 +70,17 @@ def _adapters(request: Request) -> NoveltyAdapters | None:
     return getattr(request.app.state, "novelty_adapters", None)
 
 
+def get_user_docmodel(request: Request):
+    coordinator = getattr(request.app.state, "user_docmodel", None)
+    if coordinator is None:
+        coordinator = build_default_user_docmodel_coordinator()
+        request.app.state.user_docmodel = coordinator
+    return coordinator
+
+
 PRINCIPAL_DEP = Depends(get_principal)
 REPO_DEP = Depends(get_repo)
+USER_DOCMODEL_DEP = Depends(get_user_docmodel)
 
 
 @router.post(
@@ -150,17 +164,39 @@ async def reset_jobs(
 @router.post("/jobs/{job_id}/manuscript", response_model=JobStatusResponse)
 async def upload_manuscript(
     job_id: str,
-    dto: ManuscriptContentRequest,
     request: Request,
     principal: Principal = PRINCIPAL_DEP,
     repo: NoveltyRepository = REPO_DEP,
+    user_docmodel=USER_DOCMODEL_DEP,
 ) -> JobStatusResponse:
     """US-NV2(#252) — 원고 본문 수신 → S3 적재 → objectKey 바인딩 → 잡 디스패치."""
     service = NoveltyService(repo, _observability(request))
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
     try:
-        service.attach_manuscript_content(principal.user_id, job_id, dto.contentText)
+        if content_type == USER_DOCMODEL_PDF_CONTENT_TYPE:
+            current = repo.get_job(principal.user_id, job_id)
+            file_name = (
+                request.query_params.get("fileName")
+                or (current.manuscript.fileName if current.manuscript else None)
+                or "manuscript.pdf"
+            )
+            service.attach_manuscript_pdf(
+                principal.user_id,
+                job_id,
+                file_name=file_name,
+                content_type=content_type,
+                pdf=await request.body(),
+                user_docmodel=user_docmodel,
+            )
+        elif content_type == "application/json":
+            dto = ManuscriptContentRequest.model_validate(await request.json())
+            service.attach_manuscript_content(principal.user_id, job_id, dto.contentText)
+        else:
+            raise HTTPException(status_code=415, detail="지원하지 않는 원고 형식입니다.")
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="job not found") from exc
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     _dispatch_job(

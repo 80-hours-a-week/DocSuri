@@ -429,6 +429,7 @@ def main(argv: list[str] | None = None) -> int:
             adapters=build_default_novelty_adapters(
                 observability=observability,
                 cost_guard=cost_guard,
+                user_docmodel=_build_user_docmodel(),
             ),
             observability=observability,
         )
@@ -449,6 +450,12 @@ def _build_worker_ops() -> tuple[Any, Any, Any]:
     observability, telemetry_store = _build_observability()
     _, cost_guard, _, _ = _build_ops_dashboard_service(telemetry_store)
     return observability, cost_guard, telemetry_store
+
+
+def _build_user_docmodel():
+    from backend.modules.user_docmodel import build_default_user_docmodel_coordinator
+
+    return build_default_user_docmodel_coordinator()
 
 
 if __name__ == "__main__":

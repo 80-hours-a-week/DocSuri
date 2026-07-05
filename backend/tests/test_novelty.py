@@ -66,6 +66,37 @@ def _client(monkeypatch, principal: Principal | None = None, repo=None) -> TestC
     return TestClient(app)
 
 
+class _FakeUserDocModel:
+    def __init__(self, doc_model=None) -> None:
+        self.doc_model = doc_model
+        self.uploads: list[dict] = []
+        self.enqueued: list[object] = []
+        self.polled: list[object] = []
+
+    def upload_pdf(self, ref, pdf: bytes, *, file_name: str, content_type: str) -> None:
+        self.uploads.append(
+            {
+                "ref": ref,
+                "pdf": pdf,
+                "file_name": file_name,
+                "content_type": content_type,
+            }
+        )
+
+    def enqueue_build(self, ref) -> None:
+        self.enqueued.append(ref)
+
+    def enqueue_and_poll(self, ref):
+        self.polled.append(ref)
+        return self.doc_model
+
+
+def _doc_model(full_text: str):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(fullText=full_text, sections=[])
+
+
 @given(st.text(alphabet=st.characters(min_codepoint=32, max_codepoint=126), min_size=1))
 def test_source_key_normalization_is_stable(raw: str) -> None:
     normalized_once = normalize_source_key(" DOI ", raw)
@@ -248,6 +279,81 @@ def test_similarity_adapter_reads_text_manuscript_and_queries_corpus() -> None:
     parsed_url = urlparse(result.items[-1]["sourceRefs"][0]["url"])
     assert parsed_url.scheme == "https"
     assert parsed_url.hostname == "arxiv.org"
+
+
+def test_similarity_adapter_reads_pdf_manuscript_from_user_docmodel() -> None:
+    class FakeCorpus:
+        def full_search(self, owner_id: str, query: str) -> RetrievalBundle:
+            assert owner_id == "u1"
+            assert "privacy preserving" in query
+            return RetrievalBundle(
+                items=[
+                    {
+                        "title": "Privacy Preserving RAG",
+                        "sourceRefs": [
+                            {
+                                "type": "url",
+                                "identifier": "2401.00001",
+                                "url": "https://arxiv.org/abs/2401.00001",
+                            }
+                        ],
+                    }
+                ],
+                evidenceStatus=EvidenceStatus.SUPPORTED,
+            )
+
+    fake_user_docmodel = _FakeUserDocModel(
+        _doc_model(
+            "This manuscript presents a robust framework for privacy preserving "
+            "retrieval augmented generation evaluation across domain specific "
+            "scientific workflows with repeated evidence checking."
+        )
+    )
+    result = S3ManuscriptSimilarityClient(
+        bucket="papers",
+        prefix="novelty/",
+        client=object(),
+        corpus=FakeCorpus(),
+        user_docmodel=fake_user_docmodel,
+    ).check(
+        "u1",
+        {
+            "objectKey": "novelty/u1/job/manuscript/scan.pdf",
+            "contentType": "application/pdf",
+            "jobId": "job",
+            "paperId": "userdoc:11111111-1111-4111-8111-111111111111",
+            "recordRef": (
+                "upload:u1:userdoc-11111111-1111-4111-8111-111111111111:manuscript"
+            ),
+        },
+    )
+
+    assert result.evidenceStatus is EvidenceStatus.SUPPORTED
+    assert fake_user_docmodel.polled[0].paper_id.startswith("userdoc:")
+    assert any(item["riskType"] == "sentence_similarity" for item in result.items)
+
+
+def test_similarity_adapter_degrades_pdf_when_docmodel_unavailable() -> None:
+    result = S3ManuscriptSimilarityClient(
+        bucket="papers",
+        prefix="novelty/",
+        client=object(),
+        corpus=object(),
+        user_docmodel=_FakeUserDocModel(None),
+    ).check(
+        "u1",
+        {
+            "objectKey": "novelty/u1/job/manuscript/scan.pdf",
+            "contentType": "application/pdf",
+            "jobId": "job",
+            "paperId": "userdoc:11111111-1111-4111-8111-111111111111",
+            "recordRef": (
+                "upload:u1:userdoc-11111111-1111-4111-8111-111111111111:manuscript"
+            ),
+        },
+    )
+
+    assert result.degradedReason == "manuscript_pdf_parse_unavailable"
 
 
 def test_similarity_adapter_rejects_cross_owner_object_key() -> None:
@@ -945,6 +1051,47 @@ def test_evidence_formation_client_maps_claims_and_abstain() -> None:
     assert degraded.degradedReason == "evidence formation abstained: out_of_corpus"
 
 
+def test_evidence_formation_client_does_not_fabricate_arxiv_url_for_userdoc() -> None:
+    from docsuri_shared._generated.dtos.evidence_schema import (
+        EvidenceCoverage,
+        EvidenceItem,
+        EvidenceResult,
+    )
+    from docsuri_shared._generated.dtos.evidence_schema import (
+        SourceRef as EvidenceSourceRef,
+    )
+
+    class UserDocPort:
+        async def form_evidence(self, request, ctx):
+            return EvidenceResult(
+                state="ok",
+                claims=[
+                    EvidenceItem(
+                        statement="Uploaded PDF supports the method claim.",
+                        supporting=[
+                            EvidenceSourceRef(
+                                paperId="userdoc:11111111-1111-4111-8111-111111111111",
+                                recordRef=(
+                                    "upload:u1:"
+                                    "userdoc-11111111-1111-4111-8111-111111111111:att-1"
+                                ),
+                                quote="method claim",
+                            )
+                        ],
+                        conflicting=[],
+                    )
+                ],
+                coverage=EvidenceCoverage(paperCount=1),
+            )
+
+    bundle = EvidenceFormationClient(UserDocPort()).form("u1", "rag evaluation")
+
+    ref = bundle.items[0]["sourceRefs"][0]
+    assert ref["type"] == "upload"
+    assert ref["identifier"].startswith("userdoc:")
+    assert "url" not in ref
+
+
 class _RecordingNotion:
     def __init__(self) -> None:
         self.calls: list[tuple[dict, dict]] = []
@@ -1250,6 +1397,9 @@ def test_api_lists_jobs_and_persists_chat_messages(monkeypatch) -> None:
 
 def test_api_rejects_unsupported_manuscript(monkeypatch) -> None:
     client = _client(monkeypatch, _principal(), InMemoryNoveltyRepository())
+    docx_content_type = (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
 
     resp = client.post(
         "/api/novelty/jobs",
@@ -1257,8 +1407,8 @@ def test_api_rejects_unsupported_manuscript(monkeypatch) -> None:
             "inputType": "manuscript",
             "topic": "novelty agent",
             "manuscript": {
-                "fileName": "draft.pdf",
-                "contentType": "application/pdf",
+                "fileName": "draft.docx",
+                "contentType": docx_content_type,
             },
         },
     )
@@ -1541,6 +1691,45 @@ def test_api_manuscript_upload_binds_key_and_dispatches(monkeypatch) -> None:
     assert repo.get_job(principal.user_id, job_id).manuscript.objectKey == puts[0]["Key"]
     # 큐 미구성 → 인라인 워커가 잡을 진행시킨다(더는 queued가 아니다).
     assert client.get(f"/api/novelty/jobs/{job_id}").json()["job"]["state"] != "queued"
+
+
+def test_api_manuscript_pdf_upload_binds_userdoc_contract(monkeypatch) -> None:
+    principal = _principal()
+    repo = InMemoryNoveltyRepository()
+    client = _client(monkeypatch, principal, repo)
+    fake_user_docmodel = _FakeUserDocModel(None)
+    client.app.dependency_overrides[controller.get_user_docmodel] = (
+        lambda: fake_user_docmodel
+    )
+    monkeypatch.delenv("DOCSURI_NOVELTY_JOB_QUEUE_URL", raising=False)
+
+    created = client.post(
+        "/api/novelty/jobs",
+        json={
+            "inputType": "manuscript",
+            "topic": "pdf manuscript novelty flow",
+            "manuscript": {"fileName": "draft.pdf", "contentType": "application/pdf"},
+        },
+    )
+    assert created.status_code == 200
+    job_id = created.json()["jobId"]
+
+    uploaded = client.post(
+        f"/api/novelty/jobs/{job_id}/manuscript?fileName=draft.pdf",
+        content=b"%PDF-1.4",
+        headers={"content-type": "application/pdf"},
+    )
+
+    assert uploaded.status_code == 200
+    manuscript = repo.get_job(principal.user_id, job_id).manuscript
+    assert manuscript is not None
+    assert manuscript.objectKey == f"novelty/{principal.user_id}/{job_id}/manuscript/draft.pdf"
+    assert manuscript.paperId is not None and manuscript.paperId.startswith("userdoc:")
+    assert manuscript.recordRef is not None
+    assert manuscript.recordRef.startswith(f"upload:{principal.user_id}:userdoc-")
+    assert fake_user_docmodel.uploads[0]["pdf"] == b"%PDF-1.4"
+    assert fake_user_docmodel.enqueued[0].payload()["kind"] == "BUILD_USER_DOC_MODEL"
+    assert "arxivRef" not in fake_user_docmodel.enqueued[0].payload()
 
 
 def test_api_manuscript_upload_guards(monkeypatch) -> None:

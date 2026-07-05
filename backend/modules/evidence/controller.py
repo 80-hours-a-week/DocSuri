@@ -3,13 +3,21 @@ from __future__ import annotations
 import os
 from datetime import datetime
 from typing import Any, Literal
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.middleware.agent_attachments import ATTACHMENT_MAX_COUNT, AgentAttachmentIn
 from backend.middleware.agent_quota import enforce_evidence_turn_quota
 from backend.modules.accounts.models import Principal
+from backend.modules.user_docmodel import (
+    USER_DOCMODEL_PDF_CONTENT_TYPE,
+    build_default_user_docmodel_coordinator,
+    object_key_for_upload,
+    user_docmodel_ref,
+)
 
 from .models import (
     TurnAbstainResult,
@@ -52,10 +60,19 @@ def get_sqs_enqueue(request: Request):
     return getattr(request.app.state, 'evidence_sqs_enqueue', None)
 
 
+def get_user_docmodel(request: Request):
+    coordinator = getattr(request.app.state, 'user_docmodel', None)
+    if coordinator is None:
+        coordinator = build_default_user_docmodel_coordinator()
+        request.app.state.user_docmodel = coordinator
+    return coordinator
+
+
 PRINCIPAL_DEP = Depends(get_principal)
 REPO_DEP = Depends(get_repo)
 ORCHESTRATOR_DEP = Depends(get_orchestrator)
 SQS_ENQUEUE_DEP = Depends(get_sqs_enqueue)
+USER_DOCMODEL_DEP = Depends(get_user_docmodel)
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +139,19 @@ class TurnOut(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class AttachmentUploadOut(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    name: str
+    kind: Literal['pdf'] = 'pdf'
+    size_bytes: int = Field(alias='sizeBytes')
+    status: Literal['ready'] = 'ready'
+    object_key: str = Field(alias='objectKey')
+    paper_id: str = Field(alias='paperId')
+    record_ref: str = Field(alias='recordRef')
+
+
 # ---------------------------------------------------------------------------
 # 엔드포인트
 # ---------------------------------------------------------------------------
@@ -139,6 +169,7 @@ async def create_turn(
     repo: EvidenceRepository = REPO_DEP,
     orchestrator: Any = ORCHESTRATOR_DEP,
     sqs_enqueue: Any = SQS_ENQUEUE_DEP,
+    user_docmodel: Any = USER_DOCMODEL_DEP,
 ) -> TurnOut:
     """채팅 턴 실행 — FR-36, FR-37, NFR-P6."""
     from docsuri_shared._generated.dtos.evidence_schema import EvidenceRequest, EvidenceScope
@@ -150,6 +181,13 @@ async def create_turn(
         paperIds=body.paper_ids or [],
         # 공유 계약(EvidenceRequest.attachments)은 문서 핸들 문자열 목록 — 객체를 id로 변환.
         attachments=[attachment.id for attachment in body.attachments],
+    )
+    attachment_docs = await run_in_threadpool(
+        _attachment_docs,
+        owner_id=principal.user_id,
+        scope_id=request_id or 'evidence-turn',
+        attachments=body.attachments,
+        user_docmodel=user_docmodel,
     )
 
     try:
@@ -163,6 +201,7 @@ async def create_turn(
             session_id=body.session_id,
             budget_signal=getattr(request.state, 'budget_signal', {}),
             request_id=request_id,
+            attachment_docs=attachment_docs,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail='session not found') from exc
@@ -172,6 +211,52 @@ async def create_turn(
         turnId=turn_resp.turn_id,
         result=_serialize_result(turn_resp.result),
         createdAt=turn_resp.created_at,
+    )
+
+
+@router.post('/attachments', response_model=AttachmentUploadOut)
+async def upload_attachment(
+    request: Request,
+    principal: Principal = PRINCIPAL_DEP,
+    user_docmodel: Any = USER_DOCMODEL_DEP,
+) -> AttachmentUploadOut:
+    """PR2 — backend PDF upload for evidence attachments."""
+    if user_docmodel is None:
+        raise HTTPException(status_code=422, detail='PDF 업로드 저장소가 구성되지 않았습니다.')
+    file_name = request.query_params.get('fileName') or 'attachment.pdf'
+    attachment_id = request.query_params.get('id') or f'att-{uuid4()}'
+    content_type = request.headers.get('content-type', '').split(';', 1)[0].strip().lower()
+    if content_type != USER_DOCMODEL_PDF_CONTENT_TYPE:
+        raise HTTPException(status_code=415, detail='PDF 파일만 업로드할 수 있습니다.')
+    data = await request.body()
+    object_key = object_key_for_upload(
+        module='evidence',
+        owner_id=principal.user_id,
+        scope_id=attachment_id,
+        attachment_id=attachment_id,
+        file_name=file_name,
+    )
+    ref = user_docmodel_ref(
+        owner_id=principal.user_id,
+        scope_id=attachment_id,
+        attachment_id=attachment_id,
+        object_key=object_key,
+        module='evidence',
+    )
+    try:
+        user_docmodel.upload_pdf(ref, data, file_name=file_name, content_type=content_type)
+        user_docmodel.enqueue_build(ref)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 - hide storage internals at the API boundary.
+        raise HTTPException(status_code=422, detail='PDF 업로드에 실패했습니다.') from exc
+    return AttachmentUploadOut(
+        id=attachment_id,
+        name=file_name,
+        sizeBytes=len(data),
+        objectKey=object_key,
+        paperId=ref.paper_id,
+        recordRef=ref.record_ref,
     )
 
 
@@ -254,6 +339,23 @@ def _serialize_result(result: Any) -> TurnResultOut:
         )
 
     return TurnResultOut(state='pending')
+
+
+def _attachment_docs(
+    *,
+    owner_id: str,
+    scope_id: str,
+    attachments: list[AgentAttachmentIn],
+    user_docmodel: Any,
+):
+    from .attachments import attachment_inputs_from_dicts
+
+    return attachment_inputs_from_dicts(
+        owner_id=owner_id,
+        scope_id=scope_id,
+        attachments=[item.model_dump(mode='json', by_alias=True) for item in attachments],
+        user_docmodel=user_docmodel,
+    )
 
 
 routers = (router,)
