@@ -17,6 +17,9 @@ def test_ingestion_stack_provisions_userdoc_grobid_worker() -> None:
     # points the runtime at it.
     assert STACK_SOURCE.count('ecs.ContainerImage.from_registry("grobid/grobid:0.8.0")') >= 2
     assert '"DOCSURI_GROBID_URL": "http://127.0.0.1:8070"' in STACK_SOURCE
+    assert "/api/isalive" in STACK_SOURCE
+    assert "userdoc_worker.add_container_dependencies" in STACK_SOURCE
+    assert "ecs.ContainerDependencyCondition.HEALTHY" in STACK_SOURCE
 
     # It drains the userdoc queue via the docmodel worker mode (the worker's single priority-queue
     # slot points at the userdoc queue).

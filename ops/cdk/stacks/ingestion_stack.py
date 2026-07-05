@@ -436,14 +436,28 @@ class IngestionStack(Stack):
             memory_limit_mib=8192,
             ephemeral_storage_gib=80,
         )
-        userdoc_task_def.add_container(
+        userdoc_grobid = userdoc_task_def.add_container(
             "grobid",
             image=ecs.ContainerImage.from_registry("grobid/grobid:0.8.0"),
             logging=ecs.LogDrivers.aws_logs(stream_prefix="userdoc-grobid"),
             essential=False,
+            health_check=ecs.HealthCheck(
+                command=[
+                    "CMD-SHELL",
+                    (
+                        "curl -fsS http://127.0.0.1:8070/api/isalive >/dev/null "
+                        "|| wget -q -O - http://127.0.0.1:8070/api/isalive >/dev/null "
+                        "|| exit 1"
+                    ),
+                ],
+                interval=Duration.seconds(30),
+                timeout=Duration.seconds(5),
+                retries=5,
+                start_period=Duration.seconds(90),
+            ),
             port_mappings=[ecs.PortMapping(container_port=8070)],
         )
-        userdoc_task_def.add_container(
+        userdoc_worker = userdoc_task_def.add_container(
             "worker",
             image=ecs.ContainerImage.from_ecr_repository(self.repo, tag="latest"),
             logging=ecs.LogDrivers.aws_logs(stream_prefix="userdoc"),
@@ -473,6 +487,12 @@ class IngestionStack(Stack):
                 "DOCSURI_WORKER_MAX_MESSAGES": "1",
                 "DOCSURI_WORKER_LOOP_DELAY_SECONDS": "1",
             },
+        )
+        userdoc_worker.add_container_dependencies(
+            ecs.ContainerDependency(
+                container=userdoc_grobid,
+                condition=ecs.ContainerDependencyCondition.HEALTHY,
+            )
         )
         self.userdoc_service = ecs.FargateService(
             self, "UserDocWorkerService",
