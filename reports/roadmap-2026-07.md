@@ -1,6 +1,9 @@
 # DocSuri Production Roadmap — 2026-07
 
-> **Date**: 2026-07-03 · **Baseline**: develop `1c65fa4` (2026-07-05) · **main at v1.7.0** (2026-07-05 promotion `7b36d52`, ECS 배포 완료)
+> **Date**: 2026-07-03 · **Baseline**: develop (2026-07-06) · **main at v1.9.0** (2026-07-06 promotion `07991f2`→PR #398, full deploy 완료)
+> **Updated**: 2026-07-06 — **Phase 1 COMPLETE** — 마지막 잔여 항목(PDF 첨부·원고, doc-model 경유) 프로덕션 반영:
+> - ✅ **v1.8.0 — 사용자 PDF → doc-model MVP** (PR #390/#391/#392/#393 = PR0–3 + #394; main 승격 #395). 공유계약 동결(`userdoc:{uuid}` paperId · `upload:{ownerId}:{jobId}:{attachmentId}` recordRef · arXiv URL 무날조) → ingestion 신규 `BUILD_USER_DOC_MODEL` JobKind(S3-소스, arxivRef 없음) → backend 코디네이터(업로드·enqueue·폴링, best-effort 저하) → FE 소비. **#14 consume-on-retry**(PR #394): 원고 doc-model이 폴백 타임아웃보다 늦게 완성돼도 novelty 워커가 서버측 retry-until-ready(재큐 + DelaySeconds, 최대 8회)로 소비. pdfplumber 평문 doc-model(GROBID 미배선).
+> - ✅ **v1.9.0 — GROBID 구조 추출** (#13 = PR #396 앱코드 + PR #397 인프라; main 승격 #398, **full deploy 완료 2026-07-06**). `build_user_doc_model`이 GROBID `extract_tei→build_from_tei`로 구조화 TEI(섹션/표/그림) 생성, 빈/오류 TEI는 pdfplumber 폴백(무회귀). **Option B 인프라**: 전용 `docsuri-userdoc-queue` + `docsuri-userdoc-builder` Fargate(자체 `grobid/grobid:0.8.0` 사이드카 + `/api/isalive` HEALTHY 게이트, cpu2048/mem8192/80GB) — lean `docsuri-docmodel-builder`(arXiv 뷰어 빌드)가 ~20GB GROBID 콜드풀을 떠안지 않게 분리. 생산자(API·novelty) 라우팅 `DOCSURI_USERDOC_BUILD_QUEUE_URL` + 코디네이터 팩토리 우선순위. **배포**: develop→main 릴리스(docsuri-ingestion·docsuri-api 이미지 재빌드 + ECS 롤) → `cdk deploy` Ingestion/Novelty/Compute → 라이브 검증(API rev27 라우팅 env ✅ · userdoc 워커 GROBID 배선 ✅ · CloudFront 200 · X-Origin-Verify 403 없음 · ECS 2/2). userdoc 워커 desired 0 → 첫 업로드가 실런타임 스모크(grobid 콜드풀 ~수 분).
 > **Updated**: 2026-07-05 — Phase 1 execution, day 2:
 > - ✅ **v1.7.0 promote & deploy** (PR #385, main `7b36d52`) — v1.6.0 이후 6개 PR(#379–#384) 승격: form_evidence 선행(#380)·Notion export(#382)·QT-8/QT-10 상시 게이트+저하 지표(#383)·physics 수식 매크로 렌더(#381, 유진)·로드맵 ×2. release.yml 자동 태깅 → GitHub Release → ECS 롤링 배포 전 잡 green. **Phase 1은 PDF(doc-model 경유)만 남기고 프로덕션 완료.** 마이그레이션 003(notion connections)은 API 기동 시 자동 적용; env `DOCSURI_NOTION_TOKEN_KEY` 설정 전까지 Notion export 휴면(연결 등록만 422 안전 저하). novelty DLQ 1건 purge 완료(0건 확인).
 > - ✅ **P4 잔여 완주** (PR #380·#382·#383, develop `2d42f3f`) — **#251 form_evidence 선행**(자연어 잡이 D5 포트로 근거 묶음을 먼저 만들고 U2가 보강; abstain은 무날조 저하 소비), **#258 Notion export E2E**(토큰 Fernet 암호화 저장·미리보기→명시 승인→페이지 생성·실패는 FAILED 안전 수렴; env `DOCSURI_NOTION_TOKEN_KEY` 필요), **#273/#259 QT-8·QT-10 상시화**(날조 0건 평가셋·DTO 라운드트립·상태전이/실험계획/export 게이트) + `novelty.step_degraded{source}` 지표. 4개 스토리 auto-close. old-queue 확인: 구 큐는 이미 retired, DLQ 1건(pre-GA)만 purge 대기. `s3:PutObject`·bucket env는 live 검증 완료(allowed — #252 코멘트). **남은 Phase 1 항목은 PDF(doc-model 경유) 하나** — ingestion 신규 JobKind 설계 인계(#268/#252).
@@ -28,8 +31,8 @@
 | 구독제 | ❌ Not started | Never entered requirements — needs inception re-entry |
 | 로그 수집 | ✅ Live | U9 collection healthy (944 events/7d, 0 failures); KPI funnel view missing (#346) |
 | 개인화 추천 | 🟡 Shadow | Search boost applied in shadow mode (PR #300); go-live judgment pending (#345); US-P5 deferred |
-| 에이전트: 문헌탐색/근거형성 | ✅ Live (v1.4.0) | PR #338 shipped v1.4.0; **cost-governed since v1.5.0** (PR #364); 근거 카드 + `§` 인용 앵커 (#339, PR #365); 첨부 검증 422 + 500 수정 (PR #373); **첨부 본문 근거 추출 포함** (PR #376) + **세션 재열람·삭제·전체 초기화** (PR #375) — **모두 v1.6.0 배포**; **QT-8 근거화 평가셋 상시화** (#273, PR #383, **v1.7.0**). Remaining: PDF 첨부(doc-model 경유) |
-| (charter add) 연구아이디어 novelty 에이전트 | ✅ Live (v1.4.0) | PR #349 shipped v1.4.0; cost-governed since v1.5.0 (PR #364: draft-gate + 5/day quota). FE 아티팩트 렌더러 (PR #368) + **P2-b merged** (PR #370) + **Bedrock streaming·timeout 300s** (PR #372) + **원고 업로드 E2E** (PR #376: 디스패치 보류→본문 적재→분석) — **모두 v1.6.0 배포**; **form_evidence 선행**(#251, PR #380) + **Notion export**(#258, PR #382) + **QT-10·소스별 저하 지표**(#259, PR #383) — **모두 v1.7.0 배포**. Remaining: PDF 원고(doc-model 경유) |
+| 에이전트: 문헌탐색/근거형성 | ✅ Live (v1.4.0) | PR #338 shipped v1.4.0; **cost-governed since v1.5.0** (PR #364); 근거 카드 + `§` 인용 앵커 (#339, PR #365); 첨부 검증 422 + 500 수정 (PR #373); **첨부 본문 근거 추출 포함** (PR #376) + **세션 재열람·삭제·전체 초기화** (PR #375) — **모두 v1.6.0 배포**; **QT-8 근거화 평가셋 상시화** (#273, PR #383, **v1.7.0**). **PDF 첨부(doc-model 경유) ✅ v1.8.0 MVP + v1.9.0 GROBID(#13)** — Phase 1 완료 |
+| (charter add) 연구아이디어 novelty 에이전트 | ✅ Live (v1.4.0) | PR #349 shipped v1.4.0; cost-governed since v1.5.0 (PR #364: draft-gate + 5/day quota). FE 아티팩트 렌더러 (PR #368) + **P2-b merged** (PR #370) + **Bedrock streaming·timeout 300s** (PR #372) + **원고 업로드 E2E** (PR #376: 디스패치 보류→본문 적재→분석) — **모두 v1.6.0 배포**; **form_evidence 선행**(#251, PR #380) + **Notion export**(#258, PR #382) + **QT-10·소스별 저하 지표**(#259, PR #383) — **모두 v1.7.0 배포**. **PDF 원고(doc-model 경유) ✅ v1.8.0 + v1.9.0 GROBID(#13)** — Phase 1 완료 |
 | 웹검색 레퍼런스 (고려) | ❌ Not started | Novelty agent has GitHub+datasets search; web/news deferred to next cycle |
 | 온보딩 (고려) | ❌ Not started | Candidate fix for personalization cold-start |
 
@@ -47,7 +50,7 @@ Production deploys now go through CI on main push — the manual-buildx era is o
 
 ## 3. Phase 1 — Weeks 1–2: agent GA (the 차별화)
 
-The differentiator is ~90% built. Finish it before starting anything new.
+The differentiator is **built and shipped — Phase 1 complete (v1.9.0, 2026-07-06)**. Focus now shifts to Phase 2 (production hardening, §4).
 
 **Execution board (2026-07-05)** — verified against code+tests, not docs (board sweep: 4 stories DONE→closed, rest partial):
 
@@ -57,7 +60,7 @@ The differentiator is ~90% built. Finish it before starting anything new.
 | P1 · #339 + story hygiene | ✅ **v1.5.0** | PR #365 (근거 카드 + `§` 앵커 + screen test); #293/#295/#296/#298 closed with evidence comments |
 | P2-a · Novelty FE renderers | ✅ **v1.6.0** | PR #368 (`233aac1`) — #253–#256 FE half |
 | P2-b · Novelty backend | ✅ **v1.6.0** | PR #370 — #257 단계 상세 이벤트(timelineDetail 계약) + #253 표 상세 칼럼; 리뷰 2라운드로 **필드별 근거 강제**(B-001) + SSE detail 매핑(N-001). 같은 날 PR #372(Bedrock streaming + timeout 300s)와 통합 |
-| P3 · Attachments E2E | ✅ **v1.6.0** | 1차 (PR #373): 처리 전 검증(422) + 첨부 500 결함 + async 핸들 보존. 2차 (PR #376): **본문 E2E** — evidence 첨부(md/txt) 추출 대상 포함 · novelty 원고 업로드 관통(#252 md/txt). `s3:PutObject`+bucket env ✅ live 검증(allowed). 후속 ⬜: **PDF 본문**(공통 doc-model 파이프라인, Q6=A — ingestion S3-소스 JobKind 설계 인계) |
+| P3 · Attachments E2E | ✅ **v1.6.0** | 1차 (PR #373): 처리 전 검증(422) + 첨부 500 결함 + async 핸들 보존. 2차 (PR #376): **본문 E2E** — evidence 첨부(md/txt) 추출 대상 포함 · novelty 원고 업로드 관통(#252 md/txt). `s3:PutObject`+bucket env ✅ live 검증(allowed). 후속 ✅ **PDF 본문**(doc-model 경유): v1.8.0 MVP(#390–#394, pdfplumber) + v1.9.0 GROBID 구조(#13: #396/#397, Option B 전용 워커+사이드카) — **Phase 1 완료** |
 | P4 · Residue | ✅ **v1.7.0** | 세션(#271/#272) ✅ PR #375·v1.6.0 (둘 다 closed). #251 form_evidence 선행 ✅ PR #380 · #258 Notion export ✅ PR #382 · #273/#259 QT-8/QT-10+지표 ✅ PR #383 (4개 스토리 auto-close, **v1.7.0 배포**). old-queue ✅ 확인 — 구 큐 retired·현행 큐 0건·DLQ purge ✅ 완료(0건 확인) |
 
 ## 4. Phase 2 — Weeks 2–4 (parallel): production hardening
