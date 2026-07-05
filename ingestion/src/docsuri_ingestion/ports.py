@@ -141,6 +141,13 @@ class AssetSourcePort(Protocol):
 
 
 @runtime_checkable
+class UserDocumentSourcePort(Protocol):
+    """Uploaded user document bytes, addressed by the producer-owned S3 object key."""
+
+    def fetch_pdf(self, object_key: str) -> bytes: ...
+
+
+@runtime_checkable
 class AssetStorePort(Protocol):
     """FR-17 asset persistence: binary→S3, manifest→RDS (write-order S3 then RDS, P8)."""
 

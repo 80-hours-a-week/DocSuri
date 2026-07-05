@@ -15,6 +15,8 @@ from .settings import IngestionSettings
 log = logging.getLogger("docsuri.ingestion.worker")
 
 _shutdown_event = threading.Event()
+_DOCMODEL_BUILD_KINDS = {JobKind.BUILD_DOC_MODEL, JobKind.BUILD_USER_DOC_MODEL}
+_USER_DOCMODEL_MODULES = {"evidence", "novelty"}
 
 
 def _handle_shutdown_signal(signum, _frame):
@@ -121,11 +123,13 @@ def process_message(runtime, message, queue=None) -> None:
         if job.kind is JobKind.BUILD_DOC_MODEL:
             # Lazy doc-model build (BR-30/D6) — separate from the index pipeline.
             runtime.pipeline.build_doc_model(job)
+        elif job.kind is JobKind.BUILD_USER_DOC_MODEL:
+            runtime.pipeline.build_user_doc_model(job)
         else:
             runtime.pipeline.ingest_one(job)
     except IngestionError as exc:
         if exc.failure_class is FailureClass.PERMANENT:
-            if job.kind is JobKind.BUILD_DOC_MODEL:
+            if job.kind in _DOCMODEL_BUILD_KINDS:
                 # ingest_one DLQs + signals internally before re-raising; the doc-model build path
                 # does not, so surface its permanent failures here (BR-15/17) instead of silently
                 # acking and dropping them.
@@ -174,6 +178,27 @@ def job_from_payload(payload) -> IngestionJob:
             reason=FailureReason.POISON_EVENT,
             stage="queue",
         ) from exc
+    version = _optional_int(payload, "version")
+    paper_id = payload.get("paperId")
+    object_key = payload.get("objectKey")
+    module = payload.get("module")
+    owner_id = payload.get("ownerId")
+    record_ref = payload.get("recordRef")
+    if kind is JobKind.BUILD_USER_DOC_MODEL:
+        if arxiv_ref is not None:
+            raise _invalid_payload()
+        paper_id = _required_string(payload, "paperId")
+        if not paper_id.startswith("userdoc:"):
+            raise _invalid_payload()
+        version = _required_positive_int(payload, "version")
+        object_key = _required_string(payload, "objectKey")
+        module = _required_string(payload, "module")
+        if module not in _USER_DOCMODEL_MODULES:
+            raise _invalid_payload()
+        owner_id = _required_string(payload, "ownerId")
+        record_ref = _required_string(payload, "recordRef")
+        if not record_ref.startswith(f"upload:{owner_id}:"):
+            raise _invalid_payload()
     return IngestionJob(
         job_id=job_id,
         kind=kind,
@@ -183,11 +208,46 @@ def job_from_payload(payload) -> IngestionJob:
         source_name=parsed_source,
         failure_stage=payload.get("failureStage"),
         canonical_key=payload.get("canonicalKey"),
-        paper_id=payload.get("paperId"),
-        version=payload.get("version"),
+        paper_id=paper_id,
+        version=version,
+        object_key=object_key,
+        module=module,
+        owner_id=owner_id,
+        record_ref=record_ref,
         source_record=payload.get("sourceRecord"),
         arxiv_metadata=payload.get("arxivMetadata"),
     )
+
+
+def _invalid_payload() -> PermanentIngestionError:
+    return PermanentIngestionError(
+        "invalid queue payload",
+        reason=FailureReason.POISON_EVENT,
+        stage="queue",
+    )
+
+
+def _required_string(payload: dict, key: str) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise _invalid_payload()
+    return value
+
+
+def _optional_int(payload: dict, key: str) -> int | None:
+    if key not in payload or payload.get(key) is None:
+        return None
+    value = payload.get(key)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise _invalid_payload()
+    return value
+
+
+def _required_positive_int(payload: dict, key: str) -> int:
+    value = _optional_int(payload, key)
+    if value is None or value < 1:
+        raise _invalid_payload()
+    return value
 
 
 if __name__ == "__main__":

@@ -80,6 +80,9 @@ class IngestionSettings(BaseModel):
     asset_fetch_timeout_seconds: float = Field(
         default=20.0, alias="DOCSURI_ASSET_FETCH_TIMEOUT_SECONDS"
     )
+    user_document_max_bytes: int = Field(
+        default=10 * 1024 * 1024, alias="DOCSURI_USER_DOCUMENT_MAX_BYTES"
+    )
 
     @classmethod
     def from_env(cls) -> IngestionSettings:

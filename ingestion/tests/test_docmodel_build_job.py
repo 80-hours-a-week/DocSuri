@@ -11,12 +11,14 @@ from types import SimpleNamespace
 import pytest
 from docsuri_shared.dtos import DocModel, SourceTier
 
+import docsuri_ingestion.application as application_module
 from docsuri_ingestion.adapters.local import FakeArxivSource, sample_metadata
 from docsuri_ingestion.docmodel.builder import DocModelBuilder
 from docsuri_ingestion.domain.enums import DedupDecision, JobKind
 from docsuri_ingestion.domain.errors import PermanentIngestionError
 from docsuri_ingestion.domain.models import IngestionJob, RawDocument
-from docsuri_ingestion.worker import process_message
+from docsuri_ingestion.full_text_extraction import FullTextExtractionError
+from docsuri_ingestion.worker import job_from_payload, process_message
 
 from .conftest import build_test_pipeline
 
@@ -53,6 +55,16 @@ class _FakeStore:
 
     def remove(self, paper_id: str) -> None:  # pragma: no cover - not exercised here
         pass
+
+
+class _FakeUserDocumentSource:
+    def __init__(self, payload: bytes = b"%PDF") -> None:
+        self.payload = payload
+        self.keys: list[str] = []
+
+    def fetch_pdf(self, object_key: str) -> bytes:
+        self.keys.append(object_key)
+        return self.payload
 
 
 def _builder(source: _FakeSource, store: _FakeStore) -> DocModelBuilder:
@@ -194,6 +206,58 @@ def test_build_doc_model_requires_arxiv_ref() -> None:
         )
 
 
+def test_user_docmodel_payload_accepts_s3_source_without_arxiv_ref() -> None:
+    payload = {
+        "jobId": "userdoc-1",
+        "kind": "BUILD_USER_DOC_MODEL",
+        "paperId": "userdoc:5a96a314-0fb9-45d6-96b8-2da8750120d8",
+        "version": 1,
+        "objectKey": "uploads/owner/job/attachment.pdf",
+        "module": "novelty",
+        "ownerId": "acct-1",
+        "recordRef": "upload:acct-1:job-1:attachment-1",
+    }
+
+    job = job_from_payload(payload)
+
+    assert job.kind is JobKind.BUILD_USER_DOC_MODEL
+    assert job.arxiv_ref is None
+    assert job.paper_id == "userdoc:5a96a314-0fb9-45d6-96b8-2da8750120d8"
+    assert job.version == 1
+    assert job.object_key == "uploads/owner/job/attachment.pdf"
+    assert job.module == "novelty"
+    assert job.owner_id == "acct-1"
+    assert job.record_ref == "upload:acct-1:job-1:attachment-1"
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"arxivRef": "2401.00001v1"},
+        {"paperId": "2401.00001"},
+        {"version": 0},
+        {"objectKey": ""},
+        {"module": "summary"},
+        {"recordRef": "upload:other:job-1:attachment-1"},
+    ],
+)
+def test_user_docmodel_payload_rejects_contract_drift(override: dict) -> None:
+    payload = {
+        "jobId": "userdoc-1",
+        "kind": "BUILD_USER_DOC_MODEL",
+        "paperId": "userdoc:5a96a314-0fb9-45d6-96b8-2da8750120d8",
+        "version": 1,
+        "objectKey": "uploads/owner/job/attachment.pdf",
+        "module": "evidence",
+        "ownerId": "acct-1",
+        "recordRef": "upload:acct-1:job-1:attachment-1",
+        **override,
+    }
+
+    with pytest.raises(PermanentIngestionError):
+        job_from_payload(payload)
+
+
 def test_worker_dispatches_build_job_and_acks() -> None:
     source = _FakeSource((_HTML, SourceTier.native_html))
     store = _FakeStore(cached=None)
@@ -210,6 +274,89 @@ def test_worker_dispatches_build_job_and_acks() -> None:
 
     assert queue.acked == [message.message_id]
     assert len(store.put_calls) == 1  # dispatched to build_doc_model, not ingest_one
+
+
+def test_worker_dispatches_user_docmodel_job_and_acks(monkeypatch) -> None:
+    monkeypatch.setattr(
+        application_module,
+        "pdf_to_text",
+        lambda pdf: "INTRODUCTION\nUser PDF body recovered from pdfplumber.",
+    )
+    store = _FakeStore(cached=None)
+    user_source = _FakeUserDocumentSource()
+    pipeline, _, _, queue, observability = build_test_pipeline(
+        doc_model_builder=_builder(_FakeSource(None), store),
+        user_document_source=user_source,
+    )
+    queue.send_job(
+        IngestionJob(
+            job_id="userdoc-1",
+            kind=JobKind.BUILD_USER_DOC_MODEL,
+            paper_id="userdoc:5a96a314-0fb9-45d6-96b8-2da8750120d8",
+            version=1,
+            object_key="uploads/acct-1/job-1/attachment.pdf",
+            module="evidence",
+            owner_id="acct-1",
+            record_ref="upload:acct-1:job-1:attachment-1",
+        )
+    )
+    message = queue.receive_messages(max_messages=1)[0]
+    runtime = SimpleNamespace(pipeline=pipeline, queue=queue, observability=observability)
+
+    process_message(runtime, message)
+
+    assert "arxivRef" not in message.body
+    assert queue.acked == [message.message_id]
+    assert queue.dlq == []
+    assert user_source.keys == ["uploads/acct-1/job-1/attachment.pdf"]
+    assert len(store.put_calls) == 1
+    doc = store.put_calls[0]
+    assert doc.meta.paperId == "userdoc:5a96a314-0fb9-45d6-96b8-2da8750120d8"
+    assert doc.meta.version == 1
+    assert doc.meta.provenance.sourceTier is SourceTier.pdf
+    assert "User PDF body" in doc.fullText
+    assert any(
+        metric[0] == "ingestion.docmodel.user_build"
+        and metric[2]["module"] == "evidence"
+        and metric[2]["cached"] == "false"
+        for metric in observability.metrics
+    )
+
+
+def test_worker_dlqs_unparseable_user_docmodel_pdf(monkeypatch) -> None:
+    def _raise_parse_error(pdf: bytes) -> str:
+        del pdf
+        raise FullTextExtractionError("bad pdf")
+
+    monkeypatch.setattr(application_module, "pdf_to_text", _raise_parse_error)
+    pipeline, _, _, queue, observability = build_test_pipeline(
+        doc_model_builder=_builder(_FakeSource(None), _FakeStore()),
+        user_document_source=_FakeUserDocumentSource(b"not a pdf"),
+    )
+    queue.send_job(
+        IngestionJob(
+            job_id="userdoc-bad",
+            kind=JobKind.BUILD_USER_DOC_MODEL,
+            paper_id="userdoc:5a96a314-0fb9-45d6-96b8-2da8750120d8",
+            version=1,
+            object_key="uploads/acct-1/job-1/bad.pdf",
+            module="novelty",
+            owner_id="acct-1",
+            record_ref="upload:acct-1:job-1:attachment-1",
+        )
+    )
+    message = queue.receive_messages(max_messages=1)[0]
+    runtime = SimpleNamespace(pipeline=pipeline, queue=queue, observability=observability)
+
+    process_message(runtime, message)
+
+    assert queue.acked == [message.message_id]
+    assert queue.dlq[-1]["reason"] == "PARSE_FAILURE"
+    assert observability.failures[-1] == {
+        "job_id": "userdoc-bad",
+        "stage": "parse",
+        "error": "PARSE_FAILURE",
+    }
 
 
 def test_ingest_one_eagerly_builds_doc_model_before_index() -> None:

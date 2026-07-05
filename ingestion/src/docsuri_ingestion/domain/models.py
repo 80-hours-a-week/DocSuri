@@ -211,6 +211,10 @@ class IngestionJob:
     canonical_key: str | None = None
     paper_id: str | None = None
     version: int | None = None
+    object_key: str | None = None
+    module: str | None = None
+    owner_id: str | None = None
+    record_ref: str | None = None
     source_record: dict[str, Any] | None = None
     # Harvest-supplied arXiv metadata (MetadataRecord.to_payload()). When present the worker
     # skips its per-paper fetch_metadata call — the bulk OAI-PMH harvest already had it.
@@ -220,16 +224,20 @@ class IngestionJob:
         payload: dict[str, Any] = {
             "jobId": self.job_id,
             "kind": self.kind.value,
+        }
+        optional = {
             "arxivRef": self.arxiv_ref,
             "eventId": self.event_id,
             "correlationId": self.correlation_id,
-        }
-        optional = {
             "sourceName": self.source_name.value if self.source_name else None,
             "failureStage": self.failure_stage,
             "canonicalKey": self.canonical_key,
             "paperId": self.paper_id,
             "version": self.version,
+            "objectKey": self.object_key,
+            "module": self.module,
+            "ownerId": self.owner_id,
+            "recordRef": self.record_ref,
             "sourceRecord": self.source_record,
             "arxivMetadata": self.arxiv_metadata,
         }
