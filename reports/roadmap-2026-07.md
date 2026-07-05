@@ -20,7 +20,7 @@
 | Plan item | Status | Notes |
 |---|---|---|
 | 논문 검색 | ✅ Live | Hybrid search over ~1.5M-chunk corpus; daily auto-harvest (EventBridge 15:00 KST); pre-2026 historical drain in progress |
-| 논문 요약/번역 | ✅ Live | Grounded summaries/translation; glossary redesign (PR #334); source-anchor structural resolution + stale-docmodel self-heal (PR #351); tool-use structured output (PR #356, shipped v1.4.0); summary worker now its own ECS unit (PR #366, **v1.5.0**) — 무한 pending 사고 클래스 prod 종결; worker crash + 수식/MathML sanitize + glossary 편집 UI (PR #371, **v1.6.0**) |
+| 논문 요약/번역 | ✅ Live | Grounded summaries/translation; glossary redesign (PR #334); source-anchor structural resolution + stale-docmodel self-heal (PR #351); tool-use structured output (PR #356, shipped v1.4.0); summary worker now its own ECS unit (PR #366, **v1.5.0**) — 무한 pending 사고 클래스 prod 종결; worker crash + 수식/MathML sanitize + glossary 편집 UI (PR #371, **v1.6.0**); **#381 오픈**(유진 — physics 패키지 수식 매크로 렌더, #371 후속) |
 | 프로필 페이지 | 🟡 Live w/ mocks | U10 merged; 최근 본 논문/ORCID still mock (#347) |
 | 인용 그래프 → 각주 트리 | ✅ Live | DOI node expansion 500 fixed — **PR #357** (provider fail-closed) shipped **v1.5.0**, #342 closed |
 | 트렌드/알림 | ❌ Not started | Never entered requirements — needs inception re-entry |
