@@ -16,10 +16,12 @@ from backend.modules.evidence.models import (
     EvidenceTurn,
     TurnAbstainResult,
     TurnErrorResult,
+    TurnPendingResult,
     TurnSuccessResult,
 )
 from backend.modules.evidence.repository import InMemoryEvidenceRepository
 from backend.modules.evidence.service import (
+    EvidenceChatService,
     EvidenceSessionManagementService,
 )
 
@@ -261,6 +263,80 @@ def test_api_create_turn_returns_turn_out(monkeypatch) -> None:
     assert 'turnId' in body
 
 
+def test_api_turn_accepts_fe_attachment_objects_not_500(monkeypatch) -> None:
+    """FE는 AgentAttachment 객체를 보낸다 — 공유 계약(list[str] 핸들)로 변환되어야 한다(#268).
+
+    종전에는 객체가 EvidenceRequest(attachments=list[str]) 생성에서 ValidationError → 500.
+    """
+    client = _client(monkeypatch, _principal(), InMemoryEvidenceRepository())
+
+    resp = client.post(
+        '/api/evidence/turns',
+        json={
+            'topic': 'attachment handling',
+            'attachments': [
+                {
+                    'id': 'att-1',
+                    'name': 'draft.pdf',
+                    'kind': 'pdf',
+                    'sizeBytes': 2048,
+                    'status': 'ready',
+                },
+            ],
+        },
+    )
+
+    assert resp.status_code == 200
+
+
+def test_api_turn_rejects_disallowed_attachment_kind_with_422(monkeypatch) -> None:
+    client = _client(monkeypatch, _principal(), InMemoryEvidenceRepository())
+
+    resp = client.post(
+        '/api/evidence/turns',
+        json={
+            'topic': 'attachment handling',
+            'attachments': [
+                {'id': 'att-1', 'name': 'x.docx', 'kind': 'unknown', 'sizeBytes': 10},
+            ],
+        },
+    )
+
+    assert resp.status_code == 422
+
+
+def test_api_turn_rejects_oversized_attachment_with_422(monkeypatch) -> None:
+    client = _client(monkeypatch, _principal(), InMemoryEvidenceRepository())
+
+    resp = client.post(
+        '/api/evidence/turns',
+        json={
+            'topic': 'attachment handling',
+            'attachments': [
+                {
+                    'id': 'att-1',
+                    'name': 'big.pdf',
+                    'kind': 'pdf',
+                    'sizeBytes': 10 * 1024 * 1024 + 1,
+                },
+            ],
+        },
+    )
+
+    assert resp.status_code == 422
+
+
+def test_api_turn_rejects_invalid_scope_with_422(monkeypatch) -> None:
+    client = _client(monkeypatch, _principal(), InMemoryEvidenceRepository())
+
+    resp = client.post(
+        '/api/evidence/turns',
+        json={'topic': 'attachment handling', 'scope': 'invalid'},
+    )
+
+    assert resp.status_code == 422
+
+
 # ---------------------------------------------------------------------------
 # API: 인증 없으면 401
 # ---------------------------------------------------------------------------
@@ -299,6 +375,31 @@ def test_api_sync_turn_is_persisted(monkeypatch) -> None:
 
     turns = repo.list_turns(principal.user_id, body['sessionId'])
     assert [t.turn_id for t in turns] == [body['turnId']]
+
+
+def test_async_turn_enqueue_preserves_attachment_handles() -> None:
+    from docsuri_shared._generated.dtos.evidence_schema import EvidenceRequest
+
+    repo = InMemoryEvidenceRepository()
+    enqueued: list[dict] = []
+    service = EvidenceChatService(
+        repo=repo,
+        orchestrator=object(),
+        sqs_enqueue=enqueued.append,
+    )
+
+    resp = service.run_turn(
+        owner_id='owner-1',
+        request=EvidenceRequest(
+            topic='attachment handling',
+            scope='auto',
+            paperIds=[],
+            attachments=['att-1', 'att-2'],
+        ),
+    )
+
+    assert isinstance(resp.result, TurnPendingResult)
+    assert enqueued[0]['attachments'] == ['att-1', 'att-2']
 
 
 # ---------------------------------------------------------------------------

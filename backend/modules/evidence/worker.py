@@ -11,7 +11,8 @@ SQS 메시지 페이로드:
     "jobId": "<uuid>",
     "topic": "...",
     "scope": "auto" | "explicit" | "mixed",
-    "paperIds": ["..."]
+    "paperIds": ["..."],
+    "attachments": ["attachment-handle", "..."]
   }
 """
 
@@ -58,6 +59,14 @@ def parse_sqs_payload(body: str | bytes | dict[str, Any]) -> dict[str, Any]:
     topic = payload.get('topic')
     if not owner_id or not turn_id or not topic:
         raise InvalidWorkerPayload('ownerId, turnId, topic are required')
+    raw_attachments = payload.get('attachments') or []
+    if not isinstance(raw_attachments, list):
+        raise InvalidWorkerPayload('attachments must be a list')
+    attachments: list[str] = []
+    for item in raw_attachments:
+        if not isinstance(item, str) or not item:
+            raise InvalidWorkerPayload('attachments must contain string handles')
+        attachments.append(item)
     return {
         'owner_id': str(owner_id),
         'session_id': str(payload.get('sessionId') or payload.get('session_id', '')),
@@ -66,6 +75,7 @@ def parse_sqs_payload(body: str | bytes | dict[str, Any]) -> dict[str, Any]:
         'topic': str(topic),
         'scope': payload.get('scope', 'auto'),
         'paper_ids': list(payload.get('paperIds') or payload.get('paper_ids') or []),
+        'attachments': attachments,
     }
 
 
@@ -117,6 +127,7 @@ def process_job(
     topic: str,
     scope: str = 'auto',
     paper_ids: list[str] | None = None,
+    attachments: list[str] | None = None,
 ) -> None:
     # 세션 조회 (INV-EV-1: 소유권 확인)
     try:
@@ -151,6 +162,7 @@ def process_job(
             else EvidenceScope.auto
         ),
         paperIds=paper_ids or [],
+        attachments=attachments or [],
     )
     ctx = AgentRunContext(
         session=session,

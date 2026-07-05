@@ -15,6 +15,28 @@ export interface NoveltyPayloadItem {
   riskType?: string;
   evidenceStatus?: string;
   sourceRefs?: NoveltySourceRef[];
+  // US-NV3(#253) 유사 연구 표 상세 칼럼 — 백엔드가 근거 없는 칸을 null(기권)로 보낸다.
+  problem?: string | null;
+  method?: string | null;
+  dataset?: string | null;
+  results?: string | null;
+  limitations?: string | null;
+  overlap?: string | null;
+}
+
+export const SIMILAR_WORK_COLUMNS: ReadonlyArray<{ key: string; label: string }> = [
+  { key: 'problem', label: '문제정의' },
+  { key: 'method', label: '방법' },
+  { key: 'dataset', label: '데이터셋' },
+  { key: 'results', label: '결과' },
+  { key: 'limitations', label: '한계' },
+  { key: 'overlap', label: '겹치는 점' },
+];
+
+// 칸 값은 비어있지 않은 문자열만 유효 — null/누락은 기권이라 '근거 부족' 표시 대상.
+export function detailCell(item: NoveltyPayloadItem, key: string): string | null {
+  const value = (item as Record<string, unknown>)[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
 export interface NoveltyArtifact {

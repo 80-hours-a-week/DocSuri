@@ -72,6 +72,46 @@ def test_research_sessions_are_owner_scoped(monkeypatch) -> None:
     assert client_b.get("/api/research/jobs").json()["jobs"] == []
 
 
+def test_research_message_rejects_bad_attachment_with_422(monkeypatch) -> None:
+    """US-AG5(#297)/US-EV4(#268) — 허용 형식·크기 밖 첨부는 처리 전 422로 즉시 거부."""
+    principal = _principal()
+    repo = InMemoryResearchRepository()
+    client = _client(monkeypatch, principal, repo)
+
+    created = client.post("/api/research/jobs", json={"content": "attachment validation"})
+    job_id = created.json()["jobId"]
+
+    bad_kind = client.post(
+        f"/api/research/jobs/{job_id}/messages",
+        json={
+            "content": "with bad attachment",
+            "attachments": [{"id": "a-1", "name": "x.docx", "kind": "unknown", "sizeBytes": 10}],
+        },
+    )
+    oversized = client.post(
+        f"/api/research/jobs/{job_id}/messages",
+        json={
+            "content": "with oversized attachment",
+            "attachments": [
+                {"id": "a-2", "name": "big.pdf", "kind": "pdf", "sizeBytes": 10 * 1024 * 1024 + 1}
+            ],
+        },
+    )
+    ok = client.post(
+        f"/api/research/jobs/{job_id}/messages",
+        json={
+            "content": "with valid attachment",
+            "attachments": [
+                {"id": "a-3", "name": "draft.md", "kind": "markdown", "sizeBytes": 2048}
+            ],
+        },
+    )
+
+    assert bad_kind.status_code == 422
+    assert oversized.status_code == 422
+    assert ok.status_code == 200
+
+
 def test_research_job_transitions_to_completed_after_message(monkeypatch) -> None:
     """PR #338 리뷰 Blocking #3 — job.state가 active로 남으면 FE가 이를 running으로
     매핑해 답변이 저장돼도 폴링을 멈추지 않는다."""
