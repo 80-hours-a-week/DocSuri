@@ -79,6 +79,16 @@ class EvidenceSession:
 
 
 @dataclass(frozen=True)
+class AttachmentInput:
+    """US-EV4(#268) 2차 — 턴 요청에 동봉된 첨부 문서. text가 있으면(md/txt 본문)
+    orchestrator가 추출 대상 문서로 포함하고, 없으면(PDF 등) 미포함 안내 대상이다."""
+
+    name: str
+    kind: str
+    text: str | None = None
+
+
+@dataclass(frozen=True)
 class AgentRunContext:
     session: EvidenceSession
     current_turn: EvidenceTurn
@@ -88,6 +98,8 @@ class AgentRunContext:
     # 멀티턴 검색 맥락화용 — 같은 세션의 이전 턴 topic들(PR #338 리뷰 Blocking #2/FR-37).
     # 단발 경로(U12 form_evidence)·새 세션은 비어 있다.
     prior_topics: tuple[str, ...] = ()
+    # US-EV4(#268) 2차 — 이 턴에 동봉된 첨부 문서들(연구 경로가 채운다).
+    attachment_docs: tuple[AttachmentInput, ...] = ()
 
 
 @dataclass(frozen=True)

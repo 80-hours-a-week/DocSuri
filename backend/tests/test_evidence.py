@@ -16,10 +16,12 @@ from backend.modules.evidence.models import (
     EvidenceTurn,
     TurnAbstainResult,
     TurnErrorResult,
+    TurnPendingResult,
     TurnSuccessResult,
 )
 from backend.modules.evidence.repository import InMemoryEvidenceRepository
 from backend.modules.evidence.service import (
+    EvidenceChatService,
     EvidenceSessionManagementService,
 )
 
@@ -261,6 +263,80 @@ def test_api_create_turn_returns_turn_out(monkeypatch) -> None:
     assert 'turnId' in body
 
 
+def test_api_turn_accepts_fe_attachment_objects_not_500(monkeypatch) -> None:
+    """FE는 AgentAttachment 객체를 보낸다 — 공유 계약(list[str] 핸들)로 변환되어야 한다(#268).
+
+    종전에는 객체가 EvidenceRequest(attachments=list[str]) 생성에서 ValidationError → 500.
+    """
+    client = _client(monkeypatch, _principal(), InMemoryEvidenceRepository())
+
+    resp = client.post(
+        '/api/evidence/turns',
+        json={
+            'topic': 'attachment handling',
+            'attachments': [
+                {
+                    'id': 'att-1',
+                    'name': 'draft.pdf',
+                    'kind': 'pdf',
+                    'sizeBytes': 2048,
+                    'status': 'ready',
+                },
+            ],
+        },
+    )
+
+    assert resp.status_code == 200
+
+
+def test_api_turn_rejects_disallowed_attachment_kind_with_422(monkeypatch) -> None:
+    client = _client(monkeypatch, _principal(), InMemoryEvidenceRepository())
+
+    resp = client.post(
+        '/api/evidence/turns',
+        json={
+            'topic': 'attachment handling',
+            'attachments': [
+                {'id': 'att-1', 'name': 'x.docx', 'kind': 'unknown', 'sizeBytes': 10},
+            ],
+        },
+    )
+
+    assert resp.status_code == 422
+
+
+def test_api_turn_rejects_oversized_attachment_with_422(monkeypatch) -> None:
+    client = _client(monkeypatch, _principal(), InMemoryEvidenceRepository())
+
+    resp = client.post(
+        '/api/evidence/turns',
+        json={
+            'topic': 'attachment handling',
+            'attachments': [
+                {
+                    'id': 'att-1',
+                    'name': 'big.pdf',
+                    'kind': 'pdf',
+                    'sizeBytes': 10 * 1024 * 1024 + 1,
+                },
+            ],
+        },
+    )
+
+    assert resp.status_code == 422
+
+
+def test_api_turn_rejects_invalid_scope_with_422(monkeypatch) -> None:
+    client = _client(monkeypatch, _principal(), InMemoryEvidenceRepository())
+
+    resp = client.post(
+        '/api/evidence/turns',
+        json={'topic': 'attachment handling', 'scope': 'invalid'},
+    )
+
+    assert resp.status_code == 422
+
+
 # ---------------------------------------------------------------------------
 # API: 인증 없으면 401
 # ---------------------------------------------------------------------------
@@ -299,6 +375,31 @@ def test_api_sync_turn_is_persisted(monkeypatch) -> None:
 
     turns = repo.list_turns(principal.user_id, body['sessionId'])
     assert [t.turn_id for t in turns] == [body['turnId']]
+
+
+def test_async_turn_enqueue_preserves_attachment_handles() -> None:
+    from docsuri_shared._generated.dtos.evidence_schema import EvidenceRequest
+
+    repo = InMemoryEvidenceRepository()
+    enqueued: list[dict] = []
+    service = EvidenceChatService(
+        repo=repo,
+        orchestrator=object(),
+        sqs_enqueue=enqueued.append,
+    )
+
+    resp = service.run_turn(
+        owner_id='owner-1',
+        request=EvidenceRequest(
+            topic='attachment handling',
+            scope='auto',
+            paperIds=[],
+            attachments=['att-1', 'att-2'],
+        ),
+    )
+
+    assert isinstance(resp.result, TurnPendingResult)
+    assert enqueued[0]['attachments'] == ['att-1', 'att-2']
 
 
 # ---------------------------------------------------------------------------
@@ -585,3 +686,60 @@ def test_extractor_records_bedrock_spend_into_cost_guard() -> None:
     assert payload == {'items': []}
     # 기본 단가 $3/1M input + $15/1M output → 1M in + 0.2M out = $6
     assert abs(guard.get_budget_state().spend_usd - 6.0) < 1e-9
+
+
+def test_orchestrator_includes_attachment_content_as_extraction_target() -> None:
+    """US-EV4(#268) 2차 — md/txt 본문 첨부는 corpus가 비어도 추출 대상 문서가 되고,
+    본문 없는 첨부(PDF)는 추출 대상에 포함되지 않는다."""
+    from docsuri_shared._generated.dtos.evidence_schema import EvidenceRequest
+
+    from backend.modules.evidence.models import (
+        AgentRunContext,
+        AttachmentInput,
+        PaperSearchResult,
+    )
+    from backend.modules.evidence.orchestrator import EvidenceAgentOrchestrator
+
+    captured: dict = {}
+
+    class _EmptySearchTool:
+        def search(self, *, topic, scope, paper_ids):
+            return PaperSearchResult(records=(), query_used=topic, scope='auto')
+
+    class _NoDocModelTool:
+        def get_doc_model(self, paper_id, version=1):
+            return None
+
+    class _CapturingExtractor:
+        def extract(self, topic, doc_models):
+            captured['doc_models'] = doc_models
+            return []  # abstain으로 종료 — 추출 대상 전달만 검증
+
+    orchestrator = EvidenceAgentOrchestrator(
+        search_tool=_EmptySearchTool(),
+        doc_model_tool=_NoDocModelTool(),
+        extractor=_CapturingExtractor(),
+        assembler=EvidenceComparisonAssembler(),
+    )
+    request = EvidenceRequest(topic='rag evaluation', scope='auto', paperIds=[])
+    session = EvidenceSession(owner_id='owner-1')
+    turn = EvidenceTurn(session_id=session.session_id, request=request)
+    ctx = AgentRunContext(
+        session=session,
+        current_turn=turn,
+        owner_id='owner-1',
+        request_id='req-1',
+        budget_signal={'state': 'ok'},
+        attachment_docs=(
+            AttachmentInput(name='draft.md', kind='markdown', text='# RAG 초안\n평가 프로토콜.'),
+            AttachmentInput(name='scan.pdf', kind='pdf', text=None),
+        ),
+    )
+
+    orchestrator.run(ctx, request)
+
+    ids = [paper_id for paper_id, _ in captured['doc_models']]
+    assert ids == ['attachment:draft.md']
+    doc = captured['doc_models'][0][1]
+    assert 'RAG 초안' in doc.fullText
+    assert doc.sections[0].blocks[0].text.startswith('# RAG 초안')

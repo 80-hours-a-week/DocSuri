@@ -22,6 +22,7 @@ from .models import (
     JobResultResponse,
     JobState,
     JobStatusResponse,
+    ManuscriptContentRequest,
     NoveltyChatMessage,
     NoveltyJobListResponse,
     NoveltyJobRequest,
@@ -81,13 +82,16 @@ async def create_job(
     try:
         service = NoveltyService(repo, _observability(request))
         created = service.create_job(principal.user_id, dto)
-        _dispatch_job(
-            repo,
-            principal.user_id,
-            created.jobId,
-            _observability(request),
-            adapters=_adapters(request),
-        )
+        # US-NV2(#252) — 원고 본문이 아직 없는 잡은 업로드 완료 시점에 디스패치한다.
+        awaiting_manuscript = dto.manuscript is not None and not dto.manuscript.objectKey
+        if not awaiting_manuscript:
+            _dispatch_job(
+                repo,
+                principal.user_id,
+                created.jobId,
+                _observability(request),
+                adapters=_adapters(request),
+            )
         return created
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -128,6 +132,43 @@ async def delete_job(
         return Response(status_code=204)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="job not found") from exc
+
+
+@router.delete("/jobs", status_code=204, response_class=Response)
+async def reset_jobs(
+    request: Request,
+    principal: Principal = PRINCIPAL_DEP,
+    repo: NoveltyRepository = REPO_DEP,
+) -> Response:
+    """전체 세션 초기화 — US-EV8(#272), SEC-14. 소유 잡 전부 삭제, 멱등(0건도 204)."""
+    NoveltyService(repo, _observability(request)).delete_all_jobs(principal.user_id)
+    return Response(status_code=204)
+
+
+@router.post("/jobs/{job_id}/manuscript", response_model=JobStatusResponse)
+async def upload_manuscript(
+    job_id: str,
+    dto: ManuscriptContentRequest,
+    request: Request,
+    principal: Principal = PRINCIPAL_DEP,
+    repo: NoveltyRepository = REPO_DEP,
+) -> JobStatusResponse:
+    """US-NV2(#252) — 원고 본문 수신 → S3 적재 → objectKey 바인딩 → 잡 디스패치."""
+    service = NoveltyService(repo, _observability(request))
+    try:
+        service.attach_manuscript_content(principal.user_id, job_id, dto.contentText)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="job not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _dispatch_job(
+        repo,
+        principal.user_id,
+        job_id,
+        _observability(request),
+        adapters=_adapters(request),
+    )
+    return service.status(principal.user_id, job_id)
 
 
 @router.get("/jobs/{job_id}/result", response_model=JobResultResponse)

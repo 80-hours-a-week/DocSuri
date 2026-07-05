@@ -100,6 +100,15 @@ class ManuscriptRef(BaseModel):
         return value.strip().lower()
 
 
+class ManuscriptContentRequest(BaseModel):
+    """US-NV2(#252) — FE가 읽어 보낸 원고 본문. 상한은 첨부 본문 계약(256KiB 계열,
+    middleware.agent_attachments.ATTACHMENT_TEXT_MAX_CHARS)과 동일."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    contentText: str = Field(min_length=1, max_length=262_144)
+
+
 class NoveltyJobRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -222,41 +222,33 @@ function mapNoveltyResultMessage(
   return {
     id: `novelty-result-${artifacts.map((artifact) => artifact.artifactId).join('-')}`,
     role: 'agent',
-    content: [
-      'Novelty 분석 결과',
-      ...artifacts.map((artifact) => `- ${artifact.title}: ${artifactSummary(artifact)}`),
-    ].join('\n'),
+    // 구조화 아티팩트를 JSON-in-content로 전달 — evidence 결과와 동일한 seam이라 세션
+    // 영속/재열람에서도 구조가 유지된다. 렌더링은 NoveltyResultView(#253~#256).
+    content: JSON.stringify({
+      kind: 'novelty',
+      artifacts: artifacts.map((artifact) => ({
+        artifactId: artifact.artifactId,
+        kind: artifact.kind,
+        title: artifact.title,
+        payload: artifact.payload ?? {},
+        createdAt: artifact.createdAt,
+      })),
+    }),
     createdAt: artifacts.at(-1)?.createdAt ?? fallbackCreatedAt,
     status: 'sent',
   };
 }
 
-function artifactSummary(artifact: BackendNoveltyArtifact): string {
-  const payload = artifact.payload ?? {};
-  const count = countFromPayload(payload);
-  if (artifact.kind === 'experiment_plan') {
-    return [
-      stringValue(payload.researchQuestion),
-      listValue(payload.hypotheses),
-      listValue(payload.datasets),
-      listValue(payload.metrics),
-      listValue(payload.risks),
-    ]
-      .filter(Boolean)
-      .join(' / ');
-  }
-  const firstItem = firstItemTitle(payload);
-  if (firstItem) return count ? `${firstItem} 외 ${count}건` : firstItem;
-  return count ? `${count}건` : '결과 생성됨';
-}
-
-function timelineDetail(payload?: Record<string, unknown>): string | undefined {
+// N-001(#257) — SSE 경로(AgentChatScreen)도 동일 payload→detail 매핑을 쓰도록 export.
+export function timelineDetail(payload?: Record<string, unknown>): string | undefined {
   if (!payload) return undefined;
+  const count = countFromPayload(payload);
   const parts = [
     labeled('소스', payload.source ?? payload.sourceType ?? payload.type),
     labeled('쿼리', payload.query),
     labeled('요약', payload.outputSummary),
-    countFromPayload(payload) ? `결과 ${countFromPayload(payload)}건` : undefined,
+    // 0건도 '발견한 출처 수'다(US-NV7 #257) — falsy 체크로 삼키지 않는다.
+    count !== undefined ? `결과 ${count}건` : undefined,
     safeReason(payload),
   ];
   return parts.filter(Boolean).join(' · ') || undefined;
@@ -289,11 +281,6 @@ function hasValue(value: unknown): boolean {
   return value !== null && value !== undefined;
 }
 
-function listValue(value: unknown): string | undefined {
-  if (!Array.isArray(value)) return undefined;
-  return value.map(stringValue).filter(Boolean).slice(0, 2).join(', ') || undefined;
-}
-
 function attachmentStatus(value: unknown): AgentAttachmentStatus {
   return value === 'rejected' ? 'rejected' : 'ready';
 }
@@ -312,15 +299,6 @@ function countFromPayload(payload: Record<string, unknown>): number | undefined 
   const explicit = payload.count ?? payload.foundCount ?? payload.resultCount;
   if (typeof explicit === 'number') return explicit;
   return Array.isArray(payload.items) ? payload.items.length : undefined;
-}
-
-function firstItemTitle(payload: Record<string, unknown>): string | undefined {
-  const items = payload.items;
-  if (!Array.isArray(items)) return undefined;
-  const first = items[0];
-  if (!first || typeof first !== 'object') return undefined;
-  const item = first as Record<string, unknown>;
-  return stringValue(item.title) ?? stringValue(item.summary);
 }
 
 function toResearchBody(req: AgentSendMessageRequest) {
@@ -348,10 +326,12 @@ function toNoveltyBody(req: AgentSendMessageRequest, created: boolean) {
     return toChatBody(req);
   }
   const manuscript = req.attachments?.[0];
-  if (manuscript && process.env.NEXT_PUBLIC_DOCSURI_REAL_API) {
+  // US-NV2(#252) — 원고 본문은 잡 생성 직후 별도 업로드로 전달된다(sendAgentMessage).
+  // PDF만 아직 본문 분석 미지원(공통 doc-model 파이프라인 후속).
+  if (manuscript && manuscript.kind === 'pdf') {
     throw new UserFacingError(
       'unknown',
-      '파일 업로드 연동 전에는 Novelty 첨부 분석을 사용할 수 없습니다.',
+      'PDF 원고 분석은 준비 중입니다. Markdown 또는 TXT 파일로 업로드해 주세요.',
     );
   }
   return {
@@ -706,6 +686,23 @@ export class ApiClient {
     if (res.status !== 200 && res.status !== 201) {
       throw normalizeHttpError(res.status, serverMessage(res.body));
     }
+    // US-NV2(#252) — 원고 잡은 생성 시 디스패치가 보류된다. 읽어둔 본문(contentText)을
+    // 업로드해 objectKey를 바인딩해야 분석이 시작된다.
+    if (created && target.mode === 'novelty') {
+      const manuscript = req.attachments?.[0];
+      if (manuscript?.contentText) {
+        const jobId = (res.body as { jobId: string }).jobId;
+        const uploaded = await this.request({
+          method: 'POST',
+          path: `/api/novelty/jobs/${encodeURIComponent(jobId)}/manuscript`,
+          body: { contentText: manuscript.contentText },
+          idempotent: false,
+        });
+        if (uploaded.status !== 200) {
+          throw normalizeHttpError(uploaded.status, serverMessage(uploaded.body));
+        }
+      }
+    }
     const nextId =
       created && target.mode === 'evidence'
         ? encodeAgentSessionId('evidence', (res.body as { jobId: string }).jobId)
@@ -733,6 +730,18 @@ export class ApiClient {
     });
     if (res.status === 200 || res.status === 204) return;
     throw normalizeHttpError(res.status, serverMessage(res.body));
+  }
+
+  /** 전체 세션 초기화 — US-EV8(#272). 두 에이전트 모듈의 소유 세션을 모두 비운다(멱등). */
+  async resetAgentSessions(): Promise<void> {
+    await Promise.all(
+      ['/api/research/jobs', '/api/novelty/jobs'].map(async (path) => {
+        const res = await this.request({ method: 'DELETE', path, idempotent: false });
+        if (res.status !== 200 && res.status !== 204) {
+          throw normalizeHttpError(res.status, serverMessage(res.body));
+        }
+      }),
+    );
   }
 
   async signup(req: SignupRequest): Promise<SignupResult> {

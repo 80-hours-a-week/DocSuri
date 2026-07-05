@@ -299,6 +299,144 @@
   color: var(--color-text-muted);
 }
 
+.noveltyArtifacts {
+  display: grid;
+  gap: 14px;
+}
+
+.noveltyArtifact {
+  display: grid;
+  gap: 8px;
+}
+
+.noveltyArtifactTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.noveltyTableWrap {
+  overflow-x: auto;
+}
+
+.noveltyTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.noveltyTable th,
+.noveltyTable td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.noveltyItems {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.noveltyItem {
+  display: grid;
+  gap: 4px;
+}
+
+.noveltyItem p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.noveltyItemHead {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.noveltyBadgeSupported,
+.noveltyBadgeInsufficient {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+
+.noveltyBadgeSupported {
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+}
+
+.noveltyBadgeInsufficient {
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+}
+
+/* US-NV3(#253) — 유사 연구 표에서 근거 없는 칸(기권) 표시 */
+.noveltyCellAbstain {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.noveltyRisks {
+  display: grid;
+  gap: 8px;
+}
+
+.noveltyRiskCaveat {
+  margin: 0;
+  padding: 6px 8px;
+  border-left: 2px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.noveltyRiskType {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.noveltyPlan {
+  display: grid;
+  gap: 8px;
+}
+
+.noveltyPlanQuestion {
+  margin: 0;
+  font-weight: 700;
+}
+
+.noveltyPlanAngle {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.noveltyPlanField {
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.noveltyPlanField ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.noveltyRefs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
 .evidenceRef blockquote {
   margin: 0;
   padding: 4px 8px;
@@ -587,6 +725,44 @@
 .empty {
   color: var(--color-text-muted);
   padding: 8px 0;
+}
+
+.drawerFooter {
+  margin-top: auto;
+  border-top: 1px solid var(--color-border);
+  padding-top: 10px;
+}
+
+.resetButton {
+  min-height: 36px;
+  width: 100%;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--agent-radius);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.resetButton:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.resetConfirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--color-text);
+}
+
+.resetConfirm button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--agent-radius);
+  background: var(--color-surface);
+  cursor: pointer;
 }
 
 @media (min-width: 768px) {

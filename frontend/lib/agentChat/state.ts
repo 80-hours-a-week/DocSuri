@@ -13,6 +13,8 @@ import type {
 export const MAX_AGENT_MESSAGE_CHARS = 4000;
 export const MAX_AGENT_ATTACHMENTS = 5;
 export const MAX_AGENT_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+// US-EV4(#268)/US-NV2(#252) — 동봉 본문 상한. BE 계약(ATTACHMENT_TEXT_MAX_CHARS)과 동일.
+export const MAX_AGENT_ATTACHMENT_TEXT_CHARS = 262_144;
 
 export interface AgentChatState {
   session: AgentSessionSummary | null;
@@ -49,11 +51,13 @@ export type AgentChatAction =
   | { type: 'newChat' }
   | { type: 'setDraft'; draft: string }
   | { type: 'addAttachment'; attachment: AgentAttachment }
+  | { type: 'attachmentContentReady'; id: string; contentText: string }
   | { type: 'removeAttachment'; id: string }
   | { type: 'sendStart'; message: AgentMessage }
   | { type: 'sendSuccess'; result: AgentSendMessageResult }
   | { type: 'sendFailure'; message: string }
-  | { type: 'deleteSession'; id: string };
+  | { type: 'deleteSession'; id: string }
+  | { type: 'resetSessions' };
 
 export function agentReducer(state: AgentChatState, action: AgentChatAction): AgentChatState {
   switch (action.type) {
@@ -101,6 +105,9 @@ export function agentReducer(state: AgentChatState, action: AgentChatAction): Ag
         : state;
     case 'newChat':
       return { ...initialAgentChatState, sessions: state.sessions };
+    case 'resetSessions':
+      // US-EV8(#272) 전체 초기화 — 세션 목록과 현재 대화 모두 기본 상태로.
+      return { ...initialAgentChatState };
     case 'setDraft':
       return { ...state, draft: action.draft.slice(0, MAX_AGENT_MESSAGE_CHARS), error: null };
     case 'addAttachment':
@@ -108,6 +115,17 @@ export function agentReducer(state: AgentChatState, action: AgentChatAction): Ag
         return { ...state, error: `첨부는 최대 ${MAX_AGENT_ATTACHMENTS}개까지 가능합니다.` };
       }
       return { ...state, attachments: [...state.attachments, action.attachment], error: null };
+    case 'attachmentContentReady':
+      // US-EV4(#268)/US-NV2(#252) — 본문 읽기 완료 → 전송 가능(ready). 읽기 실패는
+      // 빈 본문으로 ready 처리하고 BE가 '[첨부 안내]'로 미포함을 알린다.
+      return {
+        ...state,
+        attachments: state.attachments.map((item) =>
+          item.id === action.id
+            ? { ...item, status: 'ready' as const, contentText: action.contentText }
+            : item,
+        ),
+      };
     case 'removeAttachment':
       return {
         ...state,
@@ -319,5 +337,9 @@ function jobStateMessage(state: AgentJobState, errorMessage?: string): string | 
 }
 
 function slug(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32);
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 32);
 }

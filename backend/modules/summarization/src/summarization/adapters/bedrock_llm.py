@@ -13,6 +13,7 @@ output before exposure (Q5/BR-S8). Explicit timeout + ONE retry; persistent fail
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import time
 from collections.abc import Sequence
@@ -35,6 +36,8 @@ from ..prompts import (
     build_summary_prompt,
     build_translate_segments_prompt,
 )
+
+log = logging.getLogger("docsuri.summarization.bedrock")
 
 
 class LocalCircuitBreaker:
@@ -91,9 +94,16 @@ class BedrockLlmGateway:
             import boto3  # lazy: only the `real` extra needs boto3
             from botocore.config import Config
 
+            # read_timeout is per-read (the gap between streamed events), so it must cover the
+            # model's time-to-first-token, not the total generation. A full-paper translation sends
+            # a large prompt under forced tool-use and emits an input-sized (up to 8192-token)
+            # chunk, whose TTFT routinely exceeds 30s → ReadTimeout → retry → abstain (the observed
+            # full-translation "generation_unavailable"). Summaries are short and were unaffected.
+            # These calls run in the background worker (no gateway deadline), so a generous ceiling
+            # is safe; it bounds a genuine hang without cutting a slow-to-start large generation.
             config = Config(
                 connect_timeout=5.0,
-                read_timeout=30.0,
+                read_timeout=120.0,
                 retries={"max_attempts": 1},
             )
             client = boto3.client("bedrock-runtime", region_name=region_name, config=config)
@@ -194,6 +204,15 @@ class BedrockLlmGateway:
             except Exception as exc:  # noqa: BLE001 — any Bedrock/transport/parse error → retry/abstain
                 last_exc = exc
         self._cb.record_failure()
+        # Surface the swallowed root cause: without this the orchestrator only logs a generic
+        # ``generation_unavailable`` abstain, so a paper-specific transport/parse failure (e.g. a
+        # math-heavy translate batch) is invisible on the request path and undiagnosable in prod.
+        log.warning(
+            "Bedrock generation failed after %d attempt(s): %s: %s",
+            self._max_retries + 1,
+            type(last_exc).__name__ if last_exc else "None",
+            last_exc,
+        )
         raise LlmUnavailable("Bedrock generation failed") from last_exc
 
     def _stream_tool_input(self, model_id: str, body: dict) -> tuple[str, bool]:
@@ -229,27 +248,61 @@ class BedrockLlmGateway:
         return "".join(chunks), truncated
 
 
+def _as_str(value: Any) -> str:
+    """Coerce a payload field to a string (``None`` → "")."""
+    return "" if value is None else str(value)
+
+
+def _as_list(value: Any) -> list:
+    """A payload field that must be a list; anything else (str/dict/None) → ``[]`` so iterating it
+    never char-splits a string or walks dict keys."""
+    return value if isinstance(value, list) else []
+
+
 def _to_summary_draft(payload: dict) -> SummaryDraft:
+    # The tool schema pins each field's shape, but a model can still deviate (a field returned as a
+    # bare string instead of a list/object). Every access is shape-guarded so an off-schema field
+    # degrades to empty/best-effort rather than raising — a single ``str`` where a dict was expected
+    # used to crash the whole job (``'str' object has no attribute 'get'``) → infinite redelivery.
     anchors = tuple(
         Anchor(
-            field_name=str(a.get("field", "")),
+            field_name=_as_str(a.get("field", "")),
             target=_anchor_target(a.get("target", "section")),
-            span=str(a.get("span", "")),
-            label=str(a.get("label", "")),
+            span=_as_str(a.get("span", "")),
+            label=_as_str(a.get("label", "")),
             # Keep the raw target string (the grounding gate resolves it against real doc-model
             # structure); ``target`` above is only the coarse 3-value display type.
-            target_hint=str(a.get("target", "")),
+            target_hint=_as_str(a.get("target", "")),
         )
-        for a in payload.get("anchors", [])
+        for a in _as_list(payload.get("anchors"))
+        if isinstance(a, dict)  # skip a stray non-object anchor entry instead of crashing
     )
-    repro = payload.get("reproducibility", {}) or {}
+    repro_raw = payload.get("reproducibility")
+    if isinstance(repro_raw, dict):
+        repro = repro_raw
+    elif isinstance(repro_raw, str) and repro_raw.strip():
+        # Model returned a flat string instead of {code, data}: keep the text under 'code' rather
+        # than dropping it.
+        repro = {"code": repro_raw}
+    else:
+        repro = {}
+    # A contributions field returned as a bare string must become a one-element list, never the
+    # per-character split ``tuple("abc")`` produces.
+    contribs_raw = payload.get("contributions")
+    if isinstance(contribs_raw, str) and contribs_raw.strip():
+        contributions: tuple[str, ...] = (contribs_raw,)
+    else:
+        contributions = tuple(_as_str(c) for c in _as_list(contribs_raw))
     return SummaryDraft(
-        tldr=str(payload.get("tldr", "")),
-        contributions=tuple(payload.get("contributions", [])),
-        method=str(payload.get("method", "")),
-        results=str(payload.get("results", "")),
-        limitations=str(payload.get("limitations", "")),
-        reproducibility={"code": str(repro.get("code", "")), "data": str(repro.get("data", ""))},
+        tldr=_as_str(payload.get("tldr", "")),
+        contributions=contributions,
+        method=_as_str(payload.get("method", "")),
+        results=_as_str(payload.get("results", "")),
+        limitations=_as_str(payload.get("limitations", "")),
+        reproducibility={
+            "code": _as_str(repro.get("code", "")),
+            "data": _as_str(repro.get("data", "")),
+        },
         anchors=anchors,
         truncated=bool(payload.get("_truncated", False)),
     )

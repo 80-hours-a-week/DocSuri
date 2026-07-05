@@ -454,6 +454,7 @@ class BedrockNoveltyLlmClient:
                 payload.get("similarWorks"),
                 refs,
                 fallback=_fallback_similar_works(),
+                detail_fields=SIMILAR_WORK_DETAIL_FIELDS,
             ),
             noveltyCandidates=_llm_items_payload(
                 payload.get("noveltyCandidates"),
@@ -470,20 +471,14 @@ class BedrockNoveltyLlmClient:
             "system": system,
             "messages": [{"role": "user", "content": [{"type": "text", "text": user}]}],
         }
-        response = self._client.invoke_model(
+        response = self._client.invoke_model_with_response_stream(
             modelId=self._model_id,
             body=json.dumps(body).encode("utf-8"),
             accept="application/json",
             contentType="application/json",
         )
-        raw_body = response["body"].read()
-        model_payload = json.loads(raw_body.decode("utf-8"))
-        _record_bedrock_spend(self._cost_guard, model_payload.get("usage") or {})
-        text = "".join(
-            part.get("text", "")
-            for part in model_payload.get("content", [])
-            if isinstance(part, dict)
-        )
+        text, usage = _bedrock_stream_read(response)
+        _record_bedrock_spend(self._cost_guard, usage)
         return _parse_json_object(text)
 
 
@@ -500,10 +495,26 @@ def _source_ref_catalog(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return refs[:12]
 
 
+# US-NV3(#253) — 유사 연구 표 상세 칼럼. 근거 없는 칸은 null(기권)로 남기고 FE가
+# '근거 부족'으로 표시한다. 추측 금지는 시스템 프롬프트와 정규화가 함께 강제한다.
+SIMILAR_WORK_DETAIL_FIELDS = (
+    "problem",
+    "method",
+    "dataset",
+    "results",
+    "limitations",
+    "overlap",
+)
+
+
 def _novelty_system_prompt() -> str:
     return (
         "You are DocSuri's novelty-analysis assistant. Return only valid JSON. "
-        "Use only the supplied sourceRefIndexes; never invent URLs, titles, datasets, or papers."
+        "Use only the supplied sourceRefIndexes; never invent URLs, titles, datasets, or papers. "
+        "For each similarWorks detail field (problem, method, dataset, results, limitations, "
+        'overlap — how it overlaps the user\'s topic), return {"value": string, '
+        '"sourceRefIndexes": [int]} citing the specific sources that support that value; '
+        "if no supplied source supports it, set the field to null. Never guess."
     )
 
 
@@ -529,7 +540,17 @@ def _novelty_user_prompt(
     }
     contract = {
         "similarWorks": [
-            {"title": "string", "summary": "string", "sourceRefIndexes": [0]}
+            {
+                "title": "string",
+                "summary": "string",
+                "problem": {"value": "string", "sourceRefIndexes": [0]},
+                "method": {"value": "string", "sourceRefIndexes": [0]},
+                "dataset": {"value": "string", "sourceRefIndexes": [0]},
+                "results": {"value": "string", "sourceRefIndexes": [0]},
+                "limitations": {"value": "string", "sourceRefIndexes": [0]},
+                "overlap": {"value": "string", "sourceRefIndexes": [0]},
+                "sourceRefIndexes": [0],
+            }
         ],
         "noveltyCandidates": [
             {"title": "string", "rationale": "string", "sourceRefIndexes": [0]}
@@ -572,6 +593,7 @@ def _llm_items_payload(
     refs: list[dict[str, Any]],
     *,
     fallback: dict[str, Any],
+    detail_fields: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     if not isinstance(raw, list):
         return fallback
@@ -583,18 +605,22 @@ def _llm_items_payload(
         if not title:
             continue
         item_refs = _refs_by_indexes(item.get("sourceRefIndexes"), refs)
-        items.append(
-            {
-                "title": title[:240],
-                "summary": str(item.get("summary") or item.get("rationale") or "")[:1000],
-                "evidenceStatus": (
-                    EvidenceStatus.SUPPORTED.value
-                    if item_refs
-                    else EvidenceStatus.ABSTAINED.value
-                ),
-                "sourceRefs": item_refs,
-            }
-        )
+        entry: dict[str, Any] = {
+            "title": title[:240],
+            "summary": str(item.get("summary") or item.get("rationale") or "")[:1000],
+            "evidenceStatus": (
+                EvidenceStatus.SUPPORTED.value
+                if item_refs
+                else EvidenceStatus.ABSTAINED.value
+            ),
+            "sourceRefs": item_refs,
+        }
+        for column in detail_fields:
+            # B-001 — 상세 칸은 칸 자신의 sourceRefIndexes로 근거를 증명해야 값이 남는다.
+            # row 단위 출처를 포괄 근거로 쓰지 않으며, 검증 불가(bare string 포함)는 기권.
+            # 키는 항상 실어 null=기권을 명시한다 — FE가 '근거 부족' 칸으로 구분(#253).
+            entry[column] = _grounded_detail(item.get(column), refs)
+        items.append(entry)
     if not items:
         return fallback
     return _items_payload(items)
@@ -608,6 +634,17 @@ def _refs_by_indexes(raw: Any, refs: list[dict[str, Any]]) -> list[dict[str, Any
         if isinstance(value, int) and 0 <= value < len(refs):
             selected.append(refs[value])
     return selected
+
+
+def _grounded_detail(raw: Any, refs: list[dict[str, Any]]) -> str | None:
+    """유사 연구 표 상세 칸(#253 B-001) — {value, sourceRefIndexes} 필드별 근거 필수."""
+    if not isinstance(raw, dict):
+        return None
+    value = raw.get("value")
+    text = value.strip() if isinstance(value, str) else ""
+    if not text or not _refs_by_indexes(raw.get("sourceRefIndexes"), refs):
+        return None
+    return text[:500]
 
 
 def _llm_experiment_plan(raw: Any, topic: str, refs: list[dict[str, Any]]) -> dict[str, Any]:
@@ -719,6 +756,27 @@ def _parse_json_object(text: str) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValueError("model output is not a JSON object")
     return parsed
+
+
+def _bedrock_stream_read(response: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """스트림에서 텍스트와 usage 수집 — message_start(input) + message_delta(output 누적)."""
+    chunks: list[str] = []
+    usage: dict[str, Any] = {}
+    for event in response.get("body", []):
+        raw = event.get("chunk", {}).get("bytes")
+        if not raw:
+            continue
+        data = json.loads(raw.decode("utf-8"))
+        kind = data.get("type")
+        if kind == "message_start":
+            usage.update(data.get("message", {}).get("usage") or {})
+        elif kind == "message_delta":
+            usage.update(data.get("usage") or {})
+        elif kind == "content_block_delta":
+            delta = data.get("delta", {})
+            if delta.get("type") == "text_delta":
+                chunks.append(str(delta.get("text") or ""))
+    return "".join(chunks), usage
 
 
 class S3ManuscriptSimilarityClient:
@@ -885,6 +943,36 @@ def build_u2_full_search_corpus_adapter(observability=None, cost_guard=None) -> 
     return U2FullSearchCorpusRetrievalClient(bundle.orchestrator, GroundingEnforcementHook())
 
 
+def store_manuscript_text(owner_id: str, job_id: str, content_type: str, text: str) -> str:
+    """US-NV2(#252) — 원고 본문을 novelty/{owner}/{job}/ 프리픽스에 적재하고 key 반환.
+
+    유사도 어댑터(S3ManuscriptSimilarityClient)가 같은 프리픽스 규약으로 읽는다.
+    버킷 미구성 시 ValueError — 컨트롤러가 422 비기술 안내로 변환(SEC-5).
+    """
+    bucket = os.getenv("DOCSURI_NOVELTY_ARTIFACT_BUCKET")
+    if not bucket:
+        raise ValueError("원고 저장소가 구성되지 않아 파일 분석을 시작할 수 없습니다.")
+
+    import boto3
+    from botocore.exceptions import BotoCoreError, ClientError
+
+    region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION", "ap-northeast-2")
+    prefix = os.getenv("DOCSURI_NOVELTY_ARTIFACT_PREFIX", "novelty/")
+    ext = ".md" if content_type == "text/markdown" else ".txt"
+    object_key = f"{prefix}{owner_id}/{job_id}/manuscript{ext}"
+    try:
+        boto3.client("s3", region_name=region).put_object(
+            Bucket=bucket,
+            Key=object_key,
+            Body=text.encode("utf-8"),
+            ContentType=content_type,
+        )
+    except (BotoCoreError, ClientError) as exc:
+        # IAM 권한 부재(PutObject) 포함 — 내부 오류 상세 없이 비기술 문구만(SEC-5/9).
+        raise ValueError("원고 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.") from exc
+    return object_key
+
+
 def build_similarity_adapter(corpus: CorpusRetrievalPort) -> SimilarityPort:
     bucket = os.getenv("DOCSURI_NOVELTY_ARTIFACT_BUCKET")
     if not bucket:
@@ -928,7 +1016,7 @@ def build_llm_adapter(cost_guard: Any = None) -> NoveltyLlmPort:
             region_name=region,
             config=Config(
                 connect_timeout=5.0,
-                read_timeout=45.0,
+                read_timeout=300.0,
                 retries={"max_attempts": 1},
             ),
         ),

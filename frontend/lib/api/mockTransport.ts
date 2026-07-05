@@ -53,6 +53,7 @@ import {
   mockDeleteAgentSession,
   mockListAgentSessions,
   mockLoadAgentSession,
+  mockResetAgentSessions,
   mockSendAgentMessage,
 } from '@/mocks/agentFixtures';
 import type { SavedSearchCreateDTO, LibraryItemCreateDTO } from '@/types/generated';
@@ -354,6 +355,15 @@ export class MockTransport implements Transport {
     if (path === '/api/novelty/jobs' && req.method === 'GET') {
       return { status: 200, body: { jobs: mockListAgentSessions('novelty').map(noveltyJob) } };
     }
+    // US-EV8(#272) 전체 초기화 — 모듈별 소유 세션 일괄 삭제(멱등 204).
+    if (path === '/api/research/jobs' && req.method === 'DELETE') {
+      mockResetAgentSessions('evidence');
+      return { status: 204, body: null };
+    }
+    if (path === '/api/novelty/jobs' && req.method === 'DELETE') {
+      mockResetAgentSessions('novelty');
+      return { status: 204, body: null };
+    }
     if (path === '/api/research/jobs' && req.method === 'POST') {
       const body = req.body as { content?: string; attachments?: AgentAttachment[] };
       const result = mockSendAgentMessage(`agent-evidence-${Date.now()}`, {
@@ -417,6 +427,14 @@ export class MockTransport implements Transport {
     if (novelty && req.method === 'DELETE') {
       return mockDeleteAgentSession(decodeURIComponent(novelty[1]))
         ? { status: 204, body: null }
+        : { status: 404, body: null };
+    }
+    // US-NV2(#252) — 원고 본문 업로드. mock에서는 잡 존재만 확인하고 즉시 수락한다.
+    const noveltyManuscript = path.match(/^\/api\/novelty\/jobs\/([^/]+)\/manuscript$/);
+    if (noveltyManuscript && req.method === 'POST') {
+      const snapshot = mockLoadAgentSession(decodeURIComponent(noveltyManuscript[1]));
+      return snapshot
+        ? { status: 200, body: { job: noveltyJob(snapshot.session), events: [] } }
         : { status: 404, body: null };
     }
     const noveltyResult = path.match(/^\/api\/novelty\/jobs\/([^/]+)\/result$/);
@@ -519,6 +537,50 @@ function noveltyArtifacts(snapshot: AgentSessionSnapshot) {
   const now = snapshot.session.updatedAt;
   return [
     {
+      artifactId: `${snapshot.session.id}-similar`,
+      jobId: snapshot.session.id,
+      kind: 'similar_works',
+      title: '유사 연구 표',
+      objectKey: `mock/${snapshot.session.id}/similar.json`,
+      payload: {
+        items: [
+          {
+            title: '평가셋 자동 생성 연구',
+            summary: '기존 축은 평가셋 자동 생성과 검색 품질 진단에 집중되어 있습니다.',
+            // US-NV3(#253) 상세 칼럼 — 실제 백엔드 스키마와 동일하게 null=기권.
+            problem: '도메인 특화 RAG 평가의 재현성 부족',
+            method: '평가셋 자동 생성 파이프라인',
+            dataset: '공개 RAG 벤치마크 3종',
+            results: '검색 품질 진단 정확도 개선',
+            limitations: '실패 유형 구분이 거칠다',
+            overlap: '평가 자동화 축이 주제와 겹친다',
+            evidenceStatus: 'supported',
+            sourceRefs: [
+              {
+                type: 'url',
+                identifier: '2401.00001',
+                title: 'Prior RAG benchmark',
+                url: 'https://arxiv.org/abs/2401.00001',
+              },
+            ],
+          },
+          {
+            title: '실패 유형 분석 연구',
+            summary: '도메인 실패 유형 분해는 아직 약한 축입니다.',
+            problem: '실패 사례의 체계적 분류 부재',
+            method: null,
+            dataset: null,
+            results: null,
+            limitations: null,
+            overlap: null,
+            evidenceStatus: 'insufficient',
+            sourceRefs: [],
+          },
+        ],
+      },
+      createdAt: now,
+    },
+    {
       artifactId: `${snapshot.session.id}-ideas`,
       jobId: snapshot.session.id,
       kind: 'novelty_candidates',
@@ -530,6 +592,24 @@ function noveltyArtifacts(snapshot: AgentSessionSnapshot) {
             title: '도메인 지식 기반 실패 유형 분해',
             evidenceStatus: 'supported',
             sourceRefs: ['mock:corpus'],
+          },
+        ],
+      },
+      createdAt: now,
+    },
+    {
+      artifactId: `${snapshot.session.id}-risk`,
+      jobId: snapshot.session.id,
+      kind: 'risk_signals',
+      title: '원고 위험 신호',
+      objectKey: `mock/${snapshot.session.id}/risk.json`,
+      payload: {
+        items: [
+          {
+            title: '문장 유사도 신호',
+            riskType: 'sentence_similarity',
+            summary: '기존 논문과 유사한 문장 패턴이 감지되었습니다.',
+            sourceRefs: [],
           },
         ],
       },

@@ -17,6 +17,20 @@
 **Context**: PR 문서 작성 — U6 Reliability/Ops 구현 변경사항 설명 및 커밋 메시지 상세화.
 
 ---
+## PR #373 Review Fix
+**Timestamp**: 2026-07-04T23:12:57Z
+**User Input**: "Review PR #373 from a clean context and fix all findings."
+**AI Response**: "Reviewed PR #373 with no GitHub review threads present, identified and fixed two clean-context findings: evidence async SQS jobs dropped validated attachment handles, and invalid evidence scope could still reach shared EvidenceRequest validation inside the handler instead of returning 422 at the request boundary. Added tests for invalid scope rejection, async enqueue attachment preservation, SQS payload attachment parsing, and worker EvidenceRequest attachment propagation. Verification passed: 38 focused backend tests, ruff on touched files, and git diff --check. Extension compliance: SECURITY-05/15 compliant for applicable request validation and fail-safe handling; SECURITY-08 unchanged and compliant via existing principal/owner-scoped routes; PBT Partial mode N/A for this example-based regression slice; resiliency rules N/A because no infrastructure/deployment topology changed."
+**Context**: Code Generation and Build/Test, PR #373 review findings remediation.
+
+---
+## PR #373 Review Fix
+**Timestamp**: 2026-07-04T22:51:25Z
+**User Input**: "Review PR #373 from a clean context and fix all findings."
+**AI Response**: "Loaded AI-DLC common workflow rules, displayed the welcome message, scanned extensions, and began Workspace Detection plus PR #373 review from current repository context."
+**Context**: Workspace Detection, audit initialization, PR review and remediation request.
+
+---
 
 ## Code Generation — U6 Reliability/Ops Approval
 **Timestamp**: 2026-06-16T13:27:58Z
@@ -3458,5 +3472,29 @@ aidlc 개발 과정을 적용하여 개발하려고 합니다. 질문지를 형�
 **User Input**: "fix PR #364 according to the review"
 **AI Response**: "Implemented the review decision to move the agent global hard cost gate from warning-level degradation to critical-level budget state. Added an explicit `is_cost_critical` helper, switched evidence and novelty agent LLM gates to it, wired the app novelty LLM adapter with `app.state.cost_guard`, and updated tests to prove warning remains non-blocking while critical blocks before tool/Bedrock calls. Verification passed: backend agent tests 52 passed, ops cost guard tests 9 passed, backend/ops ruff checks clean, and git diff --check clean."
 **Context**: Code Generation, review feedback implementation, build and test verification for PR #364.
+
+---
+## Novelty Bedrock Streaming Timeout Fix
+**Timestamp**: 2026-07-04T17:28:52Z
+**User Input**: "좋아요. 그러면, ```PlainText
+1. Bedrock → 백엔드 streaming 호출 형식으로 변경
+2. read_timeout을 300초로 변경
+``` 을 진행해 주세요. 이후, Blocking 사항이 있는지 검토해 주세요."
+**AI Response**: "Changed the Novelty Bedrock adapter from `invoke_model` to `invoke_model_with_response_stream`, buffering `text_delta` chunks server-side before JSON parsing. Increased the Bedrock runtime read timeout from 45 seconds to 300 seconds. Updated Novelty tests to exercise streaming chunks and verify the configured read timeout. Blocking review found existing Novelty IAM already allows `bedrock:InvokeModelWithResponseStream`; SQS visibility timeout is 900 seconds, which remains above the 300-second Bedrock read timeout; frontend Novelty status refresh and SSE fallback continue polling during long-running jobs. Verification passed: focused Novelty pytest, Novelty ruff, compileall, full backend pytest, full backend ruff, and git diff check."
+**Context**: Production Novelty-Agent Bedrock LLM timeout mitigation and blocking review.
+
+---
+## PR #373 Review Fix — Append-Only Completion Entry
+**Timestamp**: 2026-07-04T23:14:13Z
+**User Input**: "Review PR #373 from a clean context and fix all findings."
+**AI Response**: "Append-only correction: the PR #373 audit entries above were inserted near an earlier separator by patch context, so this completion record is appended at EOF without deleting prior audit content. Final state: no GitHub review threads were present; fixed evidence async SQS attachment handle propagation and evidence scope request-boundary validation; added regression tests; verification passed with 38 focused backend tests, ruff on touched files, and git diff --check."
+**Context**: Final audit append for PR #373 review findings remediation.
+
+---
+## PR #373 Commit and Push
+**Timestamp**: 2026-07-04T23:24:05Z
+**User Input**: "commit and push to the PR"
+**AI Response**: "Preparing a scoped commit of the PR #373 remediation files and pushing the current branch to the PR remote branch."
+**Context**: Commit and push request for PR #373.
 
 ---

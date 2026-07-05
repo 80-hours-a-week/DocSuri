@@ -51,6 +51,35 @@ const DEFAULT_MACROS: MathMacros = {
 // red). Surrounding valid math still renders normally; only the unresolved span is tinted.
 const ERROR_COLOR = '#6b7280';
 
+// Fail-soft fallback: some author LaTeX carries a construct KaTeX rejects with a *fatal* parse
+// error (a braced ``\big{(}`` delimiter, an unknown macro, a stray ``&`` …). With
+// `throwOnError:false` KaTeX renders the WHOLE expression as its raw source — a wall of
+// backslashes that reads as broken. Rather than show that, we catch the throw and emit a compact,
+// intentional-looking placeholder that carries the source in its tooltip (hover/long-press to
+// inspect). Ingestion strips the known offenders, but the input is open-ended, so this guarantees
+// no formula ever renders as backslash soup regardless of what slips through.
+function escapeHtmlAttr(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function fallbackHtml(latex: string, displayMode: boolean): string {
+  const title = escapeHtmlAttr(latex);
+  // Inline styles (not a CSS-module class) because this HTML is injected via dangerouslySetInnerHTML
+  // into several consumers with independent stylesheets; inline keeps it self-contained + CSP-safe.
+  const shared =
+    'color:#6b7280;font-size:0.9em;border:1px dashed currentColor;border-radius:4px;' +
+    'padding:0 0.35em;cursor:help;white-space:nowrap;';
+  const style = displayMode ? `display:inline-block;${shared}` : shared;
+  return (
+    `<span role="img" aria-label="수식 (표시할 수 없음)" title="${title}" style="${style}">` +
+    `수식</span>`
+  );
+}
+
 // Memoize rendered LaTeX — katex.renderToString is a synchronous parse and the same
 // expression re-renders on every parent re-render (e.g. when figure assets resolve, or a
 // results table with many math cells re-renders). Keyed by (displayMode, latex); the input
@@ -89,14 +118,24 @@ function toHtml(latex: string, displayMode: boolean, macros?: MathMacros): strin
   const cacheKey = `${displayMode ? 'd' : 'i'}:${latex}`;
   const hit = cache.get(cacheKey);
   if (hit !== undefined) return hit;
-  const html = katex.renderToString(latex, {
-    displayMode,
-    throwOnError: false,
-    errorColor: ERROR_COLOR,
-    strict: false,
-    output: 'html',
-    macros: working,
-  });
+  // throwOnError:true so a parse error is caught here (→ compact placeholder). KaTeX parse errors
+  // are all-or-nothing — with throwOnError:false it would render the WHOLE expression as raw
+  // backslash source, so catching the throw and substituting the placeholder is a strict
+  // improvement (same formulas affected, no source wall). errorColor still tints any non-fatal
+  // strict-mode leniencies KaTeX resolves without throwing.
+  let html: string;
+  try {
+    html = katex.renderToString(latex, {
+      displayMode,
+      throwOnError: true,
+      errorColor: ERROR_COLOR,
+      strict: false,
+      output: 'html',
+      macros: working,
+    });
+  } catch {
+    html = fallbackHtml(latex, displayMode);
+  }
   cache.set(cacheKey, html);
   return html;
 }

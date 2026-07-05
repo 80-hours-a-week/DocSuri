@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { UserFacingError, getApiClient } from '@/lib/api';
+import { timelineDetail } from '@/lib/api/apiClient';
 import {
+  MAX_AGENT_ATTACHMENT_TEXT_CHARS,
   agentReducer,
   canSend,
   createAttachmentFromFile,
@@ -26,6 +28,20 @@ import {
   type EvidenceResultPayload,
   type EvidenceSourceRef,
 } from '@/lib/agentChat/evidenceResult';
+import {
+  SIMILAR_WORK_COLUMNS,
+  detailCell,
+  itemsOf,
+  listField,
+  sourceRefsOf,
+  textField,
+} from '@/lib/agentChat/noveltyResult';
+import type {
+  NoveltyArtifact,
+  NoveltyPayloadItem,
+  NoveltyResultPayload,
+  NoveltySourceRef,
+} from '@/lib/agentChat/noveltyResult';
 import styles from './AgentChatScreen.module.css';
 
 const MODE_LABEL: Record<AgentMode, string> = {
@@ -184,6 +200,17 @@ export function AgentChatScreen() {
     }
   }
 
+  async function resetAllSessions() {
+    try {
+      await api.resetAgentSessions();
+      resetStreamingState();
+      dispatch({ type: 'resetSessions' });
+      setDrawerOpen(false);
+    } catch {
+      dispatch({ type: 'sendFailure', message: '세션을 초기화하지 못했습니다.' });
+    }
+  }
+
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!canSend(state) || !state.session || !state.mode) return;
@@ -215,10 +242,27 @@ export function AgentChatScreen() {
   function attach(files: FileList | null) {
     if (!files) return;
     Array.from(files).forEach((file, idx) => {
+      const attachment = createAttachmentFromFile(file, state.attachments.length + idx);
+      // US-EV4(#268)/US-NV2(#252) — md/txt는 본문을 읽어 동봉한다. 읽기가 끝날 때까지
+      // 'reading'으로 전송을 막아(canSend all-ready) 본문 없는 전송 레이스를 없앤다.
+      const needsContent = attachment.status === 'ready' && attachment.kind !== 'pdf';
       dispatch({
         type: 'addAttachment',
-        attachment: createAttachmentFromFile(file, state.attachments.length + idx),
+        attachment: needsContent ? { ...attachment, status: 'reading' } : attachment,
       });
+      if (needsContent) {
+        readAttachmentText(file)
+          .then((text) =>
+            dispatch({
+              type: 'attachmentContentReady',
+              id: attachment.id,
+              contentText: text.slice(0, MAX_AGENT_ATTACHMENT_TEXT_CHARS),
+            }),
+          )
+          .catch(() =>
+            dispatch({ type: 'attachmentContentReady', id: attachment.id, contentText: '' }),
+          );
+      }
     });
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
@@ -321,10 +365,22 @@ export function AgentChatScreen() {
           }}
           onLoad={loadSession}
           onDelete={deleteSession}
+          onResetAll={resetAllSessions}
         />
       ) : null}
     </section>
   );
+}
+
+function readAttachmentText(file: File): Promise<string> {
+  // jsdom은 File.text()가 없다 — 브라우저·테스트 양쪽에서 동작하는 FileReader 폴백.
+  if (typeof file.text === 'function') return file.text();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(file);
+  });
 }
 
 function AgentModePicker({
@@ -367,6 +423,7 @@ function AgentSessionDrawer({
   onNew,
   onLoad,
   onDelete,
+  onResetAll,
 }: {
   sessions: AgentSessionSummary[];
   activeId: string | null;
@@ -374,7 +431,10 @@ function AgentSessionDrawer({
   onNew: () => void;
   onLoad: (session: AgentSessionSummary) => void;
   onDelete: (session: AgentSessionSummary) => void;
+  onResetAll: () => void;
 }) {
+  // US-EV8(#272) — 파괴적 동작이라 브라우저 confirm 대신 인라인 2단계 확인.
+  const [confirmingReset, setConfirmingReset] = useState(false);
   return (
     <div className={styles.drawerOverlay} data-testid="agent-session-drawer">
       <aside className={styles.drawer} aria-label="과거 세션">
@@ -412,6 +472,36 @@ function AgentSessionDrawer({
             </div>
           ))}
           {sessions.length === 0 ? <p className={styles.empty}>저장된 세션이 없습니다.</p> : null}
+        </div>
+        <div className={styles.drawerFooter}>
+          {confirmingReset ? (
+            <div className={styles.resetConfirm}>
+              <span>모든 세션을 삭제할까요?</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmingReset(false);
+                  onResetAll();
+                }}
+                data-testid="agent-session-reset-confirm"
+              >
+                삭제
+              </button>
+              <button type="button" onClick={() => setConfirmingReset(false)}>
+                취소
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className={styles.resetButton}
+              onClick={() => setConfirmingReset(true)}
+              disabled={sessions.length === 0}
+              data-testid="agent-session-reset"
+            >
+              전체 초기화
+            </button>
+          )}
         </div>
       </aside>
     </div>
@@ -479,6 +569,9 @@ function AgentMessageContent({
   // 노출하면 완성 전까지 깨져 보인다. 일반 텍스트 답변만 타자기 효과로 스트리밍한다.
   if (parsed.kind === 'evidence') {
     return <EvidenceResultView result={parsed.result} />;
+  }
+  if (parsed.kind === 'novelty') {
+    return <NoveltyResultView result={parsed.result} />;
   }
   if (parsed.kind === 'abstain') {
     return <p className={styles.abstainNotice}>{abstainReasonLabel(parsed.reason)}</p>;
@@ -555,6 +648,209 @@ function EvidenceRefList({ refs }: { refs: EvidenceSourceRef[] }) {
           {ref.quote ? <blockquote>{ref.quote}</blockquote> : null}
         </li>
       ))}
+    </ul>
+  );
+}
+
+function NoveltyResultView({ result }: { result: NoveltyResultPayload }) {
+  if (result.artifacts.length === 0) {
+    return <p className={styles.abstainNotice}>표시할 분석 결과가 없습니다.</p>;
+  }
+  return (
+    <div className={styles.noveltyArtifacts}>
+      {result.artifacts.map((artifact) => (
+        <section key={artifact.artifactId} className={styles.noveltyArtifact}>
+          <h4 className={styles.noveltyArtifactTitle}>{artifact.title}</h4>
+          <NoveltyArtifactBody artifact={artifact} />
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function NoveltyArtifactBody({ artifact }: { artifact: NoveltyArtifact }) {
+  if (artifact.kind === 'similar_works') {
+    return <SimilarWorksTable items={itemsOf(artifact.payload)} />;
+  }
+  if (artifact.kind === 'risk_signals') {
+    return <RiskSignalList items={itemsOf(artifact.payload)} />;
+  }
+  if (artifact.kind === 'experiment_plan') {
+    return <ExperimentPlanView plan={artifact.payload} />;
+  }
+  // novelty_candidates·external_findings·알 수 없는 kind — 공통 목록 렌더링.
+  return <NoveltyItemList items={itemsOf(artifact.payload)} />;
+}
+
+function SimilarWorksTable({ items }: { items: NoveltyPayloadItem[] }) {
+  if (items.length === 0) {
+    return <p className={styles.abstainNotice}>정리할 유사 연구를 찾지 못했습니다.</p>;
+  }
+  // US-NV3(#253) — 새 스키마(칼럼 키 존재) 아티팩트에서만 상세 칼럼을 편다. null 칸은
+  // 추측하지 않았다는 뜻이라 '근거 부족'으로 표시한다(기권 우선, 추측 금지).
+  const showDetails = items.some((item) =>
+    SIMILAR_WORK_COLUMNS.some((column) => column.key in item),
+  );
+  return (
+    <div className={styles.noveltyTableWrap}>
+      <table className={styles.noveltyTable}>
+        <thead>
+          <tr>
+            <th>연구</th>
+            <th>요약</th>
+            {showDetails
+              ? SIMILAR_WORK_COLUMNS.map((column) => <th key={column.key}>{column.label}</th>)
+              : null}
+            <th>근거</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item, idx) => (
+            <tr key={idx}>
+              <td>{item.title}</td>
+              <td>{item.summary ?? item.rationale ?? ''}</td>
+              {showDetails
+                ? SIMILAR_WORK_COLUMNS.map((column) => {
+                    const value = detailCell(item, column.key);
+                    return (
+                      <td key={column.key}>
+                        {value ?? <span className={styles.noveltyCellAbstain}>근거 부족</span>}
+                      </td>
+                    );
+                  })
+                : null}
+              <td>
+                <EvidenceStatusBadge status={item.evidenceStatus} />
+                <NoveltySourceRefLinks refs={sourceRefsOf(item.sourceRefs)} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function NoveltyItemList({ items }: { items: NoveltyPayloadItem[] }) {
+  if (items.length === 0) {
+    return <p className={styles.abstainNotice}>표시할 항목이 없습니다.</p>;
+  }
+  return (
+    <ul className={styles.noveltyItems}>
+      {items.map((item, idx) => (
+        <li key={idx} className={styles.noveltyItem}>
+          <div className={styles.noveltyItemHead}>
+            <strong>{item.title}</strong>
+            <EvidenceStatusBadge status={item.evidenceStatus} />
+          </div>
+          {item.summary || item.rationale ? <p>{item.summary ?? item.rationale}</p> : null}
+          <NoveltySourceRefLinks refs={sourceRefsOf(item.sourceRefs)} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+const RISK_TYPE_LABEL: Record<string, string> = {
+  sentence_similarity: '문장 유사도',
+  ai_style: 'AI 문체 신호',
+};
+
+function RiskSignalList({ items }: { items: NoveltyPayloadItem[] }) {
+  if (items.length === 0) {
+    return <p className={styles.abstainNotice}>감지된 위험 신호가 없습니다.</p>;
+  }
+  return (
+    <div className={styles.noveltyRisks}>
+      {/* US-NV5 AC: 판정이 아닌 검토 신호임을 명시 — 오탐 가능성 고지. */}
+      <p className={styles.noveltyRiskCaveat}>
+        아래 항목은 검토가 필요한 신호일 뿐, 표절·AI 작성 여부에 대한 판정이 아닙니다. 오탐이 있을
+        수 있습니다.
+      </p>
+      <ul className={styles.noveltyItems}>
+        {items.map((item, idx) => (
+          <li key={idx} className={styles.noveltyItem}>
+            <div className={styles.noveltyItemHead}>
+              <strong>{item.title}</strong>
+              {item.riskType ? (
+                <span className={styles.noveltyRiskType}>
+                  {RISK_TYPE_LABEL[item.riskType] ?? item.riskType}
+                </span>
+              ) : null}
+            </div>
+            {item.summary ? <p>{item.summary}</p> : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+const PLAN_LIST_FIELDS: Array<{ key: string; label: string }> = [
+  { key: 'hypotheses', label: '가설' },
+  { key: 'baselines', label: '베이스라인' },
+  { key: 'procedure', label: '절차' },
+  { key: 'datasets', label: '데이터셋' },
+  { key: 'metrics', label: '지표' },
+  { key: 'resources', label: '자원' },
+  { key: 'risks', label: '리스크' },
+];
+
+function ExperimentPlanView({ plan }: { plan: Record<string, unknown> }) {
+  return (
+    <div className={styles.noveltyPlan}>
+      <p className={styles.noveltyPlanQuestion}>{textField(plan, 'researchQuestion')}</p>
+      {textField(plan, 'noveltyAngle') ? (
+        <p className={styles.noveltyPlanAngle}>{textField(plan, 'noveltyAngle')}</p>
+      ) : null}
+      {PLAN_LIST_FIELDS.map(({ key, label }) => {
+        const values = listField(plan, key);
+        if (values.length === 0) return null;
+        return (
+          <div key={key} className={styles.noveltyPlanField}>
+            <strong>{label}</strong>
+            <ul>
+              {values.map((value, idx) => (
+                <li key={idx}>{value}</li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+      <NoveltySourceRefLinks refs={sourceRefsOf(plan.sourceRefs)} />
+    </div>
+  );
+}
+
+function EvidenceStatusBadge({ status }: { status?: string }) {
+  if (!status) return null;
+  const supported = status === 'supported';
+  return (
+    <span className={supported ? styles.noveltyBadgeSupported : styles.noveltyBadgeInsufficient}>
+      {supported ? '근거 있음' : '근거 부족'}
+    </span>
+  );
+}
+
+function NoveltySourceRefLinks({ refs }: { refs: NoveltySourceRef[] }) {
+  if (refs.length === 0) return null;
+  return (
+    <ul className={styles.noveltyRefs}>
+      {refs.map((ref, idx) => {
+        const label = ref.title || ref.identifier || ref.url || '출처';
+        const href = ref.url && /^https?:\/\//.test(ref.url) ? ref.url : null;
+        return (
+          <li key={idx}>
+            {href ? (
+              <a href={href} target="_blank" rel="noopener noreferrer">
+                {label}
+              </a>
+            ) : (
+              <span>{label}</span>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -667,10 +963,16 @@ function mapSseProgressEvent(raw: unknown): AgentTimelineEvent | null {
   const id = stringValue(record.eventId);
   const stage = stringValue(record.state) ?? 'running';
   if (!id) return null;
+  const payload =
+    record.payload && typeof record.payload === 'object'
+      ? (record.payload as Record<string, unknown>)
+      : undefined;
   return {
     id,
     stage,
     label: stringValue(record.message) ?? stage,
+    // N-001 — REST polling과 동일한 payload→detail 매핑(#257): source/query/count/사유.
+    detail: timelineDetail(payload),
     state: mapSseTimelineState(stage),
   };
 }

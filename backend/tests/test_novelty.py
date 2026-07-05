@@ -14,6 +14,7 @@ from backend.config import Settings
 from backend.modules.accounts.models import Principal, UserRole
 from backend.modules.novelty import controller
 from backend.modules.novelty.adapters import (
+    SIMILAR_WORK_DETAIL_FIELDS,
     BedrockNoveltyLlmClient,
     ExternalApiSearchClient,
     NoveltyAdapters,
@@ -21,6 +22,7 @@ from backend.modules.novelty.adapters import (
     RetrievalBundle,
     S3ManuscriptSimilarityClient,
     U2FullSearchCorpusRetrievalClient,
+    build_llm_adapter,
 )
 from backend.modules.novelty.models import (
     ArtifactKind,
@@ -364,7 +366,7 @@ def test_external_adapter_queries_public_api_sources() -> None:
 
 def test_bedrock_llm_adapter_maps_source_ref_indexes_only() -> None:
     class FakeBedrock:
-        def invoke_model(self, **kwargs):
+        def invoke_model_with_response_stream(self, **kwargs):
             body = json.loads(kwargs["body"].decode("utf-8"))
             assert body["anthropic_version"] == "bedrock-2023-05-31"
             payload = {
@@ -396,12 +398,43 @@ def test_bedrock_llm_adapter_maps_source_ref_indexes_only() -> None:
                     "sourceRefIndexes": [1],
                 },
             }
+            text = json.dumps(payload)
             return {
-                "body": BytesIO(
-                    json.dumps(
-                        {"content": [{"type": "text", "text": json.dumps(payload)}]}
-                    ).encode("utf-8")
-                )
+                "body": [
+                    {
+                        "chunk": {
+                            "bytes": json.dumps(
+                                {
+                                    "type": "content_block_delta",
+                                    "delta": {
+                                        "type": "text_delta",
+                                        "text": text[: len(text) // 2],
+                                    },
+                                }
+                            ).encode("utf-8")
+                        }
+                    },
+                    {
+                        "chunk": {
+                            "bytes": json.dumps(
+                                {
+                                    "type": "content_block_delta",
+                                    "delta": {
+                                        "type": "text_delta",
+                                        "text": text[len(text) // 2 :],
+                                    },
+                                }
+                            ).encode("utf-8")
+                        }
+                    },
+                    {
+                        "chunk": {
+                            "bytes": json.dumps(
+                                {"type": "message_delta", "delta": {"stop_reason": "end_turn"}}
+                            ).encode("utf-8")
+                        }
+                    },
+                ]
             }
 
     corpus_ref = {
@@ -432,6 +465,132 @@ def test_bedrock_llm_adapter_maps_source_ref_indexes_only() -> None:
     assert draft.experimentPlan["metrics"] == ["baseline delta"]
     assert draft.experimentPlan["sourceRefs"] == [dataset_ref]
     assert "Novelty score" not in draft.experimentPlan["metrics"]
+
+
+def test_build_llm_adapter_uses_long_stream_read_timeout(monkeypatch) -> None:
+    import boto3
+
+    captured = {}
+
+    def fake_client(service_name, *, region_name, config):
+        captured["service_name"] = service_name
+        captured["region_name"] = region_name
+        captured["config"] = config
+        return object()
+
+    monkeypatch.setattr(boto3, "client", fake_client)
+    monkeypatch.delenv("AWS_REGION", raising=False)
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "ap-northeast-2")
+
+    build_llm_adapter()
+
+    assert captured["service_name"] == "bedrock-runtime"
+    assert captured["region_name"] == "ap-northeast-2"
+    assert captured["config"].read_timeout == 300.0
+
+
+def test_bedrock_llm_adapter_maps_similar_work_detail_columns() -> None:
+    captured_bodies: list[dict] = []
+
+    class FakeBedrock:
+        def invoke_model_with_response_stream(self, **kwargs):
+            captured_bodies.append(json.loads(kwargs["body"].decode("utf-8")))
+            payload = {
+                "similarWorks": [
+                    {
+                        "title": "Prior RAG benchmark",
+                        "summary": "Grounded baseline.",
+                        "problem": {
+                            "value": "  benchmark leakage  ",
+                            "sourceRefIndexes": [0],
+                        },
+                        "method": {
+                            "value": "contrastive evaluation",
+                            "sourceRefIndexes": [0],
+                        },
+                        # B-001 회귀 — row 출처는 유효해도 칸 자체 근거가 비면 기권
+                        "dataset": {"value": "RAG-Bench", "sourceRefIndexes": []},
+                        "results": None,
+                        # 구형 bare string — 필드별 근거 검증 불가 → 기권
+                        "limitations": "small cohort",
+                        # overlap 키 자체가 없음 → null(기권)로 정규화되어야 한다
+                        "sourceRefIndexes": [0],
+                    },
+                    {
+                        # 유효한 sourceRef가 없는 row — 상세 칸이 전부 기권되어야 한다
+                        "title": "Ungrounded speculation",
+                        "summary": "No valid refs.",
+                        "problem": "invented problem",
+                        # 칸 형식은 맞지만 refs가 무효(범위 밖) → 기권
+                        "method": {"value": "invented method", "sourceRefIndexes": [99]},
+                        "dataset": "invented dataset",
+                        "results": "invented results",
+                        "limitations": "invented limitations",
+                        "overlap": "invented overlap",
+                        "sourceRefIndexes": [99],
+                    },
+                ],
+                "noveltyCandidates": [
+                    {"title": "Freshness-aware evaluation", "sourceRefIndexes": [0]}
+                ],
+                "experimentPlan": {
+                    "researchQuestion": "How can RAG novelty be evaluated?",
+                    "noveltyAngle": "Evaluate freshness against grounded baselines.",
+                    "hypotheses": ["Freshness signals improve differentiation."],
+                    "baselines": ["Prior RAG benchmark"],
+                    "procedure": ["Compare against corpus baselines."],
+                    "datasets": ["RAG Evaluation Dataset"],
+                    "metrics": ["baseline delta"],
+                    "resources": ["Public dataset"],
+                    "risks": ["dataset mismatch"],
+                    "sourceRefIndexes": [0],
+                },
+            }
+            return {
+                "body": [
+                    _stream_chunk(
+                        {
+                            "type": "content_block_delta",
+                            "delta": {"type": "text_delta", "text": json.dumps(payload)},
+                        }
+                    )
+                ]
+            }
+
+    corpus_ref = {
+        "type": "url",
+        "identifier": "2401.00001",
+        "title": "Prior RAG benchmark",
+        "url": "https://arxiv.org/abs/2401.00001",
+    }
+
+    draft = BedrockNoveltyLlmClient(
+        model_id="global.anthropic.claude-sonnet-4-6",
+        client=FakeBedrock(),
+    ).draft(
+        topic="RAG novelty evaluation",
+        corpus=RetrievalBundle(items=[{"title": "Prior", "sourceRefs": [corpus_ref]}]),
+        external=RetrievalBundle(items=[]),
+    )
+
+    item = draft.similarWorks["items"][0]
+    assert item["problem"] == "benchmark leakage"
+    assert item["method"] == "contrastive evaluation"
+    # B-001 — row 출처가 있어도 칸 자신의 근거가 없으면 기권(null)
+    assert item["dataset"] is None
+    assert item["results"] is None
+    assert item["limitations"] is None
+    assert item["overlap"] is None
+    # 리뷰 반영 — sourceRef 없는 row는 상세 칸 전부 기권(null): 근거 없는 값 노출 금지
+    ungrounded = draft.similarWorks["items"][1]
+    assert ungrounded["evidenceStatus"] == EvidenceStatus.ABSTAINED.value
+    assert all(ungrounded[column] is None for column in SIMILAR_WORK_DETAIL_FIELDS)
+    # 상세 칼럼은 유사 연구 표 전용 — novelty candidates에는 붙지 않는다
+    assert "method" not in draft.noveltyCandidates["items"][0]
+    # 프롬프트 계약과 추측 금지 지시가 실제 호출 본문에 실려 나간다
+    user_text = captured_bodies[0]["messages"][0]["content"][0]["text"]
+    assert '"limitations"' in user_text
+    assert "never guess" in captured_bodies[0]["system"].lower()
 
 
 def test_worker_completes_when_adapters_are_not_degraded() -> None:
@@ -504,6 +663,44 @@ def test_worker_completes_when_adapters_are_not_degraded() -> None:
     )
 
     assert NoveltyService(repo).result(owner_id, job_id).job.state is JobState.COMPLETED
+
+
+def test_worker_emits_step_detail_payloads() -> None:
+    source_ref = {
+        "type": "url",
+        "identifier": "2401.00002",
+        "url": "https://arxiv.org/abs/2401.00002",
+    }
+
+    class TwoItemCorpus:
+        def full_search(self, owner_id: str, query: str) -> RetrievalBundle:
+            return RetrievalBundle(
+                items=[
+                    {"title": "A", "sourceRefs": [source_ref]},
+                    {"title": "B", "sourceRefs": [source_ref]},
+                ],
+                evidenceStatus=EvidenceStatus.SUPPORTED,
+            )
+
+    repo = InMemoryNoveltyRepository()
+    _, owner_id, job_id = _service_job(repo)
+
+    process_job(repo, owner_id, job_id, adapters=NoveltyAdapters(corpus=TwoItemCorpus()))
+
+    payloads: dict[JobState, list[dict]] = {}
+    for event in repo.list_events(owner_id, job_id):
+        payloads.setdefault(event.state, []).append(event.payload)
+
+    # US-NV7(#257) — 검색 단계는 시작(도구+쿼리)·완료(count) 이벤트, LLM 단계는 결과 수 동봉
+    corpus_events = payloads[JobState.RETRIEVING_CORPUS]
+    assert corpus_events[0] == {"source": "U2 full search", "query": "privacy preserving RAG"}
+    assert corpus_events[-1]["count"] == 2
+    external_events = payloads[JobState.SEARCHING_EXTERNAL]
+    assert external_events[0]["query"] == "privacy preserving RAG"
+    assert external_events[-1]["count"] == 0
+    assert "reason" in external_events[-1]  # Noop external은 저하 사유를 실어 보낸다
+    assert payloads[JobState.SUMMARIZING_PRIOR_WORK][0]["count"] == 0
+    assert payloads[JobState.PLANNING_EXPERIMENT][0]["outputSummary"] == "privacy preserving RAG"
 
 
 def test_worker_manuscript_path_records_similarity_risk_degradation() -> None:
@@ -771,6 +968,10 @@ def test_api_rejects_blank_topic_before_job_is_created(monkeypatch) -> None:
     assert repo.list_jobs(principal.user_id) == []
 
 
+def _stream_chunk(payload: dict) -> dict:
+    return {"chunk": {"bytes": json.dumps(payload).encode("utf-8")}}
+
+
 def test_bedrock_llm_client_invokes_at_cost_guard_warning() -> None:
     """NFR-C1 — agent hard gate는 warning(80%)에서는 Bedrock을 막지 않는다."""
     from docsuri_ops.cost_guard import CostGuardCircuitBreaker
@@ -779,9 +980,18 @@ def test_bedrock_llm_client_invokes_at_cost_guard_warning() -> None:
     class _Invoke:
         called = False
 
-        def invoke_model(self, **kwargs):
+        def invoke_model_with_response_stream(self, **kwargs):
             self.called = True
-            return {"body": BytesIO(json.dumps({"content": [{"text": "{}"}]}).encode("utf-8"))}
+            return {
+                "body": [
+                    _stream_chunk(
+                        {
+                            "type": "content_block_delta",
+                            "delta": {"type": "text_delta", "text": "{}"},
+                        }
+                    )
+                ]
+            }
 
     guard = CostGuardCircuitBreaker()
     guard.record_spend(UsageEvent(event_id="seed", amount_usd=1280.0, source="test"))
@@ -804,7 +1014,7 @@ def test_bedrock_llm_client_degrades_without_invoke_when_cost_guard_critical() -
     from docsuri_ops.domain.models import UsageEvent
 
     class _NoInvoke:
-        def invoke_model(self, **kwargs):
+        def invoke_model_with_response_stream(self, **kwargs):
             raise AssertionError("LLM must not be invoked while the cost guard is gated")
 
     guard = CostGuardCircuitBreaker()
@@ -821,20 +1031,33 @@ def test_bedrock_llm_client_degrades_without_invoke_when_cost_guard_critical() -
 
 
 def test_bedrock_llm_client_records_spend_from_usage() -> None:
-    """NFR-C1 — invoke_model 응답의 usage 토큰이 cost guard 지출로 기록된다."""
+    """NFR-C1 — 스트림 usage 이벤트의 토큰이 cost guard 지출로 기록된다."""
     from docsuri_ops.cost_guard import CostGuardCircuitBreaker
 
     class _FakeBedrock:
-        def invoke_model(self, **kwargs):
+        def invoke_model_with_response_stream(self, **kwargs):
             return {
-                "body": BytesIO(
-                    json.dumps(
+                "body": [
+                    _stream_chunk(
                         {
-                            "content": [{"type": "text", "text": json.dumps({})}],
-                            "usage": {"input_tokens": 1_000_000, "output_tokens": 200_000},
+                            "type": "message_start",
+                            "message": {"usage": {"input_tokens": 1_000_000, "output_tokens": 1}},
                         }
-                    ).encode("utf-8")
-                )
+                    ),
+                    _stream_chunk(
+                        {
+                            "type": "content_block_delta",
+                            "delta": {"type": "text_delta", "text": json.dumps({})},
+                        }
+                    ),
+                    _stream_chunk(
+                        {
+                            "type": "message_delta",
+                            "delta": {"stop_reason": "end_turn"},
+                            "usage": {"output_tokens": 200_000},
+                        }
+                    ),
+                ]
             }
 
     guard = CostGuardCircuitBreaker()
@@ -848,3 +1071,185 @@ def test_bedrock_llm_client_records_spend_from_usage() -> None:
 
     # 기본 단가 $3/1M input + $15/1M output → 1M in + 0.2M out = $6
     assert abs(guard.get_budget_state().spend_usd - 6.0) < 1e-9
+
+
+def test_api_reset_deletes_only_own_jobs(monkeypatch) -> None:
+    """US-EV8(#272) 전체 초기화 — 소유 잡 전부 삭제(멱등), 타 사용자 잡 보존."""
+    owner_a = _principal()
+    owner_b = _principal()
+    repo = InMemoryNoveltyRepository()
+    client_a = _client(monkeypatch, owner_a, repo)
+    client_b = _client(monkeypatch, owner_b, repo)
+
+    client_a.post(
+        "/api/novelty/jobs",
+        json={"inputType": "natural_language", "topic": "reset target job one"},
+    )
+    client_a.post(
+        "/api/novelty/jobs",
+        json={"inputType": "natural_language", "topic": "reset target job two"},
+    )
+    kept = client_b.post(
+        "/api/novelty/jobs",
+        json={"inputType": "natural_language", "topic": "surviving job"},
+    ).json()["jobId"]
+
+    assert client_a.delete("/api/novelty/jobs").status_code == 204
+    assert client_a.get("/api/novelty/jobs").json()["jobs"] == []
+    assert client_b.get(f"/api/novelty/jobs/{kept}").status_code == 200
+    # 멱등 — 이미 비어 있어도 204.
+    assert client_a.delete("/api/novelty/jobs").status_code == 204
+
+
+def test_sql_delete_job_and_reset_purge_child_rows() -> None:
+    """US-EV8(#272)/SEC-14 — SQL 삭제는 이벤트·메시지 등 자식 행까지 제거(고아 금지 회귀)."""
+    from backend.db import make_engine, make_session_factory
+    from backend.modules.novelty.models import ChatMessageCreateRequest
+    from backend.modules.novelty.repository import (
+        ArtifactTable,
+        Base,
+        NotionExportTable,
+        NoveltyJobTable,
+        NoveltyMessageTable,
+        ProgressEventTable,
+        SqlNoveltyRepository,
+    )
+
+    engine = make_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    session = make_session_factory(engine)()
+    repo = SqlNoveltyRepository(session)
+    service = NoveltyService(repo)
+    owner = str(uuid4())
+
+    first = service.create_job(
+        owner, NoveltyJobRequest(inputType="natural_language", topic="cascade delete first")
+    )
+    service.create_job(
+        owner, NoveltyJobRequest(inputType="natural_language", topic="cascade delete second")
+    )
+    service.record_event(repo.get_job(owner, first.jobId), "cascade seed event")
+    service.add_message(owner, first.jobId, ChatMessageCreateRequest(content="history row"))
+    assert session.query(ProgressEventTable).count() > 0
+    assert session.query(NoveltyMessageTable).count() > 0
+
+    service.delete_job(owner, first.jobId)
+
+    assert session.query(ProgressEventTable).filter_by(job_id=first.jobId).count() == 0
+    assert session.query(NoveltyMessageTable).filter_by(job_id=first.jobId).count() == 0
+
+    service.delete_all_jobs(owner)
+
+    for table in (
+        NoveltyJobTable,
+        ProgressEventTable,
+        NoveltyMessageTable,
+        ArtifactTable,
+        NotionExportTable,
+    ):
+        assert session.query(table).count() == 0
+
+
+def test_api_manuscript_upload_binds_key_and_dispatches(monkeypatch) -> None:
+    """US-NV2(#252) — 원고 잡 생성(본문 없음) → 디스패치 보류(queued 유지) → 본문 업로드
+    → S3 적재(유사도 어댑터 프리픽스 규약) → objectKey 바인딩 → 분석 시작."""
+    import boto3
+
+    puts: list[dict] = []
+
+    class FakeS3:
+        def __init__(self) -> None:
+            self.objects: dict[str, bytes] = {}
+
+        def put_object(self, **kwargs):
+            puts.append(kwargs)
+            self.objects[kwargs["Key"]] = kwargs["Body"]
+            return {}
+
+        def get_object(self, **kwargs):
+            body = self.objects.get(kwargs["Key"], b"")
+            return {"Body": BytesIO(body if isinstance(body, bytes) else bytes(body))}
+
+    fake = FakeS3()
+    monkeypatch.setenv("DOCSURI_NOVELTY_ARTIFACT_BUCKET", "papers")
+    monkeypatch.delenv("DOCSURI_NOVELTY_JOB_QUEUE_URL", raising=False)
+    monkeypatch.setattr(boto3, "client", lambda *_a, **_k: fake)
+
+    principal = _principal()
+    repo = InMemoryNoveltyRepository()
+    client = _client(monkeypatch, principal, repo)
+
+    created = client.post(
+        "/api/novelty/jobs",
+        json={
+            "inputType": "manuscript",
+            "topic": "manuscript novelty flow",
+            "manuscript": {"fileName": "draft.md", "contentType": "text/markdown"},
+        },
+    )
+    assert created.status_code == 200
+    job_id = created.json()["jobId"]
+    # 본문 업로드 전 — 디스패치 보류(QUEUED 유지)
+    assert client.get(f"/api/novelty/jobs/{job_id}").json()["job"]["state"] == "queued"
+
+    uploaded = client.post(
+        f"/api/novelty/jobs/{job_id}/manuscript",
+        json={"contentText": "# Draft\nprivacy preserving retrieval evaluation."},
+    )
+
+    assert uploaded.status_code == 200
+    assert puts and puts[0]["Key"] == f"novelty/{principal.user_id}/{job_id}/manuscript.md"
+    assert repo.get_job(principal.user_id, job_id).manuscript.objectKey == puts[0]["Key"]
+    # 큐 미구성 → 인라인 워커가 잡을 진행시킨다(더는 queued가 아니다).
+    assert client.get(f"/api/novelty/jobs/{job_id}").json()["job"]["state"] != "queued"
+
+
+def test_api_manuscript_upload_guards(monkeypatch) -> None:
+    """US-NV2(#252) — 소유자 격리(404) · 비원고 잡(422) · 중복 업로드(422)."""
+    import boto3
+
+    class FakeS3:
+        def put_object(self, **kwargs):
+            return {}
+
+        def get_object(self, **kwargs):
+            return {"Body": BytesIO(b"draft body")}
+
+    monkeypatch.setenv("DOCSURI_NOVELTY_ARTIFACT_BUCKET", "papers")
+    monkeypatch.delenv("DOCSURI_NOVELTY_JOB_QUEUE_URL", raising=False)
+    monkeypatch.setattr(boto3, "client", lambda *_a, **_k: FakeS3())
+
+    owner = _principal()
+    repo = InMemoryNoveltyRepository()
+    client = _client(monkeypatch, owner, repo)
+    intruder = _client(monkeypatch, _principal(), repo)
+
+    manuscript_job = client.post(
+        "/api/novelty/jobs",
+        json={
+            "inputType": "manuscript",
+            "topic": "guard checks",
+            "manuscript": {"fileName": "draft.txt", "contentType": "text/plain"},
+        },
+    ).json()["jobId"]
+    text_job = client.post(
+        "/api/novelty/jobs",
+        json={"inputType": "natural_language", "topic": "plain topic job"},
+    ).json()["jobId"]
+
+    payload = {"contentText": "guard body"}
+    assert (
+        intruder.post(f"/api/novelty/jobs/{manuscript_job}/manuscript", json=payload).status_code
+        == 404
+    )
+    assert (
+        client.post(f"/api/novelty/jobs/{text_job}/manuscript", json=payload).status_code == 422
+    )
+    assert (
+        client.post(f"/api/novelty/jobs/{manuscript_job}/manuscript", json=payload).status_code
+        == 200
+    )
+    assert (
+        client.post(f"/api/novelty/jobs/{manuscript_job}/manuscript", json=payload).status_code
+        == 422
+    )

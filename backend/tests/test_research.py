@@ -72,6 +72,46 @@ def test_research_sessions_are_owner_scoped(monkeypatch) -> None:
     assert client_b.get("/api/research/jobs").json()["jobs"] == []
 
 
+def test_research_message_rejects_bad_attachment_with_422(monkeypatch) -> None:
+    """US-AG5(#297)/US-EV4(#268) — 허용 형식·크기 밖 첨부는 처리 전 422로 즉시 거부."""
+    principal = _principal()
+    repo = InMemoryResearchRepository()
+    client = _client(monkeypatch, principal, repo)
+
+    created = client.post("/api/research/jobs", json={"content": "attachment validation"})
+    job_id = created.json()["jobId"]
+
+    bad_kind = client.post(
+        f"/api/research/jobs/{job_id}/messages",
+        json={
+            "content": "with bad attachment",
+            "attachments": [{"id": "a-1", "name": "x.docx", "kind": "unknown", "sizeBytes": 10}],
+        },
+    )
+    oversized = client.post(
+        f"/api/research/jobs/{job_id}/messages",
+        json={
+            "content": "with oversized attachment",
+            "attachments": [
+                {"id": "a-2", "name": "big.pdf", "kind": "pdf", "sizeBytes": 10 * 1024 * 1024 + 1}
+            ],
+        },
+    )
+    ok = client.post(
+        f"/api/research/jobs/{job_id}/messages",
+        json={
+            "content": "with valid attachment",
+            "attachments": [
+                {"id": "a-3", "name": "draft.md", "kind": "markdown", "sizeBytes": 2048}
+            ],
+        },
+    )
+
+    assert bad_kind.status_code == 422
+    assert oversized.status_code == 422
+    assert ok.status_code == 200
+
+
 def test_research_job_transitions_to_completed_after_message(monkeypatch) -> None:
     """PR #338 리뷰 Blocking #3 — job.state가 active로 남으면 FE가 이를 running으로
     매핑해 답변이 저장돼도 폴링을 멈추지 않는다."""
@@ -107,3 +147,101 @@ def test_sql_repositories_bind_postgres_uuid_ids() -> None:
 
         assert table.__table__.c.owner_id.type.compile(dialect=dialect) == "UUID"
         assert "::UUID" in str(compiled)
+
+
+def test_research_reset_deletes_only_own_sessions(monkeypatch) -> None:
+    """US-EV8(#272) 전체 초기화 — 소유 잡·대화 이력 전부 삭제(멱등), 타 사용자 세션 보존."""
+    owner_a = _principal()
+    owner_b = _principal()
+    repo = InMemoryResearchRepository()
+    client_a = _client(monkeypatch, owner_a, repo)
+    client_b = _client(monkeypatch, owner_b, repo)
+
+    created = client_a.post("/api/research/jobs", json={"content": "reset target session one"})
+    job_a = created.json()["jobId"]
+    client_a.post("/api/research/jobs", json={"content": "reset target session two"})
+    job_b = client_b.post("/api/research/jobs", json={"content": "surviving session"}).json()[
+        "jobId"
+    ]
+
+    reset = client_a.delete("/api/research/jobs")
+
+    assert reset.status_code == 204
+    assert client_a.get("/api/research/jobs").json()["jobs"] == []
+    assert client_a.get(f"/api/research/jobs/{job_a}/messages").status_code == 404
+    assert client_b.get(f"/api/research/jobs/{job_b}").status_code == 200
+    # 멱등 — 이미 비어 있어도 204.
+    assert client_a.delete("/api/research/jobs").status_code == 204
+
+
+def test_research_turn_passes_attachment_docs_and_notices_unparsed(monkeypatch) -> None:
+    """US-EV4(#268) 2차 — contentText(md 본문)는 orchestrator 추출 대상으로 전달되고,
+    본문 없는 첨부(PDF)는 별도의 비기술 안내 메시지를 남긴다."""
+    from docsuri_shared._generated.dtos.evidence_schema import EvidenceAbstainResult
+
+    from backend.modules.evidence.models import TurnAbstainResult
+
+    captured: dict = {}
+
+    class FakeOrchestrator:
+        def run(self, ctx, request):
+            captured["ctx"] = ctx
+            return TurnAbstainResult(
+                outcome=EvidenceAbstainResult(state="abstain", abstainReason="no_corpus")
+            )
+
+    principal = _principal()
+    repo = InMemoryResearchRepository()
+    client = _client(monkeypatch, principal, repo)
+    client.app.dependency_overrides[controller.get_evidence_orchestrator] = (
+        lambda: FakeOrchestrator()
+    )
+
+    created = client.post(
+        "/api/research/jobs",
+        json={
+            "content": "첨부 기반 근거 형성",
+            "attachments": [
+                {
+                    "id": "a1",
+                    "name": "draft.md",
+                    "kind": "markdown",
+                    "sizeBytes": 24,
+                    "contentText": "# 초안 본문\nRAG 평가 프로토콜.",
+                },
+                {"id": "a2", "name": "scan.pdf", "kind": "pdf", "sizeBytes": 1024},
+            ],
+        },
+    )
+
+    assert created.status_code == 200
+    docs = captured["ctx"].attachment_docs
+    assert [(doc.name, bool(doc.text)) for doc in docs] == [
+        ("draft.md", True),
+        ("scan.pdf", False),
+    ]
+    messages = client.get(
+        f"/api/research/jobs/{created.json()['jobId']}/messages"
+    ).json()["messages"]
+    notices = [m["content"] for m in messages if m["content"].startswith("[첨부 안내]")]
+    assert len(notices) == 1
+    assert "scan.pdf" in notices[0]
+    assert "draft.md" not in notices[0]
+
+    # 본문 상한(262,144자) 초과는 처리 전 422 — US-EV4 AC2 연장.
+    oversized = client.post(
+        "/api/research/jobs",
+        json={
+            "content": "oversize attachment body",
+            "attachments": [
+                {
+                    "id": "a3",
+                    "name": "big.md",
+                    "kind": "markdown",
+                    "sizeBytes": 1,
+                    "contentText": "x" * 262_145,
+                }
+            ],
+        },
+    )
+    assert oversized.status_code == 422

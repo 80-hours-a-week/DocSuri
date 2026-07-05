@@ -171,6 +171,32 @@ class NoveltyService:
     def delete_job(self, owner_id: str, job_id: str) -> None:
         self._repo.delete_job(owner_id, job_id)
 
+    def delete_all_jobs(self, owner_id: str) -> None:
+        self._repo.delete_all_jobs(owner_id)
+
+    def attach_manuscript_content(self, owner_id: str, job_id: str, text: str) -> NoveltyJob:
+        """US-NV2(#252) — 원고 본문을 S3에 적재하고 objectKey를 잡에 바인딩한다.
+
+        업로드 전 원고 잡은 QUEUED로 대기하며(디스패치 보류), 이 호출이 성공해야
+        분석이 시작될 수 있다. 실패 문구는 비기술 표현만 노출(SEC-5/9).
+        """
+        from .adapters import store_manuscript_text
+
+        job = self._repo.get_job(owner_id, job_id)
+        if job.inputType is not InputType.MANUSCRIPT or job.manuscript is None:
+            raise ValueError("원고 업로드는 원고(manuscript) 입력 잡에서만 가능합니다.")
+        if job.manuscript.objectKey:
+            raise ValueError("이미 원고가 업로드된 잡입니다.")
+        if job.state is not JobState.QUEUED:
+            raise ValueError("이미 분석이 시작된 잡입니다.")
+        object_key = store_manuscript_text(
+            owner_id, job_id, job.manuscript.contentType, text
+        )
+        manuscript = job.manuscript.model_copy(update={"objectKey": object_key})
+        updated = self._repo.update_job(owner_id, job_id, manuscript=manuscript)
+        _emit_metric(self._observability, "novelty.manuscript_uploaded")
+        return updated
+
     def add_message(
         self, owner_id: str, job_id: str, dto: ChatMessageCreateRequest
     ) -> NoveltyChatMessage:

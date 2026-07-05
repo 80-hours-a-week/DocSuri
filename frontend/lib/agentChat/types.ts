@@ -4,7 +4,7 @@ export type AgentMode = (typeof AGENT_MODES)[number];
 export type AgentJobState = 'idle' | 'queued' | 'running' | 'completed' | 'failed' | 'degraded';
 export type AgentMessageRole = 'user' | 'agent';
 export type AgentAttachmentKind = 'pdf' | 'markdown' | 'text' | 'unknown';
-export type AgentAttachmentStatus = 'ready' | 'rejected';
+export type AgentAttachmentStatus = 'ready' | 'reading' | 'rejected';
 export type AgentTimelineState = 'running' | 'completed' | 'failed' | 'degraded';
 
 export interface AgentAttachment {
@@ -14,6 +14,8 @@ export interface AgentAttachment {
   sizeBytes: number;
   status: AgentAttachmentStatus;
   error?: string;
+  /** US-EV4(#268)/US-NV2(#252) — md/txt 본문(≤256KiB). PDF는 본문 분석 후속이라 없음. */
+  contentText?: string;
 }
 
 export interface AgentTimelineEvent {
