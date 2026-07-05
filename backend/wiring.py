@@ -558,6 +558,7 @@ def _mount_novelty(app: FastAPI, settings: Settings, result: MountResult) -> Non
         InMemoryNoveltyRepository,
         SqlNoveltyRepository,
     )
+    from backend.modules.user_docmodel import build_default_user_docmodel_coordinator
 
     if _is_postgres(settings.database_url):
         from .db import make_engine, make_session_factory
@@ -584,6 +585,10 @@ def _mount_novelty(app: FastAPI, settings: Settings, result: MountResult) -> Non
             return repo
 
     app.dependency_overrides[novelty.get_repo] = get_novelty_repo
+    user_docmodel = getattr(app.state, "user_docmodel", None)
+    if user_docmodel is None:
+        user_docmodel = build_default_user_docmodel_coordinator()
+        app.state.user_docmodel = user_docmodel
     discovery_bundle = getattr(app.state, "discovery_bundle", None)
     grounding_hook = getattr(app.state, "grounding_hook", None)
     if discovery_bundle is not None and grounding_hook is not None:
@@ -606,7 +611,7 @@ def _mount_novelty(app: FastAPI, settings: Settings, result: MountResult) -> Non
         app.state.novelty_adapters = NoveltyAdapters(
             corpus=corpus,
             external=build_external_adapter(),
-            similarity=build_similarity_adapter(corpus),
+            similarity=build_similarity_adapter(corpus, user_docmodel=user_docmodel),
             llm=build_llm_adapter(cost_guard=getattr(app.state, "cost_guard", None)),
             evidence=evidence_adapter,
             notion=build_notion_adapter(),

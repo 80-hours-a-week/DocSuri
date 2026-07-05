@@ -9,6 +9,12 @@ from typing import Any, Protocol
 from urllib.parse import urlparse
 from uuid import uuid4
 
+from backend.modules.user_docmodel import (
+    NOVELTY_PDF_DEGRADED_REASON,
+    USER_DOCMODEL_PDF_CONTENT_TYPE,
+    ref_from_attachment,
+)
+
 from .models import EvidenceStatus
 from .security import sanitize_external_query
 
@@ -212,7 +218,7 @@ def _bundle_from_evidence_result(result: Any) -> RetrievalBundle:
 
 
 def _evidence_claim_item(claim: Any) -> dict[str, Any]:
-    """EvidenceItem → 번들 item. sourceRef url은 반환된 paperId(arXiv ID)로만 구성 — 날조 금지."""
+    """EvidenceItem → 번들 item. userdoc 출처에는 arXiv URL을 만들지 않는다."""
     statement = str(getattr(claim, "statement", "") or "").strip()
     if not statement:
         return {}
@@ -223,6 +229,16 @@ def _evidence_claim_item(claim: Any) -> dict[str, Any]:
         if not paper_id:
             continue
         quote = quote or str(getattr(ref, "quote", "") or "")
+        if paper_id.startswith("userdoc:"):
+            refs.append(
+                {
+                    "type": "upload",
+                    "identifier": paper_id,
+                    "title": "User uploaded PDF",
+                    "sourceName": "User upload",
+                }
+            )
+            continue
         refs.append(
             {
                 "type": "paper",
@@ -595,10 +611,12 @@ def _source_ref_catalog(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seen: set[str] = set()
     for item in items:
         for ref in item.get("sourceRefs") or item.get("source_refs") or []:
-            url = ref.get("url") if isinstance(ref, dict) else None
-            if not url or url in seen:
+            if not isinstance(ref, dict):
                 continue
-            seen.add(str(url))
+            key = str(ref.get("url") or ref.get("identifier") or "")
+            if not key or key in seen:
+                continue
+            seen.add(key)
             refs.append(ref)
     return refs[:12]
 
@@ -895,11 +913,13 @@ class S3ManuscriptSimilarityClient:
         corpus: CorpusRetrievalPort,
         client: Any,
         prefix: str = "novelty/",
+        user_docmodel: Any = None,
     ) -> None:
         self._bucket = bucket
         self._corpus = corpus
         self._client = client
         self._prefix = prefix
+        self._user_docmodel = user_docmodel
 
     def check(self, owner_id: str, manuscript_ref: dict[str, Any]) -> RetrievalBundle:
         object_key = str(manuscript_ref.get("objectKey") or "")
@@ -913,12 +933,17 @@ class S3ManuscriptSimilarityClient:
         job_id = str(manuscript_ref.get("jobId") or "")
         if job_id and not object_key.startswith(f"{self._prefix}{owner_id}/{job_id}/"):
             return RetrievalBundle(degradedReason="manuscript objectKey is outside job prefix")
-        if content_type not in {"text/plain", "text/markdown"}:
+        if content_type == USER_DOCMODEL_PDF_CONTENT_TYPE:
+            text = self._read_pdf_doc_model(owner_id, manuscript_ref)
+            if not text:
+                return RetrievalBundle(degradedReason=NOVELTY_PDF_DEGRADED_REASON)
+        elif content_type in {"text/plain", "text/markdown"}:
+            text = self._read_text(object_key)
+        else:
             return RetrievalBundle(
                 degradedReason=f"similarity text extraction not configured for {content_type}"
             )
 
-        text = self._read_text(object_key)
         sentences = _candidate_sentences(text)
         items = _ai_style_items(text)
         for sentence in sentences[:3]:
@@ -943,6 +968,27 @@ class S3ManuscriptSimilarityClient:
             Range="bytes=0-262143",
         )
         return response["Body"].read().decode("utf-8", errors="replace")
+
+    def _read_pdf_doc_model(self, owner_id: str, manuscript_ref: dict[str, Any]) -> str:
+        if self._user_docmodel is None:
+            return ""
+        object_key = str(manuscript_ref.get("objectKey") or "")
+        job_id = str(manuscript_ref.get("jobId") or "manuscript")
+        try:
+            ref = ref_from_attachment(
+                owner_id=owner_id,
+                scope_id=job_id,
+                attachment_id="manuscript",
+                object_key=object_key,
+                module="novelty",
+                paper_id=manuscript_ref.get("paperId"),
+                record_ref=manuscript_ref.get("recordRef"),
+            )
+        except ValueError:
+            return ""
+        doc_model = self._user_docmodel.enqueue_and_poll(ref)
+        text = str(getattr(doc_model, "fullText", "") or "") if doc_model is not None else ""
+        return text.strip()
 
 
 def _candidate_sentences(text: str) -> list[str]:
@@ -1113,7 +1159,11 @@ class NoveltyAdapters:
     )
 
 
-def build_default_novelty_adapters(observability=None, cost_guard=None) -> NoveltyAdapters:
+def build_default_novelty_adapters(
+    observability=None,
+    cost_guard=None,
+    user_docmodel: Any = None,
+) -> NoveltyAdapters:
     corpus = build_u2_full_search_corpus_adapter(
         observability=observability,
         cost_guard=cost_guard,
@@ -1121,7 +1171,7 @@ def build_default_novelty_adapters(observability=None, cost_guard=None) -> Novel
     return NoveltyAdapters(
         corpus=corpus,
         external=build_external_adapter(),
-        similarity=build_similarity_adapter(corpus),
+        similarity=build_similarity_adapter(corpus, user_docmodel=user_docmodel),
         llm=build_llm_adapter(cost_guard=cost_guard),
         evidence=build_evidence_formation_adapter(cost_guard=cost_guard),
         notion=build_notion_adapter(),
@@ -1203,7 +1253,11 @@ def store_manuscript_text(owner_id: str, job_id: str, content_type: str, text: s
     return object_key
 
 
-def build_similarity_adapter(corpus: CorpusRetrievalPort) -> SimilarityPort:
+def build_similarity_adapter(
+    corpus: CorpusRetrievalPort,
+    *,
+    user_docmodel: Any = None,
+) -> SimilarityPort:
     bucket = os.getenv("DOCSURI_NOVELTY_ARTIFACT_BUCKET")
     if not bucket:
         return NoopSimilarityClient()
@@ -1216,6 +1270,7 @@ def build_similarity_adapter(corpus: CorpusRetrievalPort) -> SimilarityPort:
         corpus=corpus,
         client=boto3.client("s3", region_name=region),
         prefix=os.getenv("DOCSURI_NOVELTY_ARTIFACT_PREFIX", "novelty/"),
+        user_docmodel=user_docmodel,
     )
 
 

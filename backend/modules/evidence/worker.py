@@ -67,6 +67,12 @@ def parse_sqs_payload(body: str | bytes | dict[str, Any]) -> dict[str, Any]:
         if not isinstance(item, str) or not item:
             raise InvalidWorkerPayload('attachments must contain string handles')
         attachments.append(item)
+    raw_attachment_docs = payload.get('attachmentDocs') or []
+    if not isinstance(raw_attachment_docs, list):
+        raise InvalidWorkerPayload('attachmentDocs must be a list')
+    attachment_docs = [
+        item for item in raw_attachment_docs if isinstance(item, dict)
+    ]
     return {
         'owner_id': str(owner_id),
         'session_id': str(payload.get('sessionId') or payload.get('session_id', '')),
@@ -76,6 +82,7 @@ def parse_sqs_payload(body: str | bytes | dict[str, Any]) -> dict[str, Any]:
         'scope': payload.get('scope', 'auto'),
         'paper_ids': list(payload.get('paperIds') or payload.get('paper_ids') or []),
         'attachments': attachments,
+        'attachment_docs': attachment_docs,
     }
 
 
@@ -111,9 +118,10 @@ def process_sqs_payload(
     body: str | bytes | dict[str, Any],
     *,
     orchestrator: EvidenceAgentOrchestrator,
+    user_docmodel: Any = None,
 ) -> None:
     fields = parse_sqs_payload(body)
-    process_job(repo, orchestrator=orchestrator, **fields)
+    process_job(repo, orchestrator=orchestrator, user_docmodel=user_docmodel, **fields)
 
 
 def process_job(
@@ -128,6 +136,8 @@ def process_job(
     scope: str = 'auto',
     paper_ids: list[str] | None = None,
     attachments: list[str] | None = None,
+    attachment_docs: list[dict[str, Any]] | None = None,
+    user_docmodel: Any = None,
 ) -> None:
     # 세션 조회 (INV-EV-1: 소유권 확인)
     try:
@@ -170,6 +180,12 @@ def process_job(
         owner_id=owner_id,
         request_id=job_id,
         budget_signal={},
+        attachment_docs=_attachment_inputs(
+            owner_id=owner_id,
+            scope_id=job_id,
+            attachment_docs=attachment_docs or [],
+            user_docmodel=user_docmodel,
+        ),
     )
 
     try:
@@ -191,12 +207,18 @@ def run_worker(
     receive: Callable[[], Iterable[_Message]],
     ack: Callable[[_Message], None],
     should_stop: Callable[[], bool],
+    user_docmodel: Any = None,
 ) -> None:
     while not should_stop():
         for message in receive():
             repo = repo_factory()
             try:
-                process_sqs_payload(repo, message.body, orchestrator=orchestrator)
+                process_sqs_payload(
+                    repo,
+                    message.body,
+                    orchestrator=orchestrator,
+                    user_docmodel=user_docmodel,
+                )
                 commit = getattr(repo, 'commit', None)
                 if commit is not None:
                     commit()
@@ -296,9 +318,33 @@ def main(argv: list[str] | None = None) -> int:
         receive=receive,
         ack=ack,
         should_stop=_shutdown.is_set,
+        user_docmodel=_build_user_docmodel(),
     )
     log.info('evidence agent worker shut down gracefully')
     return 0
+
+
+def _attachment_inputs(
+    *,
+    owner_id: str,
+    scope_id: str,
+    attachment_docs: list[dict[str, Any]],
+    user_docmodel: Any,
+):
+    from .attachments import attachment_inputs_from_dicts
+
+    return attachment_inputs_from_dicts(
+        owner_id=owner_id,
+        scope_id=scope_id,
+        attachments=attachment_docs,
+        user_docmodel=user_docmodel,
+    )
+
+
+def _build_user_docmodel():
+    from backend.modules.user_docmodel import build_default_user_docmodel_coordinator
+
+    return build_default_user_docmodel_coordinator()
 
 
 if __name__ == '__main__':

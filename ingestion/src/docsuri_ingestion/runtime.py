@@ -158,7 +158,7 @@ def build_production_runtime(settings: IngestionSettings) -> RuntimeServices:
     # Doc-model builder (BR-30/D6): reuses the arXiv source (HTML→ar5iv tier) and the
     # single bucket's doc-model/ prefix. Phase-1 Corpus builds eagerly during ingest; the
     # BUILD_DOC_MODEL job remains for misses/backfills.
-    from .adapters.aws import S3DocModelStore
+    from .adapters.aws import S3DocModelStore, S3UserDocumentSource
     from .docmodel import DocModelBuilder
 
     doc_model_builder = DocModelBuilder(
@@ -192,6 +192,10 @@ def build_production_runtime(settings: IngestionSettings) -> RuntimeServices:
         asset_extractor=asset_extractor,
         asset_store=asset_store,
         asset_source=asset_source,
+        user_document_source=S3UserDocumentSource(
+            bucket=settings.s3_bucket or "",
+            max_bytes=settings.user_document_max_bytes,
+        ),
         doc_model_builder=doc_model_builder,
         corpus_sources=corpus_sources,
         embedding_v2=BedrockCohereEmbeddingPort(

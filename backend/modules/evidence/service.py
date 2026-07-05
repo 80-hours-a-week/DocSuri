@@ -15,6 +15,7 @@ from docsuri_shared._generated.dtos.evidence_schema import (
 
 from .models import (
     AgentRunContext,
+    AttachmentInput,
     EvidenceSession,
     EvidenceTurn,
     TurnAbstainResult,
@@ -81,6 +82,7 @@ class EvidenceChatService:
         session_id: str | None = None,
         budget_signal: dict[str, Any] | None = None,
         request_id: str = '',
+        attachment_docs: tuple[AttachmentInput, ...] = (),
     ) -> TurnResponse:
         """채팅 턴 1회 실행.
 
@@ -96,6 +98,7 @@ class EvidenceChatService:
             request_id=request_id,
             budget_signal=budget_signal or {},
             prior_topics=_prior_topics(self._repo, owner_id, session),
+            attachment_docs=attachment_docs,
         )
 
         if self._sqs_enqueue is not None:
@@ -113,6 +116,7 @@ class EvidenceChatService:
                 'scope': (request.scope.value if request.scope else 'auto'),
                 'paperIds': list(request.paperIds or []),
                 'attachments': list(request.attachments or []),
+                'attachmentDocs': _attachment_doc_payloads(attachment_docs),
             })
         else:
             # 동기 경로: async 분기와 달리 add_turn을 빠뜨려 저장된 턴이 0건이었다 —
@@ -262,3 +266,9 @@ def _prior_topics(
     return tuple(
         t.request.topic for t in prior if t.request is not None and t.request.topic
     )
+
+
+def _attachment_doc_payloads(attachment_docs: tuple[AttachmentInput, ...]) -> list[dict[str, Any]]:
+    from .attachments import attachment_inputs_to_payloads
+
+    return attachment_inputs_to_payloads(attachment_docs)

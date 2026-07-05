@@ -2,11 +2,19 @@ from __future__ import annotations
 
 import os
 from typing import Any
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from pydantic import BaseModel, ConfigDict, Field
 
 from backend.middleware.agent_quota import enforce_evidence_turn_quota
 from backend.modules.accounts.models import Principal
+from backend.modules.user_docmodel import (
+    USER_DOCMODEL_PDF_CONTENT_TYPE,
+    build_default_user_docmodel_coordinator,
+    object_key_for_upload,
+    user_docmodel_ref,
+)
 
 from .models import (
     ResearchChatMessage,
@@ -49,9 +57,31 @@ def get_evidence_orchestrator(request: Request) -> Any:
     return bundle.orchestrator if bundle else None
 
 
+def get_user_docmodel(request: Request):
+    coordinator = getattr(request.app.state, "user_docmodel", None)
+    if coordinator is None:
+        coordinator = build_default_user_docmodel_coordinator()
+        request.app.state.user_docmodel = coordinator
+    return coordinator
+
+
 PRINCIPAL_DEP = Depends(get_principal)
 REPO_DEP = Depends(get_repo)
 EVIDENCE_ORCHESTRATOR_DEP = Depends(get_evidence_orchestrator)
+USER_DOCMODEL_DEP = Depends(get_user_docmodel)
+
+
+class AttachmentUploadOut(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    name: str
+    kind: str = "pdf"
+    size_bytes: int = Field(alias="sizeBytes")
+    status: str = "ready"
+    object_key: str = Field(alias="objectKey")
+    paper_id: str = Field(alias="paperId")
+    record_ref: str = Field(alias="recordRef")
 
 
 @router.post("/jobs", response_model=ResearchJobCreateResponse)
@@ -60,8 +90,62 @@ async def create_job(
     principal: Principal = PRINCIPAL_DEP,
     repo: ResearchRepository = REPO_DEP,
     orchestrator: Any = EVIDENCE_ORCHESTRATOR_DEP,
+    user_docmodel: Any = USER_DOCMODEL_DEP,
 ) -> ResearchJobCreateResponse:
-    return await ResearchService(repo).create_job(principal.user_id, dto, orchestrator)
+    try:
+        return await ResearchService(repo).create_job(
+            principal.user_id,
+            dto,
+            orchestrator,
+            user_docmodel,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="첨부 PDF 정보가 올바르지 않습니다.") from exc
+
+
+@router.post("/attachments", response_model=AttachmentUploadOut)
+async def upload_attachment(
+    request: Request,
+    principal: Principal = PRINCIPAL_DEP,
+    user_docmodel: Any = USER_DOCMODEL_DEP,
+) -> AttachmentUploadOut:
+    if user_docmodel is None:
+        raise HTTPException(status_code=422, detail="PDF 업로드 저장소가 구성되지 않았습니다.")
+    file_name = request.query_params.get("fileName") or "attachment.pdf"
+    attachment_id = request.query_params.get("id") or f"att-{uuid4()}"
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if content_type != USER_DOCMODEL_PDF_CONTENT_TYPE:
+        raise HTTPException(status_code=415, detail="PDF 파일만 업로드할 수 있습니다.")
+    data = await request.body()
+    object_key = object_key_for_upload(
+        module="evidence",
+        owner_id=principal.user_id,
+        scope_id=attachment_id,
+        attachment_id=attachment_id,
+        file_name=file_name,
+    )
+    ref = user_docmodel_ref(
+        owner_id=principal.user_id,
+        scope_id=attachment_id,
+        attachment_id=attachment_id,
+        object_key=object_key,
+        module="evidence",
+    )
+    try:
+        user_docmodel.upload_pdf(ref, data, file_name=file_name, content_type=content_type)
+        user_docmodel.enqueue_build(ref)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 - hide storage internals at the API boundary.
+        raise HTTPException(status_code=422, detail="PDF 업로드에 실패했습니다.") from exc
+    return AttachmentUploadOut(
+        id=attachment_id,
+        name=file_name,
+        sizeBytes=len(data),
+        objectKey=object_key,
+        paperId=ref.paper_id,
+        recordRef=ref.record_ref,
+    )
 
 
 @router.get("/jobs", response_model=ResearchJobListResponse)
@@ -132,12 +216,20 @@ async def add_message(
     principal: Principal = PRINCIPAL_DEP,
     repo: ResearchRepository = REPO_DEP,
     orchestrator: Any = EVIDENCE_ORCHESTRATOR_DEP,
+    user_docmodel: Any = USER_DOCMODEL_DEP,
 ) -> ResearchChatMessage:
     try:
-        return await ResearchService(repo).add_message(principal.user_id, job_id, dto, orchestrator)
+        return await ResearchService(repo).add_message(
+            principal.user_id,
+            job_id,
+            dto,
+            orchestrator,
+            user_docmodel,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="job not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="첨부 PDF 정보가 올바르지 않습니다.") from exc
 
 
 routers = (router,)
-

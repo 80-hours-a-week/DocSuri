@@ -12,7 +12,11 @@ from docsuri_shared.vector_spec import DIMENSIONS, EMBEDDING_SPEC
 from pydantic import ValidationError
 
 from docsuri_ingestion.domain.enums import FailureReason
-from docsuri_ingestion.domain.errors import RetriableIngestionError, ValidationViolationError
+from docsuri_ingestion.domain.errors import (
+    PermanentIngestionError,
+    RetriableIngestionError,
+    ValidationViolationError,
+)
 from docsuri_ingestion.domain.models import IndexRecordBatch, IndexStats, ParsedPaper, Tombstone
 from docsuri_ingestion.ports import QueueMessage
 
@@ -125,6 +129,63 @@ class S3DocModelStore:
             self._client.delete_objects(
                 Bucket=self._bucket, Delete={"Objects": keys[start : start + 1000]}
             )
+
+
+class S3UserDocumentSource:
+    """Read producer-uploaded PDF bytes for BUILD_USER_DOC_MODEL jobs.
+
+    The queue payload carries only an object key; the bucket remains deployment configuration.
+    Backend upload validation is not trusted as the sole guard, so the worker enforces a hard byte
+    cap before handing data to pdfplumber.
+    """
+
+    def __init__(self, *, bucket: str, max_bytes: int = 10 * 1024 * 1024) -> None:
+        import boto3
+
+        self._client = boto3.client("s3")
+        self._bucket = bucket
+        self._max_bytes = max_bytes
+
+    def fetch_pdf(self, object_key: str) -> bytes:
+        from botocore.exceptions import ClientError
+
+        if not object_key:
+            raise PermanentIngestionError(
+                "empty user document object key",
+                reason=FailureReason.VALIDATION_VIOLATION,
+                stage="s3",
+            )
+        try:
+            response = self._client.get_object(Bucket=self._bucket, Key=object_key)
+        except ClientError as exc:
+            code = exc.response.get("Error", {}).get("Code")
+            if code in {"NoSuchKey", "404", "NotFound"}:
+                raise PermanentIngestionError(
+                    "user document object not found",
+                    reason=FailureReason.FETCH_FAILURE,
+                    stage="s3",
+                ) from exc
+            raise RetriableIngestionError(
+                "user document fetch failed",
+                reason=FailureReason.DEPENDENCY_UNAVAILABLE,
+                stage="s3",
+            ) from exc
+
+        length = response.get("ContentLength")
+        if isinstance(length, int) and length > self._max_bytes:
+            raise PermanentIngestionError(
+                "user document exceeds maximum size",
+                reason=FailureReason.VALIDATION_VIOLATION,
+                stage="s3",
+            )
+        data = response["Body"].read(self._max_bytes + 1)
+        if len(data) > self._max_bytes:
+            raise PermanentIngestionError(
+                "user document exceeds maximum size",
+                reason=FailureReason.VALIDATION_VIOLATION,
+                stage="s3",
+            )
+        return data
 
 
 class BedrockCohereEmbeddingPort:

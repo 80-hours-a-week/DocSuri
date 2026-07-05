@@ -32,6 +32,9 @@ class AgentAttachmentIn(BaseModel):
     content_text: str | None = Field(
         None, alias="contentText", max_length=ATTACHMENT_TEXT_MAX_CHARS
     )
+    object_key: str | None = Field(None, alias="objectKey", max_length=512)
+    paper_id: str | None = Field(None, alias="paperId", max_length=128)
+    record_ref: str | None = Field(None, alias="recordRef", max_length=512)
 
     @field_validator("kind")
     @classmethod

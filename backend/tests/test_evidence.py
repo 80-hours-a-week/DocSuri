@@ -54,6 +54,37 @@ def _client(monkeypatch, principal: Principal | None = None, repo=None) -> TestC
     return TestClient(app)
 
 
+class _FakeUserDocModel:
+    def __init__(self, doc_model=None) -> None:
+        self.doc_model = doc_model
+        self.uploads: list[dict] = []
+        self.enqueued: list[object] = []
+        self.polled: list[object] = []
+
+    def upload_pdf(self, ref, pdf: bytes, *, file_name: str, content_type: str) -> None:
+        self.uploads.append(
+            {
+                "ref": ref,
+                "pdf": pdf,
+                "file_name": file_name,
+                "content_type": content_type,
+            }
+        )
+
+    def enqueue_build(self, ref) -> None:
+        self.enqueued.append(ref)
+
+    def enqueue_and_poll(self, ref):
+        self.polled.append(ref)
+        return self.doc_model
+
+
+def _doc_model(full_text: str):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(fullText=full_text, sections=[])
+
+
 # ---------------------------------------------------------------------------
 # PBT-EV-1: INV-EV-2 — claims=[] 이면 반드시 abstain 반환
 # ---------------------------------------------------------------------------
@@ -289,6 +320,113 @@ def test_api_turn_accepts_fe_attachment_objects_not_500(monkeypatch) -> None:
     assert resp.status_code == 200
 
 
+def test_api_uploads_user_pdf_and_turn_polls_docmodel(monkeypatch) -> None:
+    principal = _principal()
+    repo = InMemoryEvidenceRepository()
+    client = _client(monkeypatch, principal, repo)
+    fake_user_docmodel = _FakeUserDocModel(_doc_model("PDF extracted text"))
+    captured: dict = {}
+
+    class _CapturingOrchestrator:
+        def run(self, ctx, request):
+            captured["ctx"] = ctx
+            return TurnAbstainResult(
+                outcome=__import__(
+                    "docsuri_shared._generated.dtos.evidence_schema",
+                    fromlist=["EvidenceAbstainResult"],
+                ).EvidenceAbstainResult(
+                    state="abstain",
+                    abstainReason="out_of_corpus",
+                )
+            )
+
+    client.app.dependency_overrides[controller.get_user_docmodel] = (
+        lambda: fake_user_docmodel
+    )
+    client.app.dependency_overrides[controller.get_orchestrator] = (
+        lambda: _CapturingOrchestrator()
+    )
+
+    uploaded = client.post(
+        "/api/evidence/attachments?fileName=scan.pdf&id=att-1",
+        content=b"%PDF-1.4",
+        headers={"content-type": "application/pdf"},
+    )
+    assert uploaded.status_code == 200
+    attachment = uploaded.json()
+    assert attachment["paperId"].startswith("userdoc:")
+    assert attachment["recordRef"].startswith(f"upload:{principal.user_id}:userdoc-")
+    assert "arxivRef" not in attachment
+
+    turn = client.post(
+        "/api/evidence/turns",
+        json={"topic": "attachment handling", "attachments": [attachment]},
+    )
+
+    assert turn.status_code == 200
+    assert fake_user_docmodel.uploads[0]["pdf"] == b"%PDF-1.4"
+    assert fake_user_docmodel.enqueued[0].payload()["kind"] == "BUILD_USER_DOC_MODEL"
+    assert fake_user_docmodel.polled[0].paper_id == attachment["paperId"]
+    docs = captured["ctx"].attachment_docs
+    assert docs[0].paper_id == attachment["paperId"]
+    assert docs[0].record_ref == attachment["recordRef"]
+    assert docs[0].doc_model.fullText == "PDF extracted text"
+
+
+def test_api_turn_rejects_forged_pdf_object_key_without_polling(monkeypatch) -> None:
+    principal = _principal()
+    repo = InMemoryEvidenceRepository()
+    client = _client(monkeypatch, principal, repo)
+    fake_user_docmodel = _FakeUserDocModel(_doc_model("PDF extracted text"))
+    client.app.dependency_overrides[controller.get_user_docmodel] = (
+        lambda: fake_user_docmodel
+    )
+
+    uploaded = client.post(
+        "/api/evidence/attachments?fileName=scan.pdf&id=att-1",
+        content=b"%PDF-1.4",
+        headers={"content-type": "application/pdf"},
+    )
+    assert uploaded.status_code == 200
+    attachment = uploaded.json()
+    attachment["objectKey"] = "uploads/evidence/other-user/att-1/att-1/scan.pdf"
+
+    turn = client.post(
+        "/api/evidence/turns",
+        json={"topic": "attachment handling", "attachments": [attachment]},
+    )
+
+    assert turn.status_code == 422
+    assert fake_user_docmodel.polled == []
+
+
+def test_api_turn_rejects_invalid_pdf_identity_without_polling(monkeypatch) -> None:
+    principal = _principal()
+    repo = InMemoryEvidenceRepository()
+    client = _client(monkeypatch, principal, repo)
+    fake_user_docmodel = _FakeUserDocModel(_doc_model("PDF extracted text"))
+    client.app.dependency_overrides[controller.get_user_docmodel] = (
+        lambda: fake_user_docmodel
+    )
+
+    uploaded = client.post(
+        "/api/evidence/attachments?fileName=scan.pdf&id=att-1",
+        content=b"%PDF-1.4",
+        headers={"content-type": "application/pdf"},
+    )
+    assert uploaded.status_code == 200
+    attachment = uploaded.json()
+    attachment["paperId"] = "userdoc:not-a-uuid"
+
+    turn = client.post(
+        "/api/evidence/turns",
+        json={"topic": "attachment handling", "attachments": [attachment]},
+    )
+
+    assert turn.status_code == 422
+    assert fake_user_docmodel.polled == []
+
+
 def test_api_turn_rejects_disallowed_attachment_kind_with_422(monkeypatch) -> None:
     client = _client(monkeypatch, _principal(), InMemoryEvidenceRepository())
 
@@ -400,6 +538,7 @@ def test_async_turn_enqueue_preserves_attachment_handles() -> None:
 
     assert isinstance(resp.result, TurnPendingResult)
     assert enqueued[0]['attachments'] == ['att-1', 'att-2']
+    assert enqueued[0]['attachmentDocs'] == []
 
 
 # ---------------------------------------------------------------------------
@@ -738,7 +877,7 @@ def test_orchestrator_includes_attachment_content_as_extraction_target() -> None
 
     orchestrator.run(ctx, request)
 
-    ids = [paper_id for paper_id, _ in captured['doc_models']]
+    ids = [source[0] for source in captured['doc_models']]
     assert ids == ['attachment:draft.md']
     doc = captured['doc_models'][0][1]
     assert 'RAG 초안' in doc.fullText

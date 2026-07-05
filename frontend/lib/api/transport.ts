@@ -6,6 +6,24 @@
 
 export type TransportMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 
+export type BinaryTransportData = Blob | ArrayBuffer | Uint8Array;
+
+export interface BinaryTransportBody {
+  kind: 'binary';
+  data: BinaryTransportData;
+  contentType: string;
+}
+
+export function binaryBody(data: BinaryTransportData, contentType: string): BinaryTransportBody {
+  return { kind: 'binary', data, contentType };
+}
+
+export function isBinaryTransportBody(body: unknown): body is BinaryTransportBody {
+  if (!body || typeof body !== 'object') return false;
+  const record = body as Record<string, unknown>;
+  return record.kind === 'binary' && typeof record.contentType === 'string' && 'data' in record;
+}
+
 export interface TransportRequest {
   method: TransportMethod;
   path: string;
