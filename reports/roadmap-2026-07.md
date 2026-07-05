@@ -1,12 +1,14 @@
 # DocSuri Production Roadmap — 2026-07
 
-> **Date**: 2026-07-03 · **Baseline**: develop `7b7166d` (2026-07-05) · **main at v1.5.0** (2026-07-04 promotion)
+> **Date**: 2026-07-03 · **Baseline**: develop `fa7e333` (2026-07-05) · **main at v1.5.0** (2026-07-04 promotion)
 > **Updated**: 2026-07-05 — Phase 1 execution, day 2:
 > - ✅ **P2-b merged** (PR #370): **#257 단계 상세 이벤트** — worker가 FE `timelineDetail` 계약 키(source/query/count/outputSummary/reason)로 도구·쿼리·발견 출처 수·저하 사유를 emit(검색 단계는 시작+완료 이벤트, LLM 단계는 draft 선완료라 시작 이벤트가 결과 수 동봉) + **#253 유사 연구 표 상세 칼럼**(문제정의·방법·데이터셋·결과·한계·겹치는 점). 리뷰 2라운드 반영: 상세 칸은 **필드별 근거**(`{value, sourceRefIndexes}`)가 유효할 때만 값 보존 — row 출처는 포괄 근거가 아니며 검증 불가 형상은 기권 null(B-001); SSE 경로도 REST와 동일한 payload→detail 매핑(N-001).
 > - ✅ **P3 1차 슬라이스 merged** (PR #373): 에이전트 첨부 **처리 전 검증**(pdf/markdown/text 허용목록 · 10MB · 최대 8개 → 422 즉시 거부, #268/#297 AC) + **실배포 첨부 500 결함** 수정(FE 객체 vs 공유계약 `list[str]` 핸들 → 파싱단계 검증 + id 핸들 변환); 후속 커밋이 evidence async 경로의 핸들 보존까지 마감. 2차(presigned upload + doc-model ingestion + #252 E2E, CDK/IAM 동반)는 **#268 설계 코멘트로 유진 검토 대기**.
 > - ✅ **#371 merged** (팀): summary worker crash 수정 + 수식/MathML sanitize + glossary 편집 UI 분리(CollapsibleTerms/GlossaryTermEditor) + renderMath 보강.
 > - ✅ **#372 merged** (팀 ELSAPHABA): novelty Bedrock을 `invoke_model_with_response_stream`으로 전환 + read_timeout 45s→300s — 장시간 draft 타임아웃 완화. #370과의 충돌(test_novelty·audit) 해소 및 칼럼 테스트 fake의 스트리밍 계약 이식 후 머지.
-> - ⏭️ Remaining Phase 1 — see §3: P3 2차(presign+ingestion) · sessions decision (#271/#272) · eval (#273/#259) · #258 Notion · #251 form_evidence.
+> - ✅ **세션 재열람·초기화 마감** (PR #375): 코드 검증 결과 #271(재열람·Postgres 영속·owner 격리)은 **이미 완성** — 증빙 코멘트 후 close 판단은 리드에. 남은 공백 **전체 초기화**(US-EV8 AC2: 소유자 벌크 `DELETE /jobs` 양 모듈 + 드로어 2단계 확인) 구현 + 조사 중 발견한 **novelty SQL 삭제 고아 행 결함**(FK cascade 부재로 이벤트·메시지·아티팩트·export 잔존, SEC-14) 수정. #272 closed.
+> - ✅ **P3 2차 merged** (PR #376): 첨부·원고 **본문 E2E** — evidence md/txt 첨부가 근거 **추출 대상 문서**로 포함(corpus 비어도 진행, INV-EV-3 유지; 본문 없는 첨부는 '[첨부 안내]' 별도 메시지), novelty 원고 잡 **디스패치 보류 → `POST /jobs/{id}/manuscript`(S3 적재·objectKey 바인딩) → 분석 시작**(US-NV2 md/txt 관통, FE 실배포 게이트 제거). presigned-PUT 설계안 대신 본문 동봉(≤256KiB)+서버 적재로 인프라 협의 없이 레포 내 완결.
+> - ⏭️ Remaining Phase 1 — see §3: PDF 첨부·원고(doc-model 파이프라인 경유, Q6=A) · eval (#273/#259) · #258 Notion · #251 form_evidence · old-queue drain 확인.
 > _Prev 2026-07-04 pm — NFR-C1 비용 거버넌스 v1.5.0 (PR #364, 유진 `40d545d`); #339 close (PR #365); #293/#295/#296/#298 close; summary worker 5th ECS unit + **v1.5.0 승격** (PR #366/#367, 5유닛 안정); novelty FE 렌더러 (PR #368). am — v1.4.0 승격 (PR #360); CI node24 (PR #361); #338/#349 에이전트 merge; #353/#355/#357 오픈; #351 merge. 07-03 — #337 merge; #349 오픈._
 > Snapshot of where the product stands against the team's initial plan, and the path to
 > production-level completion of our goals. Tracking references: #251–#373 where cited below.
@@ -23,8 +25,8 @@
 | 구독제 | ❌ Not started | Never entered requirements — needs inception re-entry |
 | 로그 수집 | ✅ Live | U9 collection healthy (944 events/7d, 0 failures); KPI funnel view missing (#346) |
 | 개인화 추천 | 🟡 Shadow | Search boost applied in shadow mode (PR #300); go-live judgment pending (#345); US-P5 deferred |
-| 에이전트: 문헌탐색/근거형성 | ✅ Live (v1.4.0) | PR #338 shipped v1.4.0; **cost-governed since v1.5.0** (PR #364); 근거 카드 + `§` 인용 앵커 (#339, PR #365); **첨부 검증(422) + 첨부 500 결함 수정 merged** (PR #373, develop). Remaining: attachments 2차(presign+ingestion, #268 설계 대기), sessions surfaces (#271/#272), eval/observability (#273) |
-| (charter add) 연구아이디어 novelty 에이전트 | ✅ Live (v1.4.0) | PR #349 shipped v1.4.0; cost-governed since v1.5.0 (PR #364: draft-gate + 5/day quota). FE 아티팩트 렌더러 (PR #368) + **P2-b merged** (PR #370: 단계 상세 이벤트 + 표 상세 칼럼, 필드별 근거 강제) + **Bedrock streaming·timeout 300s** (PR #372). Remaining: #258 Notion export, #251 form_evidence |
+| 에이전트: 문헌탐색/근거형성 | ✅ Live (v1.4.0) | PR #338 shipped v1.4.0; **cost-governed since v1.5.0** (PR #364); 근거 카드 + `§` 인용 앵커 (#339, PR #365); 첨부 검증 422 + 500 수정 (PR #373); **첨부 본문 근거 추출 포함** (PR #376) + **세션 재열람·삭제·전체 초기화** (PR #375, develop). Remaining: PDF 첨부(doc-model 경유), eval/observability (#273) |
+| (charter add) 연구아이디어 novelty 에이전트 | ✅ Live (v1.4.0) | PR #349 shipped v1.4.0; cost-governed since v1.5.0 (PR #364: draft-gate + 5/day quota). FE 아티팩트 렌더러 (PR #368) + **P2-b merged** (PR #370) + **Bedrock streaming·timeout 300s** (PR #372) + **원고 업로드 E2E** (PR #376: 디스패치 보류→본문 적재→분석, develop). Remaining: #258 Notion export, #251 form_evidence, PDF 원고(doc-model 경유) |
 | 웹검색 레퍼런스 (고려) | ❌ Not started | Novelty agent has GitHub+datasets search; web/news deferred to next cycle |
 | 온보딩 (고려) | ❌ Not started | Candidate fix for personalization cold-start |
 
@@ -52,8 +54,8 @@ The differentiator is ~90% built. Finish it before starting anything new.
 | P1 · #339 + story hygiene | ✅ **v1.5.0** | PR #365 (근거 카드 + `§` 앵커 + screen test); #293/#295/#296/#298 closed with evidence comments |
 | P2-a · Novelty FE renderers | ✅ develop | PR #368 (`233aac1`) — #253–#256 FE half; ships with next promotion |
 | P2-b · Novelty backend | ✅ develop | PR #370 — #257 단계 상세 이벤트(timelineDetail 계약) + #253 표 상세 칼럼; 리뷰 2라운드로 **필드별 근거 강제**(B-001) + SSE detail 매핑(N-001). 같은 날 PR #372(Bedrock streaming + timeout 300s)와 통합 |
-| P3 · Attachments E2E | 🟡 1차 develop | 1차 ✅ (PR #373): 처리 전 검증(422) + 첨부 500 결함 + async 핸들 보존. 2차 ⬜: presigned upload + doc-model ingestion + #252 manuscript E2E — **#268 설계 코멘트 유진 검토 대기** (CDK/IAM 동반, cd.yml allowlist 선배포 순서) |
-| P4 · Residue | ⬜ | sessions surfaces decision (#271/#272 — dead surface or wire it) · eval harness/metrics (#273/#259) · #258 Notion export · #251 form_evidence-first · novelty old-queue drain/retire 확인 (cutover green at v1.4.0) |
+| P3 · Attachments E2E | ✅ develop | 1차 (PR #373): 처리 전 검증(422) + 첨부 500 결함 + async 핸들 보존. 2차 (PR #376): **본문 E2E** — evidence 첨부(md/txt) 추출 대상 포함 · novelty 원고 업로드 관통(#252 md/txt). 후속 ⬜: **PDF 본문**(공통 doc-model 파이프라인, Q6=A) + API 태스크 롤 `s3:PutObject` grant 확인(인프라 레포, 유진 — 없어도 422 안전 저하) |
+| P4 · Residue | 🟡 | 세션(#271/#272) ✅ PR #375 (#272 closed · #271 증빙 후 close 대기). 남은 항목: eval harness/metrics (#273/#259) · #258 Notion export · #251 form_evidence-first · novelty old-queue drain/retire 확인 (cutover green at v1.4.0) |
 
 ## 4. Phase 2 — Weeks 2–4 (parallel): production hardening
 
