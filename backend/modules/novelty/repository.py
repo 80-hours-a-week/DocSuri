@@ -387,11 +387,15 @@ class SqlNoveltyRepository:
             "errorMessage": "error_message",
             "cancelled": "cancelled",
             "completedAt": "completed_at",
+            # US-NV2(#252) — 업로드 완료 시 objectKey 바인딩(JSON 컬럼).
+            "manuscript": "manuscript",
         }
         for key, value in changes.items():
             column = mapping.get(key)
             if column is None:
                 continue
+            if hasattr(value, "model_dump"):
+                value = value.model_dump(mode="json")
             if hasattr(value, "value"):
                 value = value.value
             setattr(row, column, value)

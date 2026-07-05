@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 
+from types import SimpleNamespace
+
 from docsuri_shared._generated.dtos.docmodel_schema import DocModel
 from docsuri_shared._generated.dtos.evidence_schema import (
     EvidenceAbstainResult,
@@ -87,7 +89,11 @@ class EvidenceAgentOrchestrator:
                 )
             )
 
-        if not search_result.records:
+        # US-EV4(#268) 2차 — 본문이 동봉된 첨부(md/txt)는 corpus가 비어도 추출 대상이 된다.
+        attachment_docs = [
+            doc for doc in ctx.attachment_docs if doc.text and doc.text.strip()
+        ]
+        if not search_result.records and not attachment_docs:
             return TurnAbstainResult(
                 outcome=EvidenceAbstainResult(
                     state='abstain',
@@ -104,6 +110,10 @@ class EvidenceAgentOrchestrator:
             doc_model = self._doc_model.get_doc_model(paper_id)
             if doc_model is not None:
                 doc_models.append((paper_id, doc_model))
+
+        # --- 3b. 첨부 문서를 근거 추출 대상에 포함(US-EV4 AC1) ---
+        for doc in attachment_docs:
+            doc_models.append((f'attachment:{doc.name}', _attachment_doc_model(doc)))
 
         if not doc_models:
             return TurnAbstainResult(
@@ -147,6 +157,22 @@ class EvidenceAgentOrchestrator:
 # 폭주하므로 상한을 둔다. ponytail: 3개·200자 고정, 필요하면 늘린다.
 _MAX_PRIOR_TOPICS = 3
 _PRIOR_TOPIC_CHARS = 200
+
+
+def _attachment_doc_model(doc: object) -> object:
+    """첨부 본문의 최소 DocModel 스탠드인(US-EV4 #268 2차).
+
+    생성 스키마 DocModel(extra=forbid, meta.provenance 필수)을 첨부용으로 억지로
+    채우는 대신, extractor·prompt가 실제로 읽는 필드(fullText / meta.title /
+    sections[].title·blocks[].text)만 가진 구조 동형 객체를 만든다. PDF는 공통
+    doc-model 파이프라인 경유가 후속(Q6=A) — 그때 진짜 DocModel로 대체된다.
+    """
+    name = getattr(doc, 'name', '') or '첨부 문서'
+    text = (getattr(doc, 'text', '') or '').strip()
+    block = SimpleNamespace(id='att.p1', type='paragraph', text=text)
+    section = SimpleNamespace(id='att', title=name, blocks=[block], sections=[])
+    meta = SimpleNamespace(title=f'첨부 문서: {name}')
+    return SimpleNamespace(meta=meta, fullText=text, sections=[section])
 
 
 def _contextualize_topic(topic: str, prior_topics: tuple[str, ...]) -> str:

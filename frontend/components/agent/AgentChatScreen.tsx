@@ -5,6 +5,7 @@ import type { FormEvent } from 'react';
 import { UserFacingError, getApiClient } from '@/lib/api';
 import { timelineDetail } from '@/lib/api/apiClient';
 import {
+  MAX_AGENT_ATTACHMENT_TEXT_CHARS,
   agentReducer,
   canSend,
   createAttachmentFromFile,
@@ -241,10 +242,27 @@ export function AgentChatScreen() {
   function attach(files: FileList | null) {
     if (!files) return;
     Array.from(files).forEach((file, idx) => {
+      const attachment = createAttachmentFromFile(file, state.attachments.length + idx);
+      // US-EV4(#268)/US-NV2(#252) — md/txt는 본문을 읽어 동봉한다. 읽기가 끝날 때까지
+      // 'reading'으로 전송을 막아(canSend all-ready) 본문 없는 전송 레이스를 없앤다.
+      const needsContent = attachment.status === 'ready' && attachment.kind !== 'pdf';
       dispatch({
         type: 'addAttachment',
-        attachment: createAttachmentFromFile(file, state.attachments.length + idx),
+        attachment: needsContent ? { ...attachment, status: 'reading' } : attachment,
       });
+      if (needsContent) {
+        readAttachmentText(file)
+          .then((text) =>
+            dispatch({
+              type: 'attachmentContentReady',
+              id: attachment.id,
+              contentText: text.slice(0, MAX_AGENT_ATTACHMENT_TEXT_CHARS),
+            }),
+          )
+          .catch(() =>
+            dispatch({ type: 'attachmentContentReady', id: attachment.id, contentText: '' }),
+          );
+      }
     });
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
@@ -352,6 +370,17 @@ export function AgentChatScreen() {
       ) : null}
     </section>
   );
+}
+
+function readAttachmentText(file: File): Promise<string> {
+  // jsdom은 File.text()가 없다 — 브라우저·테스트 양쪽에서 동작하는 FileReader 폴백.
+  if (typeof file.text === 'function') return file.text();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(file);
+  });
 }
 
 function AgentModePicker({

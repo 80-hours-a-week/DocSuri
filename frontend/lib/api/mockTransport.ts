@@ -429,6 +429,14 @@ export class MockTransport implements Transport {
         ? { status: 204, body: null }
         : { status: 404, body: null };
     }
+    // US-NV2(#252) — 원고 본문 업로드. mock에서는 잡 존재만 확인하고 즉시 수락한다.
+    const noveltyManuscript = path.match(/^\/api\/novelty\/jobs\/([^/]+)\/manuscript$/);
+    if (noveltyManuscript && req.method === 'POST') {
+      const snapshot = mockLoadAgentSession(decodeURIComponent(noveltyManuscript[1]));
+      return snapshot
+        ? { status: 200, body: { job: noveltyJob(snapshot.session), events: [] } }
+        : { status: 404, body: null };
+    }
     const noveltyResult = path.match(/^\/api\/novelty\/jobs\/([^/]+)\/result$/);
     if (noveltyResult && req.method === 'GET') {
       const snapshot = mockLoadAgentSession(decodeURIComponent(noveltyResult[1]));

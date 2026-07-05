@@ -13,6 +13,8 @@ import type {
 export const MAX_AGENT_MESSAGE_CHARS = 4000;
 export const MAX_AGENT_ATTACHMENTS = 5;
 export const MAX_AGENT_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+// US-EV4(#268)/US-NV2(#252) — 동봉 본문 상한. BE 계약(ATTACHMENT_TEXT_MAX_CHARS)과 동일.
+export const MAX_AGENT_ATTACHMENT_TEXT_CHARS = 262_144;
 
 export interface AgentChatState {
   session: AgentSessionSummary | null;
@@ -49,6 +51,7 @@ export type AgentChatAction =
   | { type: 'newChat' }
   | { type: 'setDraft'; draft: string }
   | { type: 'addAttachment'; attachment: AgentAttachment }
+  | { type: 'attachmentContentReady'; id: string; contentText: string }
   | { type: 'removeAttachment'; id: string }
   | { type: 'sendStart'; message: AgentMessage }
   | { type: 'sendSuccess'; result: AgentSendMessageResult }
@@ -112,6 +115,17 @@ export function agentReducer(state: AgentChatState, action: AgentChatAction): Ag
         return { ...state, error: `첨부는 최대 ${MAX_AGENT_ATTACHMENTS}개까지 가능합니다.` };
       }
       return { ...state, attachments: [...state.attachments, action.attachment], error: null };
+    case 'attachmentContentReady':
+      // US-EV4(#268)/US-NV2(#252) — 본문 읽기 완료 → 전송 가능(ready). 읽기 실패는
+      // 빈 본문으로 ready 처리하고 BE가 '[첨부 안내]'로 미포함을 알린다.
+      return {
+        ...state,
+        attachments: state.attachments.map((item) =>
+          item.id === action.id
+            ? { ...item, status: 'ready' as const, contentText: action.contentText }
+            : item,
+        ),
+      };
     case 'removeAttachment':
       return {
         ...state,

@@ -1148,3 +1148,108 @@ def test_sql_delete_job_and_reset_purge_child_rows() -> None:
         NotionExportTable,
     ):
         assert session.query(table).count() == 0
+
+
+def test_api_manuscript_upload_binds_key_and_dispatches(monkeypatch) -> None:
+    """US-NV2(#252) — 원고 잡 생성(본문 없음) → 디스패치 보류(queued 유지) → 본문 업로드
+    → S3 적재(유사도 어댑터 프리픽스 규약) → objectKey 바인딩 → 분석 시작."""
+    import boto3
+
+    puts: list[dict] = []
+
+    class FakeS3:
+        def __init__(self) -> None:
+            self.objects: dict[str, bytes] = {}
+
+        def put_object(self, **kwargs):
+            puts.append(kwargs)
+            self.objects[kwargs["Key"]] = kwargs["Body"]
+            return {}
+
+        def get_object(self, **kwargs):
+            body = self.objects.get(kwargs["Key"], b"")
+            return {"Body": BytesIO(body if isinstance(body, bytes) else bytes(body))}
+
+    fake = FakeS3()
+    monkeypatch.setenv("DOCSURI_NOVELTY_ARTIFACT_BUCKET", "papers")
+    monkeypatch.delenv("DOCSURI_NOVELTY_JOB_QUEUE_URL", raising=False)
+    monkeypatch.setattr(boto3, "client", lambda *_a, **_k: fake)
+
+    principal = _principal()
+    repo = InMemoryNoveltyRepository()
+    client = _client(monkeypatch, principal, repo)
+
+    created = client.post(
+        "/api/novelty/jobs",
+        json={
+            "inputType": "manuscript",
+            "topic": "manuscript novelty flow",
+            "manuscript": {"fileName": "draft.md", "contentType": "text/markdown"},
+        },
+    )
+    assert created.status_code == 200
+    job_id = created.json()["jobId"]
+    # 본문 업로드 전 — 디스패치 보류(QUEUED 유지)
+    assert client.get(f"/api/novelty/jobs/{job_id}").json()["job"]["state"] == "queued"
+
+    uploaded = client.post(
+        f"/api/novelty/jobs/{job_id}/manuscript",
+        json={"contentText": "# Draft\nprivacy preserving retrieval evaluation."},
+    )
+
+    assert uploaded.status_code == 200
+    assert puts and puts[0]["Key"] == f"novelty/{principal.user_id}/{job_id}/manuscript.md"
+    assert repo.get_job(principal.user_id, job_id).manuscript.objectKey == puts[0]["Key"]
+    # 큐 미구성 → 인라인 워커가 잡을 진행시킨다(더는 queued가 아니다).
+    assert client.get(f"/api/novelty/jobs/{job_id}").json()["job"]["state"] != "queued"
+
+
+def test_api_manuscript_upload_guards(monkeypatch) -> None:
+    """US-NV2(#252) — 소유자 격리(404) · 비원고 잡(422) · 중복 업로드(422)."""
+    import boto3
+
+    class FakeS3:
+        def put_object(self, **kwargs):
+            return {}
+
+        def get_object(self, **kwargs):
+            return {"Body": BytesIO(b"draft body")}
+
+    monkeypatch.setenv("DOCSURI_NOVELTY_ARTIFACT_BUCKET", "papers")
+    monkeypatch.delenv("DOCSURI_NOVELTY_JOB_QUEUE_URL", raising=False)
+    monkeypatch.setattr(boto3, "client", lambda *_a, **_k: FakeS3())
+
+    owner = _principal()
+    repo = InMemoryNoveltyRepository()
+    client = _client(monkeypatch, owner, repo)
+    intruder = _client(monkeypatch, _principal(), repo)
+
+    manuscript_job = client.post(
+        "/api/novelty/jobs",
+        json={
+            "inputType": "manuscript",
+            "topic": "guard checks",
+            "manuscript": {"fileName": "draft.txt", "contentType": "text/plain"},
+        },
+    ).json()["jobId"]
+    text_job = client.post(
+        "/api/novelty/jobs",
+        json={"inputType": "natural_language", "topic": "plain topic job"},
+    ).json()["jobId"]
+
+    payload = {"contentText": "guard body"}
+    assert (
+        intruder.post(f"/api/novelty/jobs/{manuscript_job}/manuscript", json=payload).status_code
+        == 404
+    )
+    assert (
+        client.post(f"/api/novelty/jobs/{text_job}/manuscript", json=payload).status_code == 422
+    )
+    assert (
+        client.post(f"/api/novelty/jobs/{manuscript_job}/manuscript", json=payload).status_code
+        == 200
+    )
+    assert (
+        client.post(f"/api/novelty/jobs/{manuscript_job}/manuscript", json=payload).status_code
+        == 422
+    )

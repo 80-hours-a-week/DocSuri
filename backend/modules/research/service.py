@@ -93,7 +93,9 @@ class ResearchService:
         if orchestrator is None:
             self._repo.mark_completed(owner_id, job_id)
             return user_msg
-        result = await _run_evidence(orchestrator, owner_id, dto.content, prior_topics)
+        result = await _run_evidence(
+            orchestrator, owner_id, dto.content, prior_topics, _attachment_inputs(dto.attachments)
+        )
         content = _format_turn_result(result)
         assistant_msg = self._repo.add_message(
             ResearchChatMessage(
@@ -104,6 +106,19 @@ class ResearchService:
                 attachments=[],
             )
         )
+        # US-EV4(#268) 2차 — 본문 없이 도착한 첨부(PDF 등)는 비기술 문구로 별도 안내.
+        # 성공 결과 content는 FE가 JSON으로 파싱하므로(카드 렌더링, #339) 덧붙이지 않는다.
+        notice = _attachment_notice(dto.attachments)
+        if notice:
+            self._repo.add_message(
+                ResearchChatMessage(
+                    jobId=job_id,
+                    ownerId=owner_id,
+                    role=ChatRole.ASSISTANT,
+                    content=notice,
+                    attachments=[],
+                )
+            )
         # 이 요청이 반환되는 시점에는 이미 모든 처리(evidence 추출 포함)가 끝난
         # 상태다 — job.state를 ACTIVE로 남겨두면 FE가 running으로 매핑해 답변이
         # 저장된 뒤에도 폴링을 멈추지 않는다(PR #338 리뷰 Blocking #3).
@@ -115,7 +130,11 @@ class ResearchService:
 
 
 async def _run_evidence(
-    orchestrator: Any, owner_id: str, topic: str, prior_topics: tuple[str, ...] = ()
+    orchestrator: Any,
+    owner_id: str,
+    topic: str,
+    prior_topics: tuple[str, ...] = (),
+    attachment_inputs: tuple[Any, ...] = (),
 ) -> Any:
     from docsuri_shared._generated.dtos.evidence_schema import EvidenceRequest, EvidenceScope
     from pydantic import ValidationError
@@ -138,6 +157,7 @@ async def _run_evidence(
         request_id='',
         budget_signal={'state': 'ok'},
         prior_topics=prior_topics,
+        attachment_docs=attachment_inputs,
     )
     return await asyncio.to_thread(orchestrator.run, ctx, request)
 
@@ -150,3 +170,37 @@ def _format_turn_result(result: Any) -> str:
     if isinstance(result, TurnAbstainResult):
         return f'[abstain] {result.outcome.abstainReason}'
     return '[error] evidence_unavailable'
+
+
+def _attachment_inputs(attachments: list[dict[str, Any]]) -> tuple[Any, ...]:
+    """검증된 첨부 dict → orchestrator 입력(US-EV4 #268 2차). contentText(md/txt 본문)가
+    있으면 추출 대상 문서가 된다."""
+    from backend.modules.evidence.models import AttachmentInput
+
+    inputs = []
+    for item in attachments:
+        raw_text = item.get('contentText')
+        inputs.append(
+            AttachmentInput(
+                name=str(item.get('name') or '첨부 문서'),
+                kind=str(item.get('kind') or ''),
+                text=raw_text if isinstance(raw_text, str) and raw_text.strip() else None,
+            )
+        )
+    return tuple(inputs)
+
+
+def _attachment_notice(attachments: list[dict[str, Any]]) -> str:
+    """본문 없이 도착한 첨부를 비기술 문구로 알린다(US-EV4/SEC-5 — 내부 오류 상세 미노출)."""
+    skipped = [
+        str(item.get('name') or '첨부 파일')
+        for item in attachments
+        if not (isinstance(item.get('contentText'), str) and item.get('contentText').strip())
+    ]
+    if not skipped:
+        return ''
+    names = ', '.join(skipped[:3])
+    return (
+        f'[첨부 안내] {names} — 이 형식의 본문 분석은 준비 중이라 이번 근거 형성에 '
+        '포함되지 않았습니다. Markdown·TXT 첨부는 본문까지 반영됩니다.'
+    )

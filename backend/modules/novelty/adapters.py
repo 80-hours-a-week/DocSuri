@@ -943,6 +943,36 @@ def build_u2_full_search_corpus_adapter(observability=None, cost_guard=None) -> 
     return U2FullSearchCorpusRetrievalClient(bundle.orchestrator, GroundingEnforcementHook())
 
 
+def store_manuscript_text(owner_id: str, job_id: str, content_type: str, text: str) -> str:
+    """US-NV2(#252) — 원고 본문을 novelty/{owner}/{job}/ 프리픽스에 적재하고 key 반환.
+
+    유사도 어댑터(S3ManuscriptSimilarityClient)가 같은 프리픽스 규약으로 읽는다.
+    버킷 미구성 시 ValueError — 컨트롤러가 422 비기술 안내로 변환(SEC-5).
+    """
+    bucket = os.getenv("DOCSURI_NOVELTY_ARTIFACT_BUCKET")
+    if not bucket:
+        raise ValueError("원고 저장소가 구성되지 않아 파일 분석을 시작할 수 없습니다.")
+
+    import boto3
+    from botocore.exceptions import BotoCoreError, ClientError
+
+    region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION", "ap-northeast-2")
+    prefix = os.getenv("DOCSURI_NOVELTY_ARTIFACT_PREFIX", "novelty/")
+    ext = ".md" if content_type == "text/markdown" else ".txt"
+    object_key = f"{prefix}{owner_id}/{job_id}/manuscript{ext}"
+    try:
+        boto3.client("s3", region_name=region).put_object(
+            Bucket=bucket,
+            Key=object_key,
+            Body=text.encode("utf-8"),
+            ContentType=content_type,
+        )
+    except (BotoCoreError, ClientError) as exc:
+        # IAM 권한 부재(PutObject) 포함 — 내부 오류 상세 없이 비기술 문구만(SEC-5/9).
+        raise ValueError("원고 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.") from exc
+    return object_key
+
+
 def build_similarity_adapter(corpus: CorpusRetrievalPort) -> SimilarityPort:
     bucket = os.getenv("DOCSURI_NOVELTY_ARTIFACT_BUCKET")
     if not bucket:
