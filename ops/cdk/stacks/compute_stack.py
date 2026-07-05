@@ -366,6 +366,18 @@ class ComputeStack(Stack):
             container_secrets["ORCID_OIDC_CLIENT_SECRET"] = ecs.Secret.from_secrets_manager(
                 orcid_oidc_secret
             )
+        # Notion export token-encryption key (US-NV8/SEC-8): Fernet key encrypting stored Notion
+        # connection tokens at rest — backend/modules/novelty/security.py reads it from env.
+        # Complete ARN (not name) for the grant/valueFrom reason documented for the Google secret
+        # above; the secret must already exist in Secrets Manager or the API task fails to start.
+        notion_token_key_secret = secretsmanager.Secret.from_secret_complete_arn(
+            self,
+            "NotionTokenKeySecret",
+            "arn:aws:secretsmanager:ap-northeast-2:028317349537:secret:docsuri/notion-token-key-8HoGdS",  # noqa: E501
+        )
+        container_secrets["DOCSURI_NOTION_TOKEN_KEY"] = ecs.Secret.from_secrets_manager(
+            notion_token_key_secret
+        )
 
         # --- TLS for the origin: Route53 zone + ACM cert for origin.docsuri.org ---
         zone = route53.HostedZone.from_hosted_zone_attributes(
