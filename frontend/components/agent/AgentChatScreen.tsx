@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { UserFacingError, getApiClient } from '@/lib/api';
+import { timelineDetail } from '@/lib/api/apiClient';
 import {
   agentReducer,
   canSend,
@@ -887,10 +888,16 @@ function mapSseProgressEvent(raw: unknown): AgentTimelineEvent | null {
   const id = stringValue(record.eventId);
   const stage = stringValue(record.state) ?? 'running';
   if (!id) return null;
+  const payload =
+    record.payload && typeof record.payload === 'object'
+      ? (record.payload as Record<string, unknown>)
+      : undefined;
   return {
     id,
     stage,
     label: stringValue(record.message) ?? stage,
+    // N-001 — REST polling과 동일한 payload→detail 매핑(#257): source/query/count/사유.
+    detail: timelineDetail(payload),
     state: mapSseTimelineState(stage),
   };
 }

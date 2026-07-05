@@ -517,9 +517,10 @@ def _novelty_system_prompt() -> str:
     return (
         "You are DocSuri's novelty-analysis assistant. Return only valid JSON. "
         "Use only the supplied sourceRefIndexes; never invent URLs, titles, datasets, or papers. "
-        "For each similarWorks entry, fill problem, method, dataset, results, limitations, and "
-        "overlap (how it overlaps the user's topic) only when the supplied sources support the "
-        "value; otherwise set the field to null. Never guess."
+        "For each similarWorks detail field (problem, method, dataset, results, limitations, "
+        'overlap — how it overlaps the user\'s topic), return {"value": string, '
+        '"sourceRefIndexes": [int]} citing the specific sources that support that value; '
+        "if no supplied source supports it, set the field to null. Never guess."
     )
 
 
@@ -548,12 +549,12 @@ def _novelty_user_prompt(
             {
                 "title": "string",
                 "summary": "string",
-                "problem": "string|null",
-                "method": "string|null",
-                "dataset": "string|null",
-                "results": "string|null",
-                "limitations": "string|null",
-                "overlap": "string|null",
+                "problem": {"value": "string", "sourceRefIndexes": [0]},
+                "method": {"value": "string", "sourceRefIndexes": [0]},
+                "dataset": {"value": "string", "sourceRefIndexes": [0]},
+                "results": {"value": "string", "sourceRefIndexes": [0]},
+                "limitations": {"value": "string", "sourceRefIndexes": [0]},
+                "overlap": {"value": "string", "sourceRefIndexes": [0]},
                 "sourceRefIndexes": [0],
             }
         ],
@@ -621,12 +622,10 @@ def _llm_items_payload(
             "sourceRefs": item_refs,
         }
         for column in detail_fields:
-            value = item.get(column)
-            text = value.strip() if isinstance(value, str) else ""
+            # B-001 — 상세 칸은 칸 자신의 sourceRefIndexes로 근거를 증명해야 값이 남는다.
+            # row 단위 출처를 포괄 근거로 쓰지 않으며, 검증 불가(bare string 포함)는 기권.
             # 키는 항상 실어 null=기권을 명시한다 — FE가 '근거 부족' 칸으로 구분(#253).
-            # sourceRef가 하나도 없는 row는 상세 칸 전부 기권 — 근거 없는 LLM 값이
-            # 표에서 근거 있는 것처럼 노출되면 안 된다(리뷰 반영).
-            entry[column] = (text[:500] or None) if item_refs else None
+            entry[column] = _grounded_detail(item.get(column), refs)
         items.append(entry)
     if not items:
         return fallback
@@ -641,6 +640,17 @@ def _refs_by_indexes(raw: Any, refs: list[dict[str, Any]]) -> list[dict[str, Any
         if isinstance(value, int) and 0 <= value < len(refs):
             selected.append(refs[value])
     return selected
+
+
+def _grounded_detail(raw: Any, refs: list[dict[str, Any]]) -> str | None:
+    """유사 연구 표 상세 칸(#253 B-001) — {value, sourceRefIndexes} 필드별 근거 필수."""
+    if not isinstance(raw, dict):
+        return None
+    value = raw.get("value")
+    text = value.strip() if isinstance(value, str) else ""
+    if not text or not _refs_by_indexes(raw.get("sourceRefIndexes"), refs):
+        return None
+    return text[:500]
 
 
 def _llm_experiment_plan(raw: Any, topic: str, refs: list[dict[str, Any]]) -> dict[str, Any]:

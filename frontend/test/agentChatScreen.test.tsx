@@ -35,6 +35,8 @@ describe('AgentChatScreen', () => {
         id: 'evt-1',
         stage: 'retrieving_external',
         label: '외부 검색',
+        // N-001(#257) — SSE 이벤트도 payload 상세(source/count)를 표시한다.
+        detail: '소스: github · 결과 2건',
         state: 'running',
       },
       {

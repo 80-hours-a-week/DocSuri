@@ -446,10 +446,18 @@ def test_bedrock_llm_adapter_maps_similar_work_detail_columns() -> None:
                     {
                         "title": "Prior RAG benchmark",
                         "summary": "Grounded baseline.",
-                        "problem": "  benchmark leakage  ",
-                        "method": "contrastive evaluation",
-                        "dataset": "RAG-Bench",
+                        "problem": {
+                            "value": "  benchmark leakage  ",
+                            "sourceRefIndexes": [0],
+                        },
+                        "method": {
+                            "value": "contrastive evaluation",
+                            "sourceRefIndexes": [0],
+                        },
+                        # B-001 회귀 — row 출처는 유효해도 칸 자체 근거가 비면 기권
+                        "dataset": {"value": "RAG-Bench", "sourceRefIndexes": []},
                         "results": None,
+                        # 구형 bare string — 필드별 근거 검증 불가 → 기권
                         "limitations": "small cohort",
                         # overlap 키 자체가 없음 → null(기권)로 정규화되어야 한다
                         "sourceRefIndexes": [0],
@@ -459,7 +467,8 @@ def test_bedrock_llm_adapter_maps_similar_work_detail_columns() -> None:
                         "title": "Ungrounded speculation",
                         "summary": "No valid refs.",
                         "problem": "invented problem",
-                        "method": "invented method",
+                        # 칸 형식은 맞지만 refs가 무효(범위 밖) → 기권
+                        "method": {"value": "invented method", "sourceRefIndexes": [99]},
                         "dataset": "invented dataset",
                         "results": "invented results",
                         "limitations": "invented limitations",
@@ -510,8 +519,10 @@ def test_bedrock_llm_adapter_maps_similar_work_detail_columns() -> None:
     item = draft.similarWorks["items"][0]
     assert item["problem"] == "benchmark leakage"
     assert item["method"] == "contrastive evaluation"
-    assert item["dataset"] == "RAG-Bench"
+    # B-001 — row 출처가 있어도 칸 자신의 근거가 없으면 기권(null)
+    assert item["dataset"] is None
     assert item["results"] is None
+    assert item["limitations"] is None
     assert item["overlap"] is None
     # 리뷰 반영 — sourceRef 없는 row는 상세 칸 전부 기권(null): 근거 없는 값 노출 금지
     ungrounded = draft.similarWorks["items"][1]

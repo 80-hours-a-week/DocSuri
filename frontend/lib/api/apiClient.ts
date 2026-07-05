@@ -239,7 +239,8 @@ function mapNoveltyResultMessage(
   };
 }
 
-function timelineDetail(payload?: Record<string, unknown>): string | undefined {
+// N-001(#257) — SSE 경로(AgentChatScreen)도 동일 payload→detail 매핑을 쓰도록 export.
+export function timelineDetail(payload?: Record<string, unknown>): string | undefined {
   if (!payload) return undefined;
   const count = countFromPayload(payload);
   const parts = [
