@@ -493,7 +493,7 @@ def test_bedrock_llm_adapter_maps_similar_work_detail_columns() -> None:
     captured_bodies: list[dict] = []
 
     class FakeBedrock:
-        def invoke_model(self, **kwargs):
+        def invoke_model_with_response_stream(self, **kwargs):
             captured_bodies.append(json.loads(kwargs["body"].decode("utf-8")))
             payload = {
                 "similarWorks": [
@@ -547,11 +547,14 @@ def test_bedrock_llm_adapter_maps_similar_work_detail_columns() -> None:
                 },
             }
             return {
-                "body": BytesIO(
-                    json.dumps(
-                        {"content": [{"type": "text", "text": json.dumps(payload)}]}
-                    ).encode("utf-8")
-                )
+                "body": [
+                    _stream_chunk(
+                        {
+                            "type": "content_block_delta",
+                            "delta": {"type": "text_delta", "text": json.dumps(payload)},
+                        }
+                    )
+                ]
             }
 
     corpus_ref = {
