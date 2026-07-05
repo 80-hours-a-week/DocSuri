@@ -9,6 +9,8 @@ import threading
 from collections.abc import Callable, Iterable
 from typing import Any
 
+from backend.modules.user_docmodel import USER_DOCMODEL_PDF_CONTENT_TYPE
+
 from .adapters import NoveltyAdapters, RetrievalBundle, build_default_novelty_adapters
 from .models import TERMINAL_STATES, ArtifactKind, EvidenceStatus, InputType, JobState
 from .repository import NoveltyRepository
@@ -23,6 +25,14 @@ class InvalidWorkerPayload(ValueError):
 
 class JobProcessingFailed(RuntimeError):
     pass
+
+
+# US-EV4/#268 consume-on-retry: a user-uploaded manuscript PDF's doc-model builds asynchronously
+# (slower than one poll). Rather than terminally DEGRADE, re-drive the job with a bounded backoff.
+_MANUSCRIPT_DOCMODEL_MAX_ATTEMPTS = int(os.getenv("DOCSURI_NOVELTY_MANUSCRIPT_MAX_ATTEMPTS", "8"))
+_MANUSCRIPT_DOCMODEL_RETRY_DELAY_SECONDS = min(
+    900, max(0, int(os.getenv("DOCSURI_NOVELTY_MANUSCRIPT_RETRY_DELAY_SECONDS", "30")))
+)
 
 
 class _Message:
@@ -42,15 +52,32 @@ def parse_sqs_payload(body: str | bytes | dict[str, Any]) -> tuple[str, str]:
     return str(owner_id), str(job_id)
 
 
+def _payload_attempt(body: str | bytes | dict[str, Any]) -> int:
+    if isinstance(body, bytes):
+        body = body.decode("utf-8")
+    payload = json.loads(body) if isinstance(body, str) else body
+    value = payload.get("attempt", 0)
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
 def process_sqs_payload(
     repo: NoveltyRepository,
     body: str | bytes | dict[str, Any],
     *,
     adapters: NoveltyAdapters | None = None,
     observability=None,
+    reenqueue: Callable[[str, str, int], None] | None = None,
 ) -> None:
     owner_id, job_id = parse_sqs_payload(body)
-    process_job(repo, owner_id, job_id, adapters=adapters, observability=observability)
+    process_job(
+        repo,
+        owner_id,
+        job_id,
+        adapters=adapters,
+        observability=observability,
+        attempt=_payload_attempt(body),
+        reenqueue=reenqueue,
+    )
 
 
 def run_worker(
@@ -61,6 +88,7 @@ def run_worker(
     should_stop: Callable[[], bool],
     adapters: NoveltyAdapters | None = None,
     observability=None,
+    reenqueue: Callable[[str, str, int], None] | None = None,
 ) -> None:
     while not should_stop():
         for message in receive():
@@ -71,6 +99,7 @@ def run_worker(
                     message.body,
                     adapters=adapters,
                     observability=observability,
+                    reenqueue=reenqueue,
                 )
                 commit = getattr(repo, "commit", None)
                 if commit is not None:
@@ -95,6 +124,42 @@ def run_worker(
                 break
 
 
+def _await_manuscript_doc_model(
+    service: NoveltyService,
+    adapters: NoveltyAdapters,
+    job: Any,
+    owner_id: str,
+    job_id: str,
+    attempt: int,
+    reenqueue: Callable[[str, str, int], None] | None,
+) -> bool:
+    """Early retry gate for user-uploaded manuscript PDFs (#268 consume-on-retry). The doc-model
+    builds asynchronously and is usually not ready within one poll; rather than run the LLM
+    pipeline and terminally DEGRADE, re-enqueue the same job with a bounded backoff until the
+    doc-model lands. Returns True when re-enqueued (caller returns without running the pipeline)."""
+    if reenqueue is None or job.manuscript is None:
+        return False
+    if job.inputType is not InputType.MANUSCRIPT:
+        return False
+    if job.manuscript.contentType != USER_DOCMODEL_PDF_CONTENT_TYPE:
+        return False
+    probe = getattr(adapters.similarity, "manuscript_doc_model_ready", None)
+    if probe is None:
+        return False
+    manuscript_ref = {**job.manuscript.model_dump(), "jobId": job_id}
+    if probe(owner_id, manuscript_ref):
+        return False
+    if attempt >= _MANUSCRIPT_DOCMODEL_MAX_ATTEMPTS:
+        return False  # exhausted → run the pipeline; it degrades as before.
+    service.record_event(
+        job,
+        "Waiting for the uploaded PDF to be processed",
+        {"source": _SIMILARITY_SOURCE, "attempt": attempt + 1},
+    )
+    reenqueue(owner_id, job_id, attempt + 1)
+    return True
+
+
 def process_job(
     repo: NoveltyRepository,
     owner_id: str,
@@ -102,6 +167,8 @@ def process_job(
     *,
     adapters: NoveltyAdapters | None = None,
     observability=None,
+    attempt: int = 0,
+    reenqueue: Callable[[str, str, int], None] | None = None,
 ) -> None:
     adapters = adapters or NoveltyAdapters()
     service = NoveltyService(repo, observability)
@@ -111,6 +178,8 @@ def process_job(
         log.warning("novelty job not found; dropping stale message", extra={"jobId": job_id})
         return
     if job.cancelled or job.state in TERMINAL_STATES:
+        return
+    if _await_manuscript_doc_model(service, adapters, job, owner_id, job_id, attempt, reenqueue):
         return
     try:
         degraded_reasons: list[str] = []
@@ -419,6 +488,13 @@ def main(argv: list[str] | None = None) -> int:
         if message.receipt_handle:
             sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=message.receipt_handle)
 
+    def reenqueue(o_id: str, j_id: str, attempt: int) -> None:
+        sqs.send_message(
+            QueueUrl=queue_url,
+            MessageBody=json.dumps({"ownerId": o_id, "jobId": j_id, "attempt": attempt}),
+            DelaySeconds=_MANUSCRIPT_DOCMODEL_RETRY_DELAY_SECONDS,
+        )
+
     log.info("novelty worker started; polling queue")
     try:
         run_worker(
@@ -432,6 +508,7 @@ def main(argv: list[str] | None = None) -> int:
                 user_docmodel=_build_user_docmodel(),
             ),
             observability=observability,
+            reenqueue=reenqueue,
         )
     finally:
         close = getattr(telemetry_store, "close", None)

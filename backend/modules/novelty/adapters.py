@@ -969,13 +969,11 @@ class S3ManuscriptSimilarityClient:
         )
         return response["Body"].read().decode("utf-8", errors="replace")
 
-    def _read_pdf_doc_model(self, owner_id: str, manuscript_ref: dict[str, Any]) -> str:
-        if self._user_docmodel is None:
-            return ""
+    def _manuscript_docmodel_ref(self, owner_id: str, manuscript_ref: dict[str, Any]):
         object_key = str(manuscript_ref.get("objectKey") or "")
         job_id = str(manuscript_ref.get("jobId") or "manuscript")
         try:
-            ref = ref_from_attachment(
+            return ref_from_attachment(
                 owner_id=owner_id,
                 scope_id=job_id,
                 attachment_id="manuscript",
@@ -985,6 +983,26 @@ class S3ManuscriptSimilarityClient:
                 record_ref=manuscript_ref.get("recordRef"),
             )
         except ValueError:
+            return None
+
+    def manuscript_doc_model_ready(self, owner_id: str, manuscript_ref: dict[str, Any]) -> bool:
+        """Non-blocking readiness probe for the worker's early retry gate. True when the user PDF's
+        doc-model is already built — or when no reader is configured / the ref is unbuildable, so
+        the caller proceeds to the normal (degrade) path instead of looping forever."""
+        if self._user_docmodel is None:
+            return True
+        ref = self._manuscript_docmodel_ref(owner_id, manuscript_ref)
+        if ref is None:
+            return True
+        # Re-trigger the build (idempotent) so a lost/expired build message still lands.
+        self._user_docmodel.enqueue_build(ref)
+        return self._user_docmodel.peek_doc_model(ref) is not None
+
+    def _read_pdf_doc_model(self, owner_id: str, manuscript_ref: dict[str, Any]) -> str:
+        if self._user_docmodel is None:
+            return ""
+        ref = self._manuscript_docmodel_ref(owner_id, manuscript_ref)
+        if ref is None:
             return ""
         doc_model = self._user_docmodel.enqueue_and_poll(ref)
         text = str(getattr(doc_model, "fullText", "") or "") if doc_model is not None else ""

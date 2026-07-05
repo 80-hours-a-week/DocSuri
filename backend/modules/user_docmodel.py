@@ -211,6 +211,16 @@ class UserDocModelCoordinator:
                 return None
             time.sleep(min(self._poll_interval, max(0.0, deadline - now)))
 
+    def peek_doc_model(self, ref: UserDocModelRef) -> DocModel | None:
+        """Single non-blocking readiness check (no sleep) for a worker's early retry gate.
+        Returns None when the doc-model is not built yet, or the reader is absent/erroring."""
+        if self._reader is None:
+            return None
+        try:
+            return self._reader.get_doc_model(ref.paper_id, ref.version)
+        except Exception:  # noqa: BLE001 — best-effort peek; a reader failure reads as "not ready".
+            return None
+
     def enqueue_and_poll(self, ref: UserDocModelRef) -> DocModel | None:
         self.enqueue_build(ref)
         return self.poll_doc_model(ref)
