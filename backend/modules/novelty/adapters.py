@@ -51,7 +51,9 @@ class NoveltyLlmPort(Protocol):
 
 
 class NotionExportPort(Protocol):
-    def export(self, owner_id: str, preview: dict[str, Any]) -> str: ...
+    """US-NV8(#258) — connection={"token","parentPageId"}(복호화된 값), content=제목+아티팩트."""
+
+    def export(self, connection: dict[str, str], content: dict[str, Any]) -> str: ...
 
 
 class EvidenceFormationAdapterPort(Protocol):
@@ -1002,8 +1004,101 @@ def _ai_style_items(text: str) -> list[dict[str, Any]]:
 
 
 class NoopNotionExportClient:
-    def export(self, owner_id: str, preview: dict[str, Any]) -> str:
+    def export(self, connection: dict[str, str], content: dict[str, Any]) -> str:
         raise RuntimeError("Notion export adapter is not configured")
+
+
+class NotionApiExportClient:
+    """US-NV8(#258) — 명시 연결 토큰으로 Notion 페이지 생성. api.notion.com만 호출(allowlist)."""
+
+    _API_URL = "https://api.notion.com/v1/pages"
+    _VERSION = "2022-06-28"
+    _MAX_BLOCKS = 90  # Notion 페이지 생성 children 한도(100) 밑
+
+    def __init__(self, client: Any) -> None:
+        self._client = client
+
+    def export(self, connection: dict[str, str], content: dict[str, Any]) -> str:
+        response = self._client.post(
+            self._API_URL,
+            headers={
+                "Authorization": f"Bearer {connection['token']}",
+                "Notion-Version": self._VERSION,
+                "Content-Type": "application/json",
+            },
+            json={
+                "parent": {"page_id": connection["parentPageId"]},
+                "properties": {
+                    "title": {
+                        "title": [
+                            {
+                                "text": {
+                                    "content": str(
+                                        content.get("title") or "Novelty analysis"
+                                    )[:200]
+                                }
+                            }
+                        ]
+                    }
+                },
+                "children": _notion_blocks(content)[: self._MAX_BLOCKS],
+            },
+        )
+        if getattr(response, "status_code", 500) >= 400:
+            raise RuntimeError(
+                f"notion api returned {getattr(response, 'status_code', 'error')}"
+            )
+        page_id = str((response.json() or {}).get("id") or "")
+        if not page_id:
+            raise RuntimeError("notion api returned no page id")
+        return page_id
+
+
+def _notion_blocks(content: dict[str, Any]) -> list[dict[str, Any]]:
+    blocks: list[dict[str, Any]] = []
+    for artifact in content.get("artifacts") or []:
+        title = str(artifact.get("title") or artifact.get("kind") or "").strip()
+        if title:
+            blocks.append(_notion_heading(title))
+        payload = artifact.get("payload") or {}
+        for item in (payload.get("items") or [])[:5]:
+            if not isinstance(item, dict):
+                continue
+            item_title = str(item.get("title") or "").strip()
+            summary = str(item.get("summary") or "").strip()
+            text = f"{item_title} — {summary}" if item_title and summary else item_title or summary
+            if text:
+                blocks.append(_notion_bullet(text))
+        question = str(payload.get("researchQuestion") or "").strip()
+        if question:
+            blocks.append(_notion_bullet(f"Research question: {question}"))
+    return blocks
+
+
+def _notion_heading(text: str) -> dict[str, Any]:
+    return {
+        "object": "block",
+        "type": "heading_2",
+        "heading_2": {"rich_text": [{"type": "text", "text": {"content": text[:200]}}]},
+    }
+
+
+def _notion_bullet(text: str) -> dict[str, Any]:
+    return {
+        "object": "block",
+        "type": "bulleted_list_item",
+        "bulleted_list_item": {
+            "rich_text": [{"type": "text", "text": {"content": text[:500]}}]
+        },
+    }
+
+
+def build_notion_adapter() -> NotionExportPort:
+    import httpx
+
+    return NotionApiExportClient(
+        httpx.Client(timeout=10.0, headers={"User-Agent": "DocSuri-Novelty/1.0"})
+    )
 
 
 @dataclass(frozen=True)
@@ -1029,6 +1124,7 @@ def build_default_novelty_adapters(observability=None, cost_guard=None) -> Novel
         similarity=build_similarity_adapter(corpus),
         llm=build_llm_adapter(cost_guard=cost_guard),
         evidence=build_evidence_formation_adapter(cost_guard=cost_guard),
+        notion=build_notion_adapter(),
     )
 
 

@@ -84,8 +84,7 @@ async function proxyEventStream(req: NextRequest, upstreamPath: string): Promise
         'content-type': res.headers.get('content-type') ?? 'text/event-stream',
       },
     });
-    const getSetCookie = (res.headers as Headers & { getSetCookie?: () => string[] })
-      .getSetCookie;
+    const getSetCookie = (res.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
     const cookies = getSetCookie?.call(res.headers) ?? [];
     const fallbackCookie = res.headers.get('set-cookie');
     for (const setCookie of cookies.length ? cookies : fallbackCookie ? [fallbackCookie] : []) {
@@ -166,6 +165,9 @@ export async function GET(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
   return proxy(req, (await ctx.params).path);
 }
 export async function POST(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
+  return proxy(req, (await ctx.params).path);
+}
+export async function PUT(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
   return proxy(req, (await ctx.params).path);
 }
 export async function PATCH(req: NextRequest, ctx: Ctx): Promise<NextResponse> {

@@ -151,6 +151,29 @@ describe('AgentChatScreen', () => {
     expect(await screen.findByText('유사 연구 표')).toBeInTheDocument();
   });
 
+  it('exports a novelty result to Notion after explicit approval', async () => {
+    const user = userEvent.setup();
+    render(<AgentChatScreen />);
+
+    await user.click(screen.getByTestId('agent-mode-novelty'));
+    await user.type(screen.getByTestId('agent-composer-input'), 'RAG 평가 자동화 아이디어');
+    await user.click(screen.getByTestId('agent-composer-submit'));
+    expect(await screen.findByText('유사 연구 표')).toBeInTheDocument();
+
+    // US-NV8(#258) — 연결이 없으면 먼저 토큰 등록 폼. 토큰은 응답으로 되돌아오지 않는다.
+    await user.click(await screen.findByTestId('notion-export-open'));
+    await user.type(await screen.findByTestId('notion-token-input'), 'ntn_mock_secret_token_1234');
+    await user.type(screen.getByTestId('notion-parent-input'), '0'.repeat(32));
+    await user.click(screen.getByTestId('notion-connect-save'));
+
+    // 미리보기(아티팩트 목록) → 명시 승인 → 저장 위치 링크. 자동 export 없음.
+    expect(await screen.findByTestId('notion-export-preview')).toBeInTheDocument();
+    await user.click(screen.getByTestId('notion-export-approve'));
+
+    const link = await screen.findByTestId('notion-export-link');
+    expect(link.getAttribute('href')).toContain('notion.so');
+  });
+
   // mock 세션 저장소를 비우므로 파일 내 마지막 테스트로 유지한다.
   it('resets all sessions from the drawer after inline confirm', async () => {
     const user = userEvent.setup();

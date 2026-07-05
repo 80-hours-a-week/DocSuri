@@ -355,6 +355,22 @@ function contentTypeFor(attachment: AgentAttachment): string {
   return 'text/plain';
 }
 
+export interface NotionConnectionStatusVM {
+  connected: boolean;
+  parentPageId?: string | null;
+}
+
+export interface NotionExportVM {
+  status: string;
+  notionPageId?: string | null;
+  errorMessage?: string | null;
+}
+
+export interface NotionExportPreviewVM {
+  export: NotionExportVM;
+  preview: { title: string; artifacts: { kind: string; title: string }[] };
+}
+
 function pageQuery(params?: PageQuery): string {
   const sp = new URLSearchParams({ limit: String(params?.limit ?? DEFAULT_PAGE_LIMIT) });
   if (params?.cursor) sp.set('cursor', params.cursor);
@@ -1085,6 +1101,56 @@ export class ApiClient {
   // ---- internals ------------------------------------------------------
 
   /** Shared rerun path: POST -> SearchResultSetDTO, classified like a live search. */
+  // US-NV8(#258) — Notion 연결(토큰은 서버에서 암호화 저장, 응답에 미포함)과
+  // 미리보기 → 명시 승인 → 내보내기. 자동 export 없음.
+  async getNotionConnection(): Promise<NotionConnectionStatusVM> {
+    const res = await this.request({
+      method: 'GET',
+      path: '/api/novelty/notion/connection',
+      idempotent: true,
+    });
+    if (res.status === 200) return res.body as NotionConnectionStatusVM;
+    throw normalizeHttpError(res.status, serverMessage(res.body));
+  }
+
+  async saveNotionConnection(
+    token: string,
+    parentPageId: string,
+  ): Promise<NotionConnectionStatusVM> {
+    const res = await this.request({
+      method: 'PUT',
+      path: '/api/novelty/notion/connection',
+      body: { token, parentPageId },
+      idempotent: false,
+    });
+    if (res.status === 200) return res.body as NotionConnectionStatusVM;
+    throw normalizeHttpError(res.status, serverMessage(res.body));
+  }
+
+  async previewNotionExport(sessionId: string): Promise<NotionExportPreviewVM> {
+    // 세션 id는 'novelty:{jobId}' 형태 — BE는 raw jobId로 잡을 찾는다.
+    const jobId = parseAgentSessionId(sessionId).rawId;
+    const res = await this.request({
+      method: 'POST',
+      path: `/api/novelty/jobs/${encodeURIComponent(jobId)}/notion/preview`,
+      idempotent: false,
+    });
+    if (res.status === 200) return res.body as NotionExportPreviewVM;
+    throw normalizeHttpError(res.status, serverMessage(res.body));
+  }
+
+  async approveNotionExport(sessionId: string, approved: boolean): Promise<NotionExportVM> {
+    const jobId = parseAgentSessionId(sessionId).rawId;
+    const res = await this.request({
+      method: 'POST',
+      path: `/api/novelty/jobs/${encodeURIComponent(jobId)}/notion/approve`,
+      body: { approved },
+      idempotent: false,
+    });
+    if (res.status === 200) return res.body as NotionExportVM;
+    throw normalizeHttpError(res.status, serverMessage(res.body));
+  }
+
   private async rerun(path: string): Promise<SearchOutcome> {
     const res = await this.request({ method: 'POST', path, idempotent: false });
     if (res.status === 200 || res.status === 400) {

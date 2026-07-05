@@ -20,6 +20,9 @@ from .models import (
     JobState,
     JobStatusResponse,
     ManuscriptRef,
+    NotionConnection,
+    NotionConnectionRequest,
+    NotionConnectionStatusResponse,
     NotionExport,
     NoveltyChatMessage,
     NoveltyJob,
@@ -31,6 +34,7 @@ from .models import (
     validate_transition,
 )
 from .repository import NoveltyRepository
+from .security import decrypt_secret, encrypt_secret
 from .validators import validate_artifact_payload
 
 
@@ -315,3 +319,86 @@ class NoveltyService:
         self._repo.save_export(export)
         self._repo.update_job(owner_id, job_id, exportStatus=ExportStatus.EXPORTED)
         return export
+
+    def save_notion_connection(
+        self, owner_id: str, dto: NotionConnectionRequest
+    ) -> NotionConnectionStatusResponse:
+        """US-NV8(#258) AC2 — 명시 연결 토큰 암호화 저장(SEC-8). 응답에 토큰 미포함(SEC-12)."""
+        connection = NotionConnection(
+            ownerId=owner_id,
+            tokenEncrypted=encrypt_secret(dto.token),
+            parentPageId=dto.parentPageId,
+        )
+        saved = self._repo.save_notion_connection(connection)
+        _emit_metric(self._observability, "novelty.notion_connection_saved")
+        return NotionConnectionStatusResponse(
+            connected=True, parentPageId=saved.parentPageId, updatedAt=saved.updatedAt
+        )
+
+    def notion_connection_status(self, owner_id: str) -> NotionConnectionStatusResponse:
+        connection = self._repo.get_notion_connection(owner_id)
+        if connection is None:
+            return NotionConnectionStatusResponse(connected=False)
+        return NotionConnectionStatusResponse(
+            connected=True,
+            parentPageId=connection.parentPageId,
+            updatedAt=connection.updatedAt,
+        )
+
+    def execute_export(self, owner_id: str, job_id: str, notion: Any) -> NotionExport:
+        """US-NV8(#258) AC3 — 승인된 export만 실제 Notion 호출로 완결. 실패는 FAILED+비기술 문구.
+
+        자동 export 없음 — preview→approve를 거친 상태(APPROVED)에서만 호출된다.
+        """
+        export = self._repo.get_export(owner_id, job_id)
+        if export is None or export.status is not ExportStatus.APPROVED:
+            raise ExportApprovalError("export cannot start without preview approval")
+        connection = self._repo.get_notion_connection(owner_id)
+        if connection is None:
+            return self._fail_export(
+                export, "Notion 연결이 없습니다. 먼저 연결 토큰을 등록해 주세요."
+            )
+        export = export.model_copy(
+            update={"status": ExportStatus.EXPORTING, "updatedAt": utc_now()}
+        )
+        self._repo.save_export(export)
+        self._repo.update_job(owner_id, job_id, exportStatus=ExportStatus.EXPORTING)
+        try:
+            token = decrypt_secret(connection.tokenEncrypted)
+            page_id = notion.export(
+                {"token": token, "parentPageId": connection.parentPageId},
+                self._export_content(owner_id, job_id),
+            )
+        except Exception:  # noqa: BLE001 - 외부 호출 실패는 상태로 수렴, 내부 상세 비노출(SEC-9)
+            _emit_metric(self._observability, "novelty.notion_export_failed")
+            return self._fail_export(
+                export,
+                "Notion 내보내기에 실패했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.",
+            )
+        _emit_metric(self._observability, "novelty.notion_export_completed")
+        return self.complete_export(owner_id, job_id, page_id)
+
+    def _fail_export(self, export: NotionExport, message: str) -> NotionExport:
+        failed = export.model_copy(
+            update={
+                "status": ExportStatus.FAILED,
+                "errorMessage": message,
+                "updatedAt": utc_now(),
+            }
+        )
+        self._repo.save_export(failed)
+        self._repo.update_job(failed.ownerId, failed.jobId, exportStatus=ExportStatus.FAILED)
+        return failed
+
+    def _export_content(self, owner_id: str, job_id: str) -> dict[str, Any]:
+        """export 본문 — preview(kind/title 목록)와 달리 아티팩트 payload까지 싣는다."""
+        job = self._repo.get_job(owner_id, job_id)
+        artifacts = self._repo.list_artifacts(owner_id, job_id)
+        return {
+            "title": f"Novelty analysis: {job.topic[:120]}",
+            "jobId": job.jobId,
+            "artifacts": [
+                {"kind": artifact.kind.value, "title": artifact.title, "payload": artifact.payload}
+                for artifact in artifacts
+            ],
+        }
