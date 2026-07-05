@@ -199,6 +199,17 @@ export function AgentChatScreen() {
     }
   }
 
+  async function resetAllSessions() {
+    try {
+      await api.resetAgentSessions();
+      resetStreamingState();
+      dispatch({ type: 'resetSessions' });
+      setDrawerOpen(false);
+    } catch {
+      dispatch({ type: 'sendFailure', message: '세션을 초기화하지 못했습니다.' });
+    }
+  }
+
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!canSend(state) || !state.session || !state.mode) return;
@@ -336,6 +347,7 @@ export function AgentChatScreen() {
           }}
           onLoad={loadSession}
           onDelete={deleteSession}
+          onResetAll={resetAllSessions}
         />
       ) : null}
     </section>
@@ -382,6 +394,7 @@ function AgentSessionDrawer({
   onNew,
   onLoad,
   onDelete,
+  onResetAll,
 }: {
   sessions: AgentSessionSummary[];
   activeId: string | null;
@@ -389,7 +402,10 @@ function AgentSessionDrawer({
   onNew: () => void;
   onLoad: (session: AgentSessionSummary) => void;
   onDelete: (session: AgentSessionSummary) => void;
+  onResetAll: () => void;
 }) {
+  // US-EV8(#272) — 파괴적 동작이라 브라우저 confirm 대신 인라인 2단계 확인.
+  const [confirmingReset, setConfirmingReset] = useState(false);
   return (
     <div className={styles.drawerOverlay} data-testid="agent-session-drawer">
       <aside className={styles.drawer} aria-label="과거 세션">
@@ -427,6 +443,36 @@ function AgentSessionDrawer({
             </div>
           ))}
           {sessions.length === 0 ? <p className={styles.empty}>저장된 세션이 없습니다.</p> : null}
+        </div>
+        <div className={styles.drawerFooter}>
+          {confirmingReset ? (
+            <div className={styles.resetConfirm}>
+              <span>모든 세션을 삭제할까요?</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmingReset(false);
+                  onResetAll();
+                }}
+                data-testid="agent-session-reset-confirm"
+              >
+                삭제
+              </button>
+              <button type="button" onClick={() => setConfirmingReset(false)}>
+                취소
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className={styles.resetButton}
+              onClick={() => setConfirmingReset(true)}
+              disabled={sessions.length === 0}
+              data-testid="agent-session-reset"
+            >
+              전체 초기화
+            </button>
+          )}
         </div>
       </aside>
     </div>

@@ -27,6 +27,7 @@ class NoveltyRepository(Protocol):
     def list_jobs(self, owner_id: str, limit: int = 50) -> list[NoveltyJob]: ...
     def update_job(self, owner_id: str, job_id: str, **changes: Any) -> NoveltyJob: ...
     def delete_job(self, owner_id: str, job_id: str) -> None: ...
+    def delete_all_jobs(self, owner_id: str) -> None: ...
     def add_event(self, event: ProgressEvent) -> ProgressEvent: ...
     def list_events(
         self, owner_id: str, job_id: str, after_event_id: str | None = None
@@ -108,6 +109,12 @@ class InMemoryNoveltyRepository:
             self._artifacts.pop(job_id, None)
             self._messages.pop(job_id, None)
             self._exports.pop(job_id, None)
+
+    def delete_all_jobs(self, owner_id: str) -> None:
+        with self._lock:
+            owned = [job_id for job_id, job in self._jobs.items() if job.ownerId == owner_id]
+            for job_id in owned:
+                self.delete_job(owner_id, job_id)
 
     def add_event(self, event: ProgressEvent) -> ProgressEvent:
         with self._lock:
@@ -392,11 +399,28 @@ class SqlNoveltyRepository:
         self._s.flush()
         return _job_from_row(row)
 
+    _CHILD_TABLES = (ProgressEventTable, NoveltyMessageTable, ArtifactTable, NotionExportTable)
+
     def delete_job(self, owner_id: str, job_id: str) -> None:
         row = self._s.get(NoveltyJobTable, job_id)
         if row is None or row.owner_id != owner_id:
             raise KeyError(job_id)
+        # US-EV8(#272)/SEC-14 — FK cascade가 없어 job 행만 지우면 이벤트·메시지·
+        # 아티팩트·export 행이 고아로 남았다(개인 데이터 잔존). 자식 테이블부터 삭제.
+        for table in self._CHILD_TABLES:
+            self._s.query(table).filter(table.job_id == job_id).delete(synchronize_session=False)
         self._s.delete(row)
+        self._s.flush()
+
+    def delete_all_jobs(self, owner_id: str) -> None:
+        # US-EV8(#272) 전체 초기화 — 소유자 단위 벌크 삭제(멱등, 0건이어도 통과).
+        for table in self._CHILD_TABLES:
+            self._s.query(table).filter(table.owner_id == owner_id).delete(
+                synchronize_session=False
+            )
+        self._s.query(NoveltyJobTable).filter(NoveltyJobTable.owner_id == owner_id).delete(
+            synchronize_session=False
+        )
         self._s.flush()
 
     def add_event(self, event: ProgressEvent) -> ProgressEvent:

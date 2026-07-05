@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   AgentChatScreen,
@@ -130,5 +130,27 @@ describe('AgentChatScreen', () => {
       '첨부 파일은 10MB 이하만 사용할 수 있습니다.',
     );
     expect(screen.getByTestId('agent-composer-submit')).toBeDisabled();
+  });
+
+  // mock 세션 저장소를 비우므로 파일 내 마지막 테스트로 유지한다.
+  it('resets all sessions from the drawer after inline confirm', async () => {
+    const user = userEvent.setup();
+    render(<AgentChatScreen />);
+
+    await user.click(screen.getByTestId('agent-menu'));
+    expect(await screen.findByText('LLM 평가 근거 정리')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('agent-session-reset'));
+    await user.click(await screen.findByTestId('agent-session-reset-confirm'));
+
+    // US-EV8(#272) — 전체 초기화 후 드로어가 닫히고 기본 상태(모드 선택)로 돌아간다.
+    await waitFor(() =>
+      expect(screen.queryByTestId('agent-session-drawer')).not.toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('agent-mode-picker')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('agent-menu'));
+    expect(await screen.findByText('저장된 세션이 없습니다.')).toBeInTheDocument();
+    expect(screen.getByTestId('agent-session-reset')).toBeDisabled();
   });
 });

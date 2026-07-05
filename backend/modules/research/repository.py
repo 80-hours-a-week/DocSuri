@@ -20,6 +20,7 @@ class ResearchRepository(Protocol):
     def get_job(self, owner_id: str, job_id: str) -> ResearchJob: ...
     def list_jobs(self, owner_id: str, limit: int = 50) -> list[ResearchJob]: ...
     def delete_job(self, owner_id: str, job_id: str) -> None: ...
+    def delete_all_jobs(self, owner_id: str) -> None: ...
     def add_message(self, message: ResearchChatMessage) -> ResearchChatMessage: ...
     def list_messages(self, owner_id: str, job_id: str) -> list[ResearchChatMessage]: ...
     # 동기 처리 완료 후 상태 전이(PR #338 리뷰 Blocking #3) — job.state가 계속
@@ -61,6 +62,13 @@ class InMemoryResearchRepository:
             self.get_job(owner_id, job_id)
             self._jobs.pop(job_id, None)
             self._messages.pop(job_id, None)
+
+    def delete_all_jobs(self, owner_id: str) -> None:
+        with self._lock:
+            owned = [job_id for job_id, job in self._jobs.items() if job.ownerId == owner_id]
+            for job_id in owned:
+                self._jobs.pop(job_id, None)
+                self._messages.pop(job_id, None)
 
     def add_message(self, message: ResearchChatMessage) -> ResearchChatMessage:
         with self._lock:
@@ -190,6 +198,20 @@ class SqlResearchRepository:
             .delete(synchronize_session=False)
         )
         self._s.delete(row)
+        self._s.flush()
+
+    def delete_all_jobs(self, owner_id: str) -> None:
+        # US-EV8(#272) 전체 초기화 — 소유자 단위 벌크 삭제(대화 이력 포함, SEC-14).
+        (
+            self._s.query(ResearchMessageTable)
+            .filter(ResearchMessageTable.owner_id == owner_id)
+            .delete(synchronize_session=False)
+        )
+        (
+            self._s.query(ResearchJobTable)
+            .filter(ResearchJobTable.owner_id == owner_id)
+            .delete(synchronize_session=False)
+        )
         self._s.flush()
 
     def add_message(self, message: ResearchChatMessage) -> ResearchChatMessage:

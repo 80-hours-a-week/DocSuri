@@ -98,6 +98,16 @@ async def delete_job(
         raise HTTPException(status_code=404, detail="job not found") from exc
 
 
+@router.delete("/jobs", status_code=204, response_class=Response)
+async def reset_jobs(
+    principal: Principal = PRINCIPAL_DEP,
+    repo: ResearchRepository = REPO_DEP,
+) -> Response:
+    """전체 세션 초기화 — US-EV8(#272), SEC-14. 소유 잡·대화 이력 전부 삭제, 멱등(0건도 204)."""
+    ResearchService(repo).delete_all_jobs(principal.user_id)
+    return Response(status_code=204)
+
+
 @router.get("/jobs/{job_id}/messages", response_model=ResearchMessageListResponse)
 async def get_messages(
     job_id: str,

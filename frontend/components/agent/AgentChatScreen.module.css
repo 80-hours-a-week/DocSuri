@@ -727,6 +727,44 @@
   padding: 8px 0;
 }
 
+.drawerFooter {
+  margin-top: auto;
+  border-top: 1px solid var(--color-border);
+  padding-top: 10px;
+}
+
+.resetButton {
+  min-height: 36px;
+  width: 100%;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--agent-radius);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.resetButton:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.resetConfirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--color-text);
+}
+
+.resetConfirm button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--agent-radius);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
 @media (min-width: 768px) {
   .modePicker {
     grid-template-columns: repeat(2, minmax(0, 1fr));

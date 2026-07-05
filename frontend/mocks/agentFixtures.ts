@@ -143,6 +143,10 @@ export function mockDeleteAgentSession(id: string): boolean {
   return sessions.length !== before;
 }
 
+export function mockResetAgentSessions(mode: AgentMode): void {
+  sessions = sessions.filter((item) => item.session.mode !== mode);
+}
+
 export function mockSendAgentMessage(
   sessionId: string,
   req: AgentSendMessageRequest,

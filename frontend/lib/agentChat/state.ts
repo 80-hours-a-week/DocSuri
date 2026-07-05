@@ -53,7 +53,8 @@ export type AgentChatAction =
   | { type: 'sendStart'; message: AgentMessage }
   | { type: 'sendSuccess'; result: AgentSendMessageResult }
   | { type: 'sendFailure'; message: string }
-  | { type: 'deleteSession'; id: string };
+  | { type: 'deleteSession'; id: string }
+  | { type: 'resetSessions' };
 
 export function agentReducer(state: AgentChatState, action: AgentChatAction): AgentChatState {
   switch (action.type) {
@@ -101,6 +102,9 @@ export function agentReducer(state: AgentChatState, action: AgentChatAction): Ag
         : state;
     case 'newChat':
       return { ...initialAgentChatState, sessions: state.sessions };
+    case 'resetSessions':
+      // US-EV8(#272) 전체 초기화 — 세션 목록과 현재 대화 모두 기본 상태로.
+      return { ...initialAgentChatState };
     case 'setDraft':
       return { ...state, draft: action.draft.slice(0, MAX_AGENT_MESSAGE_CHARS), error: null };
     case 'addAttachment':
@@ -319,5 +323,9 @@ function jobStateMessage(state: AgentJobState, errorMessage?: string): string | 
 }
 
 function slug(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32);
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 32);
 }
