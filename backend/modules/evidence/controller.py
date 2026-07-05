@@ -6,6 +6,7 @@ from typing import Any, Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.middleware.agent_attachments import ATTACHMENT_MAX_COUNT, AgentAttachmentIn
@@ -181,7 +182,8 @@ async def create_turn(
         # 공유 계약(EvidenceRequest.attachments)은 문서 핸들 문자열 목록 — 객체를 id로 변환.
         attachments=[attachment.id for attachment in body.attachments],
     )
-    attachment_docs = _attachment_docs(
+    attachment_docs = await run_in_threadpool(
+        _attachment_docs,
         owner_id=principal.user_id,
         scope_id=request_id or 'evidence-turn',
         attachments=body.attachments,

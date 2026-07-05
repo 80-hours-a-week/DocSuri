@@ -4,6 +4,8 @@ import asyncio
 import json
 from typing import Any
 
+from fastapi.concurrency import run_in_threadpool
+
 from backend.modules.user_docmodel import EVIDENCE_PDF_DEGRADED_NOTICE
 
 from .models import (
@@ -97,7 +99,8 @@ class ResearchService:
         if orchestrator is None:
             self._repo.mark_completed(owner_id, job_id)
             return user_msg
-        attachment_inputs = _attachment_inputs(
+        attachment_inputs = await run_in_threadpool(
+            _attachment_inputs,
             owner_id,
             job_id,
             dto.attachments,

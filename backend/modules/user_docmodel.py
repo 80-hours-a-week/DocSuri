@@ -5,6 +5,7 @@ import re
 import time
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import quote
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from docsuri_shared.dtos import DocModel
@@ -171,7 +172,7 @@ class UserDocModelCoordinator:
                 "paper-id": ref.paper_id,
                 "record-ref": ref.record_ref,
                 "owner-id": ref.owner_id,
-                "file-name": file_name[:240],
+                "file-name": quote(file_name, safe="")[:240],
             },
         )
 
@@ -196,7 +197,10 @@ class UserDocModelCoordinator:
             return None
         deadline = time.monotonic() + self._poll_timeout
         while True:
-            doc = self._reader.get_doc_model(ref.paper_id, ref.version)
+            try:
+                doc = self._reader.get_doc_model(ref.paper_id, ref.version)
+            except Exception:  # noqa: BLE001 — best-effort readiness: a reader failure degrades, never 500s (contract).
+                return None
             if doc is not None:
                 return doc
             now = time.monotonic()
