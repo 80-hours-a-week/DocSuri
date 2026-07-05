@@ -3703,3 +3703,10 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **Context**: PR review fix completion for ops user-PDF GROBID doc-model infrastructure.
 
 ---
+## PR397 Approval Attempt
+**Timestamp**: 2026-07-05T17:27:07Z
+**User Input**: "Review PR #397 from a clean context. Apply all findings. Approve the PR if approvable."
+**AI Response**: "Attempted to approve PR #397 after applying fixes and all GitHub checks passed, but GitHub rejected the formal review because the authenticated account is the PR author. Left the clean-context APPROVE verdict and verification as PR comment https://github.com/80-hours-a-week/DocSuri/pull/397#issuecomment-4886960539."
+**Context**: PR review approval attempt and fallback comment for PR #397.
+
+---
