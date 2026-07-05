@@ -64,6 +64,9 @@ class ResearchService:
     def delete_job(self, owner_id: str, job_id: str) -> None:
         self._repo.delete_job(owner_id, job_id)
 
+    def delete_all_jobs(self, owner_id: str) -> None:
+        self._repo.delete_all_jobs(owner_id)
+
     async def add_message(
         self,
         owner_id: str,

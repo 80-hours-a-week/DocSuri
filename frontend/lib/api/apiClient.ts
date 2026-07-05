@@ -713,6 +713,18 @@ export class ApiClient {
     throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
+  /** 전체 세션 초기화 — US-EV8(#272). 두 에이전트 모듈의 소유 세션을 모두 비운다(멱등). */
+  async resetAgentSessions(): Promise<void> {
+    await Promise.all(
+      ['/api/research/jobs', '/api/novelty/jobs'].map(async (path) => {
+        const res = await this.request({ method: 'DELETE', path, idempotent: false });
+        if (res.status !== 200 && res.status !== 204) {
+          throw normalizeHttpError(res.status, serverMessage(res.body));
+        }
+      }),
+    );
+  }
+
   async signup(req: SignupRequest): Promise<SignupResult> {
     const res = await this.request({
       method: 'POST',

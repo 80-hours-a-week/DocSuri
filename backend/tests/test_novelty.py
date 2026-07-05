@@ -1071,3 +1071,80 @@ def test_bedrock_llm_client_records_spend_from_usage() -> None:
 
     # 기본 단가 $3/1M input + $15/1M output → 1M in + 0.2M out = $6
     assert abs(guard.get_budget_state().spend_usd - 6.0) < 1e-9
+
+
+def test_api_reset_deletes_only_own_jobs(monkeypatch) -> None:
+    """US-EV8(#272) 전체 초기화 — 소유 잡 전부 삭제(멱등), 타 사용자 잡 보존."""
+    owner_a = _principal()
+    owner_b = _principal()
+    repo = InMemoryNoveltyRepository()
+    client_a = _client(monkeypatch, owner_a, repo)
+    client_b = _client(monkeypatch, owner_b, repo)
+
+    client_a.post(
+        "/api/novelty/jobs",
+        json={"inputType": "natural_language", "topic": "reset target job one"},
+    )
+    client_a.post(
+        "/api/novelty/jobs",
+        json={"inputType": "natural_language", "topic": "reset target job two"},
+    )
+    kept = client_b.post(
+        "/api/novelty/jobs",
+        json={"inputType": "natural_language", "topic": "surviving job"},
+    ).json()["jobId"]
+
+    assert client_a.delete("/api/novelty/jobs").status_code == 204
+    assert client_a.get("/api/novelty/jobs").json()["jobs"] == []
+    assert client_b.get(f"/api/novelty/jobs/{kept}").status_code == 200
+    # 멱등 — 이미 비어 있어도 204.
+    assert client_a.delete("/api/novelty/jobs").status_code == 204
+
+
+def test_sql_delete_job_and_reset_purge_child_rows() -> None:
+    """US-EV8(#272)/SEC-14 — SQL 삭제는 이벤트·메시지 등 자식 행까지 제거(고아 금지 회귀)."""
+    from backend.db import make_engine, make_session_factory
+    from backend.modules.novelty.models import ChatMessageCreateRequest
+    from backend.modules.novelty.repository import (
+        ArtifactTable,
+        Base,
+        NotionExportTable,
+        NoveltyJobTable,
+        NoveltyMessageTable,
+        ProgressEventTable,
+        SqlNoveltyRepository,
+    )
+
+    engine = make_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    session = make_session_factory(engine)()
+    repo = SqlNoveltyRepository(session)
+    service = NoveltyService(repo)
+    owner = str(uuid4())
+
+    first = service.create_job(
+        owner, NoveltyJobRequest(inputType="natural_language", topic="cascade delete first")
+    )
+    service.create_job(
+        owner, NoveltyJobRequest(inputType="natural_language", topic="cascade delete second")
+    )
+    service.record_event(repo.get_job(owner, first.jobId), "cascade seed event")
+    service.add_message(owner, first.jobId, ChatMessageCreateRequest(content="history row"))
+    assert session.query(ProgressEventTable).count() > 0
+    assert session.query(NoveltyMessageTable).count() > 0
+
+    service.delete_job(owner, first.jobId)
+
+    assert session.query(ProgressEventTable).filter_by(job_id=first.jobId).count() == 0
+    assert session.query(NoveltyMessageTable).filter_by(job_id=first.jobId).count() == 0
+
+    service.delete_all_jobs(owner)
+
+    for table in (
+        NoveltyJobTable,
+        ProgressEventTable,
+        NoveltyMessageTable,
+        ArtifactTable,
+        NotionExportTable,
+    ):
+        assert session.query(table).count() == 0

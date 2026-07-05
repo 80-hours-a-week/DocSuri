@@ -53,6 +53,7 @@ import {
   mockDeleteAgentSession,
   mockListAgentSessions,
   mockLoadAgentSession,
+  mockResetAgentSessions,
   mockSendAgentMessage,
 } from '@/mocks/agentFixtures';
 import type { SavedSearchCreateDTO, LibraryItemCreateDTO } from '@/types/generated';
@@ -353,6 +354,15 @@ export class MockTransport implements Transport {
     }
     if (path === '/api/novelty/jobs' && req.method === 'GET') {
       return { status: 200, body: { jobs: mockListAgentSessions('novelty').map(noveltyJob) } };
+    }
+    // US-EV8(#272) 전체 초기화 — 모듈별 소유 세션 일괄 삭제(멱등 204).
+    if (path === '/api/research/jobs' && req.method === 'DELETE') {
+      mockResetAgentSessions('evidence');
+      return { status: 204, body: null };
+    }
+    if (path === '/api/novelty/jobs' && req.method === 'DELETE') {
+      mockResetAgentSessions('novelty');
+      return { status: 204, body: null };
     }
     if (path === '/api/research/jobs' && req.method === 'POST') {
       const body = req.body as { content?: string; attachments?: AgentAttachment[] };

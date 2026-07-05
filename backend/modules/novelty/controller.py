@@ -130,6 +130,17 @@ async def delete_job(
         raise HTTPException(status_code=404, detail="job not found") from exc
 
 
+@router.delete("/jobs", status_code=204, response_class=Response)
+async def reset_jobs(
+    request: Request,
+    principal: Principal = PRINCIPAL_DEP,
+    repo: NoveltyRepository = REPO_DEP,
+) -> Response:
+    """전체 세션 초기화 — US-EV8(#272), SEC-14. 소유 잡 전부 삭제, 멱등(0건도 204)."""
+    NoveltyService(repo, _observability(request)).delete_all_jobs(principal.user_id)
+    return Response(status_code=204)
+
+
 @router.get("/jobs/{job_id}/result", response_model=JobResultResponse)
 async def get_result(
     job_id: str,

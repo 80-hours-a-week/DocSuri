@@ -147,3 +147,28 @@ def test_sql_repositories_bind_postgres_uuid_ids() -> None:
 
         assert table.__table__.c.owner_id.type.compile(dialect=dialect) == "UUID"
         assert "::UUID" in str(compiled)
+
+
+def test_research_reset_deletes_only_own_sessions(monkeypatch) -> None:
+    """US-EV8(#272) 전체 초기화 — 소유 잡·대화 이력 전부 삭제(멱등), 타 사용자 세션 보존."""
+    owner_a = _principal()
+    owner_b = _principal()
+    repo = InMemoryResearchRepository()
+    client_a = _client(monkeypatch, owner_a, repo)
+    client_b = _client(monkeypatch, owner_b, repo)
+
+    created = client_a.post("/api/research/jobs", json={"content": "reset target session one"})
+    job_a = created.json()["jobId"]
+    client_a.post("/api/research/jobs", json={"content": "reset target session two"})
+    job_b = client_b.post("/api/research/jobs", json={"content": "surviving session"}).json()[
+        "jobId"
+    ]
+
+    reset = client_a.delete("/api/research/jobs")
+
+    assert reset.status_code == 204
+    assert client_a.get("/api/research/jobs").json()["jobs"] == []
+    assert client_a.get(f"/api/research/jobs/{job_a}/messages").status_code == 404
+    assert client_b.get(f"/api/research/jobs/{job_b}").status_code == 200
+    # 멱등 — 이미 비어 있어도 204.
+    assert client_a.delete("/api/research/jobs").status_code == 204
