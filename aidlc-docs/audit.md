@@ -3619,3 +3619,10 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **Context**: Workspace hygiene and documentation artifact treatment under AI-DLC file-placement/content-validation rules.
 
 ---
+## PR2 Hardening Before PR3
+**Timestamp**: 2026-07-05T14:29:28Z
+**User Input**: "Implement PR3 in the same way."
+**AI Response**: "Before branching PR3, preserved and completed existing PR2 hardening changes: moved evidence/research user-docmodel polling into threadpool execution, percent-encoded Unicode upload filenames for S3 metadata safety, degraded doc-model reader exceptions to `None`, and added coordinator regression tests. Verification passed: focused backend tests 37 passed, touched ruff clean, git diff --check clean."
+**Context**: PR2 backend hardening cleanup discovered at PR3 start, committed before creating the frontend PR3 stack.
+
+---
