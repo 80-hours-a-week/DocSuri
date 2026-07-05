@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import replace
 from datetime import UTC, datetime
+from typing import Protocol
 from uuid import uuid4
 
 from docsuri_shared.dtos import DocModel, DocModelResultDTO, SourceTier, SourceUnavailableDTO
@@ -55,6 +56,10 @@ class SystemClock:
         return datetime.now(UTC)
 
 
+class _GrobidTeiClient(Protocol):
+    def extract_tei(self, pdf: bytes) -> str: ...
+
+
 class IngestionPipelineService:
     def __init__(
         self,
@@ -75,6 +80,7 @@ class IngestionPipelineService:
         asset_store: AssetStorePort | None = None,
         asset_source: AssetSourcePort | None = None,
         user_document_source: UserDocumentSourcePort | None = None,
+        grobid: _GrobidTeiClient | None = None,
         doc_model_builder: DocModelBuilder | None = None,
         embedding_v2: EmbeddingPort | None = None,
         vector_index_v2: VectorIndexPort | None = None,
@@ -98,6 +104,7 @@ class IngestionPipelineService:
         self._asset_store = asset_store
         self._asset_source = asset_source
         self._user_document_source = user_document_source
+        self._grobid = grobid
         # Doc-model builder (BR-30/D6): eager in the phase-1 Corpus ingest path, lazy for
         # BUILD_DOC_MODEL compatibility/backfill jobs.
         self._doc_model_builder = doc_model_builder
@@ -170,9 +177,10 @@ class IngestionPipelineService:
     def build_user_doc_model(self, job: IngestionJob) -> DocModelResultDTO:
         """Produce/cache a doc-model from a user-uploaded PDF already stored in S3.
 
-        This is the PR1 consumer for the frozen ``BUILD_USER_DOC_MODEL`` contract. It is
-        intentionally pdfplumber-only for the first user-upload slice; the GROBID sidecar is not
-        present on the latency-sensitive docmodel worker today.
+        Consumer for the frozen ``BUILD_USER_DOC_MODEL`` contract. Uses GROBID for structure
+        (sections/tables/figures) when a sidecar is wired via ``DOCSURI_GROBID_URL`` (#13,
+        dedicated user-PDF worker); degrades to the pdfplumber flat-text doc-model otherwise, or
+        on any GROBID fault.
         """
         if self._doc_model_builder is None:
             raise PermanentIngestionError(
@@ -225,11 +233,32 @@ class IngestionPipelineService:
                 stage="parse",
             )
 
-        result = self._doc_model_builder.build_from_paper(
+        # GROBID structure extraction when a sidecar is wired (DOCSURI_GROBID_URL); otherwise the
+        # TEI is empty and build_from_tei degrades to the pdfplumber flat-text doc-model. A GROBID
+        # timeout/HTTP fault also degrades to flat text — GROBID must never block the user's build.
+        tei = ""
+        grobid = self._grobid
+        if grobid is not None:
+            try:
+                tei = self._resilience.dependency_call(
+                    "grobid",
+                    "extract_tei",
+                    lambda: grobid.extract_tei(pdf),
+                )
+            except Exception:  # noqa: BLE001 - GROBID is best-effort; degrade to pdfplumber.
+                self._observability.emit_metric(
+                    "ingestion.docmodel.user_grobid_unavailable",
+                    1.0,
+                    {"module": job.module or "unknown"},
+                )
+                tei = ""
+
+        result = self._doc_model_builder.build_from_tei(
             job.paper_id,
             job.version,
             "User uploaded PDF",
             "",
+            tei,
             text,
             source_tier=SourceTier.pdf,
         )
@@ -237,7 +266,7 @@ class IngestionPipelineService:
             "ingestion.docmodel.user_build",
             1.0,
             {
-                "status": "pdf_fallback",
+                "status": "grobid" if tei else "pdf_fallback",
                 "cached": str(result.cached).lower(),
                 "module": job.module or "unknown",
             },

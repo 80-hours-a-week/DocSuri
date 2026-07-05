@@ -375,6 +375,76 @@ def test_worker_dlqs_unparseable_user_docmodel_pdf(monkeypatch) -> None:
     }
 
 
+def test_build_user_doc_model_uses_grobid_when_configured(monkeypatch) -> None:
+    monkeypatch.setattr(application_module, "pdf_to_text", lambda pdf: "INTRODUCTION\nBody text.")
+    store = _FakeStore(cached=None)
+
+    class _FakeGrobid:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def extract_tei(self, pdf: bytes) -> str:
+            self.calls += 1
+            return ""  # empty TEI → build_from_tei degrades to the pdfplumber flat-text doc-model
+
+    grobid = _FakeGrobid()
+    pipeline, _, _, _, _ = build_test_pipeline(
+        doc_model_builder=_builder(_FakeSource(None), store),
+        user_document_source=_FakeUserDocumentSource(),
+        grobid=grobid,
+    )
+    job = IngestionJob(
+        job_id=_USERDOC_JOB_ID,
+        kind=JobKind.BUILD_USER_DOC_MODEL,
+        paper_id=_USERDOC_PAPER_ID,
+        version=1,
+        object_key="uploads/acct-1/job-1/scan.pdf",
+        module="novelty",
+        owner_id="acct-1",
+        record_ref=_USERDOC_RECORD_REF,
+    )
+
+    result = pipeline.build_user_doc_model(job)
+
+    assert grobid.calls == 1  # GROBID was consulted when configured
+    assert result.docModel.meta.provenance.sourceTier is SourceTier.pdf
+    assert "Body text" in result.docModel.fullText  # flat-text fallback still yields a doc-model
+
+
+def test_build_user_doc_model_degrades_when_grobid_faults(monkeypatch) -> None:
+    monkeypatch.setattr(application_module, "pdf_to_text", lambda pdf: "INTRODUCTION\nBody text.")
+    store = _FakeStore(cached=None)
+
+    class _RaisingGrobid:
+        def extract_tei(self, pdf: bytes) -> str:
+            raise RuntimeError("grobid unavailable")
+
+    pipeline, _, _, _, observability = build_test_pipeline(
+        doc_model_builder=_builder(_FakeSource(None), store),
+        user_document_source=_FakeUserDocumentSource(),
+        grobid=_RaisingGrobid(),
+    )
+    job = IngestionJob(
+        job_id=_USERDOC_JOB_ID,
+        kind=JobKind.BUILD_USER_DOC_MODEL,
+        paper_id=_USERDOC_PAPER_ID,
+        version=1,
+        object_key="uploads/acct-1/job-1/scan.pdf",
+        module="evidence",
+        owner_id="acct-1",
+        record_ref=_USERDOC_RECORD_REF,
+    )
+
+    result = pipeline.build_user_doc_model(job)
+
+    # A GROBID fault degrades to the pdfplumber flat-text doc-model — the build still succeeds.
+    assert result.docModel.meta.provenance.sourceTier is SourceTier.pdf
+    assert "Body text" in result.docModel.fullText
+    assert any(
+        m[0] == "ingestion.docmodel.user_grobid_unavailable" for m in observability.metrics
+    )
+
+
 def test_ingest_one_eagerly_builds_doc_model_before_index() -> None:
     source = _FakeSource((_HTML, SourceTier.native_html))
     store = _FakeStore(cached=None)

@@ -27,6 +27,7 @@ def build_test_pipeline(
     doc_model_builder=None,
     asset_store=None,
     user_document_source=None,
+    grobid=None,
     corpus_sources=None,
 ):
     metadata = sample_metadata()
@@ -53,6 +54,7 @@ def build_test_pipeline(
         failure_handler=IngestFailureHandler(queue, observability),
         asset_store=asset_store,
         user_document_source=user_document_source,
+        grobid=grobid,
         doc_model_builder=doc_model_builder,
         corpus_sources=corpus_sources,
     )
