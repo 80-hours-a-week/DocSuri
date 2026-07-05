@@ -5,6 +5,7 @@ from io import BytesIO
 from urllib.parse import urlparse
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 from hypothesis import given
 from hypothesis import strategies as st
@@ -18,6 +19,7 @@ from backend.modules.novelty.adapters import (
     BedrockNoveltyLlmClient,
     EvidenceFormationClient,
     ExternalApiSearchClient,
+    NotionApiExportClient,
     NoveltyAdapters,
     NoveltyLlmDraft,
     RetrievalBundle,
@@ -941,6 +943,141 @@ def test_evidence_formation_client_maps_claims_and_abstain() -> None:
     degraded = EvidenceFormationClient(AbstainPort()).form("u1", "rag evaluation")
     assert degraded.items == []
     assert degraded.degradedReason == "evidence formation abstained: out_of_corpus"
+
+
+class _RecordingNotion:
+    def __init__(self) -> None:
+        self.calls: list[tuple[dict, dict]] = []
+
+    def export(self, connection: dict, content: dict) -> str:
+        self.calls.append((connection, content))
+        return "page-abc"
+
+
+def test_api_notion_connection_and_approved_export_completes(monkeypatch) -> None:
+    from cryptography.fernet import Fernet
+
+    from backend.modules.novelty.security import decrypt_secret
+
+    raw_token = "ntn_test_secret_token_1234"
+    monkeypatch.setenv("DOCSURI_NOTION_TOKEN_KEY", Fernet.generate_key().decode())
+    repo = InMemoryNoveltyRepository()
+    # 요청마다 principal이 새로 뽑히지 않도록 고정 — 연결 저장·조회가 같은 owner여야 한다
+    client = _client(monkeypatch, principal=_principal(), repo=repo)
+    notion = _RecordingNotion()
+    client.app.state.novelty_adapters = NoveltyAdapters(notion=notion)
+
+    job_id = client.post(
+        "/api/novelty/jobs",
+        json={"inputType": "natural_language", "topic": "rag evaluation"},
+    ).json()["jobId"]
+
+    saved = client.put(
+        "/api/novelty/notion/connection",
+        json={"token": raw_token, "parentPageId": "0" * 32},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["connected"] is True
+    assert raw_token not in saved.text  # SEC-12 — 응답에 토큰 미포함
+    assert client.get("/api/novelty/notion/connection").json()["connected"] is True
+
+    # SEC-8 — 저장소에는 암호문만 남고 복호화가 원문을 돌려준다
+    stored = next(iter(repo._notion_connections.values()))
+    assert raw_token not in stored.tokenEncrypted
+    assert decrypt_secret(stored.tokenEncrypted) == raw_token
+
+    assert client.post(f"/api/novelty/jobs/{job_id}/notion/preview").status_code == 200
+    approved = client.post(
+        f"/api/novelty/jobs/{job_id}/notion/approve", json={"approved": True}
+    )
+    assert approved.status_code == 200
+    body = approved.json()
+    assert body["status"] == "exported"
+    assert body["notionPageId"] == "page-abc"
+    assert raw_token not in approved.text
+
+    connection, content = notion.calls[0]
+    assert connection["token"] == raw_token  # 복호화된 토큰이 어댑터에 전달된다
+    assert connection["parentPageId"] == "0" * 32
+    assert content["artifacts"] and "payload" in content["artifacts"][0]
+
+
+def test_api_approved_export_without_connection_fails_softly(monkeypatch) -> None:
+    client = _client(monkeypatch, principal=_principal())
+    job_id = client.post(
+        "/api/novelty/jobs",
+        json={"inputType": "natural_language", "topic": "rag evaluation"},
+    ).json()["jobId"]
+
+    client.post(f"/api/novelty/jobs/{job_id}/notion/preview")
+    approved = client.post(
+        f"/api/novelty/jobs/{job_id}/notion/approve", json={"approved": True}
+    )
+
+    # US-NV8 — 연결 없음은 FAILED 상태+비기술 문구로 수렴, 500 아님
+    assert approved.status_code == 200
+    body = approved.json()
+    assert body["status"] == "failed"
+    assert "Notion 연결이 없습니다" in body["errorMessage"]
+
+
+def test_notion_api_client_builds_page_request_and_maps_errors() -> None:
+    captured: dict = {}
+
+    class OkHttp:
+        def post(self, url, headers=None, json=None):
+            captured["url"], captured["headers"], captured["json"] = url, headers, json
+
+            class R:
+                status_code = 200
+
+                @staticmethod
+                def json():
+                    return {"id": "page-xyz"}
+
+            return R()
+
+    content = {
+        "title": "Novelty analysis: rag",
+        "artifacts": [
+            {
+                "kind": "experiment_plan",
+                "title": "Experiment plan",
+                "payload": {
+                    "items": [{"title": "A", "summary": "B"}],
+                    "researchQuestion": "RQ?",
+                },
+            }
+        ],
+    }
+    page_id = NotionApiExportClient(OkHttp()).export(
+        {"token": "tok", "parentPageId": "0" * 32}, content
+    )
+
+    assert page_id == "page-xyz"
+    assert captured["url"] == "https://api.notion.com/v1/pages"
+    assert captured["headers"]["Authorization"] == "Bearer tok"
+    assert captured["json"]["parent"] == {"page_id": "0" * 32}
+    blocks = json.dumps(captured["json"]["children"], ensure_ascii=False)
+    assert "Experiment plan" in blocks
+    assert "A — B" in blocks
+    assert "Research question: RQ?" in blocks
+
+    class ErrHttp:
+        def post(self, url, headers=None, json=None):
+            class R:
+                status_code = 403
+
+                @staticmethod
+                def json():
+                    return {}
+
+            return R()
+
+    with pytest.raises(RuntimeError):
+        NotionApiExportClient(ErrHttp()).export(
+            {"token": "tok", "parentPageId": "0" * 32}, content
+        )
 
 
 def test_worker_loop_acks_successful_message() -> None:

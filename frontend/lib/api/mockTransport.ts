@@ -67,6 +67,9 @@ import type {
   AgentTimelineEvent,
 } from '@/lib/agentChat/types';
 
+// US-NV8(#258) — mock Notion 연결 상태(모듈 수준, 세션 초기화와 무관한 사용자 설정).
+let mockNotionConnection: { parentPageId: string } | null = null;
+
 function matches(q: string, ...needles: string[]): boolean {
   const lower = q.toLowerCase();
   return needles.some((n) => lower.includes(n));
@@ -436,6 +439,59 @@ export class MockTransport implements Transport {
       return snapshot
         ? { status: 200, body: { job: noveltyJob(snapshot.session), events: [] } }
         : { status: 404, body: null };
+    }
+    // US-NV8(#258) — Notion 연결·미리보기·승인. mock은 메모리 연결 + 즉시 성공 내보내기.
+    if (path === '/api/novelty/notion/connection' && req.method === 'GET') {
+      return {
+        status: 200,
+        body: {
+          connected: mockNotionConnection !== null,
+          parentPageId: mockNotionConnection?.parentPageId ?? null,
+        },
+      };
+    }
+    if (path === '/api/novelty/notion/connection' && req.method === 'PUT') {
+      const body = req.body as { parentPageId?: string };
+      mockNotionConnection = { parentPageId: body?.parentPageId ?? '' };
+      return {
+        status: 200,
+        body: { connected: true, parentPageId: mockNotionConnection.parentPageId },
+      };
+    }
+    const noveltyNotionPreview = path.match(/^\/api\/novelty\/jobs\/([^/]+)\/notion\/preview$/);
+    if (noveltyNotionPreview && req.method === 'POST') {
+      const snapshot = mockLoadAgentSession(decodeURIComponent(noveltyNotionPreview[1]));
+      return snapshot
+        ? {
+            status: 200,
+            body: {
+              export: { status: 'preview_ready' },
+              preview: {
+                title: `Novelty analysis: ${snapshot.session.title}`,
+                artifacts: [
+                  { kind: 'similar_works', title: '유사 연구 표' },
+                  { kind: 'experiment_plan', title: '실험 계획' },
+                ],
+              },
+            },
+          }
+        : { status: 404, body: null };
+    }
+    const noveltyNotionApprove = path.match(/^\/api\/novelty\/jobs\/([^/]+)\/notion\/approve$/);
+    if (noveltyNotionApprove && req.method === 'POST') {
+      if ((req.body as { approved?: boolean })?.approved !== true) {
+        return { status: 200, body: { status: 'not_requested' } };
+      }
+      if (!mockNotionConnection) {
+        return {
+          status: 200,
+          body: {
+            status: 'failed',
+            errorMessage: 'Notion 연결이 없습니다. 먼저 연결 토큰을 등록해 주세요.',
+          },
+        };
+      }
+      return { status: 200, body: { status: 'exported', notionPageId: 'mock-notion-page-1234' } };
     }
     const noveltyResult = path.match(/^\/api\/novelty\/jobs\/([^/]+)\/result$/);
     if (noveltyResult && req.method === 'GET') {

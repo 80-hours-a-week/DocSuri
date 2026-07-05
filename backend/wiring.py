@@ -551,6 +551,7 @@ def _mount_novelty(app: FastAPI, settings: Settings, result: MountResult) -> Non
         build_evidence_formation_adapter,
         build_external_adapter,
         build_llm_adapter,
+        build_notion_adapter,
         build_similarity_adapter,
     )
     from backend.modules.novelty.repository import (
@@ -608,6 +609,7 @@ def _mount_novelty(app: FastAPI, settings: Settings, result: MountResult) -> Non
             similarity=build_similarity_adapter(corpus),
             llm=build_llm_adapter(cost_guard=getattr(app.state, "cost_guard", None)),
             evidence=evidence_adapter,
+            notion=build_notion_adapter(),
         )
         log.info("app-shell: novelty wired U2 full-search corpus adapter")
     for router in novelty.routers:

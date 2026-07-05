@@ -4,6 +4,7 @@ import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { UserFacingError, getApiClient } from '@/lib/api';
 import { timelineDetail } from '@/lib/api/apiClient';
+import { NotionExportPanel } from './NotionExportPanel';
 import {
   MAX_AGENT_ATTACHMENT_TEXT_CHARS,
   agentReducer,
@@ -301,6 +302,13 @@ export function AgentChatScreen() {
 
       <AgentMessageList messages={state.messages} streamingMessageId={streamingMessageId} />
       <AgentProgressTimeline events={state.events} jobState={state.jobState} />
+
+      {/* US-NV8(#258) — novelty 결과가 터미널이면 미리보기→승인 export 패널 노출 */}
+      {state.mode === 'novelty' &&
+      state.session &&
+      (state.jobState === 'completed' || state.jobState === 'degraded') ? (
+        <NotionExportPanel jobId={state.session.id} />
+      ) : null}
 
       {state.error ? (
         <p className={styles.error} role="status" data-testid="agent-error">

@@ -23,6 +23,8 @@ from .models import (
     JobState,
     JobStatusResponse,
     ManuscriptContentRequest,
+    NotionConnectionRequest,
+    NotionConnectionStatusResponse,
     NoveltyChatMessage,
     NoveltyJobListResponse,
     NoveltyJobRequest,
@@ -270,14 +272,44 @@ async def approve_notion_export(
     repo: NoveltyRepository = REPO_DEP,
 ):
     try:
-        export = NoveltyService(repo, _observability(request)).approve_export(
-            principal.user_id, job_id, approved=dto.approved
-        )
+        service = NoveltyService(repo, _observability(request))
+        export = service.approve_export(principal.user_id, job_id, approved=dto.approved)
+        if dto.approved:
+            # US-NV8(#258) AC3 — 승인 직후 실제 Notion 호출까지 완결(자동 export 없음).
+            adapters = _adapters(request) or NoveltyAdapters()
+            export = service.execute_export(principal.user_id, job_id, adapters.notion)
         return export
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="job not found") from exc
     except ExportApprovalError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.get("/notion/connection", response_model=NotionConnectionStatusResponse)
+async def notion_connection_status(
+    request: Request,
+    principal: Principal = PRINCIPAL_DEP,
+    repo: NoveltyRepository = REPO_DEP,
+) -> NotionConnectionStatusResponse:
+    return NoveltyService(repo, _observability(request)).notion_connection_status(
+        principal.user_id
+    )
+
+
+@router.put("/notion/connection", response_model=NotionConnectionStatusResponse)
+async def save_notion_connection(
+    dto: NotionConnectionRequest,
+    request: Request,
+    principal: Principal = PRINCIPAL_DEP,
+    repo: NoveltyRepository = REPO_DEP,
+) -> NotionConnectionStatusResponse:
+    try:
+        return NoveltyService(repo, _observability(request)).save_notion_connection(
+            principal.user_id, dto
+        )
+    except ValueError as exc:
+        # 키 미구성 등 — 비기술 문구만 노출(SEC-5/9)
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 routers = (router,)
