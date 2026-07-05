@@ -92,6 +92,10 @@ class NoveltyStack(Stack):
                 "DOCSURI_NOVELTY_JOB_QUEUE_URL": queue.queue_url,
                 "DOCSURI_NOVELTY_ARTIFACT_BUCKET": f"docsuri-papers-fulltext-{account}",
                 "DOCSURI_NOVELTY_ARTIFACT_PREFIX": "novelty/",
+                "DOCSURI_DOCMODEL_BUCKET": f"docsuri-papers-fulltext-{account}",
+                "DOCSURI_DOCMODEL_BUILD_QUEUE_URL": (
+                    f"https://sqs.{self.region}.amazonaws.com/{account}/docsuri-docmodel-queue"
+                ),
                 "DOCSURI_OPENSEARCH_ENDPOINT": f"https://{opensearch_domain.domain_endpoint}",
                 "DOCSURI_BEDROCK_MODEL_ID": "global.cohere.embed-v4:0",
                 "DOCSURI_NOVELTY_LLM_MODEL_ID": "global.anthropic.claude-sonnet-4-6",
@@ -136,10 +140,25 @@ class NoveltyStack(Stack):
         self.service.connections.allow_to(opensearch_domain.connections, ec2.Port.tcp(443))
 
         queue.grant_consume_messages(task_def.task_role)
+        queue.grant_send_messages(task_def.task_role)
         task_def.add_to_task_role_policy(
             iam.PolicyStatement(
                 actions=["s3:GetObject", "s3:PutObject"],
                 resources=[f"{artifact_bucket_arn}/novelty/*"],
+            )
+        )
+        task_def.add_to_task_role_policy(
+            iam.PolicyStatement(
+                actions=["s3:GetObject"],
+                resources=[f"{artifact_bucket_arn}/doc-model/*"],
+            )
+        )
+        task_def.add_to_task_role_policy(
+            iam.PolicyStatement(
+                actions=["sqs:SendMessage"],
+                resources=[
+                    f"arn:aws:sqs:{self.region}:{account}:docsuri-docmodel-queue",
+                ],
             )
         )
         task_def.add_to_task_role_policy(

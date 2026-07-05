@@ -3654,3 +3654,17 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **Context**: Code Generation follow-up completion for PR #391 review findings.
 
 ---
+## PR394 Review Fix Start
+**Timestamp**: 2026-07-05T16:04:10Z
+**User Input**: "apply all changes."
+**AI Response**: "Started applying PR #394 review fixes: wire the novelty worker stack for delayed self-retry, doc-model build queue dispatch, and doc-model S3 read access; add focused regression coverage; rerun backend, ops, and CDK verification."
+**Context**: Code Generation follow-up for PR #394 review findings.
+
+---
+## PR394 Review Fix Completion
+**Timestamp**: 2026-07-05T16:04:32Z
+**User Input**: "apply all changes."
+**AI Response**: "Applied all PR #394 review fixes: the novelty worker stack now has doc-model bucket/build-queue environment, self-send permission for delayed retry, scoped doc-model queue SendMessage, and scoped doc-model S3 read access. Added an ops regression test for the stack contract. Verification passed: touched ruff clean, PR backend tests 54 passed, ops tests 49 passed, git diff --check clean, and CDK app synth succeeded with the existing Node version warning."
+**Context**: Code Generation follow-up completion for PR #394 review findings.
+
+---
