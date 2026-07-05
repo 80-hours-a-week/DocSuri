@@ -3563,3 +3563,10 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **Context**: Branch naming CI repair for PR1 user PDF doc-model ingestion branch.
 
 ---
+## PR1 Branch Name Fix Completion
+**Timestamp**: 2026-07-05T12:55:03Z
+**User Input**: "Treat aidlc-state.md, audit.md with the AIDLC way."
+**AI Response**: "Applied the AI-DLC tracking correction: kept audit.md append-only with a completion entry, updated aidlc-state.md to reference the live replacement PR #390 and the CI-compliant `feature/pr1-userdoc-docmodel-ingestion` branch, and recorded that #389 was closed by GitHub during the remote branch rename. Confirmed PR #390 Branch name check is passing."
+**Context**: AI-DLC state/audit correction for PR1 branch-name CI repair.
+
+---
