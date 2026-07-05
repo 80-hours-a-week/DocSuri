@@ -592,7 +592,7 @@ def _mount_novelty(app: FastAPI, settings: Settings, result: MountResult) -> Non
             corpus=corpus,
             external=build_external_adapter(),
             similarity=build_similarity_adapter(corpus),
-            llm=build_llm_adapter(),
+            llm=build_llm_adapter(cost_guard=getattr(app.state, "cost_guard", None)),
         )
         log.info("app-shell: novelty wired U2 full-search corpus adapter")
     for router in novelty.routers:
@@ -674,7 +674,9 @@ def _mount_evidence(app: FastAPI, settings: Settings, result: MountResult) -> No
     if ev_settings.evidence_enabled:
         from backend.modules.evidence.real_wiring import build_evidence_orchestrator
 
-        bundle = build_evidence_orchestrator(ev_settings)
+        bundle = build_evidence_orchestrator(
+            ev_settings, cost_guard=getattr(app.state, "cost_guard", None)
+        )
         app.state.evidence_bundle = bundle
 
         def get_evidence_orchestrator():

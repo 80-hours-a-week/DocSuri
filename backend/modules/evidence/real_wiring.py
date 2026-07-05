@@ -30,8 +30,14 @@ class EvidenceBundle:
     settings: EvidenceSettings
 
 
-def build_evidence_orchestrator(settings: EvidenceSettings) -> EvidenceBundle:
-    """실 어댑터 조립 — DOCSURI_DOCMODEL_BUCKET + OpenSearch 설정 필요."""
+def build_evidence_orchestrator(
+    settings: EvidenceSettings, cost_guard: object | None = None
+) -> EvidenceBundle:
+    """실 어댑터 조립 — DOCSURI_DOCMODEL_BUCKET + OpenSearch 설정 필요.
+
+    cost_guard(U6 단일 권위)를 주면 orchestrator 비용 게이트 + extractor 지출 기록에
+    연결된다(NFR-C1).
+    """
     # --- Discovery 어댑터 (U2 재사용) ---
     from discovery.adapters.bedrock_embedding import BedrockCohereQueryEmbedder
     from discovery.adapters.opensearch_index import (
@@ -80,6 +86,7 @@ def build_evidence_orchestrator(settings: EvidenceSettings) -> EvidenceBundle:
     extractor = EvidenceExtractor(
         model_id=settings.model_id,
         region_name=settings.region_name,
+        cost_guard=cost_guard,
     )
 
     # --- Assembler & Orchestrator ---
@@ -89,6 +96,7 @@ def build_evidence_orchestrator(settings: EvidenceSettings) -> EvidenceBundle:
         doc_model_tool=doc_model_tool,
         extractor=extractor,
         assembler=assembler,
+        cost_guard=cost_guard,
     )
 
     return EvidenceBundle(orchestrator=orchestrator, settings=settings)

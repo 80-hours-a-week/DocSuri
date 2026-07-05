@@ -478,6 +478,7 @@ def test_build_llm_adapter_uses_long_stream_read_timeout(monkeypatch) -> None:
         return object()
 
     monkeypatch.setattr(boto3, "client", fake_client)
+    monkeypatch.delenv("AWS_REGION", raising=False)
     monkeypatch.setenv("AWS_DEFAULT_REGION", "ap-northeast-2")
 
     build_llm_adapter()
@@ -822,3 +823,108 @@ def test_api_rejects_blank_topic_before_job_is_created(monkeypatch) -> None:
 
     assert resp.status_code == 422
     assert repo.list_jobs(principal.user_id) == []
+
+
+def _stream_chunk(payload: dict) -> dict:
+    return {"chunk": {"bytes": json.dumps(payload).encode("utf-8")}}
+
+
+def test_bedrock_llm_client_invokes_at_cost_guard_warning() -> None:
+    """NFR-C1 — agent hard gate는 warning(80%)에서는 Bedrock을 막지 않는다."""
+    from docsuri_ops.cost_guard import CostGuardCircuitBreaker
+    from docsuri_ops.domain.models import UsageEvent
+
+    class _Invoke:
+        called = False
+
+        def invoke_model_with_response_stream(self, **kwargs):
+            self.called = True
+            return {
+                "body": [
+                    _stream_chunk(
+                        {
+                            "type": "content_block_delta",
+                            "delta": {"type": "text_delta", "text": "{}"},
+                        }
+                    )
+                ]
+            }
+
+    guard = CostGuardCircuitBreaker()
+    guard.record_spend(UsageEvent(event_id="seed", amount_usd=1280.0, source="test"))
+    ref = {"type": "url", "identifier": "2401.00001", "url": "https://arxiv.org/abs/2401.00001"}
+    client = _Invoke()
+
+    draft = BedrockNoveltyLlmClient(model_id="m", client=client, cost_guard=guard).draft(
+        topic="t",
+        corpus=RetrievalBundle(items=[{"title": "Prior", "sourceRefs": [ref]}]),
+        external=RetrievalBundle(items=[]),
+    )
+
+    assert client.called is True
+    assert draft.degradedReason is None
+
+
+def test_bedrock_llm_client_degrades_without_invoke_when_cost_guard_critical() -> None:
+    """NFR-C1 — critical cost guard 상태면 Bedrock 호출 없이 cost_degraded로 저하한다."""
+    from docsuri_ops.cost_guard import CostGuardCircuitBreaker
+    from docsuri_ops.domain.models import UsageEvent
+
+    class _NoInvoke:
+        def invoke_model_with_response_stream(self, **kwargs):
+            raise AssertionError("LLM must not be invoked while the cost guard is gated")
+
+    guard = CostGuardCircuitBreaker()
+    guard.record_spend(UsageEvent(event_id="seed", amount_usd=1520.0, source="test"))
+    ref = {"type": "url", "identifier": "2401.00001", "url": "https://arxiv.org/abs/2401.00001"}
+
+    draft = BedrockNoveltyLlmClient(model_id="m", client=_NoInvoke(), cost_guard=guard).draft(
+        topic="t",
+        corpus=RetrievalBundle(items=[{"title": "Prior", "sourceRefs": [ref]}]),
+        external=RetrievalBundle(items=[]),
+    )
+
+    assert draft.degradedReason == "cost_degraded"
+
+
+def test_bedrock_llm_client_records_spend_from_usage() -> None:
+    """NFR-C1 — 스트림 usage 이벤트의 토큰이 cost guard 지출로 기록된다."""
+    from docsuri_ops.cost_guard import CostGuardCircuitBreaker
+
+    class _FakeBedrock:
+        def invoke_model_with_response_stream(self, **kwargs):
+            return {
+                "body": [
+                    _stream_chunk(
+                        {
+                            "type": "message_start",
+                            "message": {"usage": {"input_tokens": 1_000_000, "output_tokens": 1}},
+                        }
+                    ),
+                    _stream_chunk(
+                        {
+                            "type": "content_block_delta",
+                            "delta": {"type": "text_delta", "text": json.dumps({})},
+                        }
+                    ),
+                    _stream_chunk(
+                        {
+                            "type": "message_delta",
+                            "delta": {"stop_reason": "end_turn"},
+                            "usage": {"output_tokens": 200_000},
+                        }
+                    ),
+                ]
+            }
+
+    guard = CostGuardCircuitBreaker()
+    ref = {"type": "url", "identifier": "2401.00001", "url": "https://arxiv.org/abs/2401.00001"}
+
+    BedrockNoveltyLlmClient(model_id="m", client=_FakeBedrock(), cost_guard=guard).draft(
+        topic="t",
+        corpus=RetrievalBundle(items=[{"title": "Prior", "sourceRefs": [ref]}]),
+        external=RetrievalBundle(items=[]),
+    )
+
+    # 기본 단가 $3/1M input + $15/1M output → 1M in + 0.2M out = $6
+    assert abs(guard.get_budget_state().spend_usd - 6.0) < 1e-9

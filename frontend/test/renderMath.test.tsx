@@ -10,6 +10,30 @@ function html(node: React.ReactNode): HTMLElement {
   return container;
 }
 
+describe('fail-soft fallback (no raw backslash source on a KaTeX parse error)', () => {
+  it('renders a compact placeholder instead of the source when a display formula cannot parse', () => {
+    // `\big{(}` (brace-wrapped delimiter) is a fatal KaTeX parse error — the exact break the user
+    // saw. It must NOT spill its backslash source onto the page.
+    const c = html(<MathDisplay latex={String.raw`2\big{(}x\Big{]}`} />);
+    expect(c.textContent).toBe('수식');
+    expect(c.textContent).not.toContain('\\big');
+    // Source is preserved for inspection in the tooltip, HTML-escaped (no injection).
+    const chip = c.querySelector('[role="img"]') as HTMLElement;
+    expect(chip.getAttribute('title')).toContain('\\big{(}');
+  });
+
+  it('escapes angle brackets in the tooltip so a hostile source cannot inject markup', () => {
+    const c = html(<MathDisplay latex={String.raw`\big{<}<script>`} />);
+    expect(c.querySelector('script')).toBeNull();
+  });
+
+  it('still renders valid math normally (fallback only on failure)', () => {
+    const c = html(<MathDisplay latex={String.raw`\frac{a}{b}`} />);
+    expect(c.querySelector('.katex')).not.toBeNull();
+    expect(c.textContent).not.toBe('수식');
+  });
+});
+
 describe('renderInlineMath', () => {
   it('renders arXiv `$…$` inline math as KaTeX, not raw source', () => {
     const c = html(renderInlineMath('a convex combination of $K$ base measures'));
@@ -69,10 +93,11 @@ describe('renderInlineMath', () => {
   });
 
   it('resolves a custom macro from meta.macros instead of showing the raw command', () => {
-    // KaTeX (throwOnError:false) renders an undefined command as its red source text. The
-    // e-print macro map expands it instead, so the literal `\myvec` no longer appears.
+    // Without the macro map, `\myvec` is undefined → fail-soft placeholder (raw command kept in
+    // the tooltip, never spilled onto the page). The e-print macro map expands it so it renders.
     const without = html(renderInlineMath('a \\(\\myvec\\) b'));
-    expect(without.textContent).toContain('\\myvec');
+    expect(without.querySelector('.katex')).toBeNull();
+    expect(without.querySelector('[role="img"]')?.getAttribute('title')).toContain('\\myvec');
 
     const withMacros = html(renderInlineMath('a \\(\\myvec\\) b', { '\\myvec': '\\vec{x}' }));
     expect(withMacros.querySelector('.katex')).not.toBeNull();
@@ -81,7 +106,8 @@ describe('renderInlineMath', () => {
 
   it('passes macros through MathDisplay (block formulas)', () => {
     const without = html(<MathDisplay latex={'\\myop'} />);
-    expect(without.textContent).toContain('\\myop');
+    expect(without.querySelector('.katex')).toBeNull();
+    expect(without.querySelector('[role="img"]')?.getAttribute('title')).toContain('\\myop');
 
     const c = html(<MathDisplay latex={'\\myop'} macros={{ '\\myop': '\\oplus' }} />);
     expect(c.querySelector('.katex')).not.toBeNull();
@@ -116,7 +142,9 @@ describe('renderInlineMath', () => {
     html(<MathDisplay latex={'\\gdef\\leaktest{LEAKED}'} />);
     const after = html(<MathDisplay latex={'\\leaktest'} />);
     expect(after.textContent).not.toContain('LEAKED'); // definition must not have leaked
-    expect(after.textContent).toContain('\\leaktest'); // shows the raw, undefined command
+    // Isolated → `\leaktest` is undefined → fail-soft placeholder carrying the raw command in its
+    // tooltip (had the \gdef leaked, it would instead render "LEAKED" as real KaTeX).
+    expect(after.querySelector('[role="img"]')?.getAttribute('title')).toContain('\\leaktest');
   });
 });
 

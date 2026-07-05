@@ -1,30 +1,31 @@
 # DocSuri Production Roadmap — 2026-07
 
-> **Date**: 2026-07-03 · **Baseline**: develop `573ad494` (main at v1.2.3, 13 commits behind) · **main now at v1.4.0** (2026-07-04 promotion)
-> **Updated**: 2026-07-04 — current status:
-> - ✅ **v1.4.0 promoted to main** (PR #360, merge `45651d0`) — ships #351 / #356 / #338 / #349; `release.yml` auto-tagged `v1.4.0`, `cd.yml` ECS rolling deploy (API · ingestion · frontend).
-> - PR #351 merged (summary-anchor structural resolution + stale-docmodel self-heal).
-> - **PRs #338 and #349 are MERGED to develop** (2026-07-04): #338 evidence agent (merge `f12990d`) and #349 novelty agent (merge `e5e1e19`); both re-reviewed → APPROVED before merge.
-> - Roadmap execution started: **PR #353** opened for ALB + CloudFront access logs (#341 step ①); **PR #355** opened for the S3/OAC-backed edge 5xx branded error page (#341 step ②); **PR #357** opened for 각주트리 DOI node expansion 500 (#342).
-> - **PR #359 merged** into #338 (all 5 blockers + multi-turn context); attachment ingestion → tracked follow-up. #349's timeline-detail overwrite fixed (#358), and the #338↔#349 `AgentChatScreen.tsx` conflict was integrated at merge (evidence cards + streaming + jobState timeline; tsc + 231 vitest + CI build green).
-> _Prev 2026-07-03 pm — PR #337 merged; PR #349 opened._
+> **Date**: 2026-07-03 · **Baseline**: develop `233aac1` · **main at v1.5.0** (2026-07-04 promotion)
+> **Updated**: 2026-07-04 pm — Phase 1 execution:
+> - ✅ **NFR-C1 cost governance live in v1.5.0** (PR #364; #363 closed by the branch-rename gate, same commit re-landed): CostGuard wired into **both** agent Bedrock paths — evidence extractor + novelty LLM — with real spend recorded from invocation metrics; critical-tier gate → `[abstain] cost_degraded` UX (유진 review `40d545d`: `is_cost_critical` + API-side novelty wiring); per-user daily quotas (evidence 30/day · novelty 5/day, Redis-shared fail-open, 429→FE `rateLimited`).
+> - ✅ **#339 closed** (PR #365) — evidence card + `§` citation-anchor rendering + screen-level evidence-card test.
+> - ✅ Verified-DONE FE stories closed with evidence comments: **#293 · #295 · #296 · #298**.
+> - ✅ **Summary worker = 5th ECS unit** (PR #366; CICD IAM allowlist deployed first) → **promoted develop→main → `v1.5.0`** (PR #367): release + deploy green, all 5 units stable — first prod summary-worker deploy closes the infinite-pending incident class in prod.
+> - ✅ **Novelty artifact renderers merged to develop** (PR #368, merge `233aac1`) — #253–#256 FE half: 유사 연구 표 · 차별화 후보 · 위험 신호(비판정 caveat) · 실험 계획, evidenceStatus 배지 + 출처 링크; `/result` seam이 JSON을 구조화 카드로 렌더, 세션 재열람에도 유지. Ships with the next promotion.
+> - ⏭️ Remaining Phase 1 — see §3 progress table: P2-b backend (#257/#253, 유진 coordination) · attachments E2E (#268+#297+#252) · sessions decision (#271/#272) · eval (#273/#259) · #258 · #251.
+> _Prev 2026-07-04 am — v1.4.0 promoted (PR #360, deploy green); CI node24 bump (PR #361, tag-action blocked upstream); #338 evidence + #349 novelty agents merged (`f12990d`/`e5e1e19`); hardening PRs #353/#355/#357 opened; #351 merged. 2026-07-03 pm — PR #337 merged; #349 opened._
 > Snapshot of where the product stands against the team's initial plan, and the path to
-> production-level completion of our goals. Tracking references: #337–#359 where cited below.
+> production-level completion of our goals. Tracking references: #251–#368 where cited below.
 
 ## 1. Status vs. the initial plan
 
 | Plan item | Status | Notes |
 |---|---|---|
 | 논문 검색 | ✅ Live | Hybrid search over ~1.5M-chunk corpus; daily auto-harvest (EventBridge 15:00 KST); pre-2026 historical drain in progress |
-| 논문 요약/번역 | ✅ Live | Grounded summaries/translation; glossary system redesigned (PR #334); map parallelism + shared-base overlay landed; source-anchor structural resolution + stale-docmodel self-heal (PR #351); Bedrock output elicitation → tool-use structured output, killing the JSON-parse abstain failure class (**PR #356**, open, no linked issue) |
+| 논문 요약/번역 | ✅ Live | Grounded summaries/translation; glossary redesign (PR #334); source-anchor structural resolution + stale-docmodel self-heal (PR #351); tool-use structured output (PR #356, shipped v1.4.0); summary worker now its own ECS unit (PR #366, **v1.5.0**) — 무한 pending 사고 클래스 prod 종결 |
 | 프로필 페이지 | 🟡 Live w/ mocks | U10 merged; 최근 본 논문/ORCID still mock (#347) |
 | 인용 그래프 → 각주 트리 | 🟡 Live w/ bug | DOI node expansion returns 500 (#342) — fix in **PR #357** (provider fail-closed), awaiting merge |
 | 트렌드/알림 | ❌ Not started | Never entered requirements — needs inception re-entry |
 | 구독제 | ❌ Not started | Never entered requirements — needs inception re-entry |
 | 로그 수집 | ✅ Live | U9 collection healthy (944 events/7d, 0 failures); KPI funnel view missing (#346) |
 | 개인화 추천 | 🟡 Shadow | Search boost applied in shadow mode (PR #300); go-live judgment pending (#345); US-P5 deferred |
-| 에이전트: 문헌탐색/근거형성 | ✅ Merged to develop | **PR #338 merged** (`f12990d`, 2026-07-04) after #359 landed all fixes: #1 turn-persist, #3 length-500, #4 async-queue wiring, #5 whitespace + **multi-turn context** (RED→GREEN, synth, ruff); independently re-reviewed → APPROVED. Attachment ingestion → tracked follow-up (on #359). `Docsuri-Evidence` stack live; #339 (AgentChatScreen raw-JSON) can now proceed |
-| (charter add) 연구아이디어 novelty 에이전트 | ✅ Merged to develop | **PR #349 merged** (`e5e1e19`, 2026-07-04). SSE timeline-detail overwrite fixed via **#358** (field-preserving `mergeTimelineEvents` + regression test) → re-reviewed APPROVED. The #338↔#349 `AgentChatScreen.tsx` conflict was resolved at merge (evidence cards + streaming + jobState timeline integrated; tsc + 231 vitest + CI frontend build green). US-NV stories (#251–259) remain; queue-swap rollout coordination still applies |
+| 에이전트: 문헌탐색/근거형성 | ✅ Live (v1.4.0) | PR #338 shipped v1.4.0; **cost-governed since v1.5.0** (PR #364: CostGuard critical-tier abstain + live spend recording + 30/day per-user quota); 근거 카드 + `§` 인용 앵커 done (#339, PR #365). Remaining: attachments E2E (#268+#297+#252), sessions surfaces (#271/#272), eval/observability (#273) |
+| (charter add) 연구아이디어 novelty 에이전트 | ✅ Live (v1.4.0) | PR #349 shipped v1.4.0 (queue swap cut over at that rollout, deploy green); cost-governed since v1.5.0 (PR #364: draft-gate + 5/day quota). **FE 아티팩트 렌더러 merged** (PR #368): 유사 연구 표 · 차별화 후보 · 위험 신호 · 실험 계획. Remaining: #257 step-detail payloads + #253 schema columns (P2-b, 유진), #258 Notion export, #251 form_evidence |
 | 웹검색 레퍼런스 (고려) | ❌ Not started | Novelty agent has GitHub+datasets search; web/news deferred to next cycle |
 | 온보딩 (고려) | ❌ Not started | Candidate fix for personalization cold-start |
 
@@ -38,25 +39,22 @@ Production deploys now go through CI on main push — the manual-buildx era is o
 | 1 | ✅ **PR #337 merged** (2026-07-03 13:00 UTC) — revert-on-promote trap closed | PR #337 |
 | 2 | ✅ **PR #338 merged** (`f12990d`, 2026-07-04) — #359 landed all 4 blockers + whitespace + multi-turn context; independently re-reviewed → APPROVED. Attachments → tracked follow-up | PR #338, #359 |
 | 3 | ✅ **Promoted develop→main → `v1.4.0`** (2026-07-04) — PR #360 merged (`45651d0`); `release.yml` auto-tagged `v1.4.0` (ships #351 anchor, #356 tool-use, #338 evidence agent, #349 novelty agent), `cd.yml` ECS rolling deploy | #340 · `v1.4.0` |
-| 4 | Fix AgentChatScreen raw-JSON rendering — **#338 and #349 have landed**; their `AgentChatScreen.tsx` conflict was integrated at merge (evidence cards + streaming + jobState timeline), so build the fix on develop's merged component | #339 |
+| 4 | ✅ **#339 closed** (PR #365, 2026-07-04) — 근거 카드 + `§` 인용 앵커 렌더링 + screen-level evidence-card test; shipped in v1.5.0 | #339 · PR #365 |
 
 ## 3. Phase 1 — Weeks 1–2: agent GA (the 차별화)
 
 The differentiator is ~90% built. Finish it before starting anything new.
 
-- **Evidence agent stories** (#268–273): attachments, abstention paths, session
-  persistence/re-open, session delete, observability + invariants.
-- **Agent chat frontend** (#293–299): nav entry, mode select, session drawer,
-  exploration timeline, attachment UX, mock/real transport boundary, quality gate.
-- **Novelty agent stories** (#251–259): manuscript upload, 유사 연구 표, 차별화
-  후보/실험 계획, Notion export, progress display. **PR #349 (merged `e5e1e19`)** largely
-  lands progress display (US-NV7 #257), the DLQ+alarm half of observability
-  (US-NV9 #259), and timeline normalization toward US-AG4 #296.
-  ⚠️ Its queue swap (stack-owned SQS, RETAIN) needs rollout coordination — worker
-  and API must cut to the new queue URL in one rollout, then drain/retire the old
-  queue (cf. the PR #323 old-worker skew trap). Details in the PR comment.
-- **Cost gates before public exposure**: both agents call Bedrock Sonnet per turn under
-  the $1600 cap — verify NFR-C1 agent cost lines + per-user throttles on the live path.
+**Execution board (2026-07-04)** — verified against code+tests, not docs (board sweep: 4 stories DONE→closed, rest partial):
+
+| Step | Status | Notes |
+|---|---|---|
+| P0 · Cost gates (NFR-C1) | ✅ **v1.5.0** | PR #364 — CostGuard on both agent Bedrock paths, real spend recorded from invocation metrics, critical-tier `[abstain] cost_degraded`, per-user daily quotas (evidence 30 · novelty 5; Redis-shared, fail-open) |
+| P1 · #339 + story hygiene | ✅ **v1.5.0** | PR #365 (근거 카드 + `§` 앵커 + screen test); #293/#295/#296/#298 closed with evidence comments |
+| P2-a · Novelty FE renderers | ✅ develop | PR #368 (`233aac1`) — #253–#256 FE half; ships with next promotion |
+| P2-b · Novelty backend | ⬜ 유진 coord | #257 worker step-detail payloads (`advance_state` currently passes none) + #253 schema columns (method/dataset/results/limitations) |
+| P3 · Attachments E2E | ⬜ | #268 + #297 + #252, incl. the controller 500-not-422 defect — biggest remaining Phase 1 lift (presigned upload spans FE/BE/CDK) |
+| P4 · Residue | ⬜ | sessions surfaces decision (#271/#272 — dead surface or wire it) · eval harness/metrics (#273/#259) · #258 Notion export · #251 form_evidence-first · novelty old-queue drain/retire 확인 (cutover green at v1.4.0) |
 
 ## 4. Phase 2 — Weeks 2–4 (parallel): production hardening
 
@@ -75,6 +73,8 @@ Ordered by user impact:
 | Authz contract → `docsuri_shared` refactor | #167 |
 | 검색 품질 개선 (charter phase 7) | charter |
 | Issue hygiene: close shipped US-A3~A7 stories (#187–191) | — |
+| `mathieudutour/github-tag-action` node24 bump — blocked on upstream release (rest of CI on node24 since PR #361) | — |
+| Env-dependent `test_api_create_status_and_cancel` (passes only when AWS creds absent) — pin the fake/live seam | — |
 
 ## 5. Phase 3 — Month 2: growth scope (requires inception re-entry)
 

@@ -222,32 +222,21 @@ function mapNoveltyResultMessage(
   return {
     id: `novelty-result-${artifacts.map((artifact) => artifact.artifactId).join('-')}`,
     role: 'agent',
-    content: [
-      'Novelty 분석 결과',
-      ...artifacts.map((artifact) => `- ${artifact.title}: ${artifactSummary(artifact)}`),
-    ].join('\n'),
+    // 구조화 아티팩트를 JSON-in-content로 전달 — evidence 결과와 동일한 seam이라 세션
+    // 영속/재열람에서도 구조가 유지된다. 렌더링은 NoveltyResultView(#253~#256).
+    content: JSON.stringify({
+      kind: 'novelty',
+      artifacts: artifacts.map((artifact) => ({
+        artifactId: artifact.artifactId,
+        kind: artifact.kind,
+        title: artifact.title,
+        payload: artifact.payload ?? {},
+        createdAt: artifact.createdAt,
+      })),
+    }),
     createdAt: artifacts.at(-1)?.createdAt ?? fallbackCreatedAt,
     status: 'sent',
   };
-}
-
-function artifactSummary(artifact: BackendNoveltyArtifact): string {
-  const payload = artifact.payload ?? {};
-  const count = countFromPayload(payload);
-  if (artifact.kind === 'experiment_plan') {
-    return [
-      stringValue(payload.researchQuestion),
-      listValue(payload.hypotheses),
-      listValue(payload.datasets),
-      listValue(payload.metrics),
-      listValue(payload.risks),
-    ]
-      .filter(Boolean)
-      .join(' / ');
-  }
-  const firstItem = firstItemTitle(payload);
-  if (firstItem) return count ? `${firstItem} 외 ${count}건` : firstItem;
-  return count ? `${count}건` : '결과 생성됨';
 }
 
 function timelineDetail(payload?: Record<string, unknown>): string | undefined {
@@ -289,11 +278,6 @@ function hasValue(value: unknown): boolean {
   return value !== null && value !== undefined;
 }
 
-function listValue(value: unknown): string | undefined {
-  if (!Array.isArray(value)) return undefined;
-  return value.map(stringValue).filter(Boolean).slice(0, 2).join(', ') || undefined;
-}
-
 function attachmentStatus(value: unknown): AgentAttachmentStatus {
   return value === 'rejected' ? 'rejected' : 'ready';
 }
@@ -312,15 +296,6 @@ function countFromPayload(payload: Record<string, unknown>): number | undefined 
   const explicit = payload.count ?? payload.foundCount ?? payload.resultCount;
   if (typeof explicit === 'number') return explicit;
   return Array.isArray(payload.items) ? payload.items.length : undefined;
-}
-
-function firstItemTitle(payload: Record<string, unknown>): string | undefined {
-  const items = payload.items;
-  if (!Array.isArray(items)) return undefined;
-  const first = items[0];
-  if (!first || typeof first !== 'object') return undefined;
-  const item = first as Record<string, unknown>;
-  return stringValue(item.title) ?? stringValue(item.summary);
 }
 
 function toResearchBody(req: AgentSendMessageRequest) {

@@ -365,11 +365,54 @@ class NoopNoveltyLlmClient:
         )
 
 
+def _cost_gated(cost_guard: Any) -> bool:
+    """NFR-C1 — agent LLM hard gate는 critical 이상에서만 발화(None이면 게이트 없음)."""
+    if cost_guard is None:
+        return False
+    from docsuri_ops.cost_guard import is_cost_critical
+
+    return is_cost_critical(cost_guard.get_budget_state())
+
+
+def _record_bedrock_spend(cost_guard: Any, usage: dict[str, Any]) -> None:
+    """NFR-C1 — Bedrock usage 토큰을 cost guard 지출로 기록. 계측은 best-effort."""
+    if cost_guard is None or not usage:
+        return
+    try:
+        from docsuri_ops.cost_guard import estimate_bedrock_usd
+        from docsuri_ops.domain.models import UsageEvent
+
+        amount = estimate_bedrock_usd(
+            input_tokens=int(usage.get("input_tokens") or 0),
+            output_tokens=int(usage.get("output_tokens") or 0),
+        )
+        if amount > 0:
+            cost_guard.record_spend(
+                UsageEvent(
+                    event_id=f"novelty-llm-{uuid4()}",
+                    amount_usd=amount,
+                    source="novelty.llm",
+                )
+            )
+    except Exception:  # noqa: BLE001 — 지출 계측 실패가 draft를 막으면 안 된다
+        import logging
+
+        logging.getLogger(__name__).warning("failed to record novelty Bedrock spend")
+
+
 class BedrockNoveltyLlmClient:
-    def __init__(self, *, model_id: str, client: Any, max_tokens: int = 4096) -> None:
+    def __init__(
+        self,
+        *,
+        model_id: str,
+        client: Any,
+        max_tokens: int = 4096,
+        cost_guard: Any = None,
+    ) -> None:
         self._model_id = model_id
         self._client = client
         self._max_tokens = max_tokens
+        self._cost_guard = cost_guard
 
     def draft(
         self,
@@ -378,6 +421,14 @@ class BedrockNoveltyLlmClient:
         corpus: RetrievalBundle,
         external: RetrievalBundle,
     ) -> NoveltyLlmDraft:
+        # NFR-C1 비용 게이트 — LLM 호출 전에 차단, 기존 저하(not-fail) 패턴으로 강등.
+        if _cost_gated(self._cost_guard):
+            return NoveltyLlmDraft(
+                similarWorks=_fallback_similar_works(),
+                noveltyCandidates=_fallback_novelty_candidates(),
+                experimentPlan=_fallback_experiment_plan(topic),
+                degradedReason="cost_degraded",
+            )
         refs = _source_ref_catalog(corpus.items + external.items)
         if not refs:
             return NoveltyLlmDraft(
@@ -425,7 +476,8 @@ class BedrockNoveltyLlmClient:
             accept="application/json",
             contentType="application/json",
         )
-        text = _bedrock_stream_text(response)
+        text, usage = _bedrock_stream_read(response)
+        _record_bedrock_spend(self._cost_guard, usage)
         return _parse_json_object(text)
 
 
@@ -663,19 +715,25 @@ def _parse_json_object(text: str) -> dict[str, Any]:
     return parsed
 
 
-def _bedrock_stream_text(response: dict[str, Any]) -> str:
+def _bedrock_stream_read(response: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """스트림에서 텍스트와 usage 수집 — message_start(input) + message_delta(output 누적)."""
     chunks: list[str] = []
+    usage: dict[str, Any] = {}
     for event in response.get("body", []):
         raw = event.get("chunk", {}).get("bytes")
         if not raw:
             continue
         data = json.loads(raw.decode("utf-8"))
-        if data.get("type") != "content_block_delta":
-            continue
-        delta = data.get("delta", {})
-        if delta.get("type") == "text_delta":
-            chunks.append(str(delta.get("text") or ""))
-    return "".join(chunks)
+        kind = data.get("type")
+        if kind == "message_start":
+            usage.update(data.get("message", {}).get("usage") or {})
+        elif kind == "message_delta":
+            usage.update(data.get("usage") or {})
+        elif kind == "content_block_delta":
+            delta = data.get("delta", {})
+            if delta.get("type") == "text_delta":
+                chunks.append(str(delta.get("text") or ""))
+    return "".join(chunks), usage
 
 
 class S3ManuscriptSimilarityClient:
@@ -817,7 +875,7 @@ def build_default_novelty_adapters(observability=None, cost_guard=None) -> Novel
         corpus=corpus,
         external=build_external_adapter(),
         similarity=build_similarity_adapter(corpus),
-        llm=build_llm_adapter(),
+        llm=build_llm_adapter(cost_guard=cost_guard),
     )
 
 
@@ -870,7 +928,7 @@ def build_external_adapter() -> ExternalSearchPort:
     )
 
 
-def build_llm_adapter() -> NoveltyLlmPort:
+def build_llm_adapter(cost_guard: Any = None) -> NoveltyLlmPort:
     import boto3
     from botocore.config import Config
 
@@ -889,4 +947,5 @@ def build_llm_adapter() -> NoveltyLlmPort:
                 retries={"max_attempts": 1},
             ),
         ),
+        cost_guard=cost_guard,
     )
