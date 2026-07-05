@@ -378,6 +378,16 @@ function hasPdfSourceFile(
   return attachment?.kind === 'pdf' && !!attachment.sourceFile;
 }
 
+// Client-side guard mirroring the backend USER_DOCMODEL_MAX_BYTES (10 MiB): fail fast instead
+// of streaming a too-large PDF to the backend only to get a 422 back.
+const MAX_PDF_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+function assertPdfUploadSize(file: Blob): void {
+  if (file.size > MAX_PDF_UPLOAD_BYTES) {
+    throw new UserFacingError('unknown', 'PDF 파일은 10MB 이하만 업로드할 수 있습니다.');
+  }
+}
+
 function requestBodyKey(body: unknown): string {
   if (isBinaryTransportBody(body)) return `[binary:${body.contentType}]`;
   return JSON.stringify(body ?? null);
@@ -725,6 +735,7 @@ export class ApiClient {
   private async uploadResearchPdfAttachment(
     attachment: AgentAttachment & { sourceFile: Blob },
   ): Promise<AgentAttachment> {
+    assertPdfUploadSize(attachment.sourceFile);
     const query = new URLSearchParams({ fileName: attachment.name, id: attachment.id });
     const uploaded = await this.request({
       method: 'POST',
@@ -746,6 +757,7 @@ export class ApiClient {
     jobId: string,
     manuscript: AgentAttachment & { sourceFile: Blob },
   ): Promise<void> {
+    assertPdfUploadSize(manuscript.sourceFile);
     const query = new URLSearchParams({ fileName: manuscript.name });
     const uploaded = await this.request({
       method: 'POST',

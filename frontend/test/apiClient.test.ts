@@ -375,6 +375,28 @@ describe('ApiClient agent chat mapping', () => {
     expect(requests[1].path.split('?')[0]).toBe('/api/novelty/jobs/n1/manuscript');
   });
 
+  it('rejects an oversize PDF attachment before any upload request', async () => {
+    const t = transportOf(async () => ({ status: 200, body: null }));
+    const bigPdf = new Blob([new Uint8Array(10 * 1024 * 1024 + 1)], { type: 'application/pdf' });
+    await expect(
+      new ApiClient(t, fast).sendAgentMessage('agent-evidence-local', {
+        content: 'oversize pdf',
+        mode: 'evidence',
+        attachments: [
+          {
+            id: 'a1',
+            name: 'big.pdf',
+            kind: 'pdf',
+            sizeBytes: bigPdf.size,
+            status: 'ready',
+            sourceFile: bigPdf,
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({ message: 'PDF 파일은 10MB 이하만 업로드할 수 있습니다.' });
+    expect(t.calls).toBe(0);
+  });
+
   it('blocks real novelty follow-up sends until the backend can re-dispatch jobs', async () => {
     const previous = process.env.NEXT_PUBLIC_DOCSURI_REAL_API;
     process.env.NEXT_PUBLIC_DOCSURI_REAL_API = '1';
