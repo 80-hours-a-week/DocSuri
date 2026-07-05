@@ -148,6 +148,75 @@ describe('renderInlineMath', () => {
   });
 });
 
+describe('physics-package macros (KaTeX has no default → whole-formula placeholder)', () => {
+  // Renders to real KaTeX (not the 수식 placeholder) and does not leak the raw command.
+  function rendersCleanly(latex: string) {
+    const c = html(<MathDisplay latex={latex} />);
+    expect(c.querySelector('.katex'), latex).not.toBeNull();
+    expect(c.textContent, latex).not.toBe('수식');
+    return c;
+  }
+
+  it('renders \\quantity by dropping the command (literal delimiters remain)', () => {
+    const c = rendersCleanly(String.raw`\quantity(x_{i})_{i\in S}`);
+    expect(c.textContent).not.toContain('\\quantity');
+  });
+
+  it('renders \\tr and \\rank as operator names', () => {
+    rendersCleanly(String.raw`\tr(A^{\top}A)`);
+    rendersCleanly(String.raw`\rank(C)=\rank(CC^{\top})`);
+  });
+
+  it('rewrites \\matrixquantity[...] to a bracketed matrix, nested brackets intact', () => {
+    // The inner `[C]^{-1}` must NOT close the outer matrix early.
+    const c = rendersCleanly(String.raw`\matrixquantity[a&b\\ c&[C]^{-1}]`);
+    expect(c.querySelector('.mord.text, .base')).not.toBeNull();
+  });
+
+  it('rewrites a nested (block) \\matrixquantity', () => {
+    rendersCleanly(String.raw`\matrixquantity[\matrixquantity[a&b]\\ c]`);
+  });
+
+  it('rewrites \\derivative in both operator and operand forms', () => {
+    rendersCleanly(String.raw`\derivative[\alpha]{\boldsymbol{x}}{t}=A`); // order + f + var
+    rendersCleanly(String.raw`\derivative[\alpha]{t}`); // order + var (operator form)
+    rendersCleanly(String.raw`\ker\quantity(\derivative[\alpha]{t})`); // nested in \quantity
+  });
+
+  it('renders the broader physics set (operators, vector calc, abs/norm, brackets, order)', () => {
+    for (const latex of [
+      String.raw`\Tr(\rho)`,
+      String.raw`\grad f + \curl \vec{F} - \divergence \vec{G} + \laplacian \psi`,
+      String.raw`\abs{x} + \norm{v}`,
+      String.raw`\comm{A}{B} = -\acomm{B}{A}`,
+      String.raw`\order{x^2}`,
+      String.raw`\int f \dd x`,
+      String.raw`\vb{a}\cdot\vu{n}`,
+    ]) {
+      rendersCleanly(latex);
+    }
+  });
+
+  it('rewrites \\pdv (partial) with \\partial, and \\smqty like a matrix', () => {
+    const pd = html(<MathDisplay latex={String.raw`\pdv[2]{f}{x}`} />);
+    expect(pd.querySelector('.katex')).not.toBeNull();
+    expect(pd.textContent).not.toBe('수식');
+    rendersCleanly(String.raw`\smqty[a & b \\ c & d]`);
+  });
+
+  it('does NOT override KaTeX builtins — \\div stays the division sign', () => {
+    // Physics redefines \div as divergence, but overriding it would break every paper using ÷.
+    const c = rendersCleanly(String.raw`a \div b`);
+    expect(c.textContent).toContain('÷');
+  });
+
+  it('leaves an unrecognised \\derivative shape verbatim (fail-soft, no crash)', () => {
+    // No operand group → not the expected form; must not throw, degrades to the placeholder.
+    const c = html(<MathDisplay latex={String.raw`\derivative`} />);
+    expect(c.textContent).toBe('수식');
+  });
+});
+
 describe('renderRichText (summary fields: markdown + math)', () => {
   it('renders **bold** as <strong>', () => {
     const c = html(renderRichText('훈련 방법 **분류**를 제안'));

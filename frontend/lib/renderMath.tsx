@@ -45,6 +45,50 @@ const DEFAULT_MACROS: MathMacros = {
   '\\newline': '',
   '\\protect': '',
   '\\xspace': '',
+  // `physics` package (very common on arXiv) commands KaTeX has no default for, so an unhandled one
+  // collapses the WHOLE formula to a placeholder. Each expansion below was verified to render (and
+  // to be semantically faithful) against KaTeX; none override a KaTeX builtin (notably `\div` = ÷ is
+  // left untouched — physics's divergence uses the distinct `\divergence`). The two *structural*
+  // families — `\matrixquantity`/`\derivative` and their variants — can't be plain macros (delimiter
+  // detection / variable arity); they are rewritten by `preprocessPhysics` below.
+  //
+  // Auto-sized bracket commands: the alttext keeps the literal delimiters, so expanding the command
+  // to NOTHING leaves e.g. `(x)` — renders correctly, only losing the auto-sizing.
+  '\\quantity': '',
+  '\\qty': '',
+  // Operators / functions.
+  '\\tr': '\\operatorname{tr}',
+  '\\trace': '\\operatorname{tr}',
+  '\\Tr': '\\operatorname{Tr}',
+  '\\rank': '\\operatorname{rank}',
+  '\\Res': '\\operatorname{Res}',
+  '\\erf': '\\operatorname{erf}',
+  // Vector calculus (`\div` intentionally omitted — it is KaTeX's ÷).
+  '\\grad': '\\nabla',
+  '\\gradient': '\\nabla',
+  '\\curl': '\\nabla\\times',
+  '\\divergence': '\\nabla\\cdot',
+  '\\laplacian': '\\nabla^2',
+  // Differential `\dd` in integrals/derivatives.
+  '\\dd': '\\mathrm{d}',
+  // Vector decorations: bold / arrow / unit-hat.
+  '\\vb': '\\mathbf',
+  '\\va': '\\vec',
+  '\\vu': '\\hat',
+  // Absolute value / norm (brace-argument forms).
+  '\\abs': '\\left\\lvert #1 \\right\\rvert',
+  '\\absolutevalue': '\\left\\lvert #1 \\right\\rvert',
+  '\\norm': '\\left\\lVert #1 \\right\\rVert',
+  // Commutator / anticommutator / Poisson bracket.
+  '\\comm': '\\left[#1,#2\\right]',
+  '\\acomm': '\\left\\{#1,#2\\right\\}',
+  '\\anticommutator': '\\left\\{#1,#2\\right\\}',
+  '\\pb': '\\left\\{#1,#2\\right\\}',
+  '\\poissonbracket': '\\left\\{#1,#2\\right\\}',
+  // Order / big-O.
+  '\\order': '\\mathcal{O}\\!\\left(#1\\right)',
+  '\\bigO': '\\mathcal{O}\\!\\left(#1\\right)',
+  '\\Order': '\\mathcal{O}\\!\\left(#1\\right)',
 };
 
 // Unsupported-but-harmless tokens degrade to their source in this muted tone (not alarming
@@ -113,6 +157,126 @@ function entryFor(macros?: MathMacros): { working: MathMacros; cache: Map<string
   return entry;
 }
 
+// ---------------------------------------------------------------------------
+// physics-package STRUCTURAL macros. Unlike `\quantity`/`\tr` (pure macros, above), these take a
+// delimiter-detected group (`\matrixquantity[…]` picks its matrix delimiters from the following
+// bracket) or a variable number of arguments (`\derivative` has an optional order plus one OR two
+// operands) — neither is expressible as a KaTeX macro. Left unhandled, KaTeX collapses the whole
+// formula to a placeholder. A small brace/bracket-depth-aware scanner rewrites them to KaTeX-native
+// `\begin{…matrix}` / `\frac` BEFORE rendering. Read-time, so it fixes already-stored doc-models
+// with no re-ingest. Anything it does not recognise is left verbatim (KaTeX then decides).
+
+// From an opening delimiter at `s[i]` (`(`, `[`, or `{`), return the substring up to its matching
+// close and the index just past it — tracking nesting of the SAME delimiter and skipping over `{…}`
+// groups and backslash-escaped chars, so a nested `[…]` (e.g. `[C]^{-1}` inside a matrix) or a `]`
+// inside a brace group does not close it early. Null if unbalanced.
+function readDelimGroup(s: string, i: number): { inner: string; end: number } | null {
+  const open = s[i];
+  const close = open === '(' ? ')' : open === '[' ? ']' : open === '{' ? '}' : '';
+  if (!close) return null;
+  if (open === '{') {
+    let depth = 0;
+    for (let j = i; j < s.length; j += 1) {
+      const c = s[j];
+      if (c === '\\') { j += 1; continue; } // escaped char (\{ \} \\) — never a delimiter
+      if (c === '{') depth += 1;
+      else if (c === '}') { depth -= 1; if (depth === 0) return { inner: s.slice(i + 1, j), end: j + 1 }; }
+    }
+    return null;
+  }
+  let depth = 0;
+  let brace = 0;
+  for (let j = i; j < s.length; j += 1) {
+    const c = s[j];
+    if (c === '\\') { j += 1; continue; }
+    if (c === '{') brace += 1;
+    else if (c === '}') brace -= 1;
+    else if (brace === 0) {
+      if (c === open) depth += 1;
+      else if (c === close) { depth -= 1; if (depth === 0) return { inner: s.slice(i + 1, j), end: j + 1 }; }
+    }
+  }
+  return null;
+}
+
+function skipSpace(s: string, i: number): number {
+  while (i < s.length && /\s/.test(s[i])) i += 1;
+  return i;
+}
+
+// The physics matrix delimiter selects the KaTeX matrix environment (its visible fences).
+const MATRIX_ENV: Record<string, string> = { '(': 'pmatrix', '[': 'bmatrix', '{': 'matrix' };
+
+// `\matrixquantity[a & b \\ c & d]` → `\begin{bmatrix} a & b \\ c & d \end{bmatrix}` (delimiter →
+// environment via MATRIX_ENV). `\smatrixquantity`/`\smqty` (the "small" variant) are folded in here
+// — rendered at full size, which is faithful in content if not in scale. Recurses into the body so a
+// block matrix (nested matrixquantity) is rewritten too. A form with no following delimiter is left
+// verbatim. The scan regex is declared per call (not hoisted) because the recursion would otherwise
+// clobber a shared `lastIndex`.
+function rewriteMatrixQuantity(s: string): string {
+  const re = /\\(?:matrixquantity|smatrixquantity|mqty|smqty)\b\s*/g;
+  let out = '';
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s))) {
+    const dpos = skipSpace(s, m.index + m[0].length);
+    const g = readDelimGroup(s, dpos);
+    if (!g) continue; // no delimiter group → not the expected form; leave the token as-is
+    const env = MATRIX_ENV[s[dpos]] ?? 'matrix';
+    out += s.slice(last, m.index) + `\\begin{${env}}` + rewriteMatrixQuantity(g.inner) + `\\end{${env}}`;
+    last = g.end;
+    re.lastIndex = g.end;
+  }
+  return out + s.slice(last);
+}
+
+// `\derivative[n]{f}{x}` → `\frac{\mathrm{d}^{n} f}{\mathrm{d} x^{n}}` (order optional); the
+// two-operand *operator* form `\derivative[n]{x}` → `\frac{\mathrm{d}^{n}}{\mathrm{d} x^{n}}`. The
+// order is kept as written (this paper uses fractional/symbolic orders like `\alpha`, `-\alpha`).
+// `\pdv`/`\partialderivative` are the same shape with `\partial` instead of `\mathrm{d}` (its command
+// name is captured to pick the differential symbol). A form with no `{…}` operand is left verbatim.
+function rewriteDerivative(s: string): string {
+  const re = /\\(derivative|dv|partialderivative|pdv)\b\s*/g;
+  let out = '';
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s))) {
+    const d = m[1] === 'pdv' || m[1] === 'partialderivative' ? '\\partial' : '\\mathrm{d}';
+    let i = skipSpace(s, m.index + m[0].length);
+    let order: string | null = null;
+    if (s[i] === '[') {
+      const g = readDelimGroup(s, i);
+      if (g) { order = g.inner; i = g.end; }
+    }
+    i = skipSpace(s, i);
+    if (s[i] !== '{') continue; // no operand → not the expected form; leave verbatim
+    const a = readDelimGroup(s, i);
+    if (!a) continue;
+    i = a.end;
+    const j = skipSpace(s, i);
+    let b: string | null = null;
+    if (s[j] === '{') {
+      const g = readDelimGroup(s, j);
+      if (g) { b = g.inner; i = g.end; }
+    }
+    const ord = order ? `^{${order}}` : '';
+    const repl =
+      b !== null
+        ? `\\frac{${d}${ord} ${a.inner}}{${d} ${b}${ord}}`
+        : `\\frac{${d}${ord}}{${d} ${a.inner}${ord}}`;
+    out += s.slice(last, m.index) + repl;
+    last = i;
+    re.lastIndex = i;
+  }
+  return out + s.slice(last);
+}
+
+function preprocessPhysics(latex: string): string {
+  // Matrices first: a `\derivative` may sit inside a `\matrixquantity` cell, and rewriting the
+  // matrix first flattens it into the string that the derivative pass then scans.
+  return rewriteDerivative(rewriteMatrixQuantity(latex));
+}
+
 function toHtml(latex: string, displayMode: boolean, macros?: MathMacros): string {
   const { working, cache } = entryFor(macros);
   const cacheKey = `${displayMode ? 'd' : 'i'}:${latex}`;
@@ -125,7 +289,7 @@ function toHtml(latex: string, displayMode: boolean, macros?: MathMacros): strin
   // strict-mode leniencies KaTeX resolves without throwing.
   let html: string;
   try {
-    html = katex.renderToString(latex, {
+    html = katex.renderToString(preprocessPhysics(latex), {
       displayMode,
       throwOnError: true,
       errorColor: ERROR_COLOR,
@@ -134,6 +298,7 @@ function toHtml(latex: string, displayMode: boolean, macros?: MathMacros): strin
       macros: working,
     });
   } catch {
+    // Tooltip carries the ORIGINAL source (pre-rewrite), so a hover shows what the author wrote.
     html = fallbackHtml(latex, displayMode);
   }
   cache.set(cacheKey, html);
