@@ -16,6 +16,7 @@ from backend.modules.novelty import controller
 from backend.modules.novelty.adapters import (
     SIMILAR_WORK_DETAIL_FIELDS,
     BedrockNoveltyLlmClient,
+    EvidenceFormationClient,
     ExternalApiSearchClient,
     NoveltyAdapters,
     NoveltyLlmDraft,
@@ -648,6 +649,13 @@ def test_worker_completes_when_adapters_are_not_degraded() -> None:
                 },
             )
 
+    class CleanEvidence:
+        def form(self, owner_id: str, topic: str) -> RetrievalBundle:
+            return RetrievalBundle(
+                items=[{"title": f"evidence: {topic}", "sourceRefs": [source_ref]}],
+                evidenceStatus=EvidenceStatus.SUPPORTED,
+            )
+
     repo = InMemoryNoveltyRepository()
     _, owner_id, job_id = _service_job(repo)
 
@@ -659,6 +667,7 @@ def test_worker_completes_when_adapters_are_not_degraded() -> None:
             corpus=CleanCorpus(),
             external=CleanExternal(),
             llm=CleanLlm(),
+            evidence=CleanEvidence(),
         ),
     )
 
@@ -692,8 +701,15 @@ def test_worker_emits_step_detail_payloads() -> None:
         payloads.setdefault(event.state, []).append(event.payload)
 
     # US-NV7(#257) — 검색 단계는 시작(도구+쿼리)·완료(count) 이벤트, LLM 단계는 결과 수 동봉
+    # US-NV1(#251) — 자연어 잡은 근거형성(시작+결과) 이벤트가 U2 검색보다 먼저 온다
     corpus_events = payloads[JobState.RETRIEVING_CORPUS]
-    assert corpus_events[0] == {"source": "U2 full search", "query": "privacy preserving RAG"}
+    assert corpus_events[0] == {
+        "source": "U11 evidence formation",
+        "query": "privacy preserving RAG",
+    }
+    assert corpus_events[1]["source"] == "U11 evidence formation"
+    assert "reason" in corpus_events[1]  # Noop evidence는 저하 사유를 싣는다
+    assert corpus_events[2] == {"source": "U2 full search", "query": "privacy preserving RAG"}
     assert corpus_events[-1]["count"] == 2
     external_events = payloads[JobState.SEARCHING_EXTERNAL]
     assert external_events[0]["query"] == "privacy preserving RAG"
@@ -739,6 +755,192 @@ def test_supported_adapter_without_source_refs_degrades_not_fails() -> None:
     result = NoveltyService(repo).result(owner_id, job_id)
     assert result.job.state is JobState.DEGRADED
     assert "missing sourceRefs" in repo.list_events(owner_id, job_id)[-1].model_dump_json()
+
+
+def test_worker_natural_language_forms_evidence_first_and_merges_bundle() -> None:
+    calls: list[str] = []
+    paper_ref = {
+        "type": "paper",
+        "identifier": "2401.01234",
+        "title": "arXiv:2401.01234",
+        "url": "https://arxiv.org/abs/2401.01234",
+        "sourceName": "arXiv",
+    }
+
+    class RecordingEvidence:
+        def form(self, owner_id: str, topic: str) -> RetrievalBundle:
+            calls.append(f"evidence:{topic}")
+            return RetrievalBundle(
+                items=[
+                    {
+                        "title": "Benchmark reuse inflates scores.",
+                        "summary": "benchmark reuse inflates scores",
+                        "sourceType": "evidence_claim",
+                        "sourceName": "U11 evidence",
+                        "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                        "sourceRefs": [paper_ref],
+                    }
+                ],
+                evidenceStatus=EvidenceStatus.SUPPORTED,
+            )
+
+    class RecordingCorpus:
+        def full_search(self, owner_id: str, query: str) -> RetrievalBundle:
+            calls.append("corpus")
+            return RetrievalBundle(
+                items=[{"title": "Corpus paper", "sourceRefs": [paper_ref]}],
+                evidenceStatus=EvidenceStatus.SUPPORTED,
+            )
+
+    repo = InMemoryNoveltyRepository()
+    _, owner_id, job_id = _service_job(repo)
+
+    process_job(
+        repo,
+        owner_id,
+        job_id,
+        adapters=NoveltyAdapters(corpus=RecordingCorpus(), evidence=RecordingEvidence()),
+    )
+
+    # US-NV1(#251) AC1 — form_evidence가 U2 검색보다 먼저 호출된다
+    assert calls == ["evidence:privacy preserving RAG", "corpus"]
+    result = NoveltyService(repo).result(owner_id, job_id)
+    evidence_artifact = next(
+        artifact for artifact in result.artifacts if artifact.kind is ArtifactKind.EVIDENCE
+    )
+    titles = [item["title"] for item in evidence_artifact.payload["items"]]
+    # 근거 묶음이 앞서고(AC1) corpus 결과가 보강한다(AC2)
+    assert titles == ["Benchmark reuse inflates scores.", "Corpus paper"]
+
+
+def test_worker_manuscript_job_skips_evidence_formation() -> None:
+    calls: list[str] = []
+
+    class RecordingEvidence:
+        def form(self, owner_id: str, topic: str) -> RetrievalBundle:
+            calls.append("evidence")
+            return RetrievalBundle(items=[])
+
+    repo = InMemoryNoveltyRepository()
+    service = NoveltyService(repo)
+    owner_id = str(uuid4())
+    created = service.create_job(
+        owner_id,
+        NoveltyJobRequest(
+            inputType="manuscript",
+            topic="novelty agent draft",
+            manuscript={"fileName": "draft.md", "contentType": "text/markdown"},
+        ),
+    )
+
+    process_job(
+        repo, owner_id, created.jobId, adapters=NoveltyAdapters(evidence=RecordingEvidence())
+    )
+
+    assert calls == []  # US-NV1은 자연어 잡 전용 — 원고 잡은 근거형성 선행 없음
+
+
+def test_worker_treats_evidence_abstain_as_degradation_without_fabrication() -> None:
+    class AbstainingEvidence:
+        def form(self, owner_id: str, topic: str) -> RetrievalBundle:
+            return RetrievalBundle(
+                degradedReason="evidence formation abstained: out_of_corpus"
+            )
+
+    class OneItemCorpus:
+        def full_search(self, owner_id: str, query: str) -> RetrievalBundle:
+            return RetrievalBundle(
+                items=[
+                    {
+                        "title": "Corpus paper",
+                        "sourceRefs": [
+                            {
+                                "type": "url",
+                                "identifier": "2401.00001",
+                                "url": "https://arxiv.org/abs/2401.00001",
+                            }
+                        ],
+                    }
+                ],
+                evidenceStatus=EvidenceStatus.SUPPORTED,
+            )
+
+    repo = InMemoryNoveltyRepository()
+    _, owner_id, job_id = _service_job(repo)
+
+    process_job(
+        repo,
+        owner_id,
+        job_id,
+        adapters=NoveltyAdapters(corpus=OneItemCorpus(), evidence=AbstainingEvidence()),
+    )
+
+    # D5/#273 AC3 — abstain은 저하로만 소비: 날조 항목 없이 corpus 보강만 남는다
+    result = NoveltyService(repo).result(owner_id, job_id)
+    assert result.job.state is JobState.DEGRADED
+    evidence_artifact = next(
+        artifact for artifact in result.artifacts if artifact.kind is ArtifactKind.EVIDENCE
+    )
+    assert [item["title"] for item in evidence_artifact.payload["items"]] == ["Corpus paper"]
+    events_json = " ".join(
+        event.model_dump_json() for event in repo.list_events(owner_id, job_id)
+    )
+    assert "evidence formation abstained: out_of_corpus" in events_json
+
+
+def test_evidence_formation_client_maps_claims_and_abstain() -> None:
+    from docsuri_shared._generated.dtos.evidence_schema import (
+        EvidenceAbstainResult,
+        EvidenceCoverage,
+        EvidenceItem,
+        EvidenceResult,
+    )
+    from docsuri_shared._generated.dtos.evidence_schema import (
+        SourceRef as EvidenceSourceRef,
+    )
+
+    class OkPort:
+        async def form_evidence(self, request, ctx):
+            assert request.topic == "rag evaluation"
+            assert ctx.owner_id == "u1"
+            return EvidenceResult(
+                state="ok",
+                claims=[
+                    EvidenceItem(
+                        statement="Benchmark reuse inflates scores.",
+                        supporting=[
+                            EvidenceSourceRef(
+                                paperId="2401.01234",
+                                recordRef="rec-1",
+                                quote="benchmark reuse inflates scores",
+                            )
+                        ],
+                        conflicting=[
+                            EvidenceSourceRef(paperId="2402.09999", recordRef="rec-2")
+                        ],
+                    ),
+                    EvidenceItem(statement="   ", supporting=[], conflicting=[]),
+                ],
+                coverage=EvidenceCoverage(paperCount=2),
+            )
+
+    bundle = EvidenceFormationClient(OkPort()).form("u1", "rag evaluation")
+
+    assert bundle.evidenceStatus is EvidenceStatus.SUPPORTED
+    assert len(bundle.items) == 1  # 빈 statement는 탈락
+    item = bundle.items[0]
+    assert item["title"] == "Benchmark reuse inflates scores."
+    assert item["summary"] == "benchmark reuse inflates scores"
+    assert item["sourceRefs"][0]["url"] == "https://arxiv.org/abs/2401.01234"
+    assert item["conflictingCount"] == 1
+
+    class AbstainPort:
+        async def form_evidence(self, request, ctx):
+            return EvidenceAbstainResult(state="abstain", abstainReason="out_of_corpus")
+
+    degraded = EvidenceFormationClient(AbstainPort()).form("u1", "rag evaluation")
+    assert degraded.items == []
+    assert degraded.degradedReason == "evidence formation abstained: out_of_corpus"
 
 
 def test_worker_loop_acks_successful_message() -> None:

@@ -116,6 +116,29 @@ def process_job(
         degraded_reasons: list[str] = []
         topic_preview = job.topic[:_PREVIEW_LEN]
 
+        # US-NV1(#251) — 자연어 잡은 D5 EvidenceFormationPort로 근거 묶음을 먼저 만들고(AC1),
+        # 아래 U2 full 검색이 결과를 보강한다(AC2). abstain·장애는 저하로 계속(날조 금지, D5).
+        evidence_bundle: RetrievalBundle | None = None
+        if job.inputType is InputType.NATURAL_LANGUAGE:
+            job = service.advance_state(
+                owner_id,
+                job_id,
+                JobState.RETRIEVING_CORPUS,
+                "Forming evidence bundle",
+                {"source": _EVIDENCE_SOURCE, "query": topic_preview},
+            )
+            evidence_bundle = adapters.evidence.form(owner_id, job.topic)
+            _, degraded_reason = _payload_from_bundle(evidence_bundle)
+            if degraded_reason:
+                degraded_reasons.append(degraded_reason)
+            service.record_event(
+                job,
+                "Evidence bundle formed",
+                _step_result_payload(
+                    _EVIDENCE_SOURCE, len(evidence_bundle.items), degraded_reason
+                ),
+            )
+
         # US-NV7(#257) — 단계 이벤트가 도구/쿼리/발견 수/저하 사유를 싣는다. 검색 단계는
         # 시작 이벤트(도구+쿼리) 뒤 완료 이벤트(count)를 덧붙이고, LLM 단계는 draft가 이미
         # 끝난 뒤 전이되므로 시작 이벤트 하나가 결과 수까지 나른다.
@@ -135,6 +158,10 @@ def process_job(
             "U2 corpus search finished",
             _step_result_payload(_CORPUS_SOURCE, len(corpus.items), degraded_reason),
         )
+        if evidence_bundle is not None and evidence_bundle.items:
+            # 근거 묶음이 앞서고 corpus가 보강 — 병합 번들이 artifact와 LLM draft에 흐른다.
+            corpus = _merge_bundles(evidence_bundle, corpus)
+            corpus_payload, _ = _payload_from_bundle(corpus)
         service.save_artifact(
             owner_id,
             job_id,
@@ -277,6 +304,7 @@ def process_job(
 # US-NV7(#257) — 이벤트 payload 키는 FE timelineDetail 계약(source/query/count/outputSummary/
 # reason)을 따른다. 값은 표시용 프리뷰라 _PREVIEW_LEN에서 자른다.
 _PREVIEW_LEN = 160
+_EVIDENCE_SOURCE = "U11 evidence formation"
 _CORPUS_SOURCE = "U2 full search"
 _EXTERNAL_SOURCE = "GitHub · Hugging Face · Zenodo"
 _SIMILARITY_SOURCE = "manuscript similarity"
@@ -288,6 +316,16 @@ def _step_result_payload(source: str, count: int, reason: str | None) -> dict[st
     if reason:
         payload["reason"] = reason
     return payload
+
+
+def _merge_bundles(first: RetrievalBundle, second: RetrievalBundle) -> RetrievalBundle:
+    """US-NV1(#251) — 근거 묶음 + corpus 보강 병합. 개별 저하 사유는 각 단계에서 이미 기록됨."""
+    items = [*first.items, *second.items]
+    return RetrievalBundle(
+        items=items,
+        evidenceStatus=EvidenceStatus.SUPPORTED if items else EvidenceStatus.ABSTAINED,
+        degradedReason=second.degradedReason,
+    )
 
 
 def _payload_from_bundle(bundle: RetrievalBundle) -> tuple[dict[str, Any], str | None]:

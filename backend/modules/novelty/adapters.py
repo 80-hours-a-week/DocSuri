@@ -4,6 +4,7 @@ import json
 import os
 import re
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any, Protocol
 from urllib.parse import urlparse
 from uuid import uuid4
@@ -51,6 +52,12 @@ class NoveltyLlmPort(Protocol):
 
 class NotionExportPort(Protocol):
     def export(self, owner_id: str, preview: dict[str, Any]) -> str: ...
+
+
+class EvidenceFormationAdapterPort(Protocol):
+    """US-NV1(#251) — 자연어 잡의 근거형성 선행 호출. D5 포트를 RetrievalBundle로 매핑."""
+
+    def form(self, owner_id: str, topic: str) -> RetrievalBundle: ...
 
 
 class NoopCorpusRetrievalClient:
@@ -138,6 +145,105 @@ def _card_item(card: Any) -> dict[str, Any]:
         "evidenceStatus": EvidenceStatus.SUPPORTED.value,
         "sourceRefs": [source_ref],
     }
+
+
+class NoopEvidenceFormationClient:
+    def form(self, owner_id: str, topic: str) -> RetrievalBundle:
+        return RetrievalBundle(
+            items=[],
+            degradedReason=(
+                f"evidence formation adapter not configured for {sanitize_external_query(topic)}"
+            ),
+        )
+
+
+class EvidenceFormationClient:
+    """US-NV1(#251) — U12는 shared/ports EvidenceFormationPort(D5) 추상으로만 근거형성을 소비.
+
+    포트는 async — 동기 워커와 inline 디스패치(이벤트 루프 위) 양쪽에서 안전하도록
+    전용 스레드에서 asyncio.run으로 실행한다. abstain·장애는 저하로만 수렴(날조 금지).
+    """
+
+    def __init__(self, port: Any) -> None:
+        self._port = port
+
+    def form(self, owner_id: str, topic: str) -> RetrievalBundle:
+        from docsuri_shared._generated.dtos.evidence_schema import EvidenceRequest
+
+        request = EvidenceRequest(topic=topic[:2000])
+        ctx = SimpleNamespace(
+            owner_id=owner_id,
+            request_id=f"novelty-evidence-{uuid4().hex}",
+            budget_signal={},
+        )
+        try:
+            result = _run_coro_in_thread(self._port.form_evidence(request, ctx))
+        except Exception as exc:  # noqa: BLE001 - 근거형성 장애는 잡을 저하시킬 뿐 실패시키지 않는다.
+            return RetrievalBundle(
+                degradedReason=f"evidence formation unavailable: {type(exc).__name__}"
+            )
+        return _bundle_from_evidence_result(result)
+
+
+def _run_coro_in_thread(coro: Any) -> Any:
+    """이벤트 루프 유무와 무관하게 코루틴을 동기 완주 — inline 디스패치는 루프 위에서 돈다."""
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
+
+def _bundle_from_evidence_result(result: Any) -> RetrievalBundle:
+    """D5 EvidenceResult|EvidenceAbstainResult → RetrievalBundle. abstain은 저하 신호로만."""
+    if str(getattr(result, "state", "") or "") == "abstain":
+        reason = str(getattr(result, "abstainReason", "") or "insufficient_evidence")
+        return RetrievalBundle(degradedReason=f"evidence formation abstained: {reason}")
+    items = [
+        item
+        for claim in (getattr(result, "claims", None) or [])
+        if (item := _evidence_claim_item(claim))
+    ]
+    if not items:
+        return RetrievalBundle(degradedReason="evidence formation returned no claims")
+    return RetrievalBundle(items=items, evidenceStatus=EvidenceStatus.SUPPORTED)
+
+
+def _evidence_claim_item(claim: Any) -> dict[str, Any]:
+    """EvidenceItem → 번들 item. sourceRef url은 반환된 paperId(arXiv ID)로만 구성 — 날조 금지."""
+    statement = str(getattr(claim, "statement", "") or "").strip()
+    if not statement:
+        return {}
+    refs: list[dict[str, Any]] = []
+    quote = ""
+    for ref in getattr(claim, "supporting", None) or []:
+        paper_id = str(getattr(ref, "paperId", "") or "").strip()
+        if not paper_id:
+            continue
+        quote = quote or str(getattr(ref, "quote", "") or "")
+        refs.append(
+            {
+                "type": "paper",
+                "identifier": paper_id,
+                "title": f"arXiv:{paper_id}",
+                "url": f"https://arxiv.org/abs/{paper_id}",
+                "sourceName": "arXiv",
+            }
+        )
+    item: dict[str, Any] = {
+        "title": statement[:240],
+        "summary": (quote or statement)[:1000],
+        "sourceType": "evidence_claim",
+        "sourceName": "U11 evidence",
+        "evidenceStatus": (
+            EvidenceStatus.SUPPORTED.value if refs else EvidenceStatus.ABSTAINED.value
+        ),
+        "sourceRefs": refs,
+    }
+    conflicting = len(getattr(claim, "conflicting", None) or [])
+    if conflicting:
+        item["conflictingCount"] = conflicting  # D5 — 상충 출처 존재 신호(novelty 판단 입력)
+    return item
 
 
 class NoopExternalSearchClient:
@@ -907,6 +1013,9 @@ class NoveltyAdapters:
     similarity: SimilarityPort = field(default_factory=NoopSimilarityClient)
     llm: NoveltyLlmPort = field(default_factory=NoopNoveltyLlmClient)
     notion: NotionExportPort = field(default_factory=NoopNotionExportClient)
+    evidence: EvidenceFormationAdapterPort = field(
+        default_factory=NoopEvidenceFormationClient
+    )
 
 
 def build_default_novelty_adapters(observability=None, cost_guard=None) -> NoveltyAdapters:
@@ -919,6 +1028,31 @@ def build_default_novelty_adapters(observability=None, cost_guard=None) -> Novel
         external=build_external_adapter(),
         similarity=build_similarity_adapter(corpus),
         llm=build_llm_adapter(cost_guard=cost_guard),
+        evidence=build_evidence_formation_adapter(cost_guard=cost_guard),
+    )
+
+
+def build_evidence_formation_adapter(cost_guard: Any = None) -> EvidenceFormationAdapterPort:
+    """U11 실 오케스트레이터 → D5 포트 조립 — corpus(U2 재사용) 어댑터와 같은 조립 루트 관례.
+
+    U12 도메인 코드는 포트 추상만 호출하고, 구체 조립은 이 build 함수에만 둔다.
+    DocModel 버킷 미구성이면 Noop(저하)로 동작한다.
+    """
+    try:
+        from backend.modules.evidence.settings import EvidenceSettings
+    except ModuleNotFoundError:
+        return NoopEvidenceFormationClient()
+
+    settings = EvidenceSettings.from_env()
+    if not settings.evidence_enabled:
+        return NoopEvidenceFormationClient()
+
+    from backend.modules.evidence.real_wiring import build_evidence_orchestrator
+    from backend.modules.evidence.service import EvidenceFormationService
+
+    bundle = build_evidence_orchestrator(settings, cost_guard=cost_guard)
+    return EvidenceFormationClient(
+        EvidenceFormationService(orchestrator=bundle.orchestrator)
     )
 
 
