@@ -14,6 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 ALLOWED_ATTACHMENT_KINDS = frozenset({"pdf", "markdown", "text"})
 ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024  # US-EV4 크기 한도 — 초과분은 처리 전 거부
 ATTACHMENT_MAX_COUNT = 8
+# US-EV4 2차 — 동봉 본문 상한. 유사도 어댑터의 S3 읽기 상한(256KiB)과 같은 계열.
+ATTACHMENT_TEXT_MAX_CHARS = 262_144
 
 
 class AgentAttachmentIn(BaseModel):
@@ -25,6 +27,11 @@ class AgentAttachmentIn(BaseModel):
     name: str = Field(min_length=1, max_length=240)
     kind: str
     size_bytes: int = Field(0, ge=0, alias="sizeBytes")
+    # US-EV4(#268) 2차 — md/txt 본문을 요청에 동봉해 근거 추출 대상에 포함한다.
+    # PDF 본문은 공통 doc-model 파이프라인 경유가 후속(Q6=A) — 지금은 미지원 안내.
+    content_text: str | None = Field(
+        None, alias="contentText", max_length=ATTACHMENT_TEXT_MAX_CHARS
+    )
 
     @field_validator("kind")
     @classmethod

@@ -22,7 +22,11 @@ const fast = { timeoutMs: 1000, retryBackoffMs: 1 };
 describe('ApiClient retry policy', () => {
   it('retries an idempotent GET once on 5xx then succeeds', async () => {
     let n = 0;
-    const t = transportOf(async () => (++n === 1 ? { status: 500, body: null } : { status: 200, body: { userId: 'u', expiresAt: 'x' } }));
+    const t = transportOf(async () =>
+      ++n === 1
+        ? { status: 500, body: null }
+        : { status: 200, body: { userId: 'u', expiresAt: 'x' } },
+    );
     const client = new ApiClient(t, fast);
     const session = await client.currentSession();
     expect(session).toEqual({ userId: 'u', expiresAt: 'x' });
@@ -32,14 +36,19 @@ describe('ApiClient retry policy', () => {
   it('does NOT retry a state-changing POST', async () => {
     const t = transportOf(async () => ({ status: 500, body: null }));
     const client = new ApiClient(t, fast);
-    await expect(client.signup({ email: 'a@b.co', password: 'x' })).rejects.toBeInstanceOf(UserFacingError);
+    await expect(client.signup({ email: 'a@b.co', password: 'x' })).rejects.toBeInstanceOf(
+      UserFacingError,
+    );
     expect(t.calls).toBe(1);
   });
 
   it('surfaces a backend {detail} 400 reason (FastAPI envelope), not the generic fallback', async () => {
     // Module HTTPExceptions serialize as {detail}; the frontend must read it (regression guard
     // for the "signup blocked" incident where {detail} was swallowed into "문제가 발생했습니다").
-    const t = transportOf(async () => ({ status: 400, body: { detail: '이미 등록된 이메일 주소입니다.' } }));
+    const t = transportOf(async () => ({
+      status: 400,
+      body: { detail: '이미 등록된 이메일 주소입니다.' },
+    }));
     const client = new ApiClient(t, fast);
     await expect(client.signup({ email: 'a@b.co', password: 'Abcdef123!' })).rejects.toMatchObject({
       kind: 'unknown',
@@ -53,7 +62,10 @@ describe('ApiClient retry policy', () => {
       seen = req;
       return { status: 200, body: { status: 'success' } };
     });
-    await new ApiClient(t, fast).login({ email: 'a@b.co', password: 'Abcdef123!' }, 'captcha-token');
+    await new ApiClient(t, fast).login(
+      { email: 'a@b.co', password: 'Abcdef123!' },
+      'captcha-token',
+    );
     expect(seen?.headers).toEqual({ 'X-Recaptcha-Token': 'captcha-token' });
   });
 
@@ -222,33 +234,28 @@ describe('ApiClient agent chat mapping', () => {
     expect(snapshot.events[0].detail).not.toContain('internal detail');
   });
 
-  it('blocks real novelty manuscript sends until an upload handle exists', async () => {
-    const previous = process.env.NEXT_PUBLIC_DOCSURI_REAL_API;
-    process.env.NEXT_PUBLIC_DOCSURI_REAL_API = '1';
+  it('blocks pdf novelty manuscripts until doc-model parsing ships', async () => {
+    // US-NV2(#252) — md/txt 원고는 생성 직후 본문 업로드로 흐른다(스크린 테스트가 관통 검증).
+    // PDF만 공통 doc-model 파이프라인 후속까지 차단 — 요청 전에 즉시 안내한다.
     const t = transportOf(async () => ({ status: 200, body: null }));
-    try {
-      await expect(
-        new ApiClient(t, fast).sendAgentMessage('agent-novelty-local', {
-          content: 'manuscript check',
-          mode: 'novelty',
-          attachments: [
-            {
-              id: 'a1',
-              name: 'draft.pdf',
-              kind: 'pdf',
-              sizeBytes: 100,
-              status: 'ready',
-            },
-          ],
-        }),
-      ).rejects.toMatchObject({
-        message: '파일 업로드 연동 전에는 Novelty 첨부 분석을 사용할 수 없습니다.',
-      });
-      expect(t.calls).toBe(0);
-    } finally {
-      if (previous === undefined) delete process.env.NEXT_PUBLIC_DOCSURI_REAL_API;
-      else process.env.NEXT_PUBLIC_DOCSURI_REAL_API = previous;
-    }
+    await expect(
+      new ApiClient(t, fast).sendAgentMessage('agent-novelty-local', {
+        content: 'manuscript check',
+        mode: 'novelty',
+        attachments: [
+          {
+            id: 'a1',
+            name: 'draft.pdf',
+            kind: 'pdf',
+            sizeBytes: 100,
+            status: 'ready',
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({
+      message: 'PDF 원고 분석은 준비 중입니다. Markdown 또는 TXT 파일로 업로드해 주세요.',
+    });
+    expect(t.calls).toBe(0);
   });
 
   it('blocks real novelty follow-up sends until the backend can re-dispatch jobs', async () => {

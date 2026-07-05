@@ -686,3 +686,60 @@ def test_extractor_records_bedrock_spend_into_cost_guard() -> None:
     assert payload == {'items': []}
     # 기본 단가 $3/1M input + $15/1M output → 1M in + 0.2M out = $6
     assert abs(guard.get_budget_state().spend_usd - 6.0) < 1e-9
+
+
+def test_orchestrator_includes_attachment_content_as_extraction_target() -> None:
+    """US-EV4(#268) 2차 — md/txt 본문 첨부는 corpus가 비어도 추출 대상 문서가 되고,
+    본문 없는 첨부(PDF)는 추출 대상에 포함되지 않는다."""
+    from docsuri_shared._generated.dtos.evidence_schema import EvidenceRequest
+
+    from backend.modules.evidence.models import (
+        AgentRunContext,
+        AttachmentInput,
+        PaperSearchResult,
+    )
+    from backend.modules.evidence.orchestrator import EvidenceAgentOrchestrator
+
+    captured: dict = {}
+
+    class _EmptySearchTool:
+        def search(self, *, topic, scope, paper_ids):
+            return PaperSearchResult(records=(), query_used=topic, scope='auto')
+
+    class _NoDocModelTool:
+        def get_doc_model(self, paper_id, version=1):
+            return None
+
+    class _CapturingExtractor:
+        def extract(self, topic, doc_models):
+            captured['doc_models'] = doc_models
+            return []  # abstain으로 종료 — 추출 대상 전달만 검증
+
+    orchestrator = EvidenceAgentOrchestrator(
+        search_tool=_EmptySearchTool(),
+        doc_model_tool=_NoDocModelTool(),
+        extractor=_CapturingExtractor(),
+        assembler=EvidenceComparisonAssembler(),
+    )
+    request = EvidenceRequest(topic='rag evaluation', scope='auto', paperIds=[])
+    session = EvidenceSession(owner_id='owner-1')
+    turn = EvidenceTurn(session_id=session.session_id, request=request)
+    ctx = AgentRunContext(
+        session=session,
+        current_turn=turn,
+        owner_id='owner-1',
+        request_id='req-1',
+        budget_signal={'state': 'ok'},
+        attachment_docs=(
+            AttachmentInput(name='draft.md', kind='markdown', text='# RAG 초안\n평가 프로토콜.'),
+            AttachmentInput(name='scan.pdf', kind='pdf', text=None),
+        ),
+    )
+
+    orchestrator.run(ctx, request)
+
+    ids = [paper_id for paper_id, _ in captured['doc_models']]
+    assert ids == ['attachment:draft.md']
+    doc = captured['doc_models'][0][1]
+    assert 'RAG 초안' in doc.fullText
+    assert doc.sections[0].blocks[0].text.startswith('# RAG 초안')

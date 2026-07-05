@@ -132,6 +132,25 @@ describe('AgentChatScreen', () => {
     expect(screen.getByTestId('agent-composer-submit')).toBeDisabled();
   });
 
+  it('sends a novelty manuscript by attaching a markdown file', async () => {
+    const user = userEvent.setup();
+    render(<AgentChatScreen />);
+
+    await user.click(screen.getByTestId('agent-mode-novelty'));
+    await user.type(screen.getByTestId('agent-composer-input'), '내 초안의 novelty 확인');
+    await user.upload(
+      screen.getByTestId('agent-file-input'),
+      new File(['# 초안\nRAG 평가 자동화 프로토콜'], 'draft.md', { type: 'text/markdown' }),
+    );
+
+    // US-NV2(#252) — 본문 읽기(reading)가 끝나 ready가 될 때까지 전송이 막힌다.
+    await waitFor(() => expect(screen.getByTestId('agent-composer-submit')).toBeEnabled());
+    await user.click(screen.getByTestId('agent-composer-submit'));
+
+    // manuscript 잡 생성 → 본문 업로드 → 결과 아티팩트 렌더링까지 관통한다.
+    expect(await screen.findByText('유사 연구 표')).toBeInTheDocument();
+  });
+
   // mock 세션 저장소를 비우므로 파일 내 마지막 테스트로 유지한다.
   it('resets all sessions from the drawer after inline confirm', async () => {
     const user = userEvent.setup();

@@ -326,10 +326,12 @@ function toNoveltyBody(req: AgentSendMessageRequest, created: boolean) {
     return toChatBody(req);
   }
   const manuscript = req.attachments?.[0];
-  if (manuscript && process.env.NEXT_PUBLIC_DOCSURI_REAL_API) {
+  // US-NV2(#252) — 원고 본문은 잡 생성 직후 별도 업로드로 전달된다(sendAgentMessage).
+  // PDF만 아직 본문 분석 미지원(공통 doc-model 파이프라인 후속).
+  if (manuscript && manuscript.kind === 'pdf') {
     throw new UserFacingError(
       'unknown',
-      '파일 업로드 연동 전에는 Novelty 첨부 분석을 사용할 수 없습니다.',
+      'PDF 원고 분석은 준비 중입니다. Markdown 또는 TXT 파일로 업로드해 주세요.',
     );
   }
   return {
@@ -683,6 +685,23 @@ export class ApiClient {
     });
     if (res.status !== 200 && res.status !== 201) {
       throw normalizeHttpError(res.status, serverMessage(res.body));
+    }
+    // US-NV2(#252) — 원고 잡은 생성 시 디스패치가 보류된다. 읽어둔 본문(contentText)을
+    // 업로드해 objectKey를 바인딩해야 분석이 시작된다.
+    if (created && target.mode === 'novelty') {
+      const manuscript = req.attachments?.[0];
+      if (manuscript?.contentText) {
+        const jobId = (res.body as { jobId: string }).jobId;
+        const uploaded = await this.request({
+          method: 'POST',
+          path: `/api/novelty/jobs/${encodeURIComponent(jobId)}/manuscript`,
+          body: { contentText: manuscript.contentText },
+          idempotent: false,
+        });
+        if (uploaded.status !== 200) {
+          throw normalizeHttpError(uploaded.status, serverMessage(uploaded.body));
+        }
+      }
     }
     const nextId =
       created && target.mode === 'evidence'

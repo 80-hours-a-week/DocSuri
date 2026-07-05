@@ -172,3 +172,76 @@ def test_research_reset_deletes_only_own_sessions(monkeypatch) -> None:
     assert client_b.get(f"/api/research/jobs/{job_b}").status_code == 200
     # 멱등 — 이미 비어 있어도 204.
     assert client_a.delete("/api/research/jobs").status_code == 204
+
+
+def test_research_turn_passes_attachment_docs_and_notices_unparsed(monkeypatch) -> None:
+    """US-EV4(#268) 2차 — contentText(md 본문)는 orchestrator 추출 대상으로 전달되고,
+    본문 없는 첨부(PDF)는 별도의 비기술 안내 메시지를 남긴다."""
+    from docsuri_shared._generated.dtos.evidence_schema import EvidenceAbstainResult
+
+    from backend.modules.evidence.models import TurnAbstainResult
+
+    captured: dict = {}
+
+    class FakeOrchestrator:
+        def run(self, ctx, request):
+            captured["ctx"] = ctx
+            return TurnAbstainResult(
+                outcome=EvidenceAbstainResult(state="abstain", abstainReason="no_corpus")
+            )
+
+    principal = _principal()
+    repo = InMemoryResearchRepository()
+    client = _client(monkeypatch, principal, repo)
+    client.app.dependency_overrides[controller.get_evidence_orchestrator] = (
+        lambda: FakeOrchestrator()
+    )
+
+    created = client.post(
+        "/api/research/jobs",
+        json={
+            "content": "첨부 기반 근거 형성",
+            "attachments": [
+                {
+                    "id": "a1",
+                    "name": "draft.md",
+                    "kind": "markdown",
+                    "sizeBytes": 24,
+                    "contentText": "# 초안 본문\nRAG 평가 프로토콜.",
+                },
+                {"id": "a2", "name": "scan.pdf", "kind": "pdf", "sizeBytes": 1024},
+            ],
+        },
+    )
+
+    assert created.status_code == 200
+    docs = captured["ctx"].attachment_docs
+    assert [(doc.name, bool(doc.text)) for doc in docs] == [
+        ("draft.md", True),
+        ("scan.pdf", False),
+    ]
+    messages = client.get(
+        f"/api/research/jobs/{created.json()['jobId']}/messages"
+    ).json()["messages"]
+    notices = [m["content"] for m in messages if m["content"].startswith("[첨부 안내]")]
+    assert len(notices) == 1
+    assert "scan.pdf" in notices[0]
+    assert "draft.md" not in notices[0]
+
+    # 본문 상한(262,144자) 초과는 처리 전 422 — US-EV4 AC2 연장.
+    oversized = client.post(
+        "/api/research/jobs",
+        json={
+            "content": "oversize attachment body",
+            "attachments": [
+                {
+                    "id": "a3",
+                    "name": "big.md",
+                    "kind": "markdown",
+                    "sizeBytes": 1,
+                    "contentText": "x" * 262_145,
+                }
+            ],
+        },
+    )
+    assert oversized.status_code == 422
