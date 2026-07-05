@@ -13,6 +13,7 @@ from .models import (
     ExportStatus,
     InputType,
     JobState,
+    NotionConnection,
     NotionExport,
     NoveltyChatMessage,
     NoveltyJob,
@@ -38,6 +39,8 @@ class NoveltyRepository(Protocol):
     def list_messages(self, owner_id: str, job_id: str) -> list[NoveltyChatMessage]: ...
     def get_export(self, owner_id: str, job_id: str) -> NotionExport | None: ...
     def save_export(self, export: NotionExport) -> NotionExport: ...
+    def get_notion_connection(self, owner_id: str) -> NotionConnection | None: ...
+    def save_notion_connection(self, connection: NotionConnection) -> NotionConnection: ...
     def commit(self) -> None: ...
     def rollback(self) -> None: ...
     def close(self) -> None: ...
@@ -72,6 +75,7 @@ class InMemoryNoveltyRepository:
         self._artifacts: dict[str, list[ArtifactRef]] = {}
         self._messages: dict[str, list[NoveltyChatMessage]] = {}
         self._exports: dict[str, NotionExport] = {}
+        self._notion_connections: dict[str, NotionConnection] = {}
 
     def create_job(self, job: NoveltyJob) -> NoveltyJob:
         with self._lock:
@@ -168,6 +172,15 @@ class InMemoryNoveltyRepository:
             self._exports[export.jobId] = export
             return export
 
+    def get_notion_connection(self, owner_id: str) -> NotionConnection | None:
+        with self._lock:
+            return self._notion_connections.get(owner_id)
+
+    def save_notion_connection(self, connection: NotionConnection) -> NotionConnection:
+        with self._lock:
+            self._notion_connections[connection.ownerId] = connection
+            return connection
+
     def commit(self) -> None:
         return None
 
@@ -245,6 +258,18 @@ class ArtifactTable(Base):
     object_key: Mapped[str] = mapped_column(String(512), nullable=False)
     payload: Mapped[dict] = mapped_column(JSON, nullable=False)
     created_at: Mapped[Any] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class NotionConnectionTable(Base):
+    """US-NV8(#258) — 사용자별 Notion 연결. 토큰은 Fernet 암호문만 저장(SEC-8)."""
+
+    __tablename__ = "novelty_notion_connections"
+
+    owner_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
+    token_encrypted: Mapped[str] = mapped_column(String(1024), nullable=False)
+    parent_page_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[Any] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[Any] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class NotionExportTable(Base):
@@ -523,6 +548,38 @@ class SqlNoveltyRepository:
             .one_or_none()
         )
         return _export_from_row(row) if row else None
+
+    def get_notion_connection(self, owner_id: str) -> NotionConnection | None:
+        row = self._s.get(NotionConnectionTable, owner_id)
+        if row is None:
+            return None
+        return NotionConnection(
+            ownerId=row.owner_id,
+            tokenEncrypted=row.token_encrypted,
+            parentPageId=row.parent_page_id,
+            createdAt=row.created_at,
+            updatedAt=row.updated_at,
+        )
+
+    def save_notion_connection(self, connection: NotionConnection) -> NotionConnection:
+        row = self._s.get(NotionConnectionTable, connection.ownerId)
+        now = utc_now()
+        if row is None:
+            self._s.add(
+                NotionConnectionTable(
+                    owner_id=connection.ownerId,
+                    token_encrypted=connection.tokenEncrypted,
+                    parent_page_id=connection.parentPageId,
+                    created_at=connection.createdAt,
+                    updated_at=now,
+                )
+            )
+        else:
+            row.token_encrypted = connection.tokenEncrypted
+            row.parent_page_id = connection.parentPageId
+            row.updated_at = now
+        self._s.flush()
+        return connection.model_copy(update={"updatedAt": now})
 
     def save_export(self, export: NotionExport) -> NotionExport:
         self.get_job(export.ownerId, export.jobId)

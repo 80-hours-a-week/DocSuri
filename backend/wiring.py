@@ -545,10 +545,13 @@ def _mount_personalization(app: FastAPI, settings: Settings, result: MountResult
 def _mount_novelty(app: FastAPI, settings: Settings, result: MountResult) -> None:
     from backend.modules.novelty import controller as novelty
     from backend.modules.novelty.adapters import (
+        EvidenceFormationClient,
         NoveltyAdapters,
         U2FullSearchCorpusRetrievalClient,
+        build_evidence_formation_adapter,
         build_external_adapter,
         build_llm_adapter,
+        build_notion_adapter,
         build_similarity_adapter,
     )
     from backend.modules.novelty.repository import (
@@ -588,11 +591,25 @@ def _mount_novelty(app: FastAPI, settings: Settings, result: MountResult) -> Non
             discovery_bundle.orchestrator,
             grounding_hook,
         )
+        # US-NV1(#251) — 앱쉘이 이미 U11 오케스트레이터를 세웠으면 재사용, 아니면 env 조립.
+        evidence_bundle = getattr(app.state, "evidence_bundle", None)
+        if evidence_bundle is not None:
+            from backend.modules.evidence.service import EvidenceFormationService
+
+            evidence_adapter = EvidenceFormationClient(
+                EvidenceFormationService(orchestrator=evidence_bundle.orchestrator)
+            )
+        else:
+            evidence_adapter = build_evidence_formation_adapter(
+                cost_guard=getattr(app.state, "cost_guard", None)
+            )
         app.state.novelty_adapters = NoveltyAdapters(
             corpus=corpus,
             external=build_external_adapter(),
             similarity=build_similarity_adapter(corpus),
             llm=build_llm_adapter(cost_guard=getattr(app.state, "cost_guard", None)),
+            evidence=evidence_adapter,
+            notion=build_notion_adapter(),
         )
         log.info("app-shell: novelty wired U2 full-search corpus adapter")
     for router in novelty.routers:

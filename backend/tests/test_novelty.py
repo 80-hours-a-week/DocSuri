@@ -5,6 +5,7 @@ from io import BytesIO
 from urllib.parse import urlparse
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 from hypothesis import given
 from hypothesis import strategies as st
@@ -16,7 +17,9 @@ from backend.modules.novelty import controller
 from backend.modules.novelty.adapters import (
     SIMILAR_WORK_DETAIL_FIELDS,
     BedrockNoveltyLlmClient,
+    EvidenceFormationClient,
     ExternalApiSearchClient,
+    NotionApiExportClient,
     NoveltyAdapters,
     NoveltyLlmDraft,
     RetrievalBundle,
@@ -648,6 +651,13 @@ def test_worker_completes_when_adapters_are_not_degraded() -> None:
                 },
             )
 
+    class CleanEvidence:
+        def form(self, owner_id: str, topic: str) -> RetrievalBundle:
+            return RetrievalBundle(
+                items=[{"title": f"evidence: {topic}", "sourceRefs": [source_ref]}],
+                evidenceStatus=EvidenceStatus.SUPPORTED,
+            )
+
     repo = InMemoryNoveltyRepository()
     _, owner_id, job_id = _service_job(repo)
 
@@ -659,6 +669,7 @@ def test_worker_completes_when_adapters_are_not_degraded() -> None:
             corpus=CleanCorpus(),
             external=CleanExternal(),
             llm=CleanLlm(),
+            evidence=CleanEvidence(),
         ),
     )
 
@@ -692,8 +703,15 @@ def test_worker_emits_step_detail_payloads() -> None:
         payloads.setdefault(event.state, []).append(event.payload)
 
     # US-NV7(#257) — 검색 단계는 시작(도구+쿼리)·완료(count) 이벤트, LLM 단계는 결과 수 동봉
+    # US-NV1(#251) — 자연어 잡은 근거형성(시작+결과) 이벤트가 U2 검색보다 먼저 온다
     corpus_events = payloads[JobState.RETRIEVING_CORPUS]
-    assert corpus_events[0] == {"source": "U2 full search", "query": "privacy preserving RAG"}
+    assert corpus_events[0] == {
+        "source": "U11 evidence formation",
+        "query": "privacy preserving RAG",
+    }
+    assert corpus_events[1]["source"] == "U11 evidence formation"
+    assert "reason" in corpus_events[1]  # Noop evidence는 저하 사유를 싣는다
+    assert corpus_events[2] == {"source": "U2 full search", "query": "privacy preserving RAG"}
     assert corpus_events[-1]["count"] == 2
     external_events = payloads[JobState.SEARCHING_EXTERNAL]
     assert external_events[0]["query"] == "privacy preserving RAG"
@@ -739,6 +757,327 @@ def test_supported_adapter_without_source_refs_degrades_not_fails() -> None:
     result = NoveltyService(repo).result(owner_id, job_id)
     assert result.job.state is JobState.DEGRADED
     assert "missing sourceRefs" in repo.list_events(owner_id, job_id)[-1].model_dump_json()
+
+
+def test_worker_natural_language_forms_evidence_first_and_merges_bundle() -> None:
+    calls: list[str] = []
+    paper_ref = {
+        "type": "paper",
+        "identifier": "2401.01234",
+        "title": "arXiv:2401.01234",
+        "url": "https://arxiv.org/abs/2401.01234",
+        "sourceName": "arXiv",
+    }
+
+    class RecordingEvidence:
+        def form(self, owner_id: str, topic: str) -> RetrievalBundle:
+            calls.append(f"evidence:{topic}")
+            return RetrievalBundle(
+                items=[
+                    {
+                        "title": "Benchmark reuse inflates scores.",
+                        "summary": "benchmark reuse inflates scores",
+                        "sourceType": "evidence_claim",
+                        "sourceName": "U11 evidence",
+                        "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                        "sourceRefs": [paper_ref],
+                    }
+                ],
+                evidenceStatus=EvidenceStatus.SUPPORTED,
+            )
+
+    class RecordingCorpus:
+        def full_search(self, owner_id: str, query: str) -> RetrievalBundle:
+            calls.append("corpus")
+            return RetrievalBundle(
+                items=[{"title": "Corpus paper", "sourceRefs": [paper_ref]}],
+                evidenceStatus=EvidenceStatus.SUPPORTED,
+            )
+
+    repo = InMemoryNoveltyRepository()
+    _, owner_id, job_id = _service_job(repo)
+
+    process_job(
+        repo,
+        owner_id,
+        job_id,
+        adapters=NoveltyAdapters(corpus=RecordingCorpus(), evidence=RecordingEvidence()),
+    )
+
+    # US-NV1(#251) AC1 — form_evidence가 U2 검색보다 먼저 호출된다
+    assert calls == ["evidence:privacy preserving RAG", "corpus"]
+    result = NoveltyService(repo).result(owner_id, job_id)
+    evidence_artifact = next(
+        artifact for artifact in result.artifacts if artifact.kind is ArtifactKind.EVIDENCE
+    )
+    titles = [item["title"] for item in evidence_artifact.payload["items"]]
+    # 근거 묶음이 앞서고(AC1) corpus 결과가 보강한다(AC2)
+    assert titles == ["Benchmark reuse inflates scores.", "Corpus paper"]
+
+
+def test_worker_manuscript_job_skips_evidence_formation() -> None:
+    calls: list[str] = []
+
+    class RecordingEvidence:
+        def form(self, owner_id: str, topic: str) -> RetrievalBundle:
+            calls.append("evidence")
+            return RetrievalBundle(items=[])
+
+    repo = InMemoryNoveltyRepository()
+    service = NoveltyService(repo)
+    owner_id = str(uuid4())
+    created = service.create_job(
+        owner_id,
+        NoveltyJobRequest(
+            inputType="manuscript",
+            topic="novelty agent draft",
+            manuscript={"fileName": "draft.md", "contentType": "text/markdown"},
+        ),
+    )
+
+    process_job(
+        repo, owner_id, created.jobId, adapters=NoveltyAdapters(evidence=RecordingEvidence())
+    )
+
+    assert calls == []  # US-NV1은 자연어 잡 전용 — 원고 잡은 근거형성 선행 없음
+
+
+def test_worker_treats_evidence_abstain_as_degradation_without_fabrication() -> None:
+    class AbstainingEvidence:
+        def form(self, owner_id: str, topic: str) -> RetrievalBundle:
+            return RetrievalBundle(
+                degradedReason="evidence formation abstained: out_of_corpus"
+            )
+
+    class OneItemCorpus:
+        def full_search(self, owner_id: str, query: str) -> RetrievalBundle:
+            return RetrievalBundle(
+                items=[
+                    {
+                        "title": "Corpus paper",
+                        "sourceRefs": [
+                            {
+                                "type": "url",
+                                "identifier": "2401.00001",
+                                "url": "https://arxiv.org/abs/2401.00001",
+                            }
+                        ],
+                    }
+                ],
+                evidenceStatus=EvidenceStatus.SUPPORTED,
+            )
+
+    repo = InMemoryNoveltyRepository()
+    _, owner_id, job_id = _service_job(repo)
+
+    process_job(
+        repo,
+        owner_id,
+        job_id,
+        adapters=NoveltyAdapters(corpus=OneItemCorpus(), evidence=AbstainingEvidence()),
+    )
+
+    # D5/#273 AC3 — abstain은 저하로만 소비: 날조 항목 없이 corpus 보강만 남는다
+    result = NoveltyService(repo).result(owner_id, job_id)
+    assert result.job.state is JobState.DEGRADED
+    evidence_artifact = next(
+        artifact for artifact in result.artifacts if artifact.kind is ArtifactKind.EVIDENCE
+    )
+    assert [item["title"] for item in evidence_artifact.payload["items"]] == ["Corpus paper"]
+    events_json = " ".join(
+        event.model_dump_json() for event in repo.list_events(owner_id, job_id)
+    )
+    assert "evidence formation abstained: out_of_corpus" in events_json
+
+
+def test_evidence_formation_client_maps_claims_and_abstain() -> None:
+    from docsuri_shared._generated.dtos.evidence_schema import (
+        EvidenceAbstainResult,
+        EvidenceCoverage,
+        EvidenceItem,
+        EvidenceResult,
+    )
+    from docsuri_shared._generated.dtos.evidence_schema import (
+        SourceRef as EvidenceSourceRef,
+    )
+
+    class OkPort:
+        async def form_evidence(self, request, ctx):
+            assert request.topic == "rag evaluation"
+            assert ctx.owner_id == "u1"
+            return EvidenceResult(
+                state="ok",
+                claims=[
+                    EvidenceItem(
+                        statement="Benchmark reuse inflates scores.",
+                        supporting=[
+                            EvidenceSourceRef(
+                                paperId="2401.01234",
+                                recordRef="rec-1",
+                                quote="benchmark reuse inflates scores",
+                            )
+                        ],
+                        conflicting=[
+                            EvidenceSourceRef(paperId="2402.09999", recordRef="rec-2")
+                        ],
+                    ),
+                    EvidenceItem(statement="   ", supporting=[], conflicting=[]),
+                ],
+                coverage=EvidenceCoverage(paperCount=2),
+            )
+
+    bundle = EvidenceFormationClient(OkPort()).form("u1", "rag evaluation")
+
+    assert bundle.evidenceStatus is EvidenceStatus.SUPPORTED
+    assert len(bundle.items) == 1  # 빈 statement는 탈락
+    item = bundle.items[0]
+    assert item["title"] == "Benchmark reuse inflates scores."
+    assert item["summary"] == "benchmark reuse inflates scores"
+    assert item["sourceRefs"][0]["url"] == "https://arxiv.org/abs/2401.01234"
+    assert item["conflictingCount"] == 1
+
+    class AbstainPort:
+        async def form_evidence(self, request, ctx):
+            return EvidenceAbstainResult(state="abstain", abstainReason="out_of_corpus")
+
+    degraded = EvidenceFormationClient(AbstainPort()).form("u1", "rag evaluation")
+    assert degraded.items == []
+    assert degraded.degradedReason == "evidence formation abstained: out_of_corpus"
+
+
+class _RecordingNotion:
+    def __init__(self) -> None:
+        self.calls: list[tuple[dict, dict]] = []
+
+    def export(self, connection: dict, content: dict) -> str:
+        self.calls.append((connection, content))
+        return "page-abc"
+
+
+def test_api_notion_connection_and_approved_export_completes(monkeypatch) -> None:
+    from cryptography.fernet import Fernet
+
+    from backend.modules.novelty.security import decrypt_secret
+
+    raw_token = "ntn_test_secret_token_1234"
+    monkeypatch.setenv("DOCSURI_NOTION_TOKEN_KEY", Fernet.generate_key().decode())
+    repo = InMemoryNoveltyRepository()
+    # 요청마다 principal이 새로 뽑히지 않도록 고정 — 연결 저장·조회가 같은 owner여야 한다
+    client = _client(monkeypatch, principal=_principal(), repo=repo)
+    notion = _RecordingNotion()
+    client.app.state.novelty_adapters = NoveltyAdapters(notion=notion)
+
+    job_id = client.post(
+        "/api/novelty/jobs",
+        json={"inputType": "natural_language", "topic": "rag evaluation"},
+    ).json()["jobId"]
+
+    saved = client.put(
+        "/api/novelty/notion/connection",
+        json={"token": raw_token, "parentPageId": "0" * 32},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["connected"] is True
+    assert raw_token not in saved.text  # SEC-12 — 응답에 토큰 미포함
+    assert client.get("/api/novelty/notion/connection").json()["connected"] is True
+
+    # SEC-8 — 저장소에는 암호문만 남고 복호화가 원문을 돌려준다
+    stored = next(iter(repo._notion_connections.values()))
+    assert raw_token not in stored.tokenEncrypted
+    assert decrypt_secret(stored.tokenEncrypted) == raw_token
+
+    assert client.post(f"/api/novelty/jobs/{job_id}/notion/preview").status_code == 200
+    approved = client.post(
+        f"/api/novelty/jobs/{job_id}/notion/approve", json={"approved": True}
+    )
+    assert approved.status_code == 200
+    body = approved.json()
+    assert body["status"] == "exported"
+    assert body["notionPageId"] == "page-abc"
+    assert raw_token not in approved.text
+
+    connection, content = notion.calls[0]
+    assert connection["token"] == raw_token  # 복호화된 토큰이 어댑터에 전달된다
+    assert connection["parentPageId"] == "0" * 32
+    assert content["artifacts"] and "payload" in content["artifacts"][0]
+
+
+def test_api_approved_export_without_connection_fails_softly(monkeypatch) -> None:
+    client = _client(monkeypatch, principal=_principal())
+    job_id = client.post(
+        "/api/novelty/jobs",
+        json={"inputType": "natural_language", "topic": "rag evaluation"},
+    ).json()["jobId"]
+
+    client.post(f"/api/novelty/jobs/{job_id}/notion/preview")
+    approved = client.post(
+        f"/api/novelty/jobs/{job_id}/notion/approve", json={"approved": True}
+    )
+
+    # US-NV8 — 연결 없음은 FAILED 상태+비기술 문구로 수렴, 500 아님
+    assert approved.status_code == 200
+    body = approved.json()
+    assert body["status"] == "failed"
+    assert "Notion 연결이 없습니다" in body["errorMessage"]
+
+
+def test_notion_api_client_builds_page_request_and_maps_errors() -> None:
+    captured: dict = {}
+
+    class OkHttp:
+        def post(self, url, headers=None, json=None):
+            captured["url"], captured["headers"], captured["json"] = url, headers, json
+
+            class R:
+                status_code = 200
+
+                @staticmethod
+                def json():
+                    return {"id": "page-xyz"}
+
+            return R()
+
+    content = {
+        "title": "Novelty analysis: rag",
+        "artifacts": [
+            {
+                "kind": "experiment_plan",
+                "title": "Experiment plan",
+                "payload": {
+                    "items": [{"title": "A", "summary": "B"}],
+                    "researchQuestion": "RQ?",
+                },
+            }
+        ],
+    }
+    page_id = NotionApiExportClient(OkHttp()).export(
+        {"token": "tok", "parentPageId": "0" * 32}, content
+    )
+
+    assert page_id == "page-xyz"
+    assert captured["url"] == "https://api.notion.com/v1/pages"
+    assert captured["headers"]["Authorization"] == "Bearer tok"
+    assert captured["json"]["parent"] == {"page_id": "0" * 32}
+    blocks = json.dumps(captured["json"]["children"], ensure_ascii=False)
+    assert "Experiment plan" in blocks
+    assert "A — B" in blocks
+    assert "Research question: RQ?" in blocks
+
+    class ErrHttp:
+        def post(self, url, headers=None, json=None):
+            class R:
+                status_code = 403
+
+                @staticmethod
+                def json():
+                    return {}
+
+            return R()
+
+    with pytest.raises(RuntimeError):
+        NotionApiExportClient(ErrHttp()).export(
+            {"token": "tok", "parentPageId": "0" * 32}, content
+        )
 
 
 def test_worker_loop_acks_successful_message() -> None:
