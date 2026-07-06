@@ -172,6 +172,12 @@
     --agent-novelty-bg: linear-gradient(135deg, #3a2a22, #30231f);
     --agent-novelty-border: rgba(224, 171, 123, 0.28);
   }
+
+  :global(:root:not([data-theme='light'])) .shell[data-mode='novelty'] .message {
+    border-color: rgba(224, 171, 123, 0.36);
+    background: #3a2a22;
+    color: #fff7ed;
+  }
 }
 
 :global(:root[data-theme='light']) .modePicker {
@@ -208,6 +214,12 @@
   --agent-chat-novelty-bg: linear-gradient(135deg, #1b1715, #171414);
   --agent-research-border: rgba(116, 197, 222, 0.28);
   --agent-novelty-border: rgba(224, 171, 123, 0.28);
+}
+
+:global(:root[data-theme='dark']) .shell[data-mode='novelty'] .message {
+  border-color: rgba(224, 171, 123, 0.36);
+  background: #3a2a22;
+  color: #fff7ed;
 }
 
 .messages {
