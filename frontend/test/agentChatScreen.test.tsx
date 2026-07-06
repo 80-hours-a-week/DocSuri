@@ -165,10 +165,12 @@ describe('AgentChatScreen', () => {
     await user.click(screen.getByTestId('agent-composer-submit'));
     expect(await screen.findByText('유사 연구 표')).toBeInTheDocument();
 
-    // US-NV8(#258) — 연결이 없으면 바로 토큰 등록 폼. 토큰은 응답으로 되돌아오지 않는다.
-    expect(await screen.findByTestId('notion-parent-warning')).toHaveTextContent(
-      '상위 페이지 ID',
-    );
+    // US-NV8(#258) — 입력 폼은 버튼을 누른 뒤에만 열리고, 취소하면 다시 닫힌다.
+    await user.click(await screen.findByTestId('notion-export-open'));
+    expect(await screen.findByTestId('notion-token-input')).toBeInTheDocument();
+    await user.click(screen.getByTestId('notion-connect-cancel'));
+    expect(screen.queryByTestId('notion-token-input')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('notion-export-open'));
     await user.type(
       await screen.findByTestId('notion-token-input'),
       'not a real notion integration value',
