@@ -3726,6 +3726,26 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **Context**: Frontend Novelty Notion export connection form polish.
 
 ---
+## PR Document
+**Timestamp**: 2026-07-06T03:57:00Z
+**User Input**: "PR 문서를 작성해 주세요."
+**AI Response**: "Created `202607061257_PR.md` from the repository PR template, summarizing the Novelty dark-mode UI polish, Notion export panel text color fix, Notion connection cancel button, and verification results."
+**Context**: PR documentation for `fix/novelty-agent-fe-20260706`.
+
+---
+## Frontend CI Fix
+**Timestamp**: 2026-07-06T04:04:27Z
+**User Input**: "CI의 `frontend (U5 · tsc + vitest + type drift + build)` 에서 ` Test Files  1 failed | 44 passed (45)
+      Tests  1 failed | 261 passed (262)
+   Start at  04:02:17
+   Duration  27.11s (transform 1.90s, setup 11.99s, collect 5.34s, tests 24.45s, environment 26.31s, prepare 4.48s)
+
+
+Error: TestingLibraryElementError: Unable to find an element by: [data-testid=\"notion-export-open\"]`라고 오류가 발생했어요."
+**AI Response**: "Fixed AgentChatScreen Notion export test isolation by adding a mock Notion connection reset helper and resetting it before each AgentChatScreen test, preventing full Vitest order-dependent failures when another test leaves the mock connection state populated."
+**Context**: Frontend CI Vitest failure remediation for Notion export panel test.
+
+---
 ## Frontend Dark Mode Color Tuning
 **Timestamp**: 2026-07-06T03:01:29Z
 **User Input**: "프론트엔드를 조금만 수정합시다. 다크모드에서는 1. Novelty의 입력출력 텍스트 박스가 갈색이 되도록 설정 2. `Notion으로 내보내기` 박스의 텍스트가 흰색으로 되도록 설정 으로 수정해 주세요."

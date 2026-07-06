@@ -70,6 +70,10 @@ import type {
 // US-NV8(#258) — mock Notion 연결 상태(모듈 수준, 세션 초기화와 무관한 사용자 설정).
 let mockNotionConnection: { parentPageId: string } | null = null;
 
+export function resetMockNotionConnection() {
+  mockNotionConnection = null;
+}
+
 function matches(q: string, ...needles: string[]): boolean {
   const lower = q.toLowerCase();
   return needles.some((n) => lower.includes(n));

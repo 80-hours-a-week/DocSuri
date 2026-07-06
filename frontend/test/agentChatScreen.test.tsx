@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
@@ -6,8 +6,13 @@ import {
   normalizeTimelineDisplay,
   parseNoveltySseEvents,
 } from '@/components/agent/AgentChatScreen';
+import { resetMockNotionConnection } from '@/lib/api/mockTransport';
 
 describe('AgentChatScreen', () => {
+  beforeEach(() => {
+    resetMockNotionConnection();
+  });
+
   it('marks previous running timeline steps complete when a terminal event arrives', () => {
     expect(
       normalizeTimelineDisplay([
