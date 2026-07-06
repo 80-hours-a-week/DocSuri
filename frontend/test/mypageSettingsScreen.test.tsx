@@ -110,11 +110,14 @@ describe('MyPageSettingsScreen (U10)', () => {
     expect(screen.getByTestId('mypage-notion-status')).toHaveTextContent(
       '연결된 Notion이 없습니다.',
     );
-    expect(screen.getByTestId('mypage-notion-parent-warning')).toHaveTextContent(
+    expect(screen.queryByTestId('mypage-notion-error')).not.toBeInTheDocument();
+
+    await userEvent.type(screen.getByTestId('mypage-notion-token'), 'ntn_mock_secret_token_1234');
+    await userEvent.click(screen.getByTestId('mypage-notion-save'));
+    expect(screen.getByTestId('mypage-notion-error')).toHaveTextContent(
       '상위 페이지 ID',
     );
 
-    await userEvent.type(screen.getByTestId('mypage-notion-token'), 'ntn_mock_secret_token_1234');
     await userEvent.type(screen.getByTestId('mypage-notion-parent-page-id'), '1'.repeat(32));
     await userEvent.click(screen.getByTestId('mypage-notion-save'));
 

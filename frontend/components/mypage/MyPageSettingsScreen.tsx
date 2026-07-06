@@ -281,8 +281,6 @@ export function MyPageSettingsScreen() {
   if (status === 'error' || !consents)
     return <StateView kind="error" onRetry={() => void load()} />;
 
-  const notionParentPageMissing = notionParentPageId.trim().length < 32;
-
   return (
     <section className={styles.screen} data-testid="mypage-settings-screen">
       {actionError ? (
@@ -406,11 +404,6 @@ export function MyPageSettingsScreen() {
             onChange={setNotionParentPageId}
             testId="mypage-notion-parent-page-id"
           />
-          {notionParentPageMissing ? (
-            <p className={styles.error} role="alert" data-testid="mypage-notion-parent-warning">
-              상위 페이지 ID를 등록해야 Notion에 페이지를 만들 수 있습니다.
-            </p>
-          ) : null}
           <button
             type="submit"
             className={authStyles.submit}
