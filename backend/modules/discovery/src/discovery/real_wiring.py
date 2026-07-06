@@ -91,9 +91,12 @@ def build_real_orchestrator(
 
     # Cross-encoder reranker (FR-3), optional: wired only when the model ARN is configured;
     # absent → baseline RRF order. Its failures are fail-soft (RerankUnavailable → baseline).
+    # The client region is the RESOLVED rerank region (Tokyo/us-west-2 via DOCSURI_RERANK_REGION or
+    # the ARN's region) — NOT the Seoul deploy region, where the rerank model does not exist.
     reranker = (
         BedrockRerankAdapter(
-            model_arn=settings.rerank_model_arn, region_name=settings.aws_region
+            model_arn=settings.rerank_model_arn,
+            region_name=settings.rerank_region_resolved,
         )
         if settings.rerank_model_arn
         else None

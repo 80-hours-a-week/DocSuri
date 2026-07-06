@@ -652,6 +652,23 @@ class ComputeStack(Stack):
                 ],
             )
         )
+        # U2 reader cross-encoder rerank (FR-3): the Bedrock Rerank API on the Cohere/Amazon rerank
+        # model. The rerank model is NOT in this region (Seoul) and has no global inference profile,
+        # so it is called CROSS-REGION (nearest = ap-northeast-1 Tokyo) — grant the FM across regions
+        # (region wildcard, mirroring the Cohere embed grant). Provisioned ahead of activation:
+        # without it the rerank call AccessDenies → RerankUnavailable → fail-soft to the baseline RRF
+        # order (a safe no-op). ACTIVATION is a deploy-time step the team owns: set
+        # DOCSURI_RERANK_MODEL_ARN (Tokyo ARN) [+ DOCSURI_RERANK_REGION] and enable model access in
+        # that region.
+        self.service.task_definition.task_role.add_to_principal_policy(
+            iam.PolicyStatement(
+                actions=["bedrock:Rerank"],
+                resources=[
+                    "arn:aws:bedrock:*::foundation-model/cohere.rerank-v3-5:0",
+                    "arn:aws:bedrock:*::foundation-model/amazon.rerank-v1:0",
+                ],
+            )
+        )
         self.service.task_definition.task_role.add_to_principal_policy(
             iam.PolicyStatement(
                 actions=[
