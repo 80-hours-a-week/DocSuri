@@ -1,11 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { UserFacingError, getApiClient } from '@/lib/api';
 import type { NotionExportPreviewVM, NotionExportVM } from '@/lib/api/apiClient';
 import styles from './NotionExportPanel.module.css';
 
-type Phase = 'idle' | 'connect' | 'preview' | 'submitting' | 'done';
+type Phase = 'loading' | 'idle' | 'connect' | 'preview' | 'submitting' | 'done';
 
 interface Props {
   jobId: string;
@@ -15,16 +15,37 @@ interface Props {
 // 자동 export 없음. 토큰은 서버에서 암호화 저장되고 응답으로 되돌아오지 않는다(SEC-8/12).
 export function NotionExportPanel({ jobId }: Props) {
   const api = useMemo(() => getApiClient(), []);
-  const [phase, setPhase] = useState<Phase>('idle');
+  const [phase, setPhase] = useState<Phase>('loading');
   const [token, setToken] = useState('');
   const [parentPageId, setParentPageId] = useState('');
   const [preview, setPreview] = useState<NotionExportPreviewVM | null>(null);
   const [result, setResult] = useState<NotionExportVM | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const parentPageMissing = phase === 'connect' && parentPageId.trim().length < 32;
 
   function fail(err: unknown) {
     setError(err instanceof UserFacingError ? err.message : 'Notion 내보내기에 실패했습니다.');
   }
+
+  useEffect(() => {
+    let active = true;
+    void api
+      .getNotionConnection()
+      .then((connection) => {
+        if (!active) return;
+        setPhase(connection.connected ? 'idle' : 'connect');
+      })
+      .catch((err) => {
+        if (!active) return;
+        setError(
+          err instanceof UserFacingError ? err.message : 'Notion 연결 상태를 확인하지 못했습니다.',
+        );
+        setPhase('idle');
+      });
+    return () => {
+      active = false;
+    };
+  }, [api]);
 
   async function loadPreview() {
     const loaded = await api.previewNotionExport(jobId);
@@ -83,6 +104,12 @@ export function NotionExportPanel({ jobId }: Props) {
       aria-label="Notion 내보내기"
       data-testid="notion-export-panel"
     >
+      {phase === 'loading' ? (
+        <p className={styles.hint} role="status">
+          Notion 연결을 확인하는 중…
+        </p>
+      ) : null}
+
       {phase === 'idle' ? (
         <button
           type="button"
@@ -116,6 +143,11 @@ export function NotionExportPanel({ jobId }: Props) {
             aria-label="Notion 상위 페이지 ID"
             data-testid="notion-parent-input"
           />
+          {parentPageMissing ? (
+            <p className={styles.error} role="alert" data-testid="notion-parent-warning">
+              상위 페이지 ID를 등록해야 Notion에 페이지를 만들 수 있습니다.
+            </p>
+          ) : null}
           <button
             type="button"
             className={styles.primaryButton}

@@ -481,6 +481,10 @@ export class MockTransport implements Transport {
         body: { connected: true, parentPageId: mockNotionConnection.parentPageId },
       };
     }
+    if (path === '/api/novelty/notion/connection' && req.method === 'DELETE') {
+      mockNotionConnection = null;
+      return { status: 204, body: null };
+    }
     const noveltyNotionPreview = path.match(/^\/api\/novelty\/jobs\/([^/]+)\/notion\/preview$/);
     if (noveltyNotionPreview && req.method === 'POST') {
       const snapshot = mockLoadAgentSession(decodeURIComponent(noveltyNotionPreview[1]));
