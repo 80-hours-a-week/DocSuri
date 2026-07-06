@@ -17,6 +17,27 @@
 **Context**: PR 문서 작성 — U6 Reliability/Ops 구현 변경사항 설명 및 커밋 메시지 상세화.
 
 ---
+## Code Generation
+**Timestamp**: 2026-07-06T01:43:51Z
+**User Input**: "좋아요. `권장 구현 방식: 유저별 개인 Notion internal integration token 등록 + parent page ID 입력 방식`으로 구현해 주세요. 프론트도 동시에 구현합시다. 토큰이 등록되어 있지 않을 경우, 바로 토큰 입력 창이 뜨도록 하고, 이후에는 설정 페이지에서 Notion 토큰을 관리할 수 있도록 설정에 만들어 주세요. 데모와 배포 모두 구현해 주세요. 이후, Blocking 요소가 있는지 deep하게 검토해 주세요."
+**AI Response**: "Implemented owner-scoped Notion connection management with encrypted token storage, local disconnect, automatic token-entry prompt for unconnected Novelty exports, My Page settings management UI, mock/demo transport support, and regression tests. Verified backend, frontend type checks, focused tests, lint, production build, and deployment-readiness paths."
+**Context**: Novelty-Agent per-user Notion internal integration export implementation and blocking review.
+
+---
+## Implementation Guidance
+**Timestamp**: 2026-07-06T01:31:00Z
+**User Input**: "근데 모든 유저가 하나의 Notion 계정으로 내보내는게 아니라, 유저별로 각각 유저의 Notion으로 내보낼 수 있어야 해요."
+**AI Response**: "Verified that the existing Novelty Notion connection model is owner-scoped via owner_id, not a shared server Notion account, and explained the user-specific token/OAuth implementation options."
+**Context**: Clarification of per-user Notion export requirement.
+
+---
+## Implementation Guidance
+**Timestamp**: 2026-07-06T01:23:48Z
+**User Input**: "notion으로 내보내기 기능을 구현하려고 합니다. 어떻게 구현해야 할까요?"
+**AI Response**: "Inspected the existing Novelty Notion export backend, frontend panel, API client, mock transport, security helper, and wiring. Prepared implementation guidance based on the current preview/approval/export flow."
+**Context**: Notion export implementation guidance for Novelty-Agent.
+
+---
 ## PR #373 Review Fix
 **Timestamp**: 2026-07-04T23:12:57Z
 **User Input**: "Review PR #373 from a clean context and fix all findings."
@@ -3710,6 +3731,11 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **Context**: PR review approval attempt and fallback comment for PR #397.
 
 ---
+## Frontend Warning Fix
+**Timestamp**: 2026-07-06T02:02:46Z
+**User Input**: "사용자가 parent page를 등록하지 않았을 경우, 관련 경고가 뜨도록 수정해 주세요."
+**AI Response**: "Added parent page ID missing warnings to the Novelty Notion export connection form and My Page Notion settings form, and updated focused frontend tests."
+**Context**: Notion parent page registration warning for per-user Notion export.
 
 ## Novelty Evidence Optional and Bedrock Tool-Use Output Fix
 **Timestamp**: 2026-07-06T00:55:54Z

@@ -400,6 +400,7 @@ function requestBodyKey(body: unknown): string {
 export interface NotionConnectionStatusVM {
   connected: boolean;
   parentPageId?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface NotionExportVM {
@@ -1224,6 +1225,16 @@ export class ApiClient {
       idempotent: false,
     });
     if (res.status === 200) return res.body as NotionConnectionStatusVM;
+    throw normalizeHttpError(res.status, serverMessage(res.body));
+  }
+
+  async deleteNotionConnection(): Promise<void> {
+    const res = await this.request({
+      method: 'DELETE',
+      path: '/api/novelty/notion/connection',
+      idempotent: false,
+    });
+    if (res.status === 204) return;
     throw normalizeHttpError(res.status, serverMessage(res.body));
   }
 
