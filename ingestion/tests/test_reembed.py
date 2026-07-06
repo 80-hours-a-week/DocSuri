@@ -55,3 +55,49 @@ def test_index_body_dimension_override_for_reembed():
     # Cohere v4 default (1536) target index without touching the frozen vector-spec.
     assert _vector_dim(papers_index_body(dimension=1536)) == 1536
     assert _vector_dim(papers_index_body(on_disk=True, dimension=1536)) == 1536
+
+
+def test_estimate_tokens_conservative_and_min_one():
+    from docsuri_ingestion.reembed import _estimate_tokens
+
+    assert _estimate_tokens("") == 1  # min 1 so short text still consumes budget
+    assert _estimate_tokens("a" * 70) == 20  # ~len/3.5, over-counts vs the real tokenizer
+    assert _estimate_tokens("a" * 7000) > _estimate_tokens("a" * 700)
+
+
+def test_existing_ids_returns_found_subset():
+    from docsuri_ingestion.reembed import _existing_ids
+
+    class _FakeClient:
+        def mget(self, index, body, _source):
+            found = {"a", "c"}
+            return {"docs": [{"_id": i, "found": i in found} for i in body["ids"]]}
+
+    assert _existing_ids(_FakeClient(), "idx", ["a", "b", "c"]) == {"a", "c"}
+    assert _existing_ids(_FakeClient(), "idx", []) == set()
+
+
+def test_token_bucket_acquire_amount_and_oversized_batch(monkeypatch):
+    import docsuri_ingestion.resilience as resilience
+    from docsuri_ingestion.resilience import TokenBucket
+
+    now = 0.0
+    sleeps = []
+
+    def fake_monotonic():
+        return now
+
+    def fake_sleep(seconds):
+        nonlocal now
+        sleeps.append(seconds)
+        now += seconds
+
+    monkeypatch.setattr(resilience.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(resilience.time, "sleep", fake_sleep)
+
+    tb = TokenBucket(rate_per_second=10.0, capacity=10)
+    tb.acquire(4)  # partial draw from a full bucket → immediate
+    tb.acquire(0)  # no-op
+    tb.acquire(25)  # > capacity → spends multiple refill windows, never deadlocks
+
+    assert [round(s, 1) for s in sleeps if s > 1e-9] == [0.4, 1.0, 0.5]

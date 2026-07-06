@@ -135,15 +135,19 @@ class TokenBucket:
         self._last_refill = time.monotonic()
         self._lock = threading.Lock()
 
-    def acquire(self) -> None:
-        while True:
-            with self._lock:
-                self._refill()
-                if self._tokens >= 1.0:
-                    self._tokens -= 1.0
-                    return
-                wait_seconds = (1.0 - self._tokens) / self._rate
-            time.sleep(wait_seconds)
+    def acquire(self, amount: float = 1.0) -> None:
+        remaining = max(amount, 0.0)
+        while remaining > 0.0:
+            chunk = min(remaining, self._capacity)
+            while True:
+                with self._lock:
+                    self._refill()
+                    if self._tokens >= chunk:
+                        self._tokens -= chunk
+                        remaining -= chunk
+                        break
+                    wait_seconds = (chunk - self._tokens) / self._rate
+                time.sleep(wait_seconds)
 
     def _refill(self) -> None:
         now = time.monotonic()
