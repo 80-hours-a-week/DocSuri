@@ -32,6 +32,41 @@ describe('fail-soft fallback (no raw backslash source on a KaTeX parse error)', 
     expect(c.querySelector('.katex')).not.toBeNull();
     expect(c.textContent).not.toBe('수식');
   });
+
+  it('renders a formula whose alttext leaked a `\\cite` command (strip it, do not collapse)', () => {
+    // Real @6 doc-model breakage: LaTeXML leaked a trailing `\cite[citep]{…}` (nested braces) into
+    // eq (30). KaTeX has no `\cite`, so the WHOLE equation collapsed to the 수식 placeholder. The
+    // leaked citation carries no math meaning → strip it and render the real expression.
+    const latex = String.raw`\ln[2\pi I_{0}(c)]\quad\text{\cite[citep]{({A}{mardia2009}{{, }}{})}}`;
+    const c = html(<MathDisplay latex={latex} />);
+    expect(c.querySelector('.katex')).not.toBeNull();
+    expect(c.textContent).not.toBe('수식');
+  });
+
+  it('renders a formula whose alttext leaked a two-arg `\\lx@cref` (strip both args)', () => {
+    // Real @6 breakage: LaTeXML leaked its internal cleveref `\lx@cref{creftype~refnum}{key}` (TWO
+    // brace args) into `\text{(by …)}`. KaTeX has no `\lx@cref` → whole equation collapsed. Both
+    // arguments must be consumed, else the trailing `{key}` spills as stray text.
+    const latex = String.raw`\delta(m - h(m,y,\alpha))\text{(by \lx@cref{creftype~refnum}{eq:equiv_bu})}`;
+    const c = html(<MathDisplay latex={latex} />);
+    expect(c.querySelector('.katex')).not.toBeNull();
+    expect(c.textContent).not.toBe('수식');
+    expect(c.textContent).not.toContain('eq:equiv_bu');
+  });
+
+  it.each([
+    ['LaTeXML \\originalleft/right', String.raw`\originalleft(\frac{a}{b}\originalright)`],
+    ['\\mathds indicator', String.raw`\mathds{1}[x>0]`],
+    ['\\mathbbm indicator', String.raw`\mathbbm{1}_{A}`],
+    ['\\textsc', String.raw`\textsc{Sample}+x`],
+    ['\\nicefrac', String.raw`\nicefrac{1}{2}`],
+    ['\\scalebox (drop scale, keep body)', String.raw`\scalebox{0.8}{\sum_{i} x_i}`],
+    ['split environment -> aligned', String.raw`\begin{split}a&=b\\&=c\end{split}`],
+  ])('renders unsupported-package alttext leaks (%s) instead of collapsing', (_label, latex) => {
+    const c = html(<MathDisplay latex={latex} />);
+    expect(c.querySelector('.katex')).not.toBeNull();
+    expect(c.textContent).not.toBe('수식');
+  });
 });
 
 describe('renderInlineMath', () => {

@@ -404,6 +404,10 @@ class NoveltyService:
             updatedAt=connection.updatedAt,
         )
 
+    def delete_notion_connection(self, owner_id: str) -> None:
+        self._repo.delete_notion_connection(owner_id)
+        _emit_metric(self._observability, "novelty.notion_connection_deleted")
+
     def execute_export(self, owner_id: str, job_id: str, notion: Any) -> NotionExport:
         """US-NV8(#258) AC3 — 승인된 export만 실제 Notion 호출로 완결. 실패는 FAILED+비기술 문구.
 
