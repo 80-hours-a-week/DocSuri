@@ -376,7 +376,7 @@ class SummaryResultDTO:
                     if eff in translated_text:
                         std_glossary.append({"term": s, "translated": eff})
                         seen.add(key)
-                elif key in kept_by_lower and term_in_text(kept_by_lower[key], translated_text):
+                elif key in kept_by_lower:  # display_kept already gated seeds by text presence
                     std_glossary.append({"term": kept_by_lower[key]})
                     seen.add(key)
             for m in SEED_MAPPINGS:  # mapping standard (en→ko), by effective rendering
