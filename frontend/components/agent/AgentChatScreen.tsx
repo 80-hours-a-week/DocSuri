@@ -409,7 +409,8 @@ function AgentModePicker({
         data-testid="agent-mode-evidence"
       >
         <strong>Research</strong>
-        <span>작성 논문 근거 형성</span>
+        <span>질문을 던지면 여러 논문을 대조해 근거 카드로 정리해요</span>
+        <span className={styles.modeHint}>핵심 주장 · 근거 논문 원문 · 서로 다른 논문 간 상충 여부까지</span>
       </button>
       <button
         type="button"
@@ -418,7 +419,8 @@ function AgentModePicker({
         data-testid="agent-mode-novelty"
       >
         <strong>Novelty</strong>
-        <span>유사도 검사 및 차별점 추천</span>
+        <span>Research로 근거부터 자동 확인한 뒤, 차별화 아이디어를 제안해요</span>
+        <span className={styles.modeHint}>유사 연구 비교표 · 실험 아이디어 · 실험 계획까지</span>
       </button>
     </div>
   );
@@ -622,20 +624,30 @@ function EvidenceResultView({ result }: { result: EvidenceResultPayload }) {
   }
   return (
     <div className={styles.evidenceClaims}>
+      <p className={styles.evidenceIntro}>
+        아래 카드는 실제 논문 원문에서 확인된 내용만 정리한 근거입니다. 논문마다 다른 이야기를 하는
+        부분은 카드 안에 <strong>상충하는 근거</strong>로 따로 표시됩니다.
+      </p>
       {result.claims.map((claim, idx) => (
         <article key={idx} className={styles.evidenceClaim}>
+          <span className={styles.evidenceLabel}>핵심 주장</span>
           <p className={styles.evidenceStatement}>{claim.statement}</p>
+          <span className={styles.evidenceLabel}>근거 논문 (원문 인용)</span>
           <EvidenceRefList refs={claim.supporting} />
           {claim.conflicting.length > 0 ? (
             <div className={styles.evidenceConflict}>
               <strong>상충하는 근거</strong>
+              <span className={styles.evidenceConflictHint}>
+                다른 논문은 이렇게 다르게 이야기하고 있어요
+              </span>
               <EvidenceRefList refs={claim.conflicting} />
             </div>
           ) : null}
         </article>
       ))}
       <p className={styles.evidenceCoverage}>
-        참고 논문 {result.coverage.paperCount}편
+        <span className={styles.evidenceLabel}>검색 범위</span>
+        {' '}참고 논문 {result.coverage.paperCount}편
         {result.coverage.queryUsed ? ` · 검색어: ${result.coverage.queryUsed}` : ''}
       </p>
     </div>
@@ -649,16 +661,32 @@ function EvidenceRefList({ refs }: { refs: EvidenceSourceRef[] }) {
       {refs.map((ref, idx) => (
         <li key={idx} className={styles.evidenceRef}>
           <span className={styles.evidenceSource}>
+            <span className={styles.evidenceSourceLabel}>출처 논문</span>
             <span className={styles.evidencePaperId}>{ref.paperId}</span>
             {/* 인용 앵커(#339). recordRef는 내부 식별자라 노출하지 않는다. */}
             {ref.anchor ? <span className={styles.evidenceAnchor}>§ {ref.anchor}</span> : null}
           </span>
-          {ref.quote ? <blockquote>{ref.quote}</blockquote> : null}
+          {ref.quote ? (
+            <>
+              <span className={styles.evidenceQuoteLabel}>논문 원문</span>
+              <blockquote>{ref.quote}</blockquote>
+            </>
+          ) : null}
         </li>
       ))}
     </ul>
   );
 }
+
+// 첫 사용자가 각 섹션이 "무엇을·왜" 보여주는지 바로 알 수 있도록 kind별 한 줄 설명.
+// evidence(U11 근거형성 결과 병합본)는 별도 UI 섹션으로 노출하지 않아 이 맵에는 없다.
+const NOVELTY_ARTIFACT_HINT: Record<string, string> = {
+  similar_works: '이미 나와 있는 비슷한 연구들을 찾아 정리했어요',
+  external_findings: 'GitHub·데이터셋에서 관련 구현체·자료를 찾았어요',
+  novelty_candidates: '위 근거를 바탕으로 제안하는 차별화 실험 아이디어예요',
+  experiment_plan: '선택한 아이디어를 검증하기 위한 구체적인 실험 설계예요',
+  risk_signals: '업로드한 원고를 검토해 나온 참고용 신호예요',
+};
 
 function NoveltyResultView({ result }: { result: NoveltyResultPayload }) {
   if (result.artifacts.length === 0) {
@@ -669,6 +697,9 @@ function NoveltyResultView({ result }: { result: NoveltyResultPayload }) {
       {result.artifacts.map((artifact) => (
         <section key={artifact.artifactId} className={styles.noveltyArtifact}>
           <h4 className={styles.noveltyArtifactTitle}>{artifact.title}</h4>
+          {NOVELTY_ARTIFACT_HINT[artifact.kind] ? (
+            <p className={styles.noveltyArtifactHint}>{NOVELTY_ARTIFACT_HINT[artifact.kind]}</p>
+          ) : null}
           <NoveltyArtifactBody artifact={artifact} />
         </section>
       ))}
@@ -700,42 +731,47 @@ function SimilarWorksTable({ items }: { items: NoveltyPayloadItem[] }) {
     SIMILAR_WORK_COLUMNS.some((column) => column.key in item),
   );
   return (
-    <div className={styles.noveltyTableWrap}>
-      <table className={styles.noveltyTable}>
-        <thead>
-          <tr>
-            <th>연구</th>
-            <th>요약</th>
-            {showDetails
-              ? SIMILAR_WORK_COLUMNS.map((column) => <th key={column.key}>{column.label}</th>)
-              : null}
-            <th>근거</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item, idx) => (
-            <tr key={idx}>
-              <td>{item.title}</td>
-              <td>{item.summary ?? item.rationale ?? ''}</td>
+    <>
+      {showDetails ? (
+        <p className={styles.noveltyTableScrollHint}>← 좌우로 밀면 전체 항목을 볼 수 있어요</p>
+      ) : null}
+      <div className={styles.noveltyTableWrap}>
+        <table className={styles.noveltyTable}>
+          <thead>
+            <tr>
+              <th>연구</th>
+              <th>요약</th>
               {showDetails
-                ? SIMILAR_WORK_COLUMNS.map((column) => {
-                    const value = detailCell(item, column.key);
-                    return (
-                      <td key={column.key}>
-                        {value ?? <span className={styles.noveltyCellAbstain}>근거 부족</span>}
-                      </td>
-                    );
-                  })
+                ? SIMILAR_WORK_COLUMNS.map((column) => <th key={column.key}>{column.label}</th>)
                 : null}
-              <td>
-                <EvidenceStatusBadge status={item.evidenceStatus} />
-                <NoveltySourceRefLinks refs={sourceRefsOf(item.sourceRefs)} />
-              </td>
+              <th>근거</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {items.map((item, idx) => (
+              <tr key={idx}>
+                <td>{item.title}</td>
+                <td>{item.summary ?? item.rationale ?? ''}</td>
+                {showDetails
+                  ? SIMILAR_WORK_COLUMNS.map((column) => {
+                      const value = detailCell(item, column.key);
+                      return (
+                        <td key={column.key}>
+                          {value ?? <span className={styles.noveltyCellAbstain}>근거 부족</span>}
+                        </td>
+                      );
+                    })
+                  : null}
+                <td>
+                  <EvidenceStatusBadge status={item.evidenceStatus} />
+                  <NoveltySourceRefLinks refs={sourceRefsOf(item.sourceRefs)} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
@@ -807,9 +843,13 @@ const PLAN_LIST_FIELDS: Array<{ key: string; label: string }> = [
 function ExperimentPlanView({ plan }: { plan: Record<string, unknown> }) {
   return (
     <div className={styles.noveltyPlan}>
+      <span className={styles.evidenceLabel}>연구 질문</span>
       <p className={styles.noveltyPlanQuestion}>{textField(plan, 'researchQuestion')}</p>
       {textField(plan, 'noveltyAngle') ? (
-        <p className={styles.noveltyPlanAngle}>{textField(plan, 'noveltyAngle')}</p>
+        <>
+          <span className={styles.evidenceLabel}>차별화 포인트</span>
+          <p className={styles.noveltyPlanAngle}>{textField(plan, 'noveltyAngle')}</p>
+        </>
       ) : null}
       {PLAN_LIST_FIELDS.map(({ key, label }) => {
         const values = listField(plan, key);

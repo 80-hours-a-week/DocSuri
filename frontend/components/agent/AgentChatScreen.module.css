@@ -154,6 +154,11 @@
   font-size: 13px;
 }
 
+.modeHint {
+  font-size: 11px;
+  opacity: 0.85;
+}
+
 @media (prefers-color-scheme: dark) {
   .shell {
     --agent-chat-research-bg: linear-gradient(135deg, #10181c, #11161a);
@@ -266,17 +271,35 @@
   gap: 10px;
 }
 
+.evidenceIntro {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--agent-radius);
+  background: var(--color-accent-soft-bg);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .evidenceClaim {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   padding: 8px 10px;
   border: 1px solid var(--color-border);
   background: var(--color-bg);
   border-radius: var(--agent-radius);
 }
 
+.evidenceLabel {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+}
+
 .evidenceStatement {
-  margin: 0;
+  margin: 0 0 4px;
   font-weight: 700;
   line-height: 1.5;
 }
@@ -292,6 +315,13 @@
 .evidenceRef {
   display: grid;
   gap: 2px;
+}
+
+.evidenceSourceLabel,
+.evidenceQuoteLabel {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-muted);
 }
 
 .evidencePaperId {
@@ -327,12 +357,28 @@
   font-weight: 700;
 }
 
+.noveltyArtifactHint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.noveltyTableScrollHint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
 .noveltyTableWrap {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .noveltyTable {
-  width: 100%;
+  /* 좁은 화면에서 8개 칼럼을 100%에 욱여넣으면 글자가 세로로 깨진다 — 자연스러운
+     칸 너비를 유지하고 wrapper의 overflow-x로 가로 스크롤시킨다. */
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   font-size: 13px;
 }
@@ -343,6 +389,8 @@
   border-bottom: 1px solid var(--color-border);
   text-align: left;
   vertical-align: top;
+  min-width: 120px;
+  max-width: 220px;
 }
 
 .noveltyItems {
@@ -468,6 +516,11 @@
 .evidenceConflict strong {
   font-size: 12px;
   color: var(--color-danger);
+}
+
+.evidenceConflictHint {
+  font-size: 11px;
+  color: var(--color-text-muted);
 }
 
 .evidenceCoverage {
