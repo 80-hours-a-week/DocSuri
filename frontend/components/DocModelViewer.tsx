@@ -87,7 +87,8 @@ export function DocModelViewer({
   const readFiredRef = useRef<string | null>(null);
   useEffect(() => {
     const sentinel = completionRef.current;
-    if (!docModel || !sentinel) return;
+    // IntersectionObserver is absent in SSR and the jsdom test env; skip completion tracking there.
+    if (!docModel || !sentinel || typeof IntersectionObserver === 'undefined') return;
     const key = `${paperId}:${version}`;
     const observer = new IntersectionObserver((entries) => {
       if (entries.some((e) => e.isIntersecting) && readFiredRef.current !== key) {

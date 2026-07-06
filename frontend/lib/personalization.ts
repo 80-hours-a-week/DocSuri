@@ -18,7 +18,9 @@ export function hashQuery(query: string): string {
 }
 
 function sendBehaviorEvent(event: BehaviorEventCreate): void {
-  void getApiClient().recordBehaviorEvent(event).catch(() => undefined);
+  void getApiClient()
+    .recordBehaviorEvent(event)
+    .catch(() => undefined);
 }
 
 export function recordSearchExecuted(query: string, resultCount: number): void {
