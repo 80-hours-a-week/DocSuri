@@ -70,7 +70,7 @@ import type {
 // US-NV8(#258) — mock Notion 연결 상태(모듈 수준, 세션 초기화와 무관한 사용자 설정).
 let mockNotionConnection: { parentPageId: string } | null = null;
 
-export function resetMockNotionConnection(): void {
+export function resetMockNotionConnection() {
   mockNotionConnection = null;
 }
 

@@ -3745,6 +3745,78 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **Context**: Novelty-Agent degradation semantics and Bedrock structured-output reliability fix.
 
 ---
+## Frontend Dark Mode Color Tuning
+**Timestamp**: 2026-07-06T03:01:29Z
+**User Input**: "프론트엔드를 조금만 수정합시다. 다크모드에서는 1. Novelty의 입력출력 텍스트 박스가 갈색이 되도록 설정 2. `Notion으로 내보내기` 박스의 텍스트가 흰색으로 되도록 설정 으로 수정해 주세요."
+**AI Response**: "Adjusted Agent Chat dark-mode Novelty message/input surfaces to a brown background and made the Notion export panel inherit theme text colors so dark-mode text renders white."
+**Context**: Frontend dark-mode visual polish for Novelty agent and Notion export panel.
+
+---
+## Frontend Prompt Input Color Revert
+**Timestamp**: 2026-07-06T03:08:22Z
+**User Input**: "프롬프트 입력 박스는 전 색으로 돌려 주세요."
+**AI Response**: "Removed the dark-mode Novelty-specific `.input` color override from `AgentChatScreen.module.css`, keeping the brown styling on Novelty message boxes while returning the prompt input box to its default theme colors."
+**Context**: Frontend dark-mode visual adjustment for Novelty agent prompt input.
+
+---
+## Notion Connect Cancel Button
+**Timestamp**: 2026-07-06T03:44:36Z
+**User Input**: "`Notion으로 내보내기`를 누르면 `Notion Token 등록` 이 나오잖아요? `연결 저장` 밑에 `취소`버튼을 만들어 주세요."
+**AI Response**: "Added a cancel button below the Notion connection save button that clears local input state and returns the export panel to its initial closed state. Updated the existing Agent Chat Notion export regression to cover cancel and use an explicit non-secret dummy token."
+**Context**: Frontend Novelty Notion export connection form polish.
+
+---
+## Develop Deployment Complete
+**Timestamp**: 2026-07-06T03:44:54Z
+**User Input**: "현재 develop 브랜치를 AWS CLI의 `DocSuri-Deploy` Profile을 이용해 배포를 진행해 주세요."
+**AI Response**: "Completed AWS deployment from `develop` commit `d187ee4a139e0e2f9ac02bf9d64a76d3c82fe2f1` using AWS CLI profile `DocSuri-Deploy`. Built and pushed `docsuri-api`, `docsuri-ingestion`, and `docsuri-frontend` images to ECR with both immutable commit tags and `latest`; forced ECS deployments for `docsuri-api`, `docsuri-ingestion`, `docsuri-novelty-agent-worker`, `docsuri-summary-worker`, and `docsuri-frontend`; waited for all services to stabilize; verified every service reached desired running counts with no pending tasks and completed rollout state; verified `https://docsuri.org/` returned HTTP 200 and API `/healthz` returned HTTP 200."
+**Context**: Production deployment completion and post-deploy verification.
+
+---
+## PR Document
+**Timestamp**: 2026-07-06T03:57:00Z
+**User Input**: "PR 문서를 작성해 주세요."
+**AI Response**: "Created `202607061257_PR.md` from the repository PR template, summarizing the Novelty dark-mode UI polish, Notion export panel text color fix, Notion connection cancel button, and verification results."
+**Context**: PR documentation for `fix/novelty-agent-fe-20260706`.
+
+---
+## Frontend CI Fix
+**Timestamp**: 2026-07-06T04:04:27Z
+**User Input**: "CI의 `frontend (U5 · tsc + vitest + type drift + build)` 에서 ` Test Files  1 failed | 44 passed (45)
+      Tests  1 failed | 261 passed (262)
+   Start at  04:02:17
+   Duration  27.11s (transform 1.90s, setup 11.99s, collect 5.34s, tests 24.45s, environment 26.31s, prepare 4.48s)
+
+
+Error: TestingLibraryElementError: Unable to find an element by: [data-testid=\"notion-export-open\"]`라고 오류가 발생했어요."
+**AI Response**: "Fixed AgentChatScreen Notion export test isolation by adding a mock Notion connection reset helper and resetting it before each AgentChatScreen test, preventing full Vitest order-dependent failures when another test leaves the mock connection state populated."
+**Context**: Frontend CI Vitest failure remediation for Notion export panel test.
+
+---
+## Code Generation
+**Timestamp**: 2026-07-06T14:31:12+09:00
+**User Input**: "```1. max token 수를 8192로 확장
+2. 프롬프트에 길이 제한 추가
+3. tool schema도 maxItems 같은 제한 추가
+4. 파싱 실패 시 stop_reason, 응답 길이, JSONDecodeError 위치를 로깅``` 으로 코드를 수정해 주세요."
+**AI Response**: "Updated Novelty Bedrock LLM token budget, prompt/schema output limits, parse-failure diagnostics, and focused regression tests."
+**Context**: Novelty Bedrock structured output parse hardening
+
+---
+## Review
+**Timestamp**: 2026-07-06T14:36:36+09:00
+**User Input**: "blocking 사항이 있는지 검토해 주세요."
+**AI Response**: "Reviewed current Novelty Bedrock structured-output changes for blocking production risks, including model token support, schema compatibility, logging sensitivity, and regression coverage."
+**Context**: Blocking review for Novelty Bedrock structured-output hardening
+
+---
+## Cross Review Remediation
+**Timestamp**: 2026-07-06T14:47:53+09:00
+**User Input**: "Cross-Review.md 를 검토하여 코드를 수정해 주세요. 제가 원하는 flow는 초기에는 Notion 토큰&ID 입력 상자가 닫혀있고, 버튼을 누를 경우 상자가 열리고, 취소를 누를 경우 다시 돌아가도록 되어야 합니다."
+**AI Response**: "Reviewed Cross-Review.md and changed the Notion export panel to start closed, open the token/parent page form only after clicking the export button, and return to the closed button state on cancel. Updated the AgentChatScreen regression test for the opener-first flow."
+**Context**: Frontend Notion export opener-first UX review remediation.
+
+---
 ## ORCID Framed OAuth CSP Fix Start
 **Timestamp**: 2026-07-06T07:07:39Z
 **User Input**: "Continue this session. The worktree is at ~/Projects/DocSuri/.claude/worktrees/feature+kpi-funnel-346, and the branch is feature/u10-orcid-real-347."
@@ -3764,5 +3836,19 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **User Input**: "push to PR"
 **AI Response**: "Preparing to commit and push the ORCID framed OAuth CSP fix to `feature/u10-orcid-real-347`."
 **Context**: Git publish request for ORCID social login CSP frame-src fix.
+
+---
+## PR414 Merge Conflict Resolution Start
+**Timestamp**: 2026-07-06T07:25:35Z
+**User Input**: "resolve the merge conflict"
+**AI Response**: "Detected PR #414 is DIRTY against `develop`; fetched `origin/develop` and started resolving the branch merge conflict in `feature/u10-orcid-real-347`."
+**Context**: Git merge conflict resolution for PR #414.
+
+---
+## PR414 Merge Conflict Resolution Completion
+**Timestamp**: 2026-07-06T07:28:54Z
+**User Input**: "resolve the merge conflict"
+**AI Response**: "Merged `origin/develop` into `feature/u10-orcid-real-347` and resolved the only conflict, `aidlc-docs/audit.md`, by unioning both append-log sides. Verification passed: no unmerged paths, `git diff --check`, `git diff --cached --check`, `./node_modules/.bin/vitest run test/orcidLoginGate.test.tsx`, and `./node_modules/.bin/tsc --noEmit`."
+**Context**: Git merge conflict resolution completion for PR #414.
 
 ---

@@ -526,7 +526,7 @@ class BedrockNoveltyLlmClient:
         *,
         model_id: str,
         client: Any,
-        max_tokens: int = 4096,
+        max_tokens: int = 8192,
         cost_guard: Any = None,
     ) -> None:
         self._model_id = model_id
@@ -603,9 +603,22 @@ class BedrockNoveltyLlmClient:
         _record_bedrock_spend(self._cost_guard, usage)
         try:
             return _parse_json_object(text)
-        except (ValueError, json.JSONDecodeError):
+        except json.JSONDecodeError as exc:
             log.warning(
-                "novelty Bedrock JSON parse failed; rawPreview=%r",
+                "novelty Bedrock JSON parse failed; stopReason=%s outputLength=%d "
+                "jsonPos=%d rawPreview=%r",
+                usage.get("stop_reason"),
+                len(text),
+                exc.pos,
+                _safe_log_preview(text),
+            )
+            raise
+        except ValueError:
+            log.warning(
+                "novelty Bedrock JSON parse failed; stopReason=%s outputLength=%d "
+                "jsonPos=n/a rawPreview=%r",
+                usage.get("stop_reason"),
+                len(text),
                 _safe_log_preview(text),
             )
             raise
@@ -641,6 +654,8 @@ SIMILAR_WORK_DETAIL_FIELDS = (
 def _novelty_system_prompt() -> str:
     return (
         "You are DocSuri's novelty-analysis assistant. Return only valid JSON. "
+        "Fit the response within the available output budget: at most 3 similarWorks, "
+        "3 noveltyCandidates, 5 items per experimentPlan list, and concise strings. "
         "Use only the supplied sourceRefIndexes; never invent URLs, titles, datasets, or papers. "
         "For each similarWorks detail field (problem, method, dataset, results, limitations, "
         'overlap — how it overlaps the user\'s topic), return {"value": string, '
@@ -706,8 +721,9 @@ def _novelty_user_prompt(
 
 
 def _novelty_tool() -> dict[str, Any]:
-    text_field = {"type": "string"}
-    ref_indexes = {"type": "array", "items": {"type": "integer"}}
+    text_field = {"type": "string", "maxLength": 600}
+    short_list = {"type": "array", "items": text_field, "maxItems": 5}
+    ref_indexes = {"type": "array", "items": {"type": "integer"}, "maxItems": 3}
     detail = {
         "anyOf": [
             {
@@ -726,6 +742,7 @@ def _novelty_tool() -> dict[str, Any]:
             "properties": {
                 "similarWorks": {
                     "type": "array",
+                    "maxItems": 3,
                     "items": {
                         "type": "object",
                         "properties": {
@@ -744,6 +761,7 @@ def _novelty_tool() -> dict[str, Any]:
                 },
                 "noveltyCandidates": {
                     "type": "array",
+                    "maxItems": 3,
                     "items": {
                         "type": "object",
                         "properties": {
@@ -759,13 +777,13 @@ def _novelty_tool() -> dict[str, Any]:
                     "properties": {
                         "researchQuestion": text_field,
                         "noveltyAngle": text_field,
-                        "hypotheses": {"type": "array", "items": text_field},
-                        "baselines": {"type": "array", "items": text_field},
-                        "procedure": {"type": "array", "items": text_field},
-                        "datasets": {"type": "array", "items": text_field},
-                        "metrics": {"type": "array", "items": text_field},
-                        "resources": {"type": "array", "items": text_field},
-                        "risks": {"type": "array", "items": text_field},
+                        "hypotheses": short_list,
+                        "baselines": short_list,
+                        "procedure": short_list,
+                        "datasets": short_list,
+                        "metrics": short_list,
+                        "resources": short_list,
+                        "risks": short_list,
                         "sourceRefIndexes": ref_indexes,
                     },
                     "required": [
@@ -986,6 +1004,9 @@ def _bedrock_stream_read(response: dict[str, Any]) -> tuple[str, dict[str, Any]]
             usage.update(data.get("message", {}).get("usage") or {})
         elif kind == "message_delta":
             usage.update(data.get("usage") or {})
+            stop_reason = data.get("delta", {}).get("stop_reason")
+            if stop_reason:
+                usage["stop_reason"] = stop_reason
         elif kind == "content_block_delta":
             delta = data.get("delta", {})
             if delta.get("type") == "input_json_delta":
