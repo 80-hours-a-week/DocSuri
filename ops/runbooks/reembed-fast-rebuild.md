@@ -38,6 +38,9 @@ like the v4 migration (`python -m docsuri_ingestion.worker <step>`), so they run
 3. Confirm env: the target index name defaults to `docsuri-corpus-v3`
    (`DOCSURI_OPENSEARCH_INDEX_REEMBED`); the source defaults to the live alias `docsuri-corpus`
    (`DOCSURI_REEMBED_SOURCE`). For mode B set `DOCSURI_BEDROCK_MODEL_ID` to the **new** model.
+4. Deploy the ingestion task definition that writes `DOCSURI_OPENSEARCH_INDEX=docsuri-corpus`
+   (the alias), not a concrete backing index. Otherwise new papers after cutover keep landing in
+   the old index and disappear from search.
 
 ## Config (all `DOCSURI_*` env on the run-task container override)
 
@@ -66,17 +69,21 @@ aws ecs run-task --cluster <cluster> --task-definition <WorkerTaskDef> --launch-
 ```
 
 1. **provision** — `command:["reembed_provision"]`. Creates the tuned target (idempotent).
-2. **load**:
+2. **freeze writes** — pause the bulk ingestion writer before loading: disable the scheduled tick
+   or scale `docsuri-ingestion` to zero, then wait for the main ingestion queue/running tasks to
+   drain. Reads stay online through the old alias; doc-model-only workers can keep running.
+3. **load**:
    - Mode A: `command:["reembed_copy"]` — one task; server-side `_reindex`, polls to completion.
    - Mode B: launch **N** tasks `command:["reembed"]`, each with `DOCSURI_REEMBED_SHARD=i`
      (i = 0..N-1) and `DOCSURI_REEMBED_SHARD_COUNT=N`. Pick N from Bedrock RPM headroom
      (≈ RPM / per-task RPM; 24–100 is typical). Each task scrolls its slice, re-embeds, bulk-writes.
-3. **finalize** — `command:["reembed_finalize"]`. Restores `replicas=1` + `refresh_interval=1s`,
+4. **finalize** — `command:["reembed_finalize"]`. Restores `replicas=1` + `refresh_interval=1s`,
    force-merges, and **gates on `DOCSURI_REEMBED_MIN_DOCUMENTS`** — set it to the expected count so
    a truncated rebuild can't cut over. Run only after all mode-B tasks exit 0.
-4. **cutover** — `command:["reembed_cutover"]`. Atomically repoints the `docsuri-corpus` alias to
+5. **cutover** — `command:["reembed_cutover"]`. Atomically repoints the `docsuri-corpus` alias to
    the target. Search now serves the new vectors.
-5. Revert the domain resize; optionally delete the old index once verified.
+6. Resume the bulk ingestion writer; it writes through the alias and follows the new backing index.
+7. Revert the domain resize; optionally delete the old index once verified.
 
 ## Dimension change (Cohere v4 default = 1536)
 
