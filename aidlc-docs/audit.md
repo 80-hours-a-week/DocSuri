@@ -3719,3 +3719,18 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **Context**: Novelty-Agent degradation semantics and Bedrock structured-output reliability fix.
 
 ---
+## Frontend Dark Mode Color Tuning
+**Timestamp**: 2026-07-06T03:01:29Z
+**User Input**: "프론트엔드를 조금만 수정합시다. 다크모드에서는 1. Novelty의 입력출력 텍스트 박스가 갈색이 되도록 설정 2. `Notion으로 내보내기` 박스의 텍스트가 흰색으로 되도록 설정 으로 수정해 주세요."
+**AI Response**: "Adjusted Agent Chat dark-mode Novelty message/input surfaces to a brown background and made the Notion export panel inherit theme text colors so dark-mode text renders white."
+**Context**: Frontend dark-mode visual polish for Novelty agent and Notion export panel.
+
+---
+
+## Frontend Prompt Input Color Revert
+**Timestamp**: 2026-07-06T03:08:22Z
+**User Input**: "프롬프트 입력 박스는 전 색으로 돌려 주세요."
+**AI Response**: "Removed the dark-mode Novelty-specific `.input` color override from `AgentChatScreen.module.css`, keeping the brown styling on Novelty message boxes while returning the prompt input box to its default theme colors."
+**Context**: Frontend dark-mode visual adjustment for Novelty agent prompt input.
+
+---
