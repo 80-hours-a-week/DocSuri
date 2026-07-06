@@ -10,6 +10,7 @@ vi.mock('@/lib/api', () => ({
 
 import {
   recordGlossaryUpdated,
+  recordPaperOpened,
   recordReadCompleted,
   recordSearchExecuted,
 } from '@/lib/personalization';
@@ -98,18 +99,26 @@ describe('ApiClient personalization methods', () => {
     });
   });
 
-  it('records read-completion events for the KPI funnel', () => {
+  it('records version-scoped KPI funnel events', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-06-25T00:00:00Z'));
 
-    recordReadCompleted('2401.1');
+    recordPaperOpened('2401.1', 2);
+    recordReadCompleted('2401.1', 2);
 
-    expect(recordBehaviorEvent).toHaveBeenCalledWith({
+    expect(recordBehaviorEvent).toHaveBeenNthCalledWith(1, {
+      eventType: 'paper_opened',
+      subject: { kind: 'paper', paperId: '2401.1' },
+      source: 'frontend_anchor',
+      metadata: { entrySurface: 'detail' },
+      dedupeKey: 'paper:2401.1:v2:59411520',
+    });
+    expect(recordBehaviorEvent).toHaveBeenNthCalledWith(2, {
       eventType: 'read_completed',
       subject: { kind: 'paper', paperId: '2401.1' },
       source: 'frontend_anchor',
       metadata: { entrySurface: 'detail' },
-      dedupeKey: 'read:2401.1:59411520',
+      dedupeKey: 'read:2401.1:v2:59411520',
     });
   });
 });

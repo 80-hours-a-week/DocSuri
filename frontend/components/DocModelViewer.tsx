@@ -93,7 +93,7 @@ export function DocModelViewer({
     const observer = new IntersectionObserver((entries) => {
       if (entries.some((e) => e.isIntersecting) && readFiredRef.current !== key) {
         readFiredRef.current = key;
-        recordReadCompleted(paperId);
+        recordReadCompleted(paperId, version);
         observer.disconnect();
       }
     });
