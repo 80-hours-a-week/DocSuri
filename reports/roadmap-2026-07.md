@@ -7,7 +7,8 @@
 > - 🟡 **#347 U10 mock 해소** — PR #407(최근 본 논문 실데이터) + PR #414(ORCID 로그인 버튼 기본 활성화) merged to develop, issue still open for residual ORCID/profile decision.
 > - 🟡 **검색 품질 개선(charter phase 7)** — PR #416 open(Cross-Encoder Reranker). 배포 활성화는 rerank region/model ARN/IAM/model access 선결, fail-soft baseline 유지.
 > - 🟡 **#341 SSR 500** — PR #353(logs) + PR #355(edge error page) done; root-cause fix PR still missing.
-> - 🔴 **No dedicated PR yet**: #343 docmodel backlog self-heal, #344 pre-2026 backfill/autoscale/doc-model queue decision, #345 personalization shadow→real, #348 email strategy, #167 authz shared contract, #187–#191 issue hygiene, `github-tag-action` node24 upstream bump, env-dependent `test_api_create_status_and_cancel`.
+> - ✅ **Issue hygiene** — #187–#191 closed as shipped US-A3~A7 stories with evidence comments.
+> - 🔴 **No dedicated PR yet**: #343 docmodel backlog self-heal, #344 pre-2026 backfill/autoscale/doc-model queue decision, #345 personalization shadow→real, #348 email strategy, #167 authz shared contract, `github-tag-action` node24 upstream bump, env-dependent `test_api_create_status_and_cancel`.
 > **Updated**: 2026-07-06 — **Phase 1 COMPLETE** — 마지막 잔여 항목(PDF 첨부·원고, doc-model 경유) 프로덕션 반영:
 > - ✅ **v1.8.0 — 사용자 PDF → doc-model MVP** (PR #390/#391/#392/#393 = PR0–3 + #394; main 승격 #395). 공유계약 동결(`userdoc:{uuid}` paperId · `upload:{ownerId}:{jobId}:{attachmentId}` recordRef · arXiv URL 무날조) → ingestion 신규 `BUILD_USER_DOC_MODEL` JobKind(S3-소스, arxivRef 없음) → backend 코디네이터(업로드·enqueue·폴링, best-effort 저하) → FE 소비. **#14 consume-on-retry**(PR #394): 원고 doc-model이 폴백 타임아웃보다 늦게 완성돼도 novelty 워커가 서버측 retry-until-ready(재큐 + DelaySeconds, 최대 8회)로 소비. pdfplumber 평문 doc-model(GROBID 미배선).
 > - ✅ **v1.9.0 — GROBID 구조 추출** (#13 = PR #396 앱코드 + PR #397 인프라; main 승격 #398, **full deploy 완료 2026-07-06**). `build_user_doc_model`이 GROBID `extract_tei→build_from_tei`로 구조화 TEI(섹션/표/그림) 생성, 빈/오류 TEI는 pdfplumber 폴백(무회귀). **Option B 인프라**: 전용 `docsuri-userdoc-queue` + `docsuri-userdoc-builder` Fargate(자체 `grobid/grobid:0.8.0` 사이드카 + `/api/isalive` HEALTHY 게이트, cpu2048/mem8192/80GB) — lean `docsuri-docmodel-builder`(arXiv 뷰어 빌드)가 ~20GB GROBID 콜드풀을 떠안지 않게 분리. 생산자(API·novelty) 라우팅 `DOCSURI_USERDOC_BUILD_QUEUE_URL` + 코디네이터 팩토리 우선순위. **배포**: develop→main 릴리스(docsuri-ingestion·docsuri-api 이미지 재빌드 + ECS 롤) → `cdk deploy` Ingestion/Novelty/Compute → 라이브 검증(API rev27 라우팅 env ✅ · userdoc 워커 GROBID 배선 ✅ · CloudFront 200 · X-Origin-Verify 403 없음 · ECS 2/2). userdoc 워커 desired 0 → 첫 업로드가 실런타임 스모크(grobid 콜드풀 ~수 분).
@@ -86,7 +87,7 @@ Ordered by user impact:
 | 🔴 No PR | Email strategy decision: SES production access vs. Resend commitment. | #348 |
 | 🔴 No PR | Authz contract → `docsuri_shared` refactor. | #167 |
 | 🟡 Open PR | 검색 품질 개선 (charter phase 7) — **PR #416** Cross-Encoder Reranker open. Activation needs rerank region/model ARN/IAM/model access; fail-soft keeps RRF baseline until ops wiring is ready. | PR #416 · charter |
-| 🔴 No PR | Issue hygiene: close shipped US-A3~A7 stories (#187–191). | — |
+| ✅ Closed | Issue hygiene: shipped US-A3~A7 stories closed with evidence comments (#187–191). | #187 · #188 · #189 · #190 · #191 |
 | ⏸️ Blocked | `mathieudutour/github-tag-action` node24 bump — blocked on upstream release (rest of CI on node24 since PR #361). | — |
 | 🔴 No PR | Env-dependent `test_api_create_status_and_cancel` (passes only when AWS creds absent) — pin the fake/live seam. | — |
 
