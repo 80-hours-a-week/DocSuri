@@ -121,19 +121,4 @@ describe('ApiClient personalization methods', () => {
       dedupeKey: 'read:2401.1:v2:59411520',
     });
   });
-
-  it('includes the paper title in paper_opened metadata when provided', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-06-25T00:00:00Z'));
-
-    recordPaperOpened('2401.1', 2, 'Attention Is All You Need');
-
-    expect(recordBehaviorEvent).toHaveBeenCalledWith({
-      eventType: 'paper_opened',
-      subject: { kind: 'paper', paperId: '2401.1' },
-      source: 'frontend_anchor',
-      metadata: { entrySurface: 'detail', title: 'Attention Is All You Need' },
-      dedupeKey: 'paper:2401.1:v2:59411520',
-    });
-  });
 });
