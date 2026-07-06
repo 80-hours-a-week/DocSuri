@@ -3731,3 +3731,10 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **Context**: PR review approval attempt and fallback comment for PR #397.
 
 ---
+## Frontend Warning Fix
+**Timestamp**: 2026-07-06T02:02:46Z
+**User Input**: "사용자가 parent page를 등록하지 않았을 경우, 관련 경고가 뜨도록 수정해 주세요."
+**AI Response**: "Added parent page ID missing warnings to the Novelty Notion export connection form and My Page Notion settings form, and updated focused frontend tests."
+**Context**: Notion parent page registration warning for per-user Notion export.
+
+---

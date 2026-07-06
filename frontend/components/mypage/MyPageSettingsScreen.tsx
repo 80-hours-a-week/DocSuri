@@ -227,7 +227,7 @@ export function MyPageSettingsScreen() {
       return;
     }
     if (!/^[0-9a-fA-F-]{32,36}$/.test(parentPageId)) {
-      setNotionError('상위 페이지 ID를 확인해 주세요.');
+      setNotionError('상위 페이지 ID를 등록해야 Notion에 페이지를 만들 수 있습니다.');
       return;
     }
     setBusy('notionSave');
@@ -280,6 +280,8 @@ export function MyPageSettingsScreen() {
   if (status === 'loading') return <StateView kind="loading" title="설정을 불러오는 중…" />;
   if (status === 'error' || !consents)
     return <StateView kind="error" onRetry={() => void load()} />;
+
+  const notionParentPageMissing = notionParentPageId.trim().length < 32;
 
   return (
     <section className={styles.screen} data-testid="mypage-settings-screen">
@@ -404,6 +406,11 @@ export function MyPageSettingsScreen() {
             onChange={setNotionParentPageId}
             testId="mypage-notion-parent-page-id"
           />
+          {notionParentPageMissing ? (
+            <p className={styles.error} role="alert" data-testid="mypage-notion-parent-warning">
+              상위 페이지 ID를 등록해야 Notion에 페이지를 만들 수 있습니다.
+            </p>
+          ) : null}
           <button
             type="submit"
             className={authStyles.submit}

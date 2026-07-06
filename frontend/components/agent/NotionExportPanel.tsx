@@ -21,6 +21,7 @@ export function NotionExportPanel({ jobId }: Props) {
   const [preview, setPreview] = useState<NotionExportPreviewVM | null>(null);
   const [result, setResult] = useState<NotionExportVM | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const parentPageMissing = phase === 'connect' && parentPageId.trim().length < 32;
 
   function fail(err: unknown) {
     setError(err instanceof UserFacingError ? err.message : 'Notion 내보내기에 실패했습니다.');
@@ -135,6 +136,11 @@ export function NotionExportPanel({ jobId }: Props) {
             aria-label="Notion 상위 페이지 ID"
             data-testid="notion-parent-input"
           />
+          {parentPageMissing ? (
+            <p className={styles.error} role="alert" data-testid="notion-parent-warning">
+              상위 페이지 ID를 등록해야 Notion에 페이지를 만들 수 있습니다.
+            </p>
+          ) : null}
           <button
             type="button"
             className={styles.primaryButton}
