@@ -25,6 +25,7 @@ from docsuri_shared.index_spec import papers_index_body
 from docsuri_shared.vector_spec import EMBEDDING_SPEC
 
 from .adapters.aws import BedrockCohereEmbeddingPort, build_opensearch_client, collect_bulk_failures
+from .adapters.cohere_direct import CohereDirectEmbeddingPort
 from .resilience import RetryPolicy, is_retriable
 from .settings import IngestionSettings
 
@@ -148,19 +149,34 @@ def reembed_copy(settings: IngestionSettings | None = None) -> int:
     return 0
 
 
+def _build_embedding(settings: IngestionSettings):
+    """Select the re-embed embedding backend. Default "bedrock" (Cohere Embed v4 via the Bedrock
+    global inference profile). Set DOCSURI_REEMBED_EMBEDDING_BACKEND=cohere to call Cohere's API
+    directly (same model/space, no Bedrock 432M-tok/day cap) for a fast one-off rebuild."""
+    if settings.reembed_embedding_backend == "cohere":
+        if not settings.cohere_api_key:
+            raise SystemExit("DOCSURI_COHERE_API_KEY is required for the cohere re-embed backend")
+        return CohereDirectEmbeddingPort(
+            api_key=settings.cohere_api_key,
+            model=settings.cohere_embed_model,
+            output_dimension=settings.reembed_dimension,
+        )
+    if not settings.bedrock_model_id:
+        raise SystemExit("DOCSURI_BEDROCK_MODEL_ID is required for re-embed")
+    return BedrockCohereEmbeddingPort(
+        model_id=settings.bedrock_model_id,
+        region_name=settings.aws_region,
+        output_dimension=settings.reembed_dimension,
+    )
+
+
 def reembed(settings: IngestionSettings | None = None) -> int:
     """MODE B (embedding model change): sliced-scroll the source, recompute each doc's vector from
     its stored embed text with the new model, and bulk-write the full doc (only ``vector`` changes)
     to the target. Run one task per shard (DOCSURI_REEMBED_SHARD / SHARD_COUNT)."""
     settings = settings or IngestionSettings.from_env()
-    if not settings.bedrock_model_id:
-        raise SystemExit("DOCSURI_BEDROCK_MODEL_ID is required for re-embed")
     client = _client(settings)
-    embedding = BedrockCohereEmbeddingPort(
-        model_id=settings.bedrock_model_id,
-        region_name=settings.aws_region,
-        output_dimension=settings.reembed_dimension,
-    )
+    embedding = _build_embedding(settings)
     src, dst = _source_index(settings), settings.opensearch_index_reembed
     page_size = min(96, max(1, settings.reembed_batch_size))
 

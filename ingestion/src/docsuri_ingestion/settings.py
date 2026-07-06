@@ -43,6 +43,16 @@ class IngestionSettings(BaseModel):
     # re-embed; the target index + embed both use it. Cutover then needs a coordinated vector-spec
     # bump + reader redeploy (same-space invariant) or search breaks — see the runbook.
     reembed_dimension: int | None = Field(default=None, alias="DOCSURI_REEMBED_DIMENSION")
+    # Re-embed embedding backend. "bedrock" (default) → Cohere Embed v4 via the Bedrock global
+    # inference profile, subject to its fixed 432M-tokens/day cap (~3 days for the full corpus).
+    # "cohere" → call Cohere's API directly (same model/space, no Bedrock daily cap) for a fast
+    # one-off rebuild; requires cohere_api_key. Only the reembed step reads this; the live path
+    # (worker, discovery) is unaffected.
+    reembed_embedding_backend: Literal["bedrock", "cohere"] = Field(
+        default="bedrock", alias="DOCSURI_REEMBED_EMBEDDING_BACKEND"
+    )
+    cohere_api_key: str | None = Field(default=None, alias="DOCSURI_COHERE_API_KEY")
+    cohere_embed_model: str = Field(default="embed-v4.0", alias="DOCSURI_COHERE_EMBED_MODEL")
     # B3 fast full-re-parse (raw cache + bulk PDF prime + offline re-parse; see reparse.py /
     # raw_backfill.py / runbook). Default OFF → the live fetch path stays byte-identical.
     raw_cache_mode: Literal["off", "prefer", "only"] = Field(
