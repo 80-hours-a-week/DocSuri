@@ -271,13 +271,13 @@ function rewriteDerivative(s: string): string {
   return out + s.slice(last);
 }
 
-// LaTeXML sometimes leaks a reference/citation command into a formula's alttext — most often a
-// trailing `\cite[citep]{…}` inside a `\text{…}` (a citation that rode along from the source). KaTeX
-// has no such command, so the ONE stray token throws and collapses the WHOLE equation to the
-// placeholder (observed on ~0.03% of formulas). These carry no math meaning, so strip the command
-// plus its optional `[…]` and its balanced `{…}` argument. Read-time, so it heals already-stored
-// doc-models with no re-ingest.
-const LEAKED_REF_RE = /\\(?:cite[a-z]*|ref|eqref|autoref|label|footnote)\b/g;
+// LaTeXML sometimes leaks a reference/citation command into a formula's alttext — a trailing
+// `\cite[citep]{…}` inside a `\text{…}`, or a LaTeXML-internal `\lx@cref{creftype~refnum}{key}`
+// cleveref (which takes TWO arguments). KaTeX has no such command, so the ONE stray token throws and
+// collapses the WHOLE equation to the placeholder (observed on ~0.05% of formulas). These carry no
+// math meaning, so strip the command plus its optional `[…]` and ALL of its balanced `{…}` arguments.
+// Read-time, so it heals already-stored doc-models with no re-ingest.
+const LEAKED_REF_RE = /\\(?:cite[a-z]*|ref|eqref|autoref|label|footnote|lx@[a-zA-Z@]+)\b/g;
 function stripLeakedRefs(latex: string): string {
   let out = '';
   let last = 0;
@@ -290,10 +290,13 @@ function stripLeakedRefs(latex: string): string {
       const g = readDelimGroup(latex, i); // optional [key] (e.g. \cite[citep]{…})
       if (g) i = g.end;
     }
-    i = skipSpace(latex, i);
-    if (latex[i] === '{') {
-      const g = readDelimGroup(latex, i); // the balanced {…} argument (may nest)
-      if (g) i = g.end;
+    // Consume every consecutive brace argument: `\cite`/`\ref`/`\label` take one, `\lx@cref` two.
+    for (;;) {
+      const j = skipSpace(latex, i);
+      if (latex[j] !== '{') break;
+      const g = readDelimGroup(latex, j); // balanced {…} (may nest)
+      if (!g) break;
+      i = g.end;
     }
     last = i;
     LEAKED_REF_RE.lastIndex = i;

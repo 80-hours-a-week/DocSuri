@@ -42,6 +42,17 @@ describe('fail-soft fallback (no raw backslash source on a KaTeX parse error)', 
     expect(c.querySelector('.katex')).not.toBeNull();
     expect(c.textContent).not.toBe('수식');
   });
+
+  it('renders a formula whose alttext leaked a two-arg `\\lx@cref` (strip both args)', () => {
+    // Real @6 breakage: LaTeXML leaked its internal cleveref `\lx@cref{creftype~refnum}{key}` (TWO
+    // brace args) into `\text{(by …)}`. KaTeX has no `\lx@cref` → whole equation collapsed. Both
+    // arguments must be consumed, else the trailing `{key}` spills as stray text.
+    const latex = String.raw`\delta(m - h(m,y,\alpha))\text{(by \lx@cref{creftype~refnum}{eq:equiv_bu})}`;
+    const c = html(<MathDisplay latex={latex} />);
+    expect(c.querySelector('.katex')).not.toBeNull();
+    expect(c.textContent).not.toBe('수식');
+    expect(c.textContent).not.toContain('eq:equiv_bu');
+  });
 });
 
 describe('renderInlineMath', () => {
