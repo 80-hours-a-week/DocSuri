@@ -30,10 +30,14 @@ describe('DocModelViewer', () => {
 
     // Figure joins the /assets signed url by assetId. Scoped to actual <img> tags: the
     // formula-fallback placeholder also carries role="img" (D5), so a plain findByRole('img')
-    // is ambiguous once that fix landed.
-    const imgs = await screen.findAllByRole('img');
-    const img = imgs.find((el) => el.tagName === 'IMG');
-    expect(img).toBeTruthy();
+    // is ambiguous once that fix landed. The placeholder renders synchronously while the figure
+    // <img> only appears after the async assets fetch resolves — so poll for the real <img>
+    // rather than `findAllByRole` (which returns as soon as the placeholder shows → flaky).
+    const img = await waitFor(() => {
+      const el = screen.getAllByRole('img').find((e) => e.tagName === 'IMG');
+      expect(el).toBeTruthy();
+      return el!;
+    });
     expect(img!.getAttribute('src')).toContain('data:image/svg');
     expect(img!.getAttribute('loading')).toBe('lazy');
     expect(img!.closest('[role="button"]')).toBeNull();
