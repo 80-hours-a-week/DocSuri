@@ -1,6 +1,12 @@
 # DocSuri Production Roadmap — 2026-07
 
-> **Date**: 2026-07-03 · **Baseline**: develop (2026-07-06) · **main at v1.9.0** (2026-07-06 promotion `07991f2`→PR #398, full deploy 완료)
+> **Date**: 2026-07-03 · **Baseline**: develop (2026-07-07) · **main at v1.9.0** (2026-07-06 promotion `07991f2`→PR #398, full deploy 완료)
+> **Updated**: 2026-07-07 — **Phase 2 board reconcile** (post-refresh GitHub sweep):
+> - ✅ **#341 SSR 500** — **closed** by PR #418 (SSR keep-alive를 ALB idle timeout에 맞춤 — 간헐 500의 근인). #353(logs)/#355(edge error page) 위에 근인 수정 랜딩. develop merged, main 승격 전.
+> - ✅ **env-dependent `test_api_create_status_and_cancel`** — fake/live seam 고정(`branch fix/novelty-test-env-seam`): 앱쉘이 라이브 Bedrock/HTTP 어댑터를 `app.state.novelty_adapters`에 배선하고 무큐 디스패치가 워커를 인라인 실행 → ambient AWS creds가 종료 상태를 좌우하던 문제. Noop 어댑터로 오버라이드해 환경 무관 결정적 degrade. (51 novelty tests green)
+> - ✅ **검색 품질 개선(charter phase 7)** — **PR #416 merged**(Cross-Encoder Reranker; 배포 차단 2건 크로스리전 배선+`bedrock:Rerank` IAM 해소, fail-soft RRF baseline 유지). 후속 **PR #419 open**(Cohere Embed Multilingual v3 재임베드 + region-decouple).
+> - 🟡 **#343/#344 docmodel/backfill** — **PR #420 open**: arXiv 콜러 단일화(`docsuri-docmodel-builder` max_capacity=1)로 드레인 시 DLQ 유입 억제. 실제 re-enqueue/DLQ 드레인은 별도 프로덕션 뮤테이션(라이브 `docsuri-docmodel-dlq` 24건 · S3 native_html 10,660/21,252).
+> - 🔴 **여전히 결정/운영 대기**: #345 personalization shadow→real(지표 판정), #348 email SES vs Resend(결정), #344 doc-model 큐 분리(결정), #167 authz shared 계약(대형 리팩터), #347 잔여 ORCID/profile(결정).
 > **Updated**: 2026-07-06 — **Phase 2 board refresh** (GitHub live sweep):
 > - **main은 여전히 v1.9.0**. 이후 Phase 2 변경은 develop 머지/오픈 PR 상태이며 다음 main 승격 전까지 프로덕션 반영으로 간주하지 않음.
 > - ✅ **#346 KPI funnel** — PR #403 merged to develop, issue closed.
@@ -77,19 +83,19 @@ Ordered by user impact:
 
 | Status | Item | Tracking |
 |---|---|---|
-| 🟡 Partial | Intermittent SSR 500 on paper pages — **PR #353** enables ALB/CloudFront access logs (step ①); raw-500 exposure handled at the edge by **PR #355** branded CloudFront error page (step ②). Remaining: **PR-B root-cause fix** after logs/repro; no dedicated PR yet. Investigation note: module-resolution guess is weak (no dynamic imports; self-contained standalone), OOM/load still plausible. | #341 · #353 · #355 |
+| ✅ Develop merged | Intermittent SSR 500 on paper pages — **PR #353** enables ALB/CloudFront access logs (step ①); raw-500 exposure handled at the edge by **PR #355** branded CloudFront error page (step ②); root-cause fix **PR #418** aligns SSR keep-alive with the ALB idle timeout (step ③, #341 closed). develop merged, main promotion pending. | #341 · #353 · #355 · #418 |
 | ✅ Done | 각주 트리 DOI node expansion 500 — **PR #357**: S2 200-with-bad-body was fail-open (parse escaped the `httpx`-only guard → app 500); now fail-closed to Unavailable at both the provider parse and tree assembly (BR-CG12). Regression tests exercise the real provider path the old suite bypassed via FixtureProvider. | #342 · #357 |
-| 🔴 No PR | Docmodel backlog self-heal — re-enqueue contaminated docmodels @3 (embedding-cost-free) + drain DLQ 111. | #343 |
-| 🔴 No PR | Finish pre-2026 backfill drain → restore ingestion autoscale; decide on separate doc-model queue. | #344 |
+| 🟡 Open PR | Docmodel backlog self-heal — **PR #420** throttles the arXiv caller to one task (`max_capacity=1`) so drains stop feeding the DLQ; the re-enqueue/DLQ drain itself is a separate prod mutation (live: DLQ 24 msgs · S3 native_html 10,660/21,252). | #343 · #420 |
+| 🟡 Open PR | Finish pre-2026 backfill drain → restore ingestion autoscale — **PR #420** is the prerequisite throttle; queue-separation decision still open. | #344 · #420 |
 | 🔴 No PR | Personalization shadow→real flip after metric review; then US-P5 + keywordWeights. | #345 |
 | ✅ Develop merged | KPI funnel dashboard (AI 호출 > 검색 > 완독률) from existing U9 events — **PR #403** merged to develop and #346 closed; main promotion pending. | #346 · #403 |
 | 🟡 Partial | U10 mypage mocks: 최근 본 논문 실데이터 **PR #407** + ORCID 로그인 버튼 기본 활성화 **PR #414** merged to develop; #347 remains open for residual ORCID/profile decision. | #347 · #407 · #414 |
 | 🔴 No PR | Email strategy decision: SES production access vs. Resend commitment. | #348 |
 | 🔴 No PR | Authz contract → `docsuri_shared` refactor. | #167 |
-| 🟡 Open PR | 검색 품질 개선 (charter phase 7) — **PR #416** Cross-Encoder Reranker open. Activation needs rerank region/model ARN/IAM/model access; fail-soft keeps RRF baseline until ops wiring is ready. | PR #416 · charter |
+| ✅ Develop merged | 검색 품질 개선 (charter phase 7) — **PR #416 merged** (Cross-Encoder Reranker; cross-region wiring + `bedrock:Rerank` IAM blockers cleared, fail-soft keeps RRF baseline). Follow-on **PR #419 open** (Cohere Embed Multilingual v3 re-embed + region-decouple). | #416 · #419 · charter |
 | ✅ Closed | Issue hygiene: shipped US-A3~A7 stories closed with evidence comments (#187–191). | #187 · #188 · #189 · #190 · #191 |
 | ⏸️ Blocked | `mathieudutour/github-tag-action` node24 bump — blocked on upstream release (rest of CI on node24 since PR #361). | — |
-| 🔴 No PR | Env-dependent `test_api_create_status_and_cancel` (passes only when AWS creds absent) — pin the fake/live seam. | — |
+| ✅ Done | Env-dependent `test_api_create_status_and_cancel` — fake/live seam pinned: the app-shell wired live Bedrock/HTTP adapters into `app.state` and the no-queue dispatch ran the worker inline, so ambient AWS creds decided the terminal state. Overridden with Noop adapters for a deterministic degrade (51 novelty tests green). | `fix/novelty-test-env-seam` |
 
 ## 5. Phase 3 — Month 2: growth scope (requires inception re-entry)
 
