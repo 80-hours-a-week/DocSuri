@@ -182,7 +182,9 @@ def reembed(settings: IngestionSettings | None = None) -> int:
     client = _client(settings)
     embedding = BedrockCohereEmbeddingPort(
         model_id=settings.bedrock_model_id,
-        region_name=settings.aws_region,
+        # Embed region can differ from the OpenSearch region for multi-region fan-out (each region
+        # is a separate on-demand bucket). Falls back to the OpenSearch/signing region.
+        region_name=settings.reembed_embed_region or settings.aws_region,
         output_dimension=settings.reembed_dimension,
     )
     src, dst = _source_index(settings), settings.opensearch_index_reembed
