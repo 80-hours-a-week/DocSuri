@@ -89,6 +89,24 @@ const DEFAULT_MACROS: MathMacros = {
   '\\order': '\\mathcal{O}\\!\\left(#1\\right)',
   '\\bigO': '\\mathcal{O}\\!\\left(#1\\right)',
   '\\Order': '\\mathcal{O}\\!\\left(#1\\right)',
+  // LaTeXML artifact: it renames `\left`/`\right` to `\originalleft`/`\originalright` in some
+  // alttext, which KaTeX then rejects — map them straight back.
+  '\\originalleft': '\\left',
+  '\\originalright': '\\right',
+  '\\leavevmode': '',
+  // Blackboard-bold variants from `dsfont`/`bbm` (indicator function `\mathds{1}`, `\mathbbm{1}`);
+  // KaTeX has no default, so fold them into its `\mathbb` (renders digits + letters).
+  '\\mathds': '\\mathbb',
+  '\\mathbbm': '\\mathbb',
+  // Small-caps / nice-fraction text packages KaTeX lacks — degrade to plain text / a normal fraction
+  // (faithful in content, not in the exact glyph styling).
+  '\\textsc': '\\text{#1}',
+  '\\nicefrac': '\\frac{#1}{#2}',
+  // A few more recurring alttext leaks: physics `\differential` (like `\dd`), a `\boldmath` switch
+  // (no-op in math), and the `\varmathbb` blackboard alias.
+  '\\differential': '\\mathrm{d}',
+  '\\boldmath': '',
+  '\\varmathbb': '\\mathbb',
 };
 
 // Unsupported-but-harmless tokens degrade to their source in this muted tone (not alarming
@@ -304,12 +322,44 @@ function stripLeakedRefs(latex: string): string {
   return out + latex.slice(last);
 }
 
+// `\scalebox{factor}{content}` / `\resizebox{w}{h}{content}` carry display-only sizing KaTeX has no
+// equivalent for. Keep the content group (the last argument) and drop the size args so the math
+// still renders (only the scaling is lost). A form without the expected arg count is left verbatim.
+function rewriteScalebox(s: string): string {
+  const re = /\\(scalebox|resizebox)\b\s*/g;
+  let out = '';
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s))) {
+    const argc = m[1] === 'resizebox' ? 3 : 2; // resizebox{w}{h}{content}, scalebox{factor}{content}
+    let i = m.index + m[0].length;
+    const groups: { inner: string; end: number }[] = [];
+    for (let k = 0; k < argc; k += 1) {
+      i = skipSpace(s, i);
+      if (s[i] !== '{') break;
+      const g = readDelimGroup(s, i);
+      if (!g) break;
+      groups.push(g);
+      i = g.end;
+    }
+    if (groups.length !== argc) continue; // not the expected shape → leave the token verbatim
+    out += s.slice(last, m.index) + `{${groups[argc - 1].inner}}`;
+    last = i;
+    re.lastIndex = i;
+  }
+  return out + s.slice(last);
+}
+
 function preprocessLatex(latex: string): string {
   // Drop leaked citation/ref commands first (a `\cite` inside a `\text{}` would otherwise make the
-  // whole formula throw). Then matrices before derivatives: a `\derivative` may sit inside a
-  // `\matrixquantity` cell, and rewriting the matrix first flattens it into the string the
-  // derivative pass then scans.
-  return rewriteDerivative(rewriteMatrixQuantity(stripLeakedRefs(latex)));
+  // whole formula throw); unwrap `\scalebox`/`\resizebox` to their content; normalize the `split`
+  // environment (KaTeX has no `split`) to the equivalent `aligned`. Then matrices before derivatives:
+  // a `\derivative` may sit inside a `\matrixquantity` cell, and rewriting the matrix first flattens
+  // it into the string the derivative pass then scans.
+  const s = rewriteScalebox(stripLeakedRefs(latex))
+    .replace(/\\begin\{split\}/g, '\\begin{aligned}')
+    .replace(/\\end\{split\}/g, '\\end{aligned}');
+  return rewriteDerivative(rewriteMatrixQuantity(s));
 }
 
 function toHtml(latex: string, displayMode: boolean, macros?: MathMacros): string {

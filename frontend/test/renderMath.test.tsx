@@ -53,6 +53,20 @@ describe('fail-soft fallback (no raw backslash source on a KaTeX parse error)', 
     expect(c.textContent).not.toBe('수식');
     expect(c.textContent).not.toContain('eq:equiv_bu');
   });
+
+  it.each([
+    ['LaTeXML \\originalleft/right', String.raw`\originalleft(\frac{a}{b}\originalright)`],
+    ['\\mathds indicator', String.raw`\mathds{1}[x>0]`],
+    ['\\mathbbm indicator', String.raw`\mathbbm{1}_{A}`],
+    ['\\textsc', String.raw`\textsc{Sample}+x`],
+    ['\\nicefrac', String.raw`\nicefrac{1}{2}`],
+    ['\\scalebox (drop scale, keep body)', String.raw`\scalebox{0.8}{\sum_{i} x_i}`],
+    ['split environment -> aligned', String.raw`\begin{split}a&=b\\&=c\end{split}`],
+  ])('renders unsupported-package alttext leaks (%s) instead of collapsing', (_label, latex) => {
+    const c = html(<MathDisplay latex={latex} />);
+    expect(c.querySelector('.katex')).not.toBeNull();
+    expect(c.textContent).not.toBe('수식');
+  });
 });
 
 describe('renderInlineMath', () => {
