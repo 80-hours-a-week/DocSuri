@@ -15,9 +15,10 @@ from docsuri_shared.vector_spec import IndexRecord
 from .models import Candidate, SearchScope
 
 # Rerank breadth M per scope: the top-M slice of the fused pool sent to the cross-encoder. Start
-# conservative — cross-encoder latency is ~linear in M and LITE is the P50<3s hot path — then
-# ratchet up from the eval harness (nDCG@10 lift vs added latency). M ≥ top-N (20) by construction
-# so the reranked head fully covers the displayed page; the un-reranked tail never surfaces.
+# conservative — cross-encoder latency is ~linear in M and LITE is the P50<3s hot path. M is tuned
+# up only once a quantitative signal exists (click logs or a labeled set); phase 7 ships these
+# starting values with functional + qualitative validation only. M ≥ top-N (20) by construction so
+# the reranked head fully covers the displayed page; the un-reranked tail never surfaces.
 RERANK_TOP_M_LITE = 30
 RERANK_TOP_M_FULL = 50
 

@@ -5,8 +5,18 @@ path. Any transport/model error raises ``RerankUnavailable`` so the orchestrator
 baseline RRF order (fail-soft): rerank is a ranking-QUALITY enhancement, never a hard dependency.
 
 Default model = Cohere Rerank on Bedrock (provider-consistent with the Cohere Embed v4 query
-embedder). The exact wire shape (``bedrock-agent-runtime.rerank``) is validated against live
-Bedrock in the cross-account eval workstream; unit tests exercise the deterministic mock instead.
+embedder). Unit tests exercise the deterministic mock; the real wire shape
+(``bedrock-agent-runtime.rerank``) is validated live once the deployment prerequisites below hold.
+
+**Deployment prerequisites (verified 2026-07-06, account 028317349537):**
+- The Rerank model is NOT in ap-northeast-2 (Seoul, the deploy region) — only ``cohere.embed-v4``
+  is. Point ``model_arn`` + ``region_name`` at a region that HAS it (us-west-2 carries both
+  ``cohere.rerank-v3-5`` and ``amazon.rerank-v1``; us-east-1 carries Cohere). This is a
+  cross-region call, so budget the extra RTT against NFR-P1.
+- The task role needs ``bedrock:Rerank`` on the rerank model resource AND model access enabled in
+  that region. Without it the call returns ``AccessDeniedException`` → RerankUnavailable →
+  fail-soft to the baseline RRF order (search unaffected). Until these are granted, wiring the
+  adapter (setting ``DOCSURI_RERANK_MODEL_ARN``) is a safe no-op: the reranker degrades to baseline.
 """
 
 from __future__ import annotations
