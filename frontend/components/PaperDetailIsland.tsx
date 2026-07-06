@@ -15,7 +15,7 @@ import { SummaryModal, type DetailView } from './SummaryModal';
 import { SaveToLibraryButton } from './SaveToLibraryButton';
 import { CitationTreePanel } from './CitationTreePanel';
 import { DocModelViewer } from './DocModelViewer';
-import { paperOpenedDedupeKey, recordPaperOpened } from '@/lib/personalization';
+import { recordPaperOpened } from '@/lib/personalization';
 import styles from './PaperDetailIsland.module.css';
 
 interface PaperDetailIslandProps {
@@ -64,32 +64,19 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
   const sourceUrl = sourceUrlRaw && /^https?:\/\//i.test(sourceUrlRaw) ? sourceUrlRaw : undefined;
   const router = useRouter();
   const openedRef = useRef<string | null>(null);
-  const openedDedupeKeyRef = useRef<string | null>(null);
-  const titledRef = useRef<string | null>(null);
 
   useEffect(() => {
     const key = `${paperId}:${version}`;
     if (openedRef.current === key) return;
+    // Wait for the paper metadata to settle so 최근 본 논문 (mypage) records the real title, not the
+    // arXiv id. usePaperMeta always resolves to 'done' (failure → meta:null), so paper_opened still
+    // fires. Only attach a title that belongs to THIS paper — on detail→detail nav the previous
+    // paper's meta can read 'done' for one render. ponytail: on mismatch/failure the title is
+    // omitted and the backend falls back to the arXiv id, so a missed title degrades, never wrong.
+    if (meta.status !== 'done') return;
+    if (m && m.arxivId !== paperId) return;
     openedRef.current = key;
-    titledRef.current = null;
-    const dedupeKey = paperOpenedDedupeKey(paperId, version);
-    openedDedupeKeyRef.current = dedupeKey;
-    const title = meta.status === 'done' && m?.arxivId === paperId ? m.title : undefined;
-    if (title) titledRef.current = key;
-    recordPaperOpened(paperId, version, title, dedupeKey);
-  }, [paperId, version]);
-
-  useEffect(() => {
-    const key = `${paperId}:${version}`;
-    if (openedRef.current !== key || titledRef.current === key) return;
-    // 최근 본 논문 should count the open immediately for KPI/reporting, then opportunistically
-    // backfill the real paper title once the header metadata resolves. On detail→detail nav the
-    // previous paper's meta can read 'done' for one render, so only sync a title that belongs to
-    // THIS paper. ponytail: if the title never resolves, the backend keeps the arXiv id fallback.
-    if (meta.status !== 'done' || !m?.title) return;
-    if (m.arxivId !== paperId) return;
-    titledRef.current = key;
-    recordPaperOpened(paperId, version, m.title, openedDedupeKeyRef.current ?? undefined);
+    recordPaperOpened(paperId, version, m?.title);
   }, [paperId, version, meta.status, m]);
 
   useEffect(() => {

@@ -136,16 +136,4 @@ describe('ApiClient personalization methods', () => {
       dedupeKey: 'paper:2401.1:v2:59411520',
     });
   });
-
-  it('accepts a stable dedupe key override for title backfill retries', () => {
-    recordPaperOpened('2401.1', 2, 'Attention Is All You Need', 'paper:2401.1:v2:stable');
-
-    expect(recordBehaviorEvent).toHaveBeenCalledWith({
-      eventType: 'paper_opened',
-      subject: { kind: 'paper', paperId: '2401.1' },
-      source: 'frontend_anchor',
-      metadata: { entrySurface: 'detail', title: 'Attention Is All You Need' },
-      dedupeKey: 'paper:2401.1:v2:stable',
-    });
-  });
 });
