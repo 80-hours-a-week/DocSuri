@@ -43,6 +43,15 @@ class IngestionSettings(BaseModel):
     # re-embed; the target index + embed both use it. Cutover then needs a coordinated vector-spec
     # bump + reader redeploy (same-space invariant) or search breaks — see the runbook.
     reembed_dimension: int | None = Field(default=None, alias="DOCSURI_REEMBED_DIMENSION")
+    # B3 fast full-re-parse (raw cache + bulk PDF prime + offline re-parse; see reparse.py /
+    # raw_backfill.py / runbook). Default OFF → the live fetch path stays byte-identical.
+    raw_cache_mode: Literal["off", "prefer", "only"] = Field(
+        default="off", alias="DOCSURI_RAW_CACHE_MODE"
+    )
+    raw_cache_prefix: str = Field(default="raw", alias="DOCSURI_RAW_CACHE_PREFIX")
+    # arXiv requester-pays bulk PDF bucket + optional YYMM month shards (csv, e.g. "2501,2502").
+    arxiv_bulk_bucket: str = Field(default="arxiv", alias="DOCSURI_ARXIV_BULK_BUCKET")
+    raw_backfill_months: str | None = Field(default=None, alias="DOCSURI_RAW_BACKFILL_MONTHS")
     control_plane_dsn: str | None = Field(default=None, alias="DOCSURI_CONTROL_PLANE_DSN")
     sqs_queue_url: str | None = Field(default=None, alias="DOCSURI_SQS_QUEUE_URL")
     sqs_dlq_url: str | None = Field(default=None, alias="DOCSURI_SQS_DLQ_URL")

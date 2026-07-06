@@ -17,6 +17,7 @@ from docsuri_ingestion.full_text_extraction import (
     html_to_text,
     pdf_to_text,
 )
+from docsuri_ingestion.ports import RawContentStorePort
 from docsuri_ingestion.resilience import RetryPolicy, TokenBucket
 from docsuri_ingestion.xmlsafe import safe_fromstring
 
@@ -65,6 +66,8 @@ class ArxivHttpSource:
         timeout_seconds: float = 30.0,
         rate_limiter: TokenBucket | None = None,
         oai_retry_policy: RetryPolicy | None = None,
+        raw_store: RawContentStorePort | None = None,
+        raw_cache_mode: str = "off",
     ) -> None:
         self._atom_base_url = atom_base_url
         self._oai_base_url = oai_base_url
@@ -82,6 +85,9 @@ class ArxivHttpSource:
         self._oai_retry_policy = oai_retry_policy or RetryPolicy(
             max_attempts=6, base_delay_seconds=2.0
         )
+        # B3 raw-content cache. Default off → fetch_full_text hits arXiv exactly as before.
+        self._raw_store = raw_store
+        self._raw_cache_mode = raw_cache_mode
 
     def harvest_seed(self, category_filter: CategoryFilter) -> Iterable[MetadataRecord]:
         for category in category_filter.categories:
@@ -150,15 +156,13 @@ class ArxivHttpSource:
         HTML is the preferred *source* — it converts to the cleanest plain text — and PDF
         text extraction is the fallback when HTML is unavailable. Only normalized plain text
         is produced/stored (the viewer renders plain text with anchor highlighting). Never
-        decodes a compressed payload as text (the #139 e-print defect).
+        decodes a compressed payload as text (the #139 e-print defect). The B3 raw cache is
+        transparent: ``off`` fetches from arXiv exactly as before; ``prefer``/``only`` read the S3
+        raw cache first (``only`` never fetches) — see ``_acquire_html`` / ``_acquire_pdf``.
         """
         arxiv_id = metadata.identifier.arxiv_id
-        html, html_url = self._try_get_html(arxiv_id)
-        html_text = html_to_text(html) if html is not None else ""
-        # Tag which HTML rung produced the text so a doc-model text-fallback consumer can keep
-        # native arXiv HTML out of a servable doc-model (its raw TeX/pgf leaks past the parser
-        # sanitizer). Mirror the __init__ base→tier mapping ("ar5iv" in the base URL ⇒ ar5iv).
-        html_tier = SourceTier.ar5iv if "ar5iv" in html_url else SourceTier.native_html
+        html, html_url, html_tier = self._acquire_html(metadata)
+        html_text = html_to_text(html) if html else ""
         # A COMPLETE HTML conversion is the preferred source. A truncated one (ar5iv LaTeXML
         # failure — HTTP 200 but only the abstract + a sentence, below the floor) is worse than
         # the PDF text, so fall through to PDF and keep the short HTML only if the PDF is
@@ -170,8 +174,10 @@ class ArxivHttpSource:
 
         pdf_url = f"{self._pdf_base_url}/{arxiv_id}"
         try:
-            pdf = self._get_bytes(pdf_url, params=None, stage="fetch_full_text")
-            text = pdf_to_text(pdf)
+            pdf = self._acquire_pdf(metadata)
+            # pdf is None only for an ``only``-mode cache miss — treat it as the PDF-unavailable
+            # branch (empty text → short-HTML fallback, else the terminal empty-text error).
+            text = pdf_to_text(pdf) if pdf is not None else ""
         except (PermanentIngestionError, FullTextExtractionError) as exc:
             # The PDF is PERMANENTLY unavailable (404/4xx from _get_bytes) or unparseable
             # (FullTextExtractionError): a truncated HTML body beats failing the paper — keep the
@@ -198,7 +204,7 @@ class ArxivHttpSource:
                 content_type="text/plain",
                 source_tier=SourceTier.pdf,
             )
-        if html_text:  # PDF empty — fall back to the (short) HTML text rather than erroring.
+        if html_text:  # PDF empty/absent — fall back to the (short) HTML text rather than erroring.
             return RawDocument(
                 metadata=metadata, text=html_text, source_url=html_url, source_tier=html_tier
             )
@@ -207,6 +213,52 @@ class ArxivHttpSource:
             reason=FailureReason.PARSE_FAILURE,
             stage="fetch_full_text",
         )
+
+    def _acquire_html(self, metadata: MetadataRecord) -> tuple[str | None, str, SourceTier]:
+        """HTML source honoring the raw cache mode (B3). ``off`` is byte-identical to the old
+        ``_try_get_html`` path; ``prefer`` reads cache→HTTP and writes back a fetch; ``only`` reads
+        cache and NEVER hits the network. Returns ``(html, source_url, tier)`` — the tier tags which
+        rung produced the text so a doc-model text-fallback keeps native arXiv HTML out of a
+        servable doc-model (its raw TeX/pgf leaks past the parser sanitizer)."""
+        mode, store = self._raw_cache_mode, self._raw_store
+        pid, ver = metadata.paper_id, metadata.version
+        if mode in ("prefer", "only") and store is not None:
+            for tier in (SourceTier.ar5iv, SourceTier.native_html):
+                cached = store.get_raw(pid, ver, tier.value)
+                if cached:
+                    return cached.decode("utf-8"), f"cache://{tier.value}", tier
+            if mode == "only":
+                return None, "", SourceTier.native_html
+        html, url = self._try_get_html(metadata.identifier.arxiv_id)
+        # Mirror the __init__ base→tier mapping ("ar5iv" in the base URL ⇒ ar5iv).
+        tier = SourceTier.ar5iv if "ar5iv" in url else SourceTier.native_html
+        if html and mode == "prefer" and store is not None:
+            store.put_raw(
+                pid, ver, tier.value, html.encode("utf-8"),
+                content_type="text/html; charset=utf-8",
+            )
+        return html, url, tier
+
+    def _acquire_pdf(self, metadata: MetadataRecord) -> bytes | None:
+        """PDF bytes honoring the raw cache mode (B3). ``only`` never hits the network (returns
+        ``None`` on a miss); ``prefer`` reads cache→HTTP and caches a fetch; ``off`` fetches exactly
+        as before, letting _get_bytes' exceptions propagate to fetch_full_text's fallback ladder."""
+        mode, store = self._raw_cache_mode, self._raw_store
+        pid, ver = metadata.paper_id, metadata.version
+        if mode in ("prefer", "only") and store is not None:
+            cached = store.get_raw(pid, ver, "pdf")
+            if cached:
+                return cached
+            if mode == "only":
+                return None
+        pdf = self._get_bytes(
+            f"{self._pdf_base_url}/{metadata.identifier.arxiv_id}",
+            params=None,
+            stage="fetch_full_text",
+        )
+        if mode == "prefer" and store is not None:
+            store.put_raw(pid, ver, "pdf", pdf, content_type="application/pdf")
+        return pdf
 
     def fetch_html_source(self, arxiv_id: str) -> tuple[str, SourceTier] | None:
         """Fetch deterministic-parseable HTML for the doc-model (BR-30, Q6 ladder).

@@ -131,6 +131,65 @@ class S3DocModelStore:
             )
 
 
+class S3RawContentStore:
+    """Raw upstream-byte cache on S3 (B3 fast re-parse): ``{prefix}/{paperId}/v{version}/{tier}``.
+
+    Same single bucket as full-text/doc-model, separate ``raw/`` prefix. Caches the exact source
+    bytes per tier (``pdf`` / ``ar5iv`` / ``native_html``) so a full re-parse can rebuild the search
+    index from the cache instead of re-hitting arXiv's 1-req/3s limit. SSE-KMS when a key is set,
+    else SSE-S3; ``get_raw`` returns ``None`` on a cache miss (mirrors S3DocModelStore.get).
+    """
+
+    def __init__(
+        self, *, bucket: str, prefix: str = "raw", kms_key_id: str | None = None
+    ) -> None:
+        import boto3
+
+        self._client = boto3.client("s3")
+        self._bucket = bucket
+        self._prefix = prefix.strip("/")
+        self._kms_key_id = kms_key_id
+
+    def _key(self, paper_id: str, version: int, tier: str) -> str:
+        return f"{self._prefix}/{paper_id}/v{version}/{tier}"
+
+    def put_raw(
+        self,
+        paper_id: str,
+        version: int,
+        tier: str,
+        data: bytes,
+        *,
+        content_type: str = "application/octet-stream",
+    ) -> str:
+        key = self._key(paper_id, version, tier)
+        kwargs: dict[str, Any] = {
+            "Bucket": self._bucket,
+            "Key": key,
+            "Body": data,
+            "ContentType": content_type,
+            "ServerSideEncryption": "aws:kms" if self._kms_key_id else "AES256",
+            "Metadata": {"paper-id": paper_id, "version": str(version), "tier": tier},
+        }
+        if self._kms_key_id:
+            kwargs["SSEKMSKeyId"] = self._kms_key_id
+        self._client.put_object(**kwargs)
+        return f"s3://{self._bucket}/{key}"
+
+    def get_raw(self, paper_id: str, version: int, tier: str) -> bytes | None:
+        from botocore.exceptions import ClientError
+
+        try:
+            response = self._client.get_object(
+                Bucket=self._bucket, Key=self._key(paper_id, version, tier)
+            )
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") in {"NoSuchKey", "404", "NotFound"}:
+                return None
+            raise
+        return response["Body"].read()
+
+
 class S3UserDocumentSource:
     """Read producer-uploaded PDF bytes for BUILD_USER_DOC_MODEL jobs.
 

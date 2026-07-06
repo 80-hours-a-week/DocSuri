@@ -48,6 +48,17 @@ class FullTextStorePort(Protocol):
 
 
 @runtime_checkable
+class RawContentStorePort(Protocol):
+    """B3 raw source-byte cache keyed (paperId, version, tier) — primes a full re-parse offline."""
+
+    def put_raw(
+        self, paper_id: str, version: int, tier: str, data: bytes, *, content_type: str = ...
+    ) -> str: ...
+
+    def get_raw(self, paper_id: str, version: int, tier: str) -> bytes | None: ...
+
+
+@runtime_checkable
 class EmbeddingPort(Protocol):
     def embed_documents(
         self, texts: Sequence[str], *, correlation_id: str | None = None

@@ -54,6 +54,10 @@ like the v4 migration (`python -m docsuri_ingestion.worker <step>`), so they run
 | `DOCSURI_REEMBED_MIN_DOCUMENTS` | `1` | finalize floor; a good rebuild sets this near the known corpus size (~1.5M) |
 | `DOCSURI_REEMBED_COPY_RPS` | `-1` | mode A `_reindex` throttle; `-1` = unlimited |
 | `DOCSURI_REEMBED_DIMENSION` | (frozen 1024) | embedding + target-index vector width; set `1536` for Cohere v4's default (mode B only) |
+| `DOCSURI_RAW_CACHE_MODE` | `off` | B3 raw cache: `off` (live path, byte-identical) / `prefer` (cache→HTTP, write-back) / `only` (cache-only, no arXiv — used by `reparse`) |
+| `DOCSURI_RAW_CACHE_PREFIX` | `raw` | S3 prefix for cached source bytes (`{prefix}/{paperId}/v{version}/{tier}`) |
+| `DOCSURI_ARXIV_BULK_BUCKET` | `arxiv` | requester-pays bulk-PDF bucket (`s3://arxiv/pdf/`) that `raw_backfill` streams |
+| `DOCSURI_RAW_BACKFILL_MONTHS` | (all) | optional YYMM csv (e.g. `2501,2502`) sharding the bulk prime by submission month |
 
 ## Run order
 
@@ -104,6 +108,50 @@ into a 1536 mapping — `reembed_copy` refuses it) and:
    the old images + re-point the alias to the 1024 index.
 
 For a same-model reshard/corruption rebuild, leave `DOCSURI_REEMBED_DIMENSION` unset (mode A).
+
+## Full re-parse (B3 — bulk PDF)
+
+Modes A/B reindex from the existing index — they can't pick up a **parser change** (e.g. a
+`PARSER_VERSION` bump), because every field except `vector` is copied from what the old parser
+already produced. B3 rebuilds the SEARCH index by **re-parsing the corpus from cached source
+bytes**, without hitting arXiv's 1-req/3s limit: prime a raw-byte cache in bulk from arXiv's
+requester-pays S3, then re-parse cache-only into the offline re-embed index and reuse the existing
+`reembed_finalize` → `reembed_cutover` alias swap.
+
+The two new steps (`raw_backfill`, `reparse`) dispatch through the worker entrypoint exactly like
+the other steps (`python -m docsuri_ingestion.worker <step>`).
+
+### Sequence
+
+1. **raw_backfill** — `command:["raw_backfill"]`. Harvests the corpus target set from OAI-PMH, then
+   streams the `s3://arxiv/pdf/` bulk tarballs (requester-pays) and caches every target PDF to
+   `S3RawContentStore` (`{DOCSURI_RAW_CACHE_PREFIX}/{paperId}/v{version}/pdf`). Shard by submission
+   month with `DOCSURI_RAW_BACKFILL_MONTHS=2501,2502,…` (one run-task per month band) to bound each
+   task's tar scan. Idempotent; re-runs re-cache by key. Watch `targets_missed` in the logs.
+2. **reembed_provision** — `command:["reembed_provision"]`. Creates the tuned OFFLINE target index
+   (same step as modes A/B). For a parser-only rebuild leave `DOCSURI_REEMBED_DIMENSION` unset.
+3. **reparse** — launch a **fleet** of `command:["reparse"]` run-tasks, each with
+   `DOCSURI_RAW_CACHE_MODE=only` and `DOCSURI_OPENSEARCH_INDEX_REEMBED=<target>`. Each task harvests
+   OAI metadata (cheap, paged) and re-runs the ingest pipeline, which writes to the offline target
+   and fetches source bytes **cache-only** (no arXiv fetch, no rate limit, no `sleep`). Fan out by
+   slicing the corpus window across tasks via `DOCSURI_BACKFILL_START`/`DOCSURI_BACKFILL_END`
+   sub-windows. `DOCSURI_BEDROCK_MODEL_ID` must be set (each chunk is re-embedded).
+4. **reembed_finalize** — `command:["reembed_finalize"]`. Restores prod index settings, force-merges,
+   and gates on `DOCSURI_REEMBED_MIN_DOCUMENTS`. Run only after all `reparse` tasks exit 0.
+5. **reembed_cutover** — `command:["reembed_cutover"]`. Atomically repoints the `docsuri-corpus`
+   alias to the target. Revert the domain resize afterward.
+
+### Caveats (B3-specific)
+
+- **PDF fidelity, not ar5iv HTML.** The bulk prime caches PDFs, so re-parsed chunks come from PDF
+  text extraction, not the cleaner ar5iv HTML rung. Full-text search quality is fine; the exact
+  chunk text can differ from an HTML-sourced build.
+- **Doc-models are NOT rebuilt.** Doc-models are HTML-only and lazy — this path does not touch them.
+  They self-heal on demand via the reader's `BUILD_DOC_MODEL` job (which can reuse the Part-A cache
+  when `DOCSURI_RAW_CACHE_MODE=prefer` is enabled on the live worker), not through B3.
+- **blockRefs are absent/degraded** for PDF-sourced chunks (blockRefs come from the structured HTML
+  doc-model, which PDF parsing doesn't produce). The viewer/citation-tree wiring that depends on
+  blockRefs is degraded for papers rebuilt from PDF until their doc-model is (lazily) rebuilt.
 
 ## Idempotency & rollback
 
