@@ -37,3 +37,15 @@ def test_ingestion_writes_through_corpus_alias() -> None:
     assert STACK_SOURCE.count('"DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus"') == 3
     assert '"DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus-v2"' not in STACK_SOURCE
     assert '"DOCSURI_OPENSEARCH_INDEX_V2": "docsuri-corpus-v2"' in STACK_SOURCE
+
+
+def test_docmodel_builder_stays_single_arxiv_caller() -> None:
+    # The arXiv limiter is process-local. A backlog drain with two docmodel-builder tasks doubles
+    # the caller rate and can 429 retryable metadata fetches into docsuri-docmodel-dlq.
+    block = STACK_SOURCE.split("docmodel_scaling = ")[1].split(
+        "# --- ECS Fargate: user-PDF doc-model worker", maxsplit=1
+    )[0]
+    assert "self.docmodel_service.auto_scale_task_count(\n" in block
+    assert "min_capacity=0, max_capacity=1" in block
+    assert "DocModelDepth" in block
+    assert "appscaling.ScalingInterval(lower=10, change=2)" not in block
