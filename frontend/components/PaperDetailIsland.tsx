@@ -144,7 +144,7 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
         <header className={styles.meta} data-testid="paper-meta">
           <div className={styles.titleRow}>
             <h1 className={styles.title} data-testid="paper-title">
-              {meta.meta.title}
+              {renderInlineMath(meta.meta.title)}
             </h1>
             <SaveToLibraryButton
               card={{

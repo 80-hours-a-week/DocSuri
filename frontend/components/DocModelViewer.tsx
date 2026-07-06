@@ -129,7 +129,7 @@ export function DocModelViewer({
         <div ref={containerRef}>
           {!hideTitle && outcome.docModel.meta.title ? (
             <h1 className={styles.paperTitle} data-testid="docmodel-title">
-              {renderInlineMath(outcome.docModel.meta.title)}
+              {renderInlineMath(outcome.docModel.meta.title, outcome.docModel.meta.macros)}
             </h1>
           ) : null}
           <DocModelBody docModel={outcome.docModel} assetsById={assetsById} anchor={anchor} />
@@ -162,7 +162,7 @@ export function DocModelBody({
   const sections = docModel.sections.filter((s) => s.id !== 's0');
   return (
     <div className={styles.root} data-testid="docmodel-viewer">
-      <DocTOC sections={sections} />
+      <DocTOC sections={sections} macros={macros} />
       <article className={styles.body}>
         {sections.map((s) => (
           <SectionView
@@ -184,7 +184,7 @@ export function DocModelBody({
 
 // ---- table of contents (anchor jump) ------------------------------------
 
-function DocTOC({ sections }: { sections: DocSection[] }) {
+function DocTOC({ sections, macros }: { sections: DocSection[]; macros?: MathMacros }) {
   // Only titled sections are navigable; a TOC is useful with at least two of them. So an
   // abstract translation (one untitled section) or a single-section doc shows no TOC.
   const entries = useMemo(
@@ -210,7 +210,7 @@ function DocTOC({ sections }: { sections: DocSection[] }) {
                 target?.focus({ preventScroll: true });
               }}
             >
-              {e.title}
+              {renderInlineMath(e.title, macros)}
             </a>
           </li>
         ))}
@@ -400,7 +400,9 @@ function SectionView({
     // tabIndex=-1 (D3, BR-U5-15): programmatically focusable so a TOC jump moves keyboard/SR
     // focus here too, not just the viewport scroll position.
     <section id={`dm-${section.id}`} className={styles.section} tabIndex={-1}>
-      {section.title ? <Heading className={styles.heading}>{section.title}</Heading> : null}
+      {section.title ? (
+        <Heading className={styles.heading}>{renderInlineMath(section.title, macros)}</Heading>
+      ) : null}
       {section.blocks.map((b) => (
         <BlockView
           key={b.id}
