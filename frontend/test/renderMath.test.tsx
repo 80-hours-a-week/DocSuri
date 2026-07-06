@@ -32,6 +32,16 @@ describe('fail-soft fallback (no raw backslash source on a KaTeX parse error)', 
     expect(c.querySelector('.katex')).not.toBeNull();
     expect(c.textContent).not.toBe('수식');
   });
+
+  it('renders a formula whose alttext leaked a `\\cite` command (strip it, do not collapse)', () => {
+    // Real @6 doc-model breakage: LaTeXML leaked a trailing `\cite[citep]{…}` (nested braces) into
+    // eq (30). KaTeX has no `\cite`, so the WHOLE equation collapsed to the 수식 placeholder. The
+    // leaked citation carries no math meaning → strip it and render the real expression.
+    const latex = String.raw`\ln[2\pi I_{0}(c)]\quad\text{\cite[citep]{({A}{mardia2009}{{, }}{})}}`;
+    const c = html(<MathDisplay latex={latex} />);
+    expect(c.querySelector('.katex')).not.toBeNull();
+    expect(c.textContent).not.toBe('수식');
+  });
 });
 
 describe('renderInlineMath', () => {

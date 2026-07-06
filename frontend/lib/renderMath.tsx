@@ -271,10 +271,42 @@ function rewriteDerivative(s: string): string {
   return out + s.slice(last);
 }
 
-function preprocessPhysics(latex: string): string {
-  // Matrices first: a `\derivative` may sit inside a `\matrixquantity` cell, and rewriting the
-  // matrix first flattens it into the string that the derivative pass then scans.
-  return rewriteDerivative(rewriteMatrixQuantity(latex));
+// LaTeXML sometimes leaks a reference/citation command into a formula's alttext — most often a
+// trailing `\cite[citep]{…}` inside a `\text{…}` (a citation that rode along from the source). KaTeX
+// has no such command, so the ONE stray token throws and collapses the WHOLE equation to the
+// placeholder (observed on ~0.03% of formulas). These carry no math meaning, so strip the command
+// plus its optional `[…]` and its balanced `{…}` argument. Read-time, so it heals already-stored
+// doc-models with no re-ingest.
+const LEAKED_REF_RE = /\\(?:cite[a-z]*|ref|eqref|autoref|label|footnote)\b/g;
+function stripLeakedRefs(latex: string): string {
+  let out = '';
+  let last = 0;
+  let m: RegExpExecArray | null;
+  LEAKED_REF_RE.lastIndex = 0;
+  while ((m = LEAKED_REF_RE.exec(latex))) {
+    out += latex.slice(last, m.index);
+    let i = skipSpace(latex, m.index + m[0].length);
+    if (latex[i] === '[') {
+      const g = readDelimGroup(latex, i); // optional [key] (e.g. \cite[citep]{…})
+      if (g) i = g.end;
+    }
+    i = skipSpace(latex, i);
+    if (latex[i] === '{') {
+      const g = readDelimGroup(latex, i); // the balanced {…} argument (may nest)
+      if (g) i = g.end;
+    }
+    last = i;
+    LEAKED_REF_RE.lastIndex = i;
+  }
+  return out + latex.slice(last);
+}
+
+function preprocessLatex(latex: string): string {
+  // Drop leaked citation/ref commands first (a `\cite` inside a `\text{}` would otherwise make the
+  // whole formula throw). Then matrices before derivatives: a `\derivative` may sit inside a
+  // `\matrixquantity` cell, and rewriting the matrix first flattens it into the string the
+  // derivative pass then scans.
+  return rewriteDerivative(rewriteMatrixQuantity(stripLeakedRefs(latex)));
 }
 
 function toHtml(latex: string, displayMode: boolean, macros?: MathMacros): string {
@@ -289,7 +321,7 @@ function toHtml(latex: string, displayMode: boolean, macros?: MathMacros): strin
   // strict-mode leniencies KaTeX resolves without throwing.
   let html: string;
   try {
-    html = katex.renderToString(preprocessPhysics(latex), {
+    html = katex.renderToString(preprocessLatex(latex), {
       displayMode,
       throwOnError: true,
       errorColor: ERROR_COLOR,
