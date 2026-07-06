@@ -77,10 +77,27 @@ def test_existing_ids_returns_found_subset():
     assert _existing_ids(_FakeClient(), "idx", []) == set()
 
 
-def test_token_bucket_acquire_amount_and_clamp():
+def test_token_bucket_acquire_amount_and_oversized_batch(monkeypatch):
+    import docsuri_ingestion.resilience as resilience
     from docsuri_ingestion.resilience import TokenBucket
 
-    tb = TokenBucket(rate_per_second=1_000_000.0, capacity=1000)
-    tb.acquire(400)  # partial draw from a full bucket → immediate
+    now = 0.0
+    sleeps = []
+
+    def fake_monotonic():
+        return now
+
+    def fake_sleep(seconds):
+        nonlocal now
+        sleeps.append(seconds)
+        now += seconds
+
+    monkeypatch.setattr(resilience.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(resilience.time, "sleep", fake_sleep)
+
+    tb = TokenBucket(rate_per_second=10.0, capacity=10)
+    tb.acquire(4)  # partial draw from a full bucket → immediate
     tb.acquire(0)  # no-op
-    tb.acquire(5000)  # > capacity → clamped, refills fast, never deadlocks
+    tb.acquire(25)  # > capacity → spends multiple refill windows, never deadlocks
+
+    assert [round(s, 1) for s in sleeps if s > 1e-9] == [0.4, 1.0, 0.5]

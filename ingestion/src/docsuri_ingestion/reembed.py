@@ -159,7 +159,8 @@ def _existing_ids(client, index: str, ids: list[str]) -> set[str]:
     """The subset of ``ids`` already present in ``index`` (realtime mget, source suppressed). Lets
     a paced re-embed skip docs a prior (possibly killed) run already wrote -- so a relaunch resumes
     instead of re-embedding, and re-spending the token budget, from zero. mget is realtime, so it
-    sees docs written but not yet refreshed (the target runs refresh_interval=-1 during the load)."""
+    sees docs written but not yet refreshed (the target runs refresh_interval=-1 during the
+    load)."""
     if not ids:
         return set()
     resp = client.mget(index=index, body={"ids": ids}, _source=False)
