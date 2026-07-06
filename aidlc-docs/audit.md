@@ -3745,6 +3745,23 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **Context**: Novelty-Agent degradation semantics and Bedrock structured-output reliability fix.
 
 ---
+
+## Code Generation
+**Timestamp**: 2026-07-06T14:31:12+09:00
+**User Input**: "```1. max token 수를 8192로 확장
+2. 프롬프트에 길이 제한 추가
+3. tool schema도 maxItems 같은 제한 추가
+4. 파싱 실패 시 stop_reason, 응답 길이, JSONDecodeError 위치를 로깅``` 으로 코드를 수정해 주세요."
+**AI Response**: "Updated Novelty Bedrock LLM token budget, prompt/schema output limits, parse-failure diagnostics, and focused regression tests."
+**Context**: Novelty Bedrock structured output parse hardening
+
+---
+
+## Review
+**Timestamp**: 2026-07-06T14:36:36+09:00
+**User Input**: "blocking 사항이 있는지 검토해 주세요."
+**AI Response**: "Reviewed current Novelty Bedrock structured-output changes for blocking production risks, including model token support, schema compatibility, logging sensitivity, and regression coverage."
+**Context**: Blocking review for Novelty Bedrock structured-output hardening
 ## Notion Connect Cancel Button
 **Timestamp**: 2026-07-06T03:44:36Z
 **User Input**: "`Notion으로 내보내기`를 누르면 `Notion Token 등록` 이 나오잖아요? `연결 저장` 밑에 `취소`버튼을 만들어 주세요."
