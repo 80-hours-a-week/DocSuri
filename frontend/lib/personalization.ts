@@ -42,6 +42,18 @@ export function recordPaperOpened(paperId: string): void {
   });
 }
 
+// 완독 (read-completion, #346): fired once per open when the reader scrolls to the end of the
+// doc-model body. Pairs with recordPaperOpened so the dashboard's 완독률 = read_completed / paper_opened.
+export function recordReadCompleted(paperId: string): void {
+  sendBehaviorEvent({
+    eventType: 'read_completed',
+    subject: { kind: 'paper', paperId },
+    source: 'frontend_anchor',
+    metadata: { entrySurface: 'detail' },
+    dedupeKey: `read:${paperId}:${dedupeBucket()}`,
+  });
+}
+
 export function recordLibraryAdded(paperId: string): void {
   sendBehaviorEvent({
     eventType: 'library_added',

@@ -25,6 +25,7 @@ import { createPortal } from 'react-dom';
 import { MathDisplay, renderInlineMath, type MathMacros } from '@/lib/renderMath';
 import { StateView } from './StateView';
 import { ScrollToTopButton } from './ScrollToTopButton';
+import { recordReadCompleted } from '@/lib/personalization';
 import styles from './DocModelViewer.module.css';
 
 interface DocModelViewerProps {
@@ -77,6 +78,27 @@ export function DocModelViewer({
     // position (D3, BR-U5-15) — every block root carries tabIndex={-1} for this.
     el.focus({ preventScroll: true });
   }, [docModel, anchor]);
+
+  // 완독 (read-completion, #346): when the end-of-body sentinel scrolls into view the reader has
+  // reached the bottom → record a completion, once per (paper, version). IntersectionObserver's
+  // default viewport root correctly accounts for the phone-frame scroll container's clipping. The
+  // sentinel only exists once the page body renders, so this is a no-op until docModel is present.
+  const completionRef = useRef<HTMLDivElement | null>(null);
+  const readFiredRef = useRef<string | null>(null);
+  useEffect(() => {
+    const sentinel = completionRef.current;
+    if (!docModel || !sentinel) return;
+    const key = `${paperId}:${version}`;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting) && readFiredRef.current !== key) {
+        readFiredRef.current = key;
+        recordReadCompleted(paperId);
+        observer.disconnect();
+      }
+    });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [docModel, paperId, version]);
 
   if (state.status === 'idle' || state.status === 'loading') {
     return <StateView kind="loading" title="전문 불러오는 중…" message="전문을 가져오고 있어요." />;
@@ -133,6 +155,8 @@ export function DocModelViewer({
             </h1>
           ) : null}
           <DocModelBody docModel={outcome.docModel} assetsById={assetsById} anchor={anchor} />
+          {/* 완독 sentinel (#346): reaching it = read to the end. Empty/hidden — layout-neutral. */}
+          <div ref={completionRef} aria-hidden="true" data-testid="docmodel-end-sentinel" />
         </div>
       );
   }

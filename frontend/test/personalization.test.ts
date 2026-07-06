@@ -8,7 +8,11 @@ vi.mock('@/lib/api', () => ({
   getApiClient: () => ({ recordBehaviorEvent }),
 }));
 
-import { recordGlossaryUpdated, recordSearchExecuted } from '@/lib/personalization';
+import {
+  recordGlossaryUpdated,
+  recordReadCompleted,
+  recordSearchExecuted,
+} from '@/lib/personalization';
 
 const fast = { timeoutMs: 1000, retryBackoffMs: 1 };
 
@@ -90,6 +94,21 @@ describe('ApiClient personalization methods', () => {
       source: 'frontend_anchor',
       metadata: { glossaryVersion: 7 },
       dedupeKey: 'glossary:7:59411520',
+    });
+  });
+
+  it('records read-completion events for the KPI funnel', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-25T00:00:00Z'));
+
+    recordReadCompleted('2401.1');
+
+    expect(recordBehaviorEvent).toHaveBeenCalledWith({
+      eventType: 'read_completed',
+      subject: { kind: 'paper', paperId: '2401.1' },
+      source: 'frontend_anchor',
+      metadata: { entrySurface: 'detail' },
+      dedupeKey: 'read:2401.1:59411520',
     });
   });
 });
