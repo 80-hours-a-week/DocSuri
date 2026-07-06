@@ -3,13 +3,12 @@ from __future__ import annotations
 import logging
 from typing import Any, Protocol, runtime_checkable
 
-from docsuri_shared._generated.dtos.evidence_schema import EvidenceScope
-from docsuri_shared.dtos import DocModel
-
-from backend.modules.discovery.src.discovery.ports.search_ports import (
+from discovery.ports.search_ports import (
     IndexUnavailable,
     ScoredRecord,
 )
+from docsuri_shared._generated.dtos.evidence_schema import EvidenceScope
+from docsuri_shared.dtos import DocModel
 
 from .models import PaperSearchResult
 
@@ -126,12 +125,8 @@ class EvidencePaperSearchTool:
         )
 
     def _hybrid_search(self, topic: str) -> list[ScoredRecord]:
-        from backend.modules.discovery.src.discovery.domain.models import (
-            QueryPlan,
-            RetrievalMode,
-            SearchScope,
-        )
-        from backend.modules.discovery.src.discovery.domain.retriever import HybridRetriever
+        from discovery.domain.models import QueryPlan, RetrievalMode, SearchScope
+        from discovery.domain.retriever import HybridRetriever
 
         try:
             vector = self._embedding.embed_query(topic)

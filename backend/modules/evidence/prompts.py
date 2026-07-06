@@ -83,8 +83,49 @@ def _collect_section_text(section: object, lines: list[str]) -> None:
     if title:
         lines.append(f'## {title}')
     for block in getattr(section, 'blocks', None) or []:
-        text = getattr(block.root, 'text', '') or ''
+        text = _block_text(getattr(block, 'root', block))
         if text:
             lines.append(text[:2000])
     for nested in getattr(section, 'sections', None) or []:
         _collect_section_text(nested, lines)
+
+
+def _block_text(root: object) -> str:
+    """블록 타입(paragraph/code/table/formula/figure/list)별로 프롬프트에 실을 텍스트를
+    뽑는다. 예전엔 ``.text``만 읽어 Table/Formula/Figure/List가 전부 0바이트로 빠졌다
+    (PR #338 리뷰 Medium #9) — 결과 비교표의 핵심 수치·수식·그림 캡션이 애초에 LLM에
+    보이지 않아 근거로 추출될 수 없었다."""
+    block_type = getattr(root, 'type', None)
+    if block_type in ('paragraph', 'code'):
+        return getattr(root, 'text', '') or ''
+    if block_type == 'table':
+        return _table_text(root)
+    if block_type == 'formula':
+        label = getattr(root, 'anchorLabel', None)
+        latex = getattr(root, 'latex', None)
+        if not latex:
+            return ''
+        return f'{label}: {latex}' if label else latex
+    if block_type == 'figure':
+        caption = getattr(root, 'caption', None) or ''
+        label = getattr(root, 'anchorLabel', None)
+        if not caption:
+            return ''
+        return f'{label}: {caption}' if label else caption
+    if block_type == 'list':
+        items = [getattr(item, 'text', '') for item in getattr(root, 'items', None) or []]
+        return '\n'.join(f'- {text}' for text in items if text)
+    return ''
+
+
+def _table_text(root: object) -> str:
+    caption = getattr(root, 'caption', None) or ''
+    label = getattr(root, 'anchorLabel', None)
+    header = f'{label}: {caption}' if label and caption else label or caption
+    row_lines = []
+    for row in getattr(root, 'rows', None) or []:
+        cells = [getattr(cell, 'text', '') or '' for cell in getattr(row, 'cells', None) or []]
+        if cells:
+            row_lines.append(' | '.join(cells))
+    body = '\n'.join(row_lines)
+    return f'{header}\n{body}' if header else body

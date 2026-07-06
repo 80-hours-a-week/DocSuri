@@ -18,11 +18,25 @@ import { binaryBody, type Transport, type TransportMethod } from '@/lib/api/tran
 // auth-injection is tracked separately (backend coordination zone, system-infra step).
 
 const SSE_PROXY_TIMEOUT_MS = 15000;
+// evidence 턴(OpenSearch 검색 + 다건 S3 DocModel 로드 + Bedrock 추출)은 동기로 30~90초
+// 걸린다 — HttpTransport 기본 10초로는 백엔드가 정상 완료돼도 이 서버->게이트웨이 홉이
+// 먼저 끊겨 504로 보인다(ApiClient의 90초 타임아웃과는 별개 레이어, PR #338 후속 발견).
+const EVIDENCE_GATEWAY_TIMEOUT_MS = 90000;
 
-function buildTransport(req: NextRequest): Transport | null {
+function isEvidenceHeavyPath(upstreamPath: string): boolean {
+  return (
+    upstreamPath.startsWith('/api/research/jobs') || upstreamPath.startsWith('/api/evidence/turns')
+  );
+}
+
+function buildTransport(req: NextRequest, upstreamPath: string): Transport | null {
   const baseUrl = process.env.DOCSURI_GATEWAY_URL;
   if (baseUrl) {
-    return new HttpTransport({ baseUrl, cookieHeader: req.headers.get('cookie') ?? undefined });
+    return new HttpTransport({
+      baseUrl,
+      cookieHeader: req.headers.get('cookie') ?? undefined,
+      timeoutMs: isEvidenceHeavyPath(upstreamPath) ? EVIDENCE_GATEWAY_TIMEOUT_MS : undefined,
+    });
   }
   if (process.env.NODE_ENV === 'production' && process.env.DOCSURI_BFF_ALLOW_MOCK !== '1') {
     return null;
@@ -131,7 +145,7 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
     }
   }
 
-  const transport = buildTransport(req);
+  const transport = buildTransport(req, upstreamPath);
   if (!transport) {
     return NextResponse.json(
       { message: '일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' },

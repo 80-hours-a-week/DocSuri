@@ -288,12 +288,17 @@ class FrontendStack(Stack):
         web_latency_alarm.add_alarm_action(cw_actions.SnsAction(ops_alerts))
 
         # --- CloudFront: browser-trusted HTTPS at docsuri.org, encrypted+authenticated origin ---
+        # read_timeout 60s(기본 30s에서 상향, AWS 계정 기본 할당량 최대치) — evidence 채팅 턴은
+        # OpenSearch 검색 + 다건 S3 DocModel 로드 + Bedrock 추출을 동기로 거쳐 30초를 쉽게
+        # 넘긴다. 기본값이면 백엔드가 정상 완료돼도 CloudFront가 먼저 504를 반환해 사용자에게
+        # "네트워크 연결" 에러로 보임(임시 완화 — 근본 해결은 비동기 job+폴링 전환 필요).
         origin = origins.HttpOrigin(
             _ORIGIN_DOMAIN,
             protocol_policy=cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
             https_port=443,
             origin_ssl_protocols=[cloudfront.OriginSslPolicy.TLS_V1_2],
             custom_headers={"X-Origin-Verify": origin_verify},
+            read_timeout=Duration.seconds(60),
         )
         # Backend origin for the social-login redirects only (Option A, FR-27). Sends the SHARED
         # verify secret (accepted as a 2nd value on the backend ALB rule in ComputeStack).

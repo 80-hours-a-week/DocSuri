@@ -87,6 +87,10 @@ export interface PageQuery {
 
 const DEFAULT_PAGE_LIMIT = 20;
 const AGENT_ID_SEP = ':';
+// evidence 턴은 OpenSearch 검색 + 다건 S3 DocModel 로드 + Bedrock 추출을 동기로 거쳐
+// 8초 기본 타임아웃(withTimeout)을 항상 초과한다 — 백엔드는 계속 처리해 응답이 저장되지만
+// 클라이언트만 network 에러로 끊겨 사용자에게 실패로 보이는 문제(PR #338 후속 발견).
+const EVIDENCE_TURN_TIMEOUT_MS = 90_000;
 
 type BackendResearchJob = {
   jobId: string;
@@ -791,6 +795,7 @@ export class ApiClient {
       path,
       body: target.mode === 'evidence' ? toResearchBody(sendReq) : toNoveltyBody(sendReq, created),
       idempotent: false,
+      timeoutMs: target.mode === 'evidence' ? EVIDENCE_TURN_TIMEOUT_MS : undefined,
     });
     if (res.status !== 200 && res.status !== 201) {
       throw normalizeHttpError(res.status, serverMessage(res.body));
@@ -1273,7 +1278,10 @@ export class ApiClient {
     for (let i = 0; i < attempts; i++) {
       const lastAttempt = i === attempts - 1;
       try {
-        const res = await this.withTimeout((signal) => this.transport.send({ ...req, signal }));
+        const res = await this.withTimeout(
+          (signal) => this.transport.send({ ...req, signal }),
+          req.timeoutMs ?? this.timeoutMs,
+        );
         if (res.status >= 500 && !lastAttempt) {
           await delay(this.retryBackoffMs * (i + 1));
           continue;
@@ -1296,13 +1304,14 @@ export class ApiClient {
 
   private withTimeout(
     send: (signal: AbortSignal) => Promise<TransportResponse>,
+    timeoutMs: number,
   ): Promise<TransportResponse> {
     const controller = new AbortController();
     return new Promise((resolve, reject) => {
       const t = setTimeout(() => {
         controller.abort();
         reject(new Error('timeout'));
-      }, this.timeoutMs);
+      }, timeoutMs);
       send(controller.signal).then(
         (v) => {
           clearTimeout(t);

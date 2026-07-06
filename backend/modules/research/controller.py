@@ -84,7 +84,14 @@ class AttachmentUploadOut(BaseModel):
     record_ref: str = Field(alias="recordRef")
 
 
-@router.post("/jobs", response_model=ResearchJobCreateResponse)
+@router.post(
+    "/jobs",
+    response_model=ResearchJobCreateResponse,
+    # NFR-C1: create_job도 내부적으로 add_message → orchestrator.run()을 실행해 Bedrock을
+    # 호출한다 — 여기를 게이트하지 않으면 새 세션을 계속 만드는 것만으로 일일 쿼터를
+    # 완전히 우회할 수 있다(PR #364 리뷰 지적, 병합 시 누락됨).
+    dependencies=[Depends(enforce_evidence_turn_quota)],
+)
 async def create_job(
     dto: ResearchJobCreateRequest,
     principal: Principal = PRINCIPAL_DEP,
