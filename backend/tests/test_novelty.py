@@ -1232,6 +1232,11 @@ def test_api_notion_connection_and_approved_export_completes(monkeypatch) -> Non
     connection, content = notion.calls[0]
     assert connection["token"] == raw_token  # 복호화된 토큰이 어댑터에 전달된다
     assert connection["parentPageId"] == "0" * 32
+    assert content["title"].endswith("_Novelty_분석_결과")
+    assert content["title"][:8].isdigit()
+    assert content["title"][8] == ":"
+    assert content["title"][9:13].isdigit()
+    assert content["inputPrompt"] == "rag evaluation"
     assert content["artifacts"] and "payload" in content["artifacts"][0]
 
     assert client.delete("/api/novelty/notion/connection").status_code == 204
@@ -1293,7 +1298,8 @@ def test_notion_api_client_builds_page_request_and_maps_errors() -> None:
             return R()
 
     content = {
-        "title": "Novelty analysis: rag",
+        "title": "20260706:1624_Novelty_분석_결과",
+        "inputPrompt": "rag",
         "artifacts": [
             {
                 "kind": "experiment_plan",
@@ -1313,7 +1319,10 @@ def test_notion_api_client_builds_page_request_and_maps_errors() -> None:
     assert captured["url"] == "https://api.notion.com/v1/pages"
     assert captured["headers"]["Authorization"] == "Bearer tok"
     assert captured["json"]["parent"] == {"page_id": "0" * 32}
+    title = captured["json"]["properties"]["title"]["title"][0]["text"]["content"]
+    assert title == "20260706:1624_Novelty_분석_결과"
     blocks = json.dumps(captured["json"]["children"], ensure_ascii=False)
+    assert "입력 프롬프트: rag" in blocks
     assert "Experiment plan" in blocks
     assert "A — B" in blocks
     assert "Research question: RQ?" in blocks

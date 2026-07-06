@@ -1235,6 +1235,9 @@ class NotionApiExportClient:
 
 def _notion_blocks(content: dict[str, Any]) -> list[dict[str, Any]]:
     blocks: list[dict[str, Any]] = []
+    prompt = str(content.get("inputPrompt") or "").strip()
+    if prompt:
+        blocks.append(_notion_bullet(f"입력 프롬프트: {prompt}"))
     for artifact in content.get("artifacts") or []:
         title = str(artifact.get("title") or artifact.get("kind") or "").strip()
         if title:
