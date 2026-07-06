@@ -340,7 +340,13 @@ class SummaryResultDTO:
             #  · mapping seed — present iff its effective rendering (override, else the seed Korean)
             #    is in the text. Without this, attention→주목 drops 어텐션 and the chip would
             #    vanish, breaking the 표준 용어 edit path. Lazy import avoids a cycle.
-            from .glossary import SEED_KEEP_AS_IS, SEED_MAPPINGS, is_glossary_worthy
+            from .glossary import (
+                SEED_KEEP_AS_IS,
+                SEED_KEEP_AS_IS_LOWER,
+                SEED_MAPPINGS,
+                is_glossary_worthy,
+                term_in_text,
+            )
 
             doc = self.translation.doc_model.model_dump(mode="json", exclude_none=True)
             translated_text = doc.get("fullText") or ""
@@ -348,8 +354,16 @@ class SummaryResultDTO:
             std_glossary: list[dict] = []
             seen: set[str] = set()
             # Drop math notation the model reported as "kept" (Greek vars, W_q, L(w+delta)…) so the
-            # 원어 유지 용어 list shows keywords/names, not symbols (BR-S4). Seeds pass the filter.
-            display_kept = [t for t in self.translation.kept_terms if is_glossary_worthy(t)]
+            # 원어 유지 용어 list shows keywords/names, not symbols (BR-S4). Also drop a SEED term
+            # the model echoed from the keep-as-is prompt line but that this paper never uses
+            # (absent from the text) — the whole seed list rides into every prompt, so kept_terms
+            # over-reports it. Free-form (non-seed) kept terms are trusted (model met them here).
+            def _keep_display(t: str) -> bool:
+                if not is_glossary_worthy(t):
+                    return False
+                return t.lower() not in SEED_KEEP_AS_IS_LOWER or term_in_text(t, translated_text)
+
+            display_kept = [t for t in self.translation.kept_terms if _keep_display(t)]
             kept_by_lower: dict[str, str] = {}
             for t in display_kept:  # first-seen casing wins (case-insensitive dedup)
                 kept_by_lower.setdefault(t.lower(), t)
@@ -362,7 +376,7 @@ class SummaryResultDTO:
                     if eff in translated_text:
                         std_glossary.append({"term": s, "translated": eff})
                         seen.add(key)
-                elif key in kept_by_lower:
+                elif key in kept_by_lower and term_in_text(kept_by_lower[key], translated_text):
                     std_glossary.append({"term": kept_by_lower[key]})
                     seen.add(key)
             for m in SEED_MAPPINGS:  # mapping standard (en→ko), by effective rendering
