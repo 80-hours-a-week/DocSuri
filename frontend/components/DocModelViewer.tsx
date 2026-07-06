@@ -25,6 +25,7 @@ import { createPortal } from 'react-dom';
 import { MathDisplay, renderInlineMath, type MathMacros } from '@/lib/renderMath';
 import { StateView } from './StateView';
 import { ScrollToTopButton } from './ScrollToTopButton';
+import { recordReadCompleted } from '@/lib/personalization';
 import styles from './DocModelViewer.module.css';
 
 interface DocModelViewerProps {
@@ -78,6 +79,28 @@ export function DocModelViewer({
     el.focus({ preventScroll: true });
   }, [docModel, anchor]);
 
+  // 완독 (read-completion, #346): when the end-of-body sentinel scrolls into view the reader has
+  // reached the bottom → record a completion, once per (paper, version). IntersectionObserver's
+  // default viewport root correctly accounts for the phone-frame scroll container's clipping. The
+  // sentinel only exists once the page body renders, so this is a no-op until docModel is present.
+  const completionRef = useRef<HTMLDivElement | null>(null);
+  const readFiredRef = useRef<string | null>(null);
+  useEffect(() => {
+    const sentinel = completionRef.current;
+    // IntersectionObserver is absent in SSR and the jsdom test env; skip completion tracking there.
+    if (!docModel || !sentinel || typeof IntersectionObserver === 'undefined') return;
+    const key = `${paperId}:${version}`;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting) && readFiredRef.current !== key) {
+        readFiredRef.current = key;
+        recordReadCompleted(paperId, version);
+        observer.disconnect();
+      }
+    });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [docModel, paperId, version]);
+
   if (state.status === 'idle' || state.status === 'loading') {
     return <StateView kind="loading" title="전문 불러오는 중…" message="전문을 가져오고 있어요." />;
   }
@@ -129,10 +152,12 @@ export function DocModelViewer({
         <div ref={containerRef}>
           {!hideTitle && outcome.docModel.meta.title ? (
             <h1 className={styles.paperTitle} data-testid="docmodel-title">
-              {renderInlineMath(outcome.docModel.meta.title)}
+              {renderInlineMath(outcome.docModel.meta.title, outcome.docModel.meta.macros)}
             </h1>
           ) : null}
           <DocModelBody docModel={outcome.docModel} assetsById={assetsById} anchor={anchor} />
+          {/* 완독 sentinel (#346): reaching it = read to the end. Empty/hidden — layout-neutral. */}
+          <div ref={completionRef} aria-hidden="true" data-testid="docmodel-end-sentinel" />
         </div>
       );
   }
@@ -162,7 +187,7 @@ export function DocModelBody({
   const sections = docModel.sections.filter((s) => s.id !== 's0');
   return (
     <div className={styles.root} data-testid="docmodel-viewer">
-      <DocTOC sections={sections} />
+      <DocTOC sections={sections} macros={macros} />
       <article className={styles.body}>
         {sections.map((s) => (
           <SectionView
@@ -184,7 +209,7 @@ export function DocModelBody({
 
 // ---- table of contents (anchor jump) ------------------------------------
 
-function DocTOC({ sections }: { sections: DocSection[] }) {
+function DocTOC({ sections, macros }: { sections: DocSection[]; macros?: MathMacros }) {
   // Only titled sections are navigable; a TOC is useful with at least two of them. So an
   // abstract translation (one untitled section) or a single-section doc shows no TOC.
   const entries = useMemo(
@@ -210,7 +235,7 @@ function DocTOC({ sections }: { sections: DocSection[] }) {
                 target?.focus({ preventScroll: true });
               }}
             >
-              {e.title}
+              {renderInlineMath(e.title, macros)}
             </a>
           </li>
         ))}
@@ -400,7 +425,9 @@ function SectionView({
     // tabIndex=-1 (D3, BR-U5-15): programmatically focusable so a TOC jump moves keyboard/SR
     // focus here too, not just the viewport scroll position.
     <section id={`dm-${section.id}`} className={styles.section} tabIndex={-1}>
-      {section.title ? <Heading className={styles.heading}>{section.title}</Heading> : null}
+      {section.title ? (
+        <Heading className={styles.heading}>{renderInlineMath(section.title, macros)}</Heading>
+      ) : null}
       {section.blocks.map((b) => (
         <BlockView
           key={b.id}

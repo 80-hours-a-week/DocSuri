@@ -197,15 +197,11 @@ def process_job(
                 {"source": _EVIDENCE_SOURCE, "query": topic_preview},
             )
             evidence_bundle = adapters.evidence.form(owner_id, job.topic)
-            _, degraded_reason = _payload_from_bundle(evidence_bundle)
-            if degraded_reason:
-                degraded_reasons.append(degraded_reason)
-                _note_degraded(observability, _EVIDENCE_SOURCE)
             service.record_event(
                 job,
                 "Evidence bundle formed",
                 _step_result_payload(
-                    _EVIDENCE_SOURCE, len(evidence_bundle.items), degraded_reason
+                    _EVIDENCE_SOURCE, len(evidence_bundle.items), None
                 ),
             )
 

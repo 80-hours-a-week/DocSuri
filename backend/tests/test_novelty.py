@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from io import BytesIO
 from urllib.parse import urlparse
 from uuid import uuid4
@@ -482,6 +483,8 @@ def test_bedrock_llm_adapter_maps_source_ref_indexes_only() -> None:
         def invoke_model_with_response_stream(self, **kwargs):
             body = json.loads(kwargs["body"].decode("utf-8"))
             assert body["anthropic_version"] == "bedrock-2023-05-31"
+            assert body["tool_choice"] == {"type": "tool", "name": "emit_novelty_analysis"}
+            assert body["tools"][0]["name"] == "emit_novelty_analysis"
             payload = {
                 "similarWorks": [
                     {
@@ -514,39 +517,11 @@ def test_bedrock_llm_adapter_maps_source_ref_indexes_only() -> None:
             text = json.dumps(payload)
             return {
                 "body": [
-                    {
-                        "chunk": {
-                            "bytes": json.dumps(
-                                {
-                                    "type": "content_block_delta",
-                                    "delta": {
-                                        "type": "text_delta",
-                                        "text": text[: len(text) // 2],
-                                    },
-                                }
-                            ).encode("utf-8")
-                        }
-                    },
-                    {
-                        "chunk": {
-                            "bytes": json.dumps(
-                                {
-                                    "type": "content_block_delta",
-                                    "delta": {
-                                        "type": "text_delta",
-                                        "text": text[len(text) // 2 :],
-                                    },
-                                }
-                            ).encode("utf-8")
-                        }
-                    },
-                    {
-                        "chunk": {
-                            "bytes": json.dumps(
-                                {"type": "message_delta", "delta": {"stop_reason": "end_turn"}}
-                            ).encode("utf-8")
-                        }
-                    },
+                    _tool_stream_chunk(text[: len(text) // 2]),
+                    _tool_stream_chunk(text[len(text) // 2 :]),
+                    _stream_chunk(
+                        {"type": "message_delta", "delta": {"stop_reason": "tool_use"}}
+                    ),
                 ]
             }
 
@@ -660,14 +635,7 @@ def test_bedrock_llm_adapter_maps_similar_work_detail_columns() -> None:
                 },
             }
             return {
-                "body": [
-                    _stream_chunk(
-                        {
-                            "type": "content_block_delta",
-                            "delta": {"type": "text_delta", "text": json.dumps(payload)},
-                        }
-                    )
-                ]
+                "body": [_tool_stream_chunk(json.dumps(payload))]
             }
 
     corpus_ref = {
@@ -704,6 +672,34 @@ def test_bedrock_llm_adapter_maps_similar_work_detail_columns() -> None:
     user_text = captured_bodies[0]["messages"][0]["content"][0]["text"]
     assert '"limitations"' in user_text
     assert "never guess" in captured_bodies[0]["system"].lower()
+    assert captured_bodies[0]["tool_choice"]["name"] == "emit_novelty_analysis"
+
+
+def test_bedrock_llm_adapter_logs_raw_preview_on_json_parse_failure(caplog) -> None:
+    class FakeBedrock:
+        def invoke_model_with_response_stream(self, **kwargs):
+            return {"body": [_tool_stream_chunk('{"similarWorks": }')]}
+
+    ref = {
+        "type": "url",
+        "identifier": "2401.00001",
+        "url": "https://arxiv.org/abs/2401.00001",
+    }
+
+    with caplog.at_level(logging.WARNING):
+        draft = BedrockNoveltyLlmClient(model_id="m", client=FakeBedrock()).draft(
+            topic="RAG novelty evaluation",
+            corpus=RetrievalBundle(items=[{"title": "Prior", "sourceRefs": [ref]}]),
+            external=RetrievalBundle(items=[]),
+        )
+
+    assert draft.degradedReason == "LLM generation unavailable: JSONDecodeError"
+    record = next(
+        item
+        for item in caplog.records
+        if item.message.startswith("novelty Bedrock JSON parse failed")
+    )
+    assert '{"similarWorks": }' in record.message
 
 
 def test_worker_completes_when_adapters_are_not_degraded() -> None:
@@ -820,7 +816,7 @@ def test_worker_emits_step_detail_payloads() -> None:
         "query": "privacy preserving RAG",
     }
     assert corpus_events[1]["source"] == "U11 evidence formation"
-    assert "reason" in corpus_events[1]  # Noop evidence는 저하 사유를 싣는다
+    assert "reason" not in corpus_events[1]  # Noop evidence는 optional enrichment라 조용히 비운다
     assert corpus_events[2] == {"source": "U2 full search", "query": "privacy preserving RAG"}
     assert corpus_events[-1]["count"] == 2
     external_events = payloads[JobState.SEARCHING_EXTERNAL]
@@ -1054,9 +1050,8 @@ def test_worker_treats_evidence_abstain_as_degradation_without_fabrication() -> 
         adapters=NoveltyAdapters(corpus=OneItemCorpus(), evidence=AbstainingEvidence()),
     )
 
-    # D5/#273 AC3 — abstain은 저하로만 소비: 날조 항목 없이 corpus 보강만 남는다
+    # Evidence formation은 optional enrichment다: abstain은 날조/저하 없이 corpus만 남긴다.
     result = NoveltyService(repo).result(owner_id, job_id)
-    assert result.job.state is JobState.DEGRADED
     evidence_artifact = next(
         artifact for artifact in result.artifacts if artifact.kind is ArtifactKind.EVIDENCE
     )
@@ -1064,7 +1059,7 @@ def test_worker_treats_evidence_abstain_as_degradation_without_fabrication() -> 
     events_json = " ".join(
         event.model_dump_json() for event in repo.list_events(owner_id, job_id)
     )
-    assert "evidence formation abstained: out_of_corpus" in events_json
+    assert "evidence formation abstained: out_of_corpus" not in events_json
 
 
 def test_evidence_formation_client_maps_claims_and_abstain() -> None:
@@ -1119,7 +1114,7 @@ def test_evidence_formation_client_maps_claims_and_abstain() -> None:
 
     degraded = EvidenceFormationClient(AbstainPort()).form("u1", "rag evaluation")
     assert degraded.items == []
-    assert degraded.degradedReason == "evidence formation abstained: out_of_corpus"
+    assert degraded.degradedReason is None
 
 
 def test_evidence_formation_client_does_not_fabricate_arxiv_url_for_userdoc() -> None:
@@ -1554,6 +1549,15 @@ def _stream_chunk(payload: dict) -> dict:
     return {"chunk": {"bytes": json.dumps(payload).encode("utf-8")}}
 
 
+def _tool_stream_chunk(partial_json: str) -> dict:
+    return _stream_chunk(
+        {
+            "type": "content_block_delta",
+            "delta": {"type": "input_json_delta", "partial_json": partial_json},
+        }
+    )
+
+
 def test_bedrock_llm_client_invokes_at_cost_guard_warning() -> None:
     """NFR-C1 — agent hard gate는 warning(80%)에서는 Bedrock을 막지 않는다."""
     from docsuri_ops.cost_guard import CostGuardCircuitBreaker
@@ -1566,12 +1570,7 @@ def test_bedrock_llm_client_invokes_at_cost_guard_warning() -> None:
             self.called = True
             return {
                 "body": [
-                    _stream_chunk(
-                        {
-                            "type": "content_block_delta",
-                            "delta": {"type": "text_delta", "text": "{}"},
-                        }
-                    )
+                    _tool_stream_chunk("{}")
                 ]
             }
 
@@ -1626,12 +1625,7 @@ def test_bedrock_llm_client_records_spend_from_usage() -> None:
                             "message": {"usage": {"input_tokens": 1_000_000, "output_tokens": 1}},
                         }
                     ),
-                    _stream_chunk(
-                        {
-                            "type": "content_block_delta",
-                            "delta": {"type": "text_delta", "text": json.dumps({})},
-                        }
-                    ),
+                    _tool_stream_chunk(json.dumps({})),
                     _stream_chunk(
                         {
                             "type": "message_delta",

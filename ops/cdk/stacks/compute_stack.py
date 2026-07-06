@@ -1063,6 +1063,69 @@ class ComputeStack(Stack):
                 height=6,
             ),
         )
+        # KPI funnel (#346): the initial-plan success-metric hierarchy — AI 호출 > 검색 > 완독 —
+        # graphed from U9 behavior events, emitted as dimensionless DocSuri/Production counters by
+        # the personalization recorder (backend .../personalization/service.py _FUNNEL_METRIC).
+        # 완독률 = read_completed / paper_opened. novelty-agent calls are not U9 events, so
+        # "AI 호출" here counts summary/translation requests only.
+        funnel_ai_metric = cloudwatch.Metric(
+            namespace="DocSuri/Production",
+            metric_name="personalization.funnel.ai_invocation",
+            period=Duration.hours(1),
+            statistic="Sum",
+        )
+        funnel_search_metric = cloudwatch.Metric(
+            namespace="DocSuri/Production",
+            metric_name="personalization.funnel.search",
+            period=Duration.hours(1),
+            statistic="Sum",
+        )
+        funnel_opened_metric = cloudwatch.Metric(
+            namespace="DocSuri/Production",
+            metric_name="personalization.funnel.paper_opened",
+            period=Duration.hours(1),
+            statistic="Sum",
+        )
+        funnel_read_metric = cloudwatch.Metric(
+            namespace="DocSuri/Production",
+            metric_name="personalization.funnel.read_completed",
+            period=Duration.hours(1),
+            statistic="Sum",
+        )
+        # opened=0 in a window → CloudWatch yields no point (no error), so the rate just gaps.
+        funnel_completion_rate = cloudwatch.MathExpression(
+            expression="100 * completed / opened",
+            using_metrics={"completed": funnel_read_metric, "opened": funnel_opened_metric},
+            label="완독률 (%)",
+            period=Duration.hours(1),
+        )
+        dashboard.add_widgets(
+            cloudwatch.TextWidget(
+                markdown=(
+                    "## KPI 퍼널 — 성공지표 위계 (AI 호출 > 검색 > 완독)\n"
+                    "U9 사용자 행동 이벤트 집계. AI 호출 = 요약·번역 요청, 검색 = 검색 실행, "
+                    "완독률 = 완독(본문 끝까지 스크롤) ÷ 논문 열람. "
+                    "novelty 에이전트 호출은 U9 미포함."
+                ),
+                width=24,
+                height=2,
+            )
+        )
+        dashboard.add_widgets(
+            cloudwatch.GraphWidget(
+                title="AI 호출 빈도 (요약·번역)", left=[funnel_ai_metric], width=8, height=6
+            ),
+            cloudwatch.GraphWidget(
+                title="검색 빈도", left=[funnel_search_metric], width=8, height=6
+            ),
+            cloudwatch.GraphWidget(
+                title="완독률",
+                left=[funnel_completion_rate],
+                right=[funnel_opened_metric, funnel_read_metric],
+                width=8,
+                height=6,
+            ),
+        )
         dashboard.add_widgets(
             cloudwatch.TextWidget(
                 markdown=(

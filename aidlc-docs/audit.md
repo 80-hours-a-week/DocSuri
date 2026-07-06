@@ -3737,4 +3737,11 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **AI Response**: "Added parent page ID missing warnings to the Novelty Notion export connection form and My Page Notion settings form, and updated focused frontend tests."
 **Context**: Notion parent page registration warning for per-user Notion export.
 
+## Novelty Evidence Optional and Bedrock Tool-Use Output Fix
+**Timestamp**: 2026-07-06T00:55:54Z
+**User Input**: "코드를 수정하겠습니다. 1. evidence formation adapter 연결이 되어있지 않거나, 응답이 없어도 degraded하지 말고 무시하고 넘어가도록 수정해 주세요.
+2. Bedrock tool use 방식으로 JSON schema-shaped output을 강제하고, 최소한 JSON 파싱 실패 시 raw 응답 일부를 안전하게 로깅해서 원인을 볼 수 있도록 수정해 주세요."
+**AI Response**: "Updated Novelty evidence formation to behave as optional enrichment: the Noop adapter, evidence abstain, no-claim responses, and evidence adapter exceptions now return empty bundles without adding job degraded reasons; the worker no longer records evidence-formation degradation. Updated the Bedrock Novelty LLM adapter to force Anthropic tool use with `emit_novelty_analysis`, read `input_json_delta` stream fragments, preserve usage accounting, and log a sanitized truncated raw preview in the warning message on JSON parse failures. Updated focused tests and quality gates. Verification passed: focused Novelty tests, touched ruff checks, git diff check, full backend pytest, and full backend ruff."
+**Context**: Novelty-Agent degradation semantics and Bedrock structured-output reliability fix.
+
 ---
