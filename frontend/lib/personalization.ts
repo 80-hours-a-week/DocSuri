@@ -12,6 +12,10 @@ function paperVersionKey(paperId: string, version: number): string {
   return `${paperId}:v${version}`;
 }
 
+export function paperOpenedDedupeKey(paperId: string, version: number): string {
+  return `paper:${paperVersionKey(paperId, version)}:${dedupeBucket()}`;
+}
+
 export function hashQuery(query: string): string {
   let hash = 0x811c9dc5;
   for (const ch of query.trim().toLowerCase()) {
@@ -38,7 +42,12 @@ export function recordSearchExecuted(query: string, resultCount: number): void {
   });
 }
 
-export function recordPaperOpened(paperId: string, version: number, title?: string): void {
+export function recordPaperOpened(
+  paperId: string,
+  version: number,
+  title?: string,
+  dedupeKey = paperOpenedDedupeKey(paperId, version),
+): void {
   sendBehaviorEvent({
     eventType: 'paper_opened',
     subject: { kind: 'paper', paperId },
@@ -46,7 +55,7 @@ export function recordPaperOpened(paperId: string, version: number, title?: stri
     // title (optional) surfaces real paper names in 최근 본 논문 (mypage /recently-viewed). Omitted
     // when the detail header hasn't resolved yet — the backend then falls back to the arXiv id.
     metadata: { entrySurface: 'detail', ...(title ? { title } : {}) },
-    dedupeKey: `paper:${paperVersionKey(paperId, version)}:${dedupeBucket()}`,
+    dedupeKey,
   });
 }
 

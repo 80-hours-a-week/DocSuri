@@ -61,9 +61,20 @@ class InMemoryPersonalizationRepository:
         key = f"{event.userId}:{event.dedupeKey}"
         with self._lock:
             if key in self._events:
+                self._backfill_title(self._events[key], event)
                 return False
             self._events[key] = event
             return True
+
+    def _backfill_title(self, existing: BehaviorEvent, incoming: BehaviorEvent) -> None:
+        if existing.eventType is not BehaviorEventType.PAPER_OPENED:
+            return
+        title = str(incoming.metadata.get("title") or "").strip()
+        if not title or existing.metadata.get("title"):
+            return
+        self._events[f"{existing.userId}:{existing.dedupeKey}"] = existing.model_copy(
+            update={"metadata": {**existing.metadata, "title": title}}
+        )
 
     def list_events(self, user_id: str) -> list[BehaviorEvent]:
         with self._lock:
@@ -256,8 +267,33 @@ class SqlPersonalizationRepository:
             )
             .on_conflict_do_nothing(index_elements=["owner_id", "dedupe_key"])
         )
+        if not result.rowcount:
+            self._backfill_title(event)
         self._s.flush()
         return bool(result.rowcount)
+
+    def _backfill_title(self, event: BehaviorEvent) -> None:
+        if event.eventType is not BehaviorEventType.PAPER_OPENED:
+            return
+        title = str(event.metadata.get("title") or "").strip()
+        if not title:
+            return
+        row = (
+            self._s.query(BehaviorEventTable)
+            .filter(
+                BehaviorEventTable.owner_id == event.userId,
+                BehaviorEventTable.dedupe_key == event.dedupeKey,
+                BehaviorEventTable.event_type == BehaviorEventType.PAPER_OPENED.value,
+            )
+            .one_or_none()
+        )
+        if row is None:
+            return
+        metadata = dict(row.metadata_json or {})
+        if metadata.get("title"):
+            return
+        metadata["title"] = title
+        row.metadata_json = metadata
 
     def list_events(self, user_id: str) -> list[BehaviorEvent]:
         rows = (

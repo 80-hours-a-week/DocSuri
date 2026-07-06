@@ -177,6 +177,33 @@ def test_recent_papers_uses_title_from_metadata() -> None:
     assert viewed[0][1] == "Attention Is All You Need"
 
 
+def test_duplicate_paper_opened_backfills_title_without_double_recording() -> None:
+    repo = InMemoryPersonalizationRepository()
+    recorder = BehaviorEventRecorder(repo)
+    user_id = str(uuid4())
+    first = BehaviorEventCreate(
+        eventType="paper_opened",
+        subject={"kind": "paper", "paperId": "1706.03762"},
+        metadata={"entrySurface": "detail"},
+        dedupeKey="view-1",
+    )
+    titled = BehaviorEventCreate(
+        eventType="paper_opened",
+        subject={"kind": "paper", "paperId": "1706.03762"},
+        metadata={"entrySurface": "detail", "title": "Attention Is All You Need"},
+        dedupeKey="view-1",
+    )
+
+    recorded = recorder.record(user_id, first)
+    duplicate = recorder.record(user_id, titled)
+    viewed = repo.list_recent_papers(user_id)
+
+    assert recorded.recorded is True
+    assert duplicate.duplicate is True
+    assert len(repo.list_events(user_id)) == 1
+    assert viewed[0][1] == "Attention Is All You Need"
+
+
 def test_owner_isolation_and_deterministic_aggregation() -> None:
     user_a = str(uuid4())
     user_b = str(uuid4())

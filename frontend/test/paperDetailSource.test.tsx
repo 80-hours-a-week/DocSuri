@@ -1,15 +1,19 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { PaperMetaVM } from '@/types/paperMeta';
 
 // Source-neutral detail header (Phase 2 Q2): the detail route agrees with the search card on a
 // paper's discovery source. Isolate the header — mock usePaperMeta (force a resolved value) and
 // the heavy children so only the source label/link-out is under test.
-let metaValue: { status: 'done'; meta: PaperMetaVM };
+const recordPaperOpened = vi.hoisted(() => vi.fn());
+let metaValue: { status: 'loading' } | { status: 'done'; meta: PaperMetaVM | null };
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('@/lib/usePaperMeta', () => ({ usePaperMeta: () => metaValue }));
 vi.mock('@/lib/renderMath', () => ({ renderInlineMath: (s: string) => s }));
-vi.mock('@/lib/personalization', () => ({ recordPaperOpened: vi.fn() }));
+vi.mock('@/lib/personalization', () => ({
+  paperOpenedDedupeKey: (paperId: string, version: number) => `paper:${paperId}:v${version}:stable`,
+  recordPaperOpened,
+}));
 vi.mock('@/components/SaveToLibraryButton', () => ({ SaveToLibraryButton: () => null }));
 vi.mock('@/components/CitationTreePanel', () => ({ CitationTreePanel: () => null }));
 vi.mock('@/components/SummaryModal', () => ({ SummaryModal: () => null }));
@@ -26,6 +30,14 @@ const base: PaperMetaVM = {
 };
 
 describe('PaperDetailIsland — source-neutral header (Q2)', () => {
+  beforeEach(() => {
+    recordPaperOpened.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('shows the source name and a source link-out for a non-arXiv paper', () => {
     metaValue = {
       status: 'done',
@@ -59,5 +71,29 @@ describe('PaperDetailIsland — source-neutral header (Q2)', () => {
     render(<PaperDetailIsland paperId="2006.11239v2" version={1} />);
     expect(screen.queryByTestId('paper-source-link')).toBeNull();
     expect(screen.getByTestId('paper-source')).toHaveTextContent('OpenAlex');
+  });
+
+  it('records the open immediately, then backfills the title with the same dedupe key', () => {
+    metaValue = { status: 'loading' };
+    const { rerender } = render(<PaperDetailIsland paperId="2005.14165v4" version={1} />);
+
+    expect(recordPaperOpened).toHaveBeenNthCalledWith(
+      1,
+      '2005.14165v4',
+      1,
+      undefined,
+      'paper:2005.14165v4:v1:stable',
+    );
+
+    metaValue = { status: 'done', meta: { ...base } };
+    rerender(<PaperDetailIsland paperId="2005.14165v4" version={1} />);
+
+    expect(recordPaperOpened).toHaveBeenNthCalledWith(
+      2,
+      '2005.14165v4',
+      1,
+      'Language Models are Few-Shot Learners',
+      'paper:2005.14165v4:v1:stable',
+    );
   });
 });
