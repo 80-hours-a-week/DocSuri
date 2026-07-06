@@ -1463,6 +1463,11 @@ def test_api_create_status_and_cancel(monkeypatch) -> None:
     principal = _principal()
     repo = InMemoryNoveltyRepository()
     client = _client(monkeypatch, principal, repo)
+    # Pin the fake/live seam: the app-shell wires live Bedrock/HTTP adapters into
+    # app.state, and the no-queue dispatch path runs the worker inline — so ambient
+    # AWS creds would otherwise decide the terminal state. Noop adapters degrade
+    # deterministically regardless of environment.
+    client.app.state.novelty_adapters = NoveltyAdapters()
 
     created = client.post(
         "/api/novelty/jobs",
