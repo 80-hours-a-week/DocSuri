@@ -669,16 +669,33 @@ def test_bedrock_llm_adapter_maps_similar_work_detail_columns() -> None:
     # 상세 칼럼은 유사 연구 표 전용 — novelty candidates에는 붙지 않는다
     assert "method" not in draft.noveltyCandidates["items"][0]
     # 프롬프트 계약과 추측 금지 지시가 실제 호출 본문에 실려 나간다
+    body = captured_bodies[0]
     user_text = captured_bodies[0]["messages"][0]["content"][0]["text"]
     assert '"limitations"' in user_text
-    assert "never guess" in captured_bodies[0]["system"].lower()
-    assert captured_bodies[0]["tool_choice"]["name"] == "emit_novelty_analysis"
+    assert body["max_tokens"] == 8192
+    assert "at most 3 similarworks" in body["system"].lower()
+    assert "never guess" in body["system"].lower()
+    assert body["tool_choice"]["name"] == "emit_novelty_analysis"
+    schema = body["tools"][0]["input_schema"]["properties"]
+    assert schema["similarWorks"]["maxItems"] == 3
+    assert schema["noveltyCandidates"]["maxItems"] == 3
+    assert schema["experimentPlan"]["properties"]["procedure"]["maxItems"] == 5
 
 
 def test_bedrock_llm_adapter_logs_raw_preview_on_json_parse_failure(caplog) -> None:
     class FakeBedrock:
         def invoke_model_with_response_stream(self, **kwargs):
-            return {"body": [_tool_stream_chunk('{"similarWorks": }')]}
+            return {
+                "body": [
+                    _tool_stream_chunk('{"similarWorks": }'),
+                    _stream_chunk(
+                        {
+                            "type": "message_delta",
+                            "delta": {"stop_reason": "max_tokens"},
+                        }
+                    ),
+                ]
+            }
 
     ref = {
         "type": "url",
@@ -700,6 +717,9 @@ def test_bedrock_llm_adapter_logs_raw_preview_on_json_parse_failure(caplog) -> N
         if item.message.startswith("novelty Bedrock JSON parse failed")
     )
     assert '{"similarWorks": }' in record.message
+    assert "stopReason=max_tokens" in record.message
+    assert "outputLength=" in record.message
+    assert "jsonPos=" in record.message
 
 
 def test_worker_completes_when_adapters_are_not_degraded() -> None:
