@@ -26,6 +26,19 @@ class IngestionSettings(BaseModel):
         default="docsuri-corpus-v2", alias="DOCSURI_OPENSEARCH_INDEX_V2"
     )
     opensearch_alias: str = Field(default="docsuri-corpus", alias="DOCSURI_OPENSEARCH_ALIAS")
+    # Fast re-embed rebuild knobs (see reembed.py / runbook): reindex the existing corpus into a
+    # fresh bulk-tuned target, then alias-swap. reembed_shard_* slice the source across a fan-out
+    # of one-off ECS tasks so the wall-clock re-index window is as short as possible.
+    opensearch_index_reembed: str = Field(
+        default="docsuri-corpus-v3", alias="DOCSURI_OPENSEARCH_INDEX_REEMBED"
+    )
+    reembed_source: str | None = Field(default=None, alias="DOCSURI_REEMBED_SOURCE")
+    reembed_shards: int = Field(default=6, alias="DOCSURI_REEMBED_SHARDS")
+    reembed_shard_index: int = Field(default=0, alias="DOCSURI_REEMBED_SHARD")
+    reembed_shard_count: int = Field(default=1, alias="DOCSURI_REEMBED_SHARD_COUNT")
+    reembed_batch_size: int = Field(default=96, alias="DOCSURI_REEMBED_BATCH_SIZE")  # <=96
+    reembed_min_documents: int = Field(default=1, alias="DOCSURI_REEMBED_MIN_DOCUMENTS")
+    reembed_copy_rps: int = Field(default=-1, alias="DOCSURI_REEMBED_COPY_RPS")  # -1 = unlimited
     control_plane_dsn: str | None = Field(default=None, alias="DOCSURI_CONTROL_PLANE_DSN")
     sqs_queue_url: str | None = Field(default=None, alias="DOCSURI_SQS_QUEUE_URL")
     sqs_dlq_url: str | None = Field(default=None, alias="DOCSURI_SQS_DLQ_URL")
