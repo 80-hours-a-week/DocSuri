@@ -3817,6 +3817,87 @@ Error: TestingLibraryElementError: Unable to find an element by: [data-testid=\"
 **Context**: Frontend Notion export opener-first UX review remediation.
 
 ---
+## Workspace Detection / Ingestion Bottleneck Architecture
+**Timestamp**: 2026-07-06T06:48:56Z
+**User Input**: "코퍼스에 논문을 수집하고 빌드(Ingestion)하는 과정에서 병목이 발생할 때, 시간을 효과적으로 단축할 수 있는 아키텍처적 해결 방안과 최적화 패턴은 다음과 같습니다.
+  1. 비동기 분산 배치 처리 (Batch Ingestion)
+  논문을 한 건씩 순차적으로 처리하는 방식은 I/O 및 네트워크 병목을 유발합니다. 이를 비동기 분산 파이프라인으로 전환해야 합니다.
+  Celery / 메시지 큐 도입: 논문 수집 요청을 메시지 큐(예: RabbitMQ, AWS SQS)에 적재하고, 여러 개의 워커(Worker) 프로세스가 비동기적으로 나누어 처리하도록 구성합니다.
+  대량 삽입(Bulk Insert): 데이터베이스나 벡터 DB(OpenSearch, 데이터베이스 등)에 데이터를 저장할 때 건별로 요청하지 않고, 일정 크기(예: 100~500건 단위)로 묶어 Bulk API를 호출합니다.
+  2. 병렬 청킹 및 맵리듀스 패턴 (Parallel Chunking & Map-Reduce)
+  논문 한 편의 텍스트 양이 많고 요약이나 분석(Evidence Formation) 프로세스가 포함되어 있다면, 단일 스레드 처리는 비효율적입니다.
+  Map-Reduce 패턴 활용: 논문 서론, 본론, 결론 또는 섹션 단위로 텍스트를 쪼갠(Chunking) 후, 각 청크의 임베딩 및 분석을 병렬(Map)로 처리하고 최종적으로 결과를 취합(Reduce)하는 방식을 적용합니다.
+  멀티프로세싱 인코딩: CPU 바운드 작업인 텍스트 파싱 및 토큰화 단계를 파이썬의 multiprocessing 등을 활용해 멀티코어를 최대한 활용하도록 최적화합니다.
+  3. 비용 및 시간 절감을 위한 캐싱 (Caching)
+  동일하거나 유사한 논문, 혹은 중복되는 텍스트 세그먼트에 대한 재처리를 방지합니다.
+  임베딩 벡터 캐싱 (Embedding Cache): 이미 계산된 텍스트 청크의 임베딩 벡터 값은 Redis 같은 고속 인메모리 캐시에 저장하여, 재처리 시 LLM API 호출이나 로컬 GPU 연산 시간을 생략합니다.
+  중복 체크 가드(Guard): Ingestion 파이프라인 진입 직후 DOI(디지털 객체 식별자)나 파일 해시값을 비교하여 이미 코퍼스에 존재하는 논문은 즉시 스킵(Skip)하도록 구현합니다.
+  4. 조절 기능 기반의 문서 모델 재빌드 (Throttled Rebuild)
+  논문이 추가될 때마다 전체 코퍼스 인덱스나 문서 모델(DocModel)을 실시간으로 재빌드하면 시스템 전반의 성능이 저하됩니다.
+  Throttled Rebuild: 논문 유입 시 즉시 인덱싱을 수행하는 대신, 변경 사항을 큐에 모아두었다가 시스템 부하가 적은 시간대에 주기적으로 배치 갱신하거나 속도를 제어(Throttling)하여 동시성 병목을 제어합니다.
+  현재 파이프라인에서 가장 많은 시간이 소요되는 구간이 PDF 파일 파싱(Multimodal Asset parsing) 단계인지, LLM 임베딩/요약 연산 단계인지, 혹은 DB 저장 단계인지 말씀해 주시면 더 구체적인 최적화 코드를 제안해 드릴 수 있습니다. 어느 부분에서 가장 정체가 심한가요?"
+**AI Response**: "Loaded AI-DLC common rules, extension opt-in prompts, state context, and current/memory ingestion context to answer with a minimal repo-grounded bottleneck diagnosis rather than starting speculative implementation."
+**Context**: Existing DocSuri ingestion/corpus pipeline architecture diagnosis.
+
+---
+## Live Ingestion Bottleneck Diagnosis
+**Timestamp**: 2026-07-06T06:51:22Z
+**User Input**: "(same interaction — live verification of current ingestion bottleneck)"
+**AI Response**: "Verified live SQS/ECS state with AWS profile AdministratorAccess-028317349537. Bulk queue docsuri-ingestion-queue had 152682 visible messages and docsuri-ingestion ECS service was desired=0/running=0. Application Auto Scaling scalable target for service/docsuri/docsuri-ingestion had MaxCapacity=0, while the code config expects max_capacity=1. DocModel and userdoc queues were empty; docmodel DLQ had 24 and ingestion DLQ had 1746. Diagnosis: current dominant bottleneck is disabled bulk drain/autoscaling drift, not PDF parsing, embedding, or DB writes."
+**Context**: Live production ingestion bottleneck check.
+
+---
+## Cross-Agent Ingestion Bottleneck Comparison
+**Timestamp**: 2026-07-06T06:52:16Z
+**User Input**: "그리고 다른 에이전트로부터 이런 대답이 나왔어:
+
+코드 근거로 확인했습니다. 결론부터: 질문하신 세 후보(PDF 파싱 / 임베딩 / DB 저장) 중 어느 것도 지금 병목이 아닙니다. 그리고 보내주신 일반론 패턴 대부분은 DocSuri에 이미 구현돼 있습니다.
+
+보내주신 처방 → 이미 있음 대조표
+
+┌───────────────────────┬─────────────────────────────────────────────────────────────────────────────────┬───────────────────────────────────────┐
+│         제안          │                                  DocSuri 현황                                   │                 근거                  │
+├───────────────────────┼─────────────────────────────────────────────────────────────────────────────────┼───────────────────────────────────────┤
+│ Celery/메시지 큐      │ 이미 SQS (우선순위 doc-model 큐 + 벌크 큐 분리)                                 │ worker.py:50-70                       │
+├───────────────────────┼─────────────────────────────────────────────────────────────────────────────────┼───────────────────────────────────────┤
+│ Bulk Insert           │ 이미 bulk — 논문당 OpenSearch bulk() NDJSON 1콜, chunkId 멱등                   │ adapters/aws.py:364-370               │
+├───────────────────────┼─────────────────────────────────────────────────────────────────────────────────┼───────────────────────────────────────┤
+│ 병렬 임베딩(맵리듀스) │ 이미 96개 배치 — 논문당 Bedrock 호출 ≤2회 (청크 128 cap)                        │ aws.py:26,279-281                     │
+├───────────────────────┼─────────────────────────────────────────────────────────────────────────────────┼───────────────────────────────────────┤
+│ 임베딩 캐시(Redis)    │ 벡터 캐시는 없지만 논문 단위 dedup으로 재임베딩 자체를 스킵 → Redis 불필요      │ application.py:419-428                │
+├───────────────────────┼─────────────────────────────────────────────────────────────────────────────────┼───────────────────────────────────────┤
+│ 중복 가드(DOI/해시)   │ 다중 가드: 지문 dedup + canonical 키(DOI/arXiv-id/title) + parserVersion 게이트 │ application.py:572-652, aws.py:98-100 │
+├───────────────────────┼─────────────────────────────────────────────────────────────────────────────────┼───────────────────────────────────────┤
+│ Throttled rebuild     │ 이미 doc-model 별도 큐 + 별도 서비스 + REBUILD_LOCK                             │ ingestion_stack.py:340-379            │
+└───────────────────────┴─────────────────────────────────────────────────────────────────────────────────┴───────────────────────────────────────┘
+
+즉 per-item 최적화는 사실상 다 돼 있어서, 저 패턴들을 더 붙여도 시간이 안 줄어듭니다.
+
+실제 병목: 의도된 직렬화 스로틀 (2026-07-01 503 인시던트 대응)
+
+논문 1편 wall-clock ≈ (arXiv 예의 대기) + (단일코어 pdfminer 파싱) + (Bedrock ≤2콜) + (OpenSearch bulk 1콜) — 전부 1개 태스크에서 순차 실행. 스루풋을 잡는 건:
+
+1. max_capacity=1 — 라이브 코퍼스 전체가 Fargate 태스크 1개로 드레인 (ingestion_stack.py:389)
+2. worker_max_messages=1 + 싱글스레드 루프 — 한 번에 1편, in-process 동시성 없음 (worker.py:66-69)
+3. arXiv 0.33 req/s 리미터 — fetch마다 ~3s 대기, full-text는 HTML+PDF라 편당 수초 (arxiv.py:82,361)"
+**AI Response**: "Re-checked code and live AWS state. The other agent's code-level assessment is mostly correct, but live state currently differs: CDK code sets max_capacity=1, while Application Auto Scaling has MaxCapacity=0 for service/docsuri/docsuri-ingestion. The bulk queue still has 152682 visible messages and the ECS service remains desired=0/running=0. Therefore the immediate live bottleneck is autoscaling drift/disabled bulk drain; after fixing that, the intended single-worker throttle becomes the next bottleneck."
+**Context**: Cross-agent diagnosis reconciliation.
+
+---
+## Isolated Worktree Ingestion Autoscaling Test
+**Timestamp**: 2026-07-06T06:57:21Z
+**User Input**: "그러면 브랜치나 워크트리를 따로 만들어서 거기서 테스트해봐."
+**AI Response**: "Creating a separate git worktree from origin/develop on branch codex/ingestion-autoscaling-test and testing the ingestion autoscaling/CDK state there, leaving the main checkout untouched except for this required audit entry."
+**Context**: Isolated infrastructure test for ingestion autoscaling drift.
+
+---
+## Isolated Worktree Ingestion Autoscaling Test Result
+**Timestamp**: 2026-07-06T07:00:24Z
+**User Input**: "(same interaction — isolated worktree test result)"
+**AI Response**: "Created /private/tmp/docsuri-ingestion-autoscaling-test on branch codex/ingestion-autoscaling-test from origin/develop. In that clean worktree, CDK synth succeeded and produced WorkerServiceTaskCountTarget94398C8F with MaxCapacity=1 and MinCapacity=0. CloudFormation deployed template also has MaxCapacity=1 for the same logical resource. Live Application Auto Scaling describes the physical target service/docsuri/docsuri-ingestion|ecs:service:DesiredCount|ecs as MaxCapacity=0. CDK diff did not show a scalable-target template diff, but did show unrelated task-definition drift for DOCSURI_OPENSEARCH_INDEX from live docsuri-corpus-v2 to local docsuri-corpus. Conclusion: bulk worker MaxCapacity=0 is live resource drift, not current code intent."
+**Context**: Isolated test completed without code changes or production mutation.
+
+---
 ## ORCID Framed OAuth CSP Fix Start
 **Timestamp**: 2026-07-06T07:07:39Z
 **User Input**: "Continue this session. The worktree is at ~/Projects/DocSuri/.claude/worktrees/feature+kpi-funnel-346, and the branch is feature/u10-orcid-real-347."
@@ -3835,7 +3916,7 @@ Error: TestingLibraryElementError: Unable to find an element by: [data-testid=\"
 **Timestamp**: 2026-07-06T07:23:15Z
 **User Input**: "push to PR"
 **AI Response**: "Preparing to commit and push the ORCID framed OAuth CSP fix to `feature/u10-orcid-real-347`."
-**Context**: Git publish request for ORCID social login CSP frame-src fix.
+**Context**: Git publish request for ORCID social login CSP fix.
 
 ---
 ## PR414 Merge Conflict Resolution Start
