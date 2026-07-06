@@ -66,10 +66,11 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
   const openedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (openedRef.current === paperId) return;
-    openedRef.current = paperId;
-    recordPaperOpened(paperId);
-  }, [paperId]);
+    const key = `${paperId}:${version}`;
+    if (openedRef.current === key) return;
+    openedRef.current = key;
+    recordPaperOpened(paperId, version);
+  }, [paperId, version]);
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 768px)');
