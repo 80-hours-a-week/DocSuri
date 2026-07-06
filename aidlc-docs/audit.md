@@ -3719,6 +3719,13 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **Context**: Novelty-Agent degradation semantics and Bedrock structured-output reliability fix.
 
 ---
+## Notion Connect Cancel Button
+**Timestamp**: 2026-07-06T03:44:36Z
+**User Input**: "`Notion으로 내보내기`를 누르면 `Notion Token 등록` 이 나오잖아요? `연결 저장` 밑에 `취소`버튼을 만들어 주세요."
+**AI Response**: "Added a cancel button below the Notion connection save button that clears local input state and returns the export panel to its initial closed state. Updated the existing Agent Chat Notion export regression to cover cancel and use an explicit non-secret dummy token."
+**Context**: Frontend Novelty Notion export connection form polish.
+
+---
 ## Frontend Dark Mode Color Tuning
 **Timestamp**: 2026-07-06T03:01:29Z
 **User Input**: "프론트엔드를 조금만 수정합시다. 다크모드에서는 1. Novelty의 입력출력 텍스트 박스가 갈색이 되도록 설정 2. `Notion으로 내보내기` 박스의 텍스트가 흰색으로 되도록 설정 으로 수정해 주세요."
@@ -3732,5 +3739,13 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **User Input**: "프롬프트 입력 박스는 전 색으로 돌려 주세요."
 **AI Response**: "Removed the dark-mode Novelty-specific `.input` color override from `AgentChatScreen.module.css`, keeping the brown styling on Novelty message boxes while returning the prompt input box to its default theme colors."
 **Context**: Frontend dark-mode visual adjustment for Novelty agent prompt input.
+
+---
+
+## Develop Deployment Complete
+**Timestamp**: 2026-07-06T03:44:54Z
+**User Input**: "현재 develop 브랜치를 AWS CLI의 `DocSuri-Deploy` Profile을 이용해 배포를 진행해 주세요."
+**AI Response**: "Completed AWS deployment from `develop` commit `d187ee4a139e0e2f9ac02bf9d64a76d3c82fe2f1` using AWS CLI profile `DocSuri-Deploy`. Built and pushed `docsuri-api`, `docsuri-ingestion`, and `docsuri-frontend` images to ECR with both immutable commit tags and `latest`; forced ECS deployments for `docsuri-api`, `docsuri-ingestion`, `docsuri-novelty-agent-worker`, `docsuri-summary-worker`, and `docsuri-frontend`; waited for all services to stabilize; verified every service reached desired running counts with no pending tasks and completed rollout state; verified `https://docsuri.org/` returned HTTP 200 and API `/healthz` returned HTTP 200."
+**Context**: Production deployment completion and post-deploy verification.
 
 ---

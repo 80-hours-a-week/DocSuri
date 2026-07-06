@@ -162,7 +162,13 @@ describe('AgentChatScreen', () => {
 
     // US-NV8(#258) — 연결이 없으면 먼저 토큰 등록 폼. 토큰은 응답으로 되돌아오지 않는다.
     await user.click(await screen.findByTestId('notion-export-open'));
-    await user.type(await screen.findByTestId('notion-token-input'), 'ntn_mock_secret_token_1234');
+    await user.click(await screen.findByTestId('notion-connect-cancel'));
+    expect(screen.queryByTestId('notion-token-input')).not.toBeInTheDocument();
+    await user.click(await screen.findByTestId('notion-export-open'));
+    await user.type(
+      await screen.findByTestId('notion-token-input'),
+      'not a real notion integration value',
+    );
     await user.type(screen.getByTestId('notion-parent-input'), '0'.repeat(32));
     await user.click(screen.getByTestId('notion-connect-save'));
 

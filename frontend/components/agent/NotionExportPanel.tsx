@@ -54,6 +54,13 @@ export function NotionExportPanel({ jobId }: Props) {
     }
   }
 
+  function cancelConnection() {
+    setError(null);
+    setToken('');
+    setParentPageId('');
+    setPhase('idle');
+  }
+
   async function approve() {
     setError(null);
     setPhase('submitting');
@@ -117,6 +124,14 @@ export function NotionExportPanel({ jobId }: Props) {
             data-testid="notion-connect-save"
           >
             연결 저장
+          </button>
+          <button
+            type="button"
+            className={styles.ghostButton}
+            onClick={cancelConnection}
+            data-testid="notion-connect-cancel"
+          >
+            취소
           </button>
         </div>
       ) : null}
