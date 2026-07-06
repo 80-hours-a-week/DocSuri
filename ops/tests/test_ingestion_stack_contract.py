@@ -30,3 +30,10 @@ def test_ingestion_stack_provisions_userdoc_grobid_worker() -> None:
     # RDS grants — the build path is S3-only.
     assert "self.userdoc_queue.grant_consume_messages(userdoc_task_def.task_role)" in STACK_SOURCE
     assert "self.bucket.grant_read_write(userdoc_task_def.task_role)" in STACK_SOURCE
+
+
+def test_ingestion_writes_through_corpus_alias() -> None:
+    # Re-embed cutover moves docsuri-corpus to a fresh backing index; writers must follow it.
+    assert STACK_SOURCE.count('"DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus"') == 3
+    assert '"DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus-v2"' not in STACK_SOURCE
+    assert '"DOCSURI_OPENSEARCH_INDEX_V2": "docsuri-corpus-v2"' in STACK_SOURCE
