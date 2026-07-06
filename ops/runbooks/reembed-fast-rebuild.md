@@ -59,6 +59,32 @@ like the v4 migration (`python -m docsuri_ingestion.worker <step>`), so they run
 | `DOCSURI_ARXIV_BULK_BUCKET` | `arxiv` | requester-pays bulk-PDF bucket (`s3://arxiv/pdf/`) that `raw_backfill` streams |
 | `DOCSURI_RAW_BACKFILL_MONTHS` | (all) | optional YYMM csv (e.g. `2501,2502`) sharding the bulk prime by submission month |
 
+## Embedding throughput — Bedrock daily cap vs Cohere-direct (mode B)
+
+⚠️ **The Bedrock quota bump in Prerequisites does NOT make a full re-embed fast.** `cohere.embed-v4`
+is **INFERENCE_PROFILE-only** on Bedrock (no provisioned throughput, no batch inference, no regional
+on-demand — verified via `get-foundation-model`), so every embed goes through the global
+cross-region profile, whose **432M tokens/day cap is fixed** (`RequestServiceQuotaIncrease` →
+"not adjustable"). The live corpus is ~2.87M chunks ≈ ~1.3B tokens, so a full re-embed through
+Bedrock takes **~3 days** (stall at the daily cap, resume next day). Raising TPM/RPM speeds a
+*minute*, not the *day*.
+
+**Fast path — call Cohere's API directly** (same model, same 1536 space, no Bedrock daily cap):
+
+| Env | Value | Meaning |
+|-----|-------|---------|
+| `DOCSURI_REEMBED_EMBEDDING_BACKEND` | `cohere` | select the direct backend (default `bedrock`) |
+| `DOCSURI_COHERE_API_KEY` | (secret) | Cohere **production** key; inject from Secrets Manager |
+| `DOCSURI_COHERE_EMBED_MODEL` | `embed-v4.0` | Cohere embed model id (default) |
+
+Set these on the `reembed` run-tasks **only** — the live worker/discovery keep the frozen Bedrock
+path. `reembed()._build_embedding` then picks `CohereDirectEmbeddingPort`, which POSTs
+`api.cohere.com/v2/embed` with `input_type=search_document` + the `DOCSURI_REEMBED_DIMENSION` pin,
+sub-batches at 96, and raises `RetriableIngestionError` on 429/5xx so the existing `_embed_with_retry`
+backoff retries. The worker subnets are public-IP (internet egress present) → no NAT needed.
+Requires: a Cohere prod key in Secrets Manager granted to the task role, and a rebuilt ingestion
+image that includes the adapter. This is the whole corpus in **hours**, no AWS quota dependency.
+
 ## Run order
 
 All commands are one-off `aws ecs run-task` on the worker task def, overriding the `worker`
