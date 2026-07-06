@@ -10,9 +10,10 @@ embedder). Unit tests exercise the deterministic mock; the real wire shape
 
 **Deployment prerequisites (verified 2026-07-06, account 028317349537):**
 - The Rerank model is NOT in ap-northeast-2 (Seoul, the deploy region) — only ``cohere.embed-v4``
-  is. Point ``model_arn`` + ``region_name`` at a region that HAS it (us-west-2 carries both
-  ``cohere.rerank-v3-5`` and ``amazon.rerank-v1``; us-east-1 carries Cohere). This is a
-  cross-region call, so budget the extra RTT against NFR-P1.
+  is, and (unlike embed) there is NO global/APAC rerank inference profile, so it cannot be called
+  "in Seoul". Point ``model_arn`` + ``region_name`` at the NEAREST region that carries it:
+  **ap-northeast-1 (Tokyo)** has both ``cohere.rerank-v3-5`` and ``amazon.rerank-v1`` and is ~30ms
+  RTT from Seoul (vs ~130ms to us-west-2), so the cross-region hop stays well inside NFR-P1.
 - The task role needs ``bedrock:Rerank`` on the rerank model resource AND model access enabled in
   that region. Without it the call returns ``AccessDeniedException`` → RerankUnavailable →
   fail-soft to the baseline RRF order (search unaffected). Until these are granted, wiring the
