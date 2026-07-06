@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from docsuri_shared.dtos import DocModel
-from docsuri_shared.vector_spec import DIMENSIONS, EMBEDDING_SPEC
+from docsuri_shared.vector_spec import EMBEDDING_SPEC
 from pydantic import ValidationError
 
 from docsuri_ingestion.domain.enums import FailureReason
@@ -189,11 +189,20 @@ class S3UserDocumentSource:
 
 
 class BedrockCohereEmbeddingPort:
-    def __init__(self, *, model_id: str, region_name: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        model_id: str,
+        region_name: str | None = None,
+        output_dimension: int | None = None,
+    ) -> None:
         import boto3
 
         self._client = boto3.client("bedrock-runtime", region_name=region_name)
         self._model_id = model_id
+        # Defaults to the frozen spec width (1024). A re-embed to a different space (e.g. Cohere
+        # v4's 1536 default) overrides it so the request pin + length check match the new vectors.
+        self._output_dimension = output_dimension or EMBEDDING_SPEC.dimensions
 
     def embed_documents(
         self,
@@ -217,9 +226,9 @@ class BedrockCohereEmbeddingPort:
             "texts": list(texts),
             "input_type": EMBEDDING_SPEC.input_type_writer,
             "embedding_types": ["float"],
-            # Cohere Embed v4 defaults to 1536-dim; pin to the index/spec width so vectors
-            # match docsuri-corpus-v2's mapping (v3 returned EMBEDDING_SPEC.dimensions implicitly).
-            "output_dimension": EMBEDDING_SPEC.dimensions,
+            # Cohere Embed v4 defaults to 1536-dim; pin to the configured width (the frozen 1024 for
+            # the live path, or a re-embed override e.g. 1536) so vectors match the target mapping.
+            "output_dimension": self._output_dimension,
         }
         response = self._client.invoke_model(
             modelId=self._model_id,
@@ -232,9 +241,10 @@ class BedrockCohereEmbeddingPort:
         if isinstance(vectors, dict):
             vectors = vectors.get("float", [])
         for vector in vectors:
-            if len(vector) != DIMENSIONS:
+            if len(vector) != self._output_dimension:
                 raise ValidationViolationError(
-                    f"Bedrock returned vector dimension {len(vector)}, expected {DIMENSIONS}",
+                    f"Bedrock returned vector dimension {len(vector)}, "
+                    f"expected {self._output_dimension}",
                     stage="embed",
                 )
         return vectors

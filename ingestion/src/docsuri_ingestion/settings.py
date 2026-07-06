@@ -39,6 +39,10 @@ class IngestionSettings(BaseModel):
     reembed_batch_size: int = Field(default=96, alias="DOCSURI_REEMBED_BATCH_SIZE")  # <=96
     reembed_min_documents: int = Field(default=1, alias="DOCSURI_REEMBED_MIN_DOCUMENTS")
     reembed_copy_rps: int = Field(default=-1, alias="DOCSURI_REEMBED_COPY_RPS")  # -1 = unlimited
+    # None → frozen spec width (1024). Set to Cohere v4's 1536 default for a dimension-changing
+    # re-embed; the target index + embed both use it. Cutover then needs a coordinated vector-spec
+    # bump + reader redeploy (same-space invariant) or search breaks — see the runbook.
+    reembed_dimension: int | None = Field(default=None, alias="DOCSURI_REEMBED_DIMENSION")
     control_plane_dsn: str | None = Field(default=None, alias="DOCSURI_CONTROL_PLANE_DSN")
     sqs_queue_url: str | None = Field(default=None, alias="DOCSURI_SQS_QUEUE_URL")
     sqs_dlq_url: str | None = Field(default=None, alias="DOCSURI_SQS_DLQ_URL")

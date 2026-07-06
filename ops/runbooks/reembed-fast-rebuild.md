@@ -50,6 +50,7 @@ like the v4 migration (`python -m docsuri_ingestion.worker <step>`), so they run
 | `DOCSURI_REEMBED_BATCH_SIZE` | `96` | scroll page = embed batch (≤96, Bedrock Cohere limit) |
 | `DOCSURI_REEMBED_MIN_DOCUMENTS` | `1` | finalize floor; a good rebuild sets this near the known corpus size (~1.5M) |
 | `DOCSURI_REEMBED_COPY_RPS` | `-1` | mode A `_reindex` throttle; `-1` = unlimited |
+| `DOCSURI_REEMBED_DIMENSION` | (frozen 1024) | embedding + target-index vector width; set `1536` for Cohere v4's default (mode B only) |
 
 ## Run order
 
@@ -76,6 +77,26 @@ aws ecs run-task --cluster <cluster> --task-definition <WorkerTaskDef> --launch-
 4. **cutover** — `command:["reembed_cutover"]`. Atomically repoints the `docsuri-corpus` alias to
    the target. Search now serves the new vectors.
 5. Revert the domain resize; optionally delete the old index once verified.
+
+## Dimension change (Cohere v4 default = 1536)
+
+Cohere Embed v4 defaults to **1536** dims; the live corpus is pinned to **1024**. Re-embedding to
+the default is a **dimension change**, which means **mode B only** (old 1024 vectors can't be copied
+into a 1536 mapping — `reembed_copy` refuses it) and:
+
+1. Set `DOCSURI_REEMBED_DIMENSION=1536` on the `reembed_provision` and `reembed` tasks. The target
+   index mapping and the Bedrock `output_dimension` both follow it — the frozen `vector_spec`
+   (still 1024) is intentionally **not** touched yet, so daily ingest and the live reader keep
+   working against the old index during the (hours-long) build.
+2. **⚠️ Cutover is a coordinated release, not just `reembed_cutover`.** The U2 reader embeds queries
+   from the SAME `vector_spec`; pointing the alias at a 1536 index while the reader still queries at
+   1024 = every search violates the same-space invariant (`assert_same_space`) → broken results.
+   At cutover you MUST, together: bump `shared/vector-spec` (SPEC_VERSION `v2`→`v3`, DIMENSIONS
+   `1024`→`1536`, drop the `output_dimension` pin so it uses the default), regenerate, and deploy
+   BOTH the reader (discovery) and writer images, THEN run `reembed_cutover`. Rollback = redeploy
+   the old images + re-point the alias to the 1024 index.
+
+For a same-model reshard/corruption rebuild, leave `DOCSURI_REEMBED_DIMENSION` unset (mode A).
 
 ## Idempotency & rollback
 

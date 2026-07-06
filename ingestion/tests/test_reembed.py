@@ -1,6 +1,9 @@
 """AWS-free unit tests for the pure helpers of the re-embed rebuild runner. The step functions
 themselves hit OpenSearch/Bedrock and are exercised in the live rebuild, not here."""
 
+from docsuri_shared.index_spec import papers_index_body
+from docsuri_shared.vector_spec import DIMENSIONS
+
 from docsuri_ingestion.reembed import _embed_text_for_source, _scroll_body
 from docsuri_ingestion.settings import IngestionSettings
 
@@ -37,3 +40,18 @@ def test_scroll_body_includes_slice_when_sharded():
     body = _scroll_body(settings, page_size=50)
     assert body["slice"] == {"id": 1, "max": 3}
     assert body["size"] == 50
+
+
+def _vector_dim(body: dict) -> int:
+    return body["mappings"]["properties"]["vector"]["dimension"]
+
+
+def test_index_body_dimension_defaults_to_frozen_spec():
+    assert _vector_dim(papers_index_body()) == DIMENSIONS
+    assert _vector_dim(papers_index_body(on_disk=True)) == DIMENSIONS
+
+
+def test_index_body_dimension_override_for_reembed():
+    # Cohere v4 default (1536) target index without touching the frozen vector-spec.
+    assert _vector_dim(papers_index_body(dimension=1536)) == 1536
+    assert _vector_dim(papers_index_body(on_disk=True, dimension=1536)) == 1536

@@ -22,6 +22,7 @@ import logging
 import time
 
 from docsuri_shared.index_spec import papers_index_body
+from docsuri_shared.vector_spec import EMBEDDING_SPEC
 
 from .adapters.aws import BedrockCohereEmbeddingPort, build_opensearch_client, collect_bulk_failures
 from .resilience import RetryPolicy, is_retriable
@@ -97,9 +98,15 @@ def reembed_provision(settings: IngestionSettings | None = None) -> int:
             number_of_shards=settings.reembed_shards,
             number_of_replicas=0,
             refresh_interval="-1",
+            dimension=settings.reembed_dimension,
         ),
     )
-    log.info("created re-embed target %s (shards=%d)", dst, settings.reembed_shards)
+    log.info(
+        "created re-embed target %s (shards=%d, dim=%s)",
+        dst,
+        settings.reembed_shards,
+        settings.reembed_dimension or EMBEDDING_SPEC.dimensions,
+    )
     return 0
 
 
@@ -108,6 +115,12 @@ def reembed_copy(settings: IngestionSettings | None = None) -> int:
     into the target -- no Bedrock. Polls the reindex task to completion, then refreshes the target
     (refresh_interval=-1 means docs are not searchable until an explicit refresh)."""
     settings = settings or IngestionSettings.from_env()
+    if settings.reembed_dimension not in (None, EMBEDDING_SPEC.dimensions):
+        # MODE A copies source vectors verbatim; they can't land in a different-dimension mapping.
+        raise SystemExit(
+            f"reembed_copy cannot copy {EMBEDDING_SPEC.dimensions}-dim source vectors into a "
+            f"{settings.reembed_dimension}-dim target -- a dimension change needs MODE B (reembed)"
+        )
     client = _client(settings)
     src, dst = _source_index(settings), settings.opensearch_index_reembed
     throttle = (
@@ -144,7 +157,9 @@ def reembed(settings: IngestionSettings | None = None) -> int:
         raise SystemExit("DOCSURI_BEDROCK_MODEL_ID is required for re-embed")
     client = _client(settings)
     embedding = BedrockCohereEmbeddingPort(
-        model_id=settings.bedrock_model_id, region_name=settings.aws_region
+        model_id=settings.bedrock_model_id,
+        region_name=settings.aws_region,
+        output_dimension=settings.reembed_dimension,
     )
     src, dst = _source_index(settings), settings.opensearch_index_reembed
     page_size = min(96, max(1, settings.reembed_batch_size))
