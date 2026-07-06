@@ -1172,7 +1172,7 @@ def test_api_notion_connection_and_approved_export_completes(monkeypatch) -> Non
 
     from backend.modules.novelty.security import decrypt_secret
 
-    raw_token = "ntn_test_secret_token_1234"
+    raw_token = "not a real notion integration value"
     monkeypatch.setenv("DOCSURI_NOTION_TOKEN_KEY", Fernet.generate_key().decode())
     repo = InMemoryNoveltyRepository()
     # 요청마다 principal이 새로 뽑히지 않도록 고정 — 연결 저장·조회가 같은 owner여야 한다
@@ -1214,6 +1214,9 @@ def test_api_notion_connection_and_approved_export_completes(monkeypatch) -> Non
     assert connection["parentPageId"] == "0" * 32
     assert content["artifacts"] and "payload" in content["artifacts"][0]
 
+    assert client.delete("/api/novelty/notion/connection").status_code == 204
+    assert client.get("/api/novelty/notion/connection").json()["connected"] is False
+
 
 def test_api_approved_export_without_connection_fails_softly(monkeypatch) -> None:
     client = _client(monkeypatch, principal=_principal())
@@ -1232,6 +1235,25 @@ def test_api_approved_export_without_connection_fails_softly(monkeypatch) -> Non
     body = approved.json()
     assert body["status"] == "failed"
     assert "Notion 연결이 없습니다" in body["errorMessage"]
+
+
+def test_api_notion_connection_is_owner_scoped(monkeypatch) -> None:
+    from cryptography.fernet import Fernet
+
+    monkeypatch.setenv("DOCSURI_NOTION_TOKEN_KEY", Fernet.generate_key().decode())
+    repo = InMemoryNoveltyRepository()
+    owner_a = _principal(str(uuid4()))
+    owner_b = _principal(str(uuid4()))
+    client_a = _client(monkeypatch, principal=owner_a, repo=repo)
+    client_b = _client(monkeypatch, principal=owner_b, repo=repo)
+
+    assert client_a.put(
+        "/api/novelty/notion/connection",
+        json={"token": "not a real owner scoped notion value", "parentPageId": "a" * 32},
+    ).status_code == 200
+
+    assert client_a.get("/api/novelty/notion/connection").json()["connected"] is True
+    assert client_b.get("/api/novelty/notion/connection").json()["connected"] is False
 
 
 def test_notion_api_client_builds_page_request_and_maps_errors() -> None:

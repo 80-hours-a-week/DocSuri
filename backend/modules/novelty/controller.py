@@ -348,6 +348,18 @@ async def save_notion_connection(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.delete("/notion/connection", status_code=204, response_class=Response)
+async def delete_notion_connection(
+    request: Request,
+    principal: Principal = PRINCIPAL_DEP,
+    repo: NoveltyRepository = REPO_DEP,
+) -> Response:
+    NoveltyService(repo, _observability(request)).delete_notion_connection(
+        principal.user_id
+    )
+    return Response(status_code=204)
+
+
 routers = (router,)
 
 

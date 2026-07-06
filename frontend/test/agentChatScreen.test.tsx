@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
@@ -6,8 +6,13 @@ import {
   normalizeTimelineDisplay,
   parseNoveltySseEvents,
 } from '@/components/agent/AgentChatScreen';
+import { resetMockNotionConnection } from '@/lib/api/mockTransport';
 
 describe('AgentChatScreen', () => {
+  beforeEach(() => {
+    resetMockNotionConnection();
+  });
+
   it('marks previous running timeline steps complete when a terminal event arrives', () => {
     expect(
       normalizeTimelineDisplay([
@@ -160,9 +165,14 @@ describe('AgentChatScreen', () => {
     await user.click(screen.getByTestId('agent-composer-submit'));
     expect(await screen.findByText('유사 연구 표')).toBeInTheDocument();
 
-    // US-NV8(#258) — 연결이 없으면 먼저 토큰 등록 폼. 토큰은 응답으로 되돌아오지 않는다.
-    await user.click(await screen.findByTestId('notion-export-open'));
-    await user.type(await screen.findByTestId('notion-token-input'), 'ntn_mock_secret_token_1234');
+    // US-NV8(#258) — 연결이 없으면 바로 토큰 등록 폼. 토큰은 응답으로 되돌아오지 않는다.
+    expect(await screen.findByTestId('notion-parent-warning')).toHaveTextContent(
+      '상위 페이지 ID',
+    );
+    await user.type(
+      await screen.findByTestId('notion-token-input'),
+      'not a real notion integration value',
+    );
     await user.type(screen.getByTestId('notion-parent-input'), '0'.repeat(32));
     await user.click(screen.getByTestId('notion-connect-save'));
 

@@ -41,6 +41,7 @@ class NoveltyRepository(Protocol):
     def save_export(self, export: NotionExport) -> NotionExport: ...
     def get_notion_connection(self, owner_id: str) -> NotionConnection | None: ...
     def save_notion_connection(self, connection: NotionConnection) -> NotionConnection: ...
+    def delete_notion_connection(self, owner_id: str) -> None: ...
     def commit(self) -> None: ...
     def rollback(self) -> None: ...
     def close(self) -> None: ...
@@ -180,6 +181,10 @@ class InMemoryNoveltyRepository:
         with self._lock:
             self._notion_connections[connection.ownerId] = connection
             return connection
+
+    def delete_notion_connection(self, owner_id: str) -> None:
+        with self._lock:
+            self._notion_connections.pop(owner_id, None)
 
     def commit(self) -> None:
         return None
@@ -580,6 +585,12 @@ class SqlNoveltyRepository:
             row.updated_at = now
         self._s.flush()
         return connection.model_copy(update={"updatedAt": now})
+
+    def delete_notion_connection(self, owner_id: str) -> None:
+        row = self._s.get(NotionConnectionTable, owner_id)
+        if row is not None:
+            self._s.delete(row)
+            self._s.flush()
 
     def save_export(self, export: NotionExport) -> NotionExport:
         self.get_job(export.ownerId, export.jobId)
