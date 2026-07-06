@@ -3,13 +3,13 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+from docsuri_shared.authz import Principal, UserRole
 from fastapi.testclient import TestClient
 from hypothesis import example, given
 from hypothesis import strategies as st
 
 from backend.app import create_app
 from backend.config import Settings
-from backend.modules.accounts.models import Principal, UserRole
 from backend.modules.personalization import controller
 from backend.modules.personalization.models import (
     BehaviorEvent,

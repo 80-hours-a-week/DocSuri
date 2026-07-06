@@ -3,12 +3,12 @@ from __future__ import annotations
 import json
 import os
 
+from docsuri_shared.authz import Principal
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
 from backend.middleware.agent_quota import enforce_novelty_job_quota
-from backend.modules.accounts.models import Principal
 from backend.modules.user_docmodel import (
     USER_DOCMODEL_PDF_CONTENT_TYPE,
     build_default_user_docmodel_coordinator,

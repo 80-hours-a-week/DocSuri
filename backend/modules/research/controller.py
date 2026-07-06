@@ -4,11 +4,11 @@ import os
 from typing import Any
 from uuid import uuid4
 
+from docsuri_shared.authz import Principal
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.middleware.agent_quota import enforce_evidence_turn_quota
-from backend.modules.accounts.models import Principal
 from backend.modules.user_docmodel import (
     USER_DOCMODEL_PDF_CONTENT_TYPE,
     build_default_user_docmodel_coordinator,

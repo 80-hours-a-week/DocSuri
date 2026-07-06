@@ -7,10 +7,10 @@ from typing import Any
 from urllib.parse import quote
 
 import httpx
+from docsuri_shared.authz import Principal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from backend.modules.accounts.models import Principal
 from backend.modules.library.controller import get_library_service
 from backend.modules.library.schemas import LibraryItemCreateDTO
 from backend.modules.library.services.library import LibraryService

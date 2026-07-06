@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+from docsuri_shared.authz import Principal, UserRole
 from fastapi.testclient import TestClient
 from hypothesis import given
 from hypothesis import strategies as st
 
 from backend.app import create_app
 from backend.config import Settings
-from backend.modules.accounts.models import Principal, UserRole
 from backend.modules.evidence import controller
 from backend.modules.evidence.assembler import EvidenceComparisonAssembler
 from backend.modules.evidence.models import (
