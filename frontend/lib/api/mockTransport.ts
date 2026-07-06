@@ -70,6 +70,10 @@ import type {
 // US-NV8(#258) — mock Notion 연결 상태(모듈 수준, 세션 초기화와 무관한 사용자 설정).
 let mockNotionConnection: { parentPageId: string } | null = null;
 
+export function resetMockNotionConnection(): void {
+  mockNotionConnection = null;
+}
+
 function matches(q: string, ...needles: string[]): boolean {
   const lower = q.toLowerCase();
   return needles.some((n) => lower.includes(n));
@@ -476,6 +480,10 @@ export class MockTransport implements Transport {
         status: 200,
         body: { connected: true, parentPageId: mockNotionConnection.parentPageId },
       };
+    }
+    if (path === '/api/novelty/notion/connection' && req.method === 'DELETE') {
+      mockNotionConnection = null;
+      return { status: 204, body: null };
     }
     const noveltyNotionPreview = path.match(/^\/api\/novelty\/jobs\/([^/]+)\/notion\/preview$/);
     if (noveltyNotionPreview && req.method === 'POST') {
