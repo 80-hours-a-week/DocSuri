@@ -55,3 +55,32 @@ def test_index_body_dimension_override_for_reembed():
     # Cohere v4 default (1536) target index without touching the frozen vector-spec.
     assert _vector_dim(papers_index_body(dimension=1536)) == 1536
     assert _vector_dim(papers_index_body(on_disk=True, dimension=1536)) == 1536
+
+
+def test_estimate_tokens_conservative_and_min_one():
+    from docsuri_ingestion.reembed import _estimate_tokens
+
+    assert _estimate_tokens("") == 1  # min 1 so short text still consumes budget
+    assert _estimate_tokens("a" * 70) == 20  # ~len/3.5, over-counts vs the real tokenizer
+    assert _estimate_tokens("a" * 7000) > _estimate_tokens("a" * 700)
+
+
+def test_existing_ids_returns_found_subset():
+    from docsuri_ingestion.reembed import _existing_ids
+
+    class _FakeClient:
+        def mget(self, index, body, _source):
+            found = {"a", "c"}
+            return {"docs": [{"_id": i, "found": i in found} for i in body["ids"]]}
+
+    assert _existing_ids(_FakeClient(), "idx", ["a", "b", "c"]) == {"a", "c"}
+    assert _existing_ids(_FakeClient(), "idx", []) == set()
+
+
+def test_token_bucket_acquire_amount_and_clamp():
+    from docsuri_ingestion.resilience import TokenBucket
+
+    tb = TokenBucket(rate_per_second=1_000_000.0, capacity=1000)
+    tb.acquire(400)  # partial draw from a full bucket → immediate
+    tb.acquire(0)  # no-op
+    tb.acquire(5000)  # > capacity → clamped, refills fast, never deadlocks

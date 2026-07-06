@@ -32,9 +32,18 @@ like the v4 migration (`python -m docsuri_ingestion.worker <step>`), so they run
 1. **Resize the OpenSearch domain up** for the rebuild window (cost-no-object → e.g.
    `r6g.2xlarge.search` ×4). This is a blue/green, online change in `ops/cdk/stacks/search_stack.py`
    (`data_nodes`, instance type) — `cdk deploy Docsuri-Search`. Revert after cutover.
-2. **Bedrock quota** (mode B): raise the `cohere.embed-v4` on-demand TPM/RPM in Service Quotas so
-   N parallel tasks don't sit in throttle backoff. Throttling is now retried (not DLQ'd), but
-   headroom is what makes it fast.
+2. **Bedrock quota / the embed-v4 daily-cap reality** (mode B): `cohere.embed-v4` is
+   `INFERENCE_PROFILE`-only (no on-demand-by-id, no Provisioned Throughput, no Batch), so every
+   invoke goes through the global cross-region profile — gated by a **non-adjustable 432M
+   tokens/day** cap (= 300k tokens/min). The full corpus (~500M–1.4B embed-tokens) therefore takes
+   **2–4 days regardless of fan-out** — the cap is account-wide, so N parallel tasks just throttle
+   each other to the same aggregate. You can still raise the per-minute TPM (a support case, not an
+   auto-grant), but it can't beat the daily wall. So run **one** task with
+   `DOCSURI_REEMBED_TARGET_TPM` set below the per-minute cap (e.g. `250000`): client-side pacing
+   holds throughput under both caps so it grinds continuously without throttle-storming, and turns
+   on mget-skip resumability so a killed multi-day task can be relaunched without re-embedding. Only
+   leave it `0` (unpaced fast path) when you truly have headroom — a small corpus or a big approved
+   bump.
 3. Confirm env: the target index name defaults to `docsuri-corpus-v3`
    (`DOCSURI_OPENSEARCH_INDEX_REEMBED`); the source defaults to the live alias `docsuri-corpus`
    (`DOCSURI_REEMBED_SOURCE`). For mode B set `DOCSURI_BEDROCK_MODEL_ID` to the **new** model.
@@ -54,6 +63,7 @@ like the v4 migration (`python -m docsuri_ingestion.worker <step>`), so they run
 | `DOCSURI_REEMBED_MIN_DOCUMENTS` | `1` | finalize floor; a good rebuild sets this near the known corpus size (~1.5M) |
 | `DOCSURI_REEMBED_COPY_RPS` | `-1` | mode A `_reindex` throttle; `-1` = unlimited |
 | `DOCSURI_REEMBED_DIMENSION` | (frozen 1024) | embedding + target-index vector width; set `1536` for Cohere v4's default (mode B only) |
+| `DOCSURI_REEMBED_TARGET_TPM` | `0` (off) | mode B pacing: >0 caps client-side embed throughput to this many tokens/min (set below the Bedrock per-minute cap, e.g. `250000`) so a binding, non-adjustable daily quota never throttle-storms — and enables mget-skip resumability. `0` = unpaced (needs quota headroom). |
 | `DOCSURI_RAW_CACHE_MODE` | `off` | B3 raw cache: `off` (live path, byte-identical) / `prefer` (cache→HTTP, write-back) / `only` (cache-only, no arXiv — used by `reparse`) |
 | `DOCSURI_RAW_CACHE_PREFIX` | `raw` | S3 prefix for cached source bytes (`{prefix}/{paperId}/v{version}/{tier}`) |
 | `DOCSURI_ARXIV_BULK_BUCKET` | `arxiv` | requester-pays bulk-PDF bucket (`s3://arxiv/pdf/`) that `raw_backfill` streams |

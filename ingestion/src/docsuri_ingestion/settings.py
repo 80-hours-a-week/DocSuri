@@ -43,6 +43,12 @@ class IngestionSettings(BaseModel):
     # re-embed; the target index + embed both use it. Cutover then needs a coordinated vector-spec
     # bump + reader redeploy (same-space invariant) or search breaks — see the runbook.
     reembed_dimension: int | None = Field(default=None, alias="DOCSURI_REEMBED_DIMENSION")
+    # >0 → client-side embed pacing: cap aggregate Bedrock throughput to this many tokens/min so a
+    # binding, non-adjustable on-demand quota (Cohere v4 = 300k/min = 432M/day) never throttle-
+    # storms the run — one paced task grinds continuously under both caps. Also turns on mget-skip
+    # resumability (skip docs already in the target) so a killed multi-day task can be relaunched
+    # without re-embedding. 0 = off → unpaced (needs quota headroom); live path byte-identical.
+    reembed_target_tpm: int = Field(default=0, alias="DOCSURI_REEMBED_TARGET_TPM")
     # B3 fast full-re-parse (raw cache + bulk PDF prime + offline re-parse; see reparse.py /
     # raw_backfill.py / runbook). Default OFF → the live fetch path stays byte-identical.
     raw_cache_mode: Literal["off", "prefer", "only"] = Field(

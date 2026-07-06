@@ -25,7 +25,7 @@ from docsuri_shared.index_spec import papers_index_body
 from docsuri_shared.vector_spec import EMBEDDING_SPEC
 
 from .adapters.aws import BedrockCohereEmbeddingPort, build_opensearch_client, collect_bulk_failures
-from .resilience import RetryPolicy, is_retriable
+from .resilience import RetryPolicy, TokenBucket, is_retriable
 from .settings import IngestionSettings
 
 log = logging.getLogger("docsuri.ingestion.reembed")
@@ -69,7 +69,7 @@ def _scroll_body(settings: IngestionSettings, *, page_size: int) -> dict:
 def _embed_with_retry(embedding, texts, policy: RetryPolicy | None = None) -> list[list[float]]:
     """Embed with backoff on transient Bedrock failures (throttling/5xx are now retriable via
     resilience.is_retriable), rather than letting one throttle abort a shard."""
-    policy = policy or RetryPolicy()
+    policy = policy or RetryPolicy(max_attempts=8, base_delay_seconds=2.0)
     attempt = 0
     while True:
         attempt += 1
@@ -148,10 +148,33 @@ def reembed_copy(settings: IngestionSettings | None = None) -> int:
     return 0
 
 
+def _estimate_tokens(text: str) -> int:
+    """Conservative input-token estimate for pacing (Bedrock bills input tokens). ~1 token per
+    3.5 chars OVER-counts vs Cohere's tokenizer on typical scientific text, so pacing stays under
+    the cap rather than tripping it. Min 1 so a short text still consumes budget."""
+    return max(1, len(text) * 2 // 7)  # len / 3.5
+
+
+def _existing_ids(client, index: str, ids: list[str]) -> set[str]:
+    """The subset of ``ids`` already present in ``index`` (realtime mget, source suppressed). Lets
+    a paced re-embed skip docs a prior (possibly killed) run already wrote -- so a relaunch resumes
+    instead of re-embedding, and re-spending the token budget, from zero. mget is realtime, so it
+    sees docs written but not yet refreshed (the target runs refresh_interval=-1 during the load)."""
+    if not ids:
+        return set()
+    resp = client.mget(index=index, body={"ids": ids}, _source=False)
+    return {d["_id"] for d in resp.get("docs", []) if d.get("found")}
+
+
 def reembed(settings: IngestionSettings | None = None) -> int:
     """MODE B (embedding model change): sliced-scroll the source, recompute each doc's vector from
     its stored embed text with the new model, and bulk-write the full doc (only ``vector`` changes)
-    to the target. Run one task per shard (DOCSURI_REEMBED_SHARD / SHARD_COUNT)."""
+    to the target. Run one task per shard (DOCSURI_REEMBED_SHARD / SHARD_COUNT).
+
+    With DOCSURI_REEMBED_TARGET_TPM>0 the run is PACED (holds Bedrock throughput under a binding,
+    non-adjustable quota so it never throttle-storms) and RESUMABLE (skips docs already written to
+    the target). Fan-out gives no speedup against an account-wide token/day cap, so a capped run is
+    one continuous paced task; the pacing to <cap/min inherently keeps a day under the daily cap."""
     settings = settings or IngestionSettings.from_env()
     if not settings.bedrock_model_id:
         raise SystemExit("DOCSURI_BEDROCK_MODEL_ID is required for re-embed")
@@ -163,8 +186,18 @@ def reembed(settings: IngestionSettings | None = None) -> int:
     )
     src, dst = _source_index(settings), settings.opensearch_index_reembed
     page_size = min(96, max(1, settings.reembed_batch_size))
+    # Paced mode: cap token throughput below the Bedrock quota + skip already-written docs. None →
+    # unpaced legacy behaviour (needs quota headroom), byte-identical to before this knob existed.
+    limiter = (
+        TokenBucket(
+            rate_per_second=settings.reembed_target_tpm / 60.0,
+            capacity=settings.reembed_target_tpm,
+        )
+        if settings.reembed_target_tpm > 0
+        else None
+    )
 
-    total = skipped_empty = 0
+    total = skipped_empty = skipped_done = 0
     resp = client.search(index=src, body=_scroll_body(settings, page_size=page_size), scroll="10m")
     sid = resp.get("_scroll_id")
     try:
@@ -175,7 +208,16 @@ def reembed(settings: IngestionSettings | None = None) -> int:
             # Drop docs whose stored embed text is empty (nothing to embed) but keep going.
             usable = [(h, text) for h in hits if (text := _embed_text_for_source(h["_source"]))]
             skipped_empty += len(hits) - len(usable)
+            if usable and limiter is not None:
+                # Resumability: don't re-embed (or re-spend budget on) docs a prior run wrote.
+                done = _existing_ids(client, dst, [h["_id"] for h, _ in usable])
+                if done:
+                    usable = [(h, t) for (h, t) in usable if h["_id"] not in done]
+                    skipped_done += len(done)
             if usable:
+                if limiter is not None:
+                    # Pace to the token budget BEFORE hitting Bedrock so we never trip the cap.
+                    limiter.acquire(sum(_estimate_tokens(t) for _, t in usable))
                 vectors = _embed_with_retry(embedding, [text for _, text in usable])
                 lines: list[str] = []
                 for (h, _text), vec in zip(usable, vectors, strict=True):
@@ -186,7 +228,10 @@ def reembed(settings: IngestionSettings | None = None) -> int:
                 if failures:
                     raise RuntimeError(f"re-embed bulk had {len(failures)} failed item(s)")
                 total += len(usable)
-            log.info("re-embedded %d (skipped_empty=%d)", total, skipped_empty)
+            log.info(
+                "re-embedded %d (skipped_empty=%d, skipped_done=%d)",
+                total, skipped_empty, skipped_done,
+            )
             resp = client.scroll(scroll_id=sid, scroll="10m")
             sid = resp.get("_scroll_id")
     finally:
@@ -196,11 +241,12 @@ def reembed(settings: IngestionSettings | None = None) -> int:
             except Exception:  # noqa: BLE001 -- best-effort scroll cleanup
                 pass
     log.info(
-        "re-embed shard %d/%d complete: %d reembedded, %d skipped_empty",
+        "re-embed shard %d/%d complete: %d reembedded, %d skipped_empty, %d skipped_done",
         settings.reembed_shard_index,
         settings.reembed_shard_count,
         total,
         skipped_empty,
+        skipped_done,
     )
     return 0
 
