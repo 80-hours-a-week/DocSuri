@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta, timezone
 from typing import Any
 
 from backend.modules.user_docmodel import (
@@ -42,6 +43,12 @@ from .models import (
 from .repository import NoveltyRepository
 from .security import decrypt_secret, encrypt_secret
 from .validators import validate_artifact_payload
+
+_KST = timezone(timedelta(hours=9))
+
+
+def _notion_export_title() -> str:
+    return f"{utc_now().astimezone(_KST):%Y%m%d:%H%M}_Novelty_분석_결과"
 
 
 def _emit_metric(observability, name: str, value: float = 1.0, tags: dict | None = None) -> None:
@@ -317,7 +324,8 @@ class NoveltyService:
         job = self._repo.get_job(owner_id, job_id)
         artifacts = self._repo.list_artifacts(owner_id, job_id)
         preview = {
-            "title": f"Novelty analysis: {job.topic[:120]}",
+            "title": _notion_export_title(),
+            "inputPrompt": job.topic,
             "jobId": job.jobId,
             "artifacts": [
                 {"kind": artifact.kind.value, "title": artifact.title}
@@ -458,7 +466,8 @@ class NoveltyService:
         job = self._repo.get_job(owner_id, job_id)
         artifacts = self._repo.list_artifacts(owner_id, job_id)
         return {
-            "title": f"Novelty analysis: {job.topic[:120]}",
+            "title": _notion_export_title(),
+            "inputPrompt": job.topic,
             "jobId": job.jobId,
             "artifacts": [
                 {"kind": artifact.kind.value, "title": artifact.title, "payload": artifact.payload}

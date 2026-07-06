@@ -3919,6 +3919,13 @@ Error: TestingLibraryElementError: Unable to find an element by: [data-testid=\"
 **Context**: Git publish request for ORCID social login CSP fix.
 
 ---
+## Code Generation
+**Timestamp**: 2026-07-06T16:24:04+09:00
+**User Input**: "내보내기 제목은 `날짜:시간_Novelty_분석_결과`로 내보내지도록 수정해 주세요."
+**AI Response**: "Changed Novelty Notion export titles to the KST timestamped format `YYYYMMDD:HHMM_Novelty_분석_결과`, kept the user prompt in the Notion body as `입력 프롬프트: ...`, and updated regression tests. Verified targeted Novelty tests, Ruff, and diff check."
+**Context**: Novelty Notion export timestamped title formatting
+
+---
 ## PR414 Merge Conflict Resolution Start
 **Timestamp**: 2026-07-06T07:25:35Z
 **User Input**: "resolve the merge conflict"
@@ -3931,5 +3938,12 @@ Error: TestingLibraryElementError: Unable to find an element by: [data-testid=\"
 **User Input**: "resolve the merge conflict"
 **AI Response**: "Merged `origin/develop` into `feature/u10-orcid-real-347` and resolved the only conflict, `aidlc-docs/audit.md`, by unioning both append-log sides. Verification passed: no unmerged paths, `git diff --check`, `git diff --cached --check`, `./node_modules/.bin/vitest run test/orcidLoginGate.test.tsx`, and `./node_modules/.bin/tsc --noEmit`."
 **Context**: Git merge conflict resolution completion for PR #414.
+
+---
+## PR415 Merge Conflict Resolution
+**Timestamp**: 2026-07-06T07:42:03Z
+**User Input**: "Resolve merge conflicts."
+**AI Response**: "Detected PR #415 is DIRTY against `develop`; merged `origin/develop` into `fix/novelty-agent-20260706` in an isolated worktree and resolved the only conflict, `aidlc-docs/audit.md`, by unioning both append-log sides."
+**Context**: Git merge conflict resolution for PR #415.
 
 ---
