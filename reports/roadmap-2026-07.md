@@ -1,6 +1,13 @@
 # DocSuri Production Roadmap — 2026-07
 
 > **Date**: 2026-07-03 · **Baseline**: develop (2026-07-06) · **main at v1.9.0** (2026-07-06 promotion `07991f2`→PR #398, full deploy 완료)
+> **Updated**: 2026-07-06 — **Phase 2 board refresh** (GitHub live sweep):
+> - **main은 여전히 v1.9.0**. 이후 Phase 2 변경은 develop 머지/오픈 PR 상태이며 다음 main 승격 전까지 프로덕션 반영으로 간주하지 않음.
+> - ✅ **#346 KPI funnel** — PR #403 merged to develop, issue closed.
+> - 🟡 **#347 U10 mock 해소** — PR #407(최근 본 논문 실데이터) + PR #414(ORCID 로그인 버튼 기본 활성화) merged to develop, issue still open for residual ORCID/profile decision.
+> - 🟡 **검색 품질 개선(charter phase 7)** — PR #416 open(Cross-Encoder Reranker). 배포 활성화는 rerank region/model ARN/IAM/model access 선결, fail-soft baseline 유지.
+> - 🟡 **#341 SSR 500** — PR #353(logs) + PR #355(edge error page) done; root-cause fix PR still missing.
+> - 🔴 **No dedicated PR yet**: #343 docmodel backlog self-heal, #344 pre-2026 backfill/autoscale/doc-model queue decision, #345 personalization shadow→real, #348 email strategy, #167 authz shared contract, #187–#191 issue hygiene, `github-tag-action` node24 upstream bump, env-dependent `test_api_create_status_and_cancel`.
 > **Updated**: 2026-07-06 — **Phase 1 COMPLETE** — 마지막 잔여 항목(PDF 첨부·원고, doc-model 경유) 프로덕션 반영:
 > - ✅ **v1.8.0 — 사용자 PDF → doc-model MVP** (PR #390/#391/#392/#393 = PR0–3 + #394; main 승격 #395). 공유계약 동결(`userdoc:{uuid}` paperId · `upload:{ownerId}:{jobId}:{attachmentId}` recordRef · arXiv URL 무날조) → ingestion 신규 `BUILD_USER_DOC_MODEL` JobKind(S3-소스, arxivRef 없음) → backend 코디네이터(업로드·enqueue·폴링, best-effort 저하) → FE 소비. **#14 consume-on-retry**(PR #394): 원고 doc-model이 폴백 타임아웃보다 늦게 완성돼도 novelty 워커가 서버측 retry-until-ready(재큐 + DelaySeconds, 최대 8회)로 소비. pdfplumber 평문 doc-model(GROBID 미배선).
 > - ✅ **v1.9.0 — GROBID 구조 추출** (#13 = PR #396 앱코드 + PR #397 인프라; main 승격 #398, **full deploy 완료 2026-07-06**). `build_user_doc_model`이 GROBID `extract_tei→build_from_tei`로 구조화 TEI(섹션/표/그림) 생성, 빈/오류 TEI는 pdfplumber 폴백(무회귀). **Option B 인프라**: 전용 `docsuri-userdoc-queue` + `docsuri-userdoc-builder` Fargate(자체 `grobid/grobid:0.8.0` 사이드카 + `/api/isalive` HEALTHY 게이트, cpu2048/mem8192/80GB) — lean `docsuri-docmodel-builder`(arXiv 뷰어 빌드)가 ~20GB GROBID 콜드풀을 떠안지 않게 분리. 생산자(API·novelty) 라우팅 `DOCSURI_USERDOC_BUILD_QUEUE_URL` + 코디네이터 팩토리 우선순위. **배포**: develop→main 릴리스(docsuri-ingestion·docsuri-api 이미지 재빌드 + ECS 롤) → `cdk deploy` Ingestion/Novelty/Compute → 라이브 검증(API rev27 라우팅 env ✅ · userdoc 워커 GROBID 배선 ✅ · CloudFront 200 · X-Origin-Verify 403 없음 · ECS 2/2). userdoc 워커 desired 0 → 첫 업로드가 실런타임 스모크(grobid 콜드풀 ~수 분).
@@ -17,7 +24,7 @@
 > - ⏭️ Remaining Phase 1 — see §3: **PDF 첨부·원고**(doc-model 파이프라인 경유, Q6=A)만 남음 — 빌드 계약이 arXiv 전용이라 ingestion에 S3-소스 JobKind 신설 필요(3-서비스, GROBID env 게이트), #268/#252에 설계 인계.
 > _Prev 2026-07-04 pm — NFR-C1 비용 거버넌스 v1.5.0 (PR #364, 유진 `40d545d`); #339 close (PR #365); #293/#295/#296/#298 close; summary worker 5th ECS unit + **v1.5.0 승격** (PR #366/#367, 5유닛 안정); novelty FE 렌더러 (PR #368). am — v1.4.0 승격 (PR #360); CI node24 (PR #361); #338/#349 에이전트 merge; #353/#355/#357 오픈; #351 merge. 07-03 — #337 merge; #349 오픈._
 > Snapshot of where the product stands against the team's initial plan, and the path to
-> production-level completion of our goals. Tracking references: #251–#373 where cited below.
+> production-level completion of our goals. Tracking references: #251–#416 where cited below.
 
 ## 1. Status vs. the initial plan
 
@@ -25,11 +32,11 @@
 |---|---|---|
 | 논문 검색 | ✅ Live | Hybrid search over ~1.5M-chunk corpus; daily auto-harvest (EventBridge 15:00 KST); pre-2026 historical drain in progress |
 | 논문 요약/번역 | ✅ Live | Grounded summaries/translation; glossary redesign (PR #334); source-anchor structural resolution + stale-docmodel self-heal (PR #351); tool-use structured output (PR #356, shipped v1.4.0); summary worker now its own ECS unit (PR #366, **v1.5.0**) — 무한 pending 사고 클래스 prod 종결; worker crash + 수식/MathML sanitize + glossary 편집 UI (PR #371, **v1.6.0**); physics 패키지 수식 매크로 렌더 — **PR #381, v1.7.0**(유진, #371 후속) |
-| 프로필 페이지 | 🟡 Live w/ mocks | U10 merged; 최근 본 논문/ORCID still mock (#347) |
+| 프로필 페이지 | 🟡 Live w/ residual | U10 merged; 최근 본 논문 실데이터 PR #407 + ORCID 로그인 버튼 기본 활성화 PR #414는 develop merged, main 승격 전. #347 still open for residual ORCID/profile decision |
 | 인용 그래프 → 각주 트리 | ✅ Live | DOI node expansion 500 fixed — **PR #357** (provider fail-closed) shipped **v1.5.0**, #342 closed |
 | 트렌드/알림 | ❌ Not started | Never entered requirements — needs inception re-entry |
 | 구독제 | ❌ Not started | Never entered requirements — needs inception re-entry |
-| 로그 수집 | ✅ Live | U9 collection healthy (944 events/7d, 0 failures); KPI funnel view missing (#346) |
+| 로그 수집 | ✅ Live | U9 collection healthy (944 events/7d, 0 failures); KPI funnel dashboard + read-complete instrumentation PR #403 merged to develop, #346 closed (main promotion pending) |
 | 개인화 추천 | 🟡 Shadow | Search boost applied in shadow mode (PR #300); go-live judgment pending (#345); US-P5 deferred |
 | 에이전트: 문헌탐색/근거형성 | ✅ Live (v1.4.0) | PR #338 shipped v1.4.0; **cost-governed since v1.5.0** (PR #364); 근거 카드 + `§` 인용 앵커 (#339, PR #365); 첨부 검증 422 + 500 수정 (PR #373); **첨부 본문 근거 추출 포함** (PR #376) + **세션 재열람·삭제·전체 초기화** (PR #375) — **모두 v1.6.0 배포**; **QT-8 근거화 평가셋 상시화** (#273, PR #383, **v1.7.0**). **PDF 첨부(doc-model 경유) ✅ v1.8.0 MVP + v1.9.0 GROBID(#13)** — Phase 1 완료 |
 | (charter add) 연구아이디어 novelty 에이전트 | ✅ Live (v1.4.0) | PR #349 shipped v1.4.0; cost-governed since v1.5.0 (PR #364: draft-gate + 5/day quota). FE 아티팩트 렌더러 (PR #368) + **P2-b merged** (PR #370) + **Bedrock streaming·timeout 300s** (PR #372) + **원고 업로드 E2E** (PR #376: 디스패치 보류→본문 적재→분석) — **모두 v1.6.0 배포**; **form_evidence 선행**(#251, PR #380) + **Notion export**(#258, PR #382) + **QT-10·소스별 저하 지표**(#259, PR #383) — **모두 v1.7.0 배포**. **PDF 원고(doc-model 경유) ✅ v1.8.0 + v1.9.0 GROBID(#13)** — Phase 1 완료 |
@@ -67,21 +74,21 @@ The differentiator is **built and shipped — Phase 1 complete (v1.9.0, 2026-07-
 
 Ordered by user impact:
 
-| Item | Tracking |
-|---|---|
-| Intermittent SSR 500 on paper pages — **PR #353** enables ALB/CloudFront access logs (step ①); root-cause after a repro. Investigation: module-resolution guess weak (no dynamic imports; self-contained standalone) — likelier load-driven OOM. Raw-500 exposure fix belongs at the edge (CloudFront `error_responses`), not React boundaries → **PR #355** (step ②): branded page served from a private S3/OAC origin, independent of the failing ALB. Remaining: **PR-B** root-cause fix, after #353 logs give a repro. | #341 · #353 · #355 |
-| 각주 트리 DOI node expansion 500 — **PR #357**: S2 200-with-bad-body was fail-open (parse escaped the `httpx`-only guard → app 500); now fail-closed to Unavailable at both the provider parse and tree assembly (BR-CG12). Regression tests exercise the real provider path the old suite bypassed via FixtureProvider. | #342 · #357 |
-| Docmodel backlog self-heal — re-enqueue contaminated docmodels @3 (embedding-cost-free) + drain DLQ 111 | #343 |
-| Finish pre-2026 backfill drain → restore ingestion autoscale; decide on separate doc-model queue | #344 |
-| Personalization shadow→real flip after metric review; then US-P5 + keywordWeights | #345 |
-| KPI funnel dashboard (AI 호출 > 검색 > 완독률) from existing U9 events — build **before** Phase 3 prioritization | #346 |
-| U10 mypage mocks: 최근 본 논문/ORCID real data or cut | #347 |
-| Email strategy decision: SES production access vs. Resend commitment | #348 |
-| Authz contract → `docsuri_shared` refactor | #167 |
-| 검색 품질 개선 (charter phase 7) | charter |
-| Issue hygiene: close shipped US-A3~A7 stories (#187–191) | — |
-| `mathieudutour/github-tag-action` node24 bump — blocked on upstream release (rest of CI on node24 since PR #361) | — |
-| Env-dependent `test_api_create_status_and_cancel` (passes only when AWS creds absent) — pin the fake/live seam | — |
+| Status | Item | Tracking |
+|---|---|---|
+| 🟡 Partial | Intermittent SSR 500 on paper pages — **PR #353** enables ALB/CloudFront access logs (step ①); raw-500 exposure handled at the edge by **PR #355** branded CloudFront error page (step ②). Remaining: **PR-B root-cause fix** after logs/repro; no dedicated PR yet. Investigation note: module-resolution guess is weak (no dynamic imports; self-contained standalone), OOM/load still plausible. | #341 · #353 · #355 |
+| ✅ Done | 각주 트리 DOI node expansion 500 — **PR #357**: S2 200-with-bad-body was fail-open (parse escaped the `httpx`-only guard → app 500); now fail-closed to Unavailable at both the provider parse and tree assembly (BR-CG12). Regression tests exercise the real provider path the old suite bypassed via FixtureProvider. | #342 · #357 |
+| 🔴 No PR | Docmodel backlog self-heal — re-enqueue contaminated docmodels @3 (embedding-cost-free) + drain DLQ 111. | #343 |
+| 🔴 No PR | Finish pre-2026 backfill drain → restore ingestion autoscale; decide on separate doc-model queue. | #344 |
+| 🔴 No PR | Personalization shadow→real flip after metric review; then US-P5 + keywordWeights. | #345 |
+| ✅ Develop merged | KPI funnel dashboard (AI 호출 > 검색 > 완독률) from existing U9 events — **PR #403** merged to develop and #346 closed; main promotion pending. | #346 · #403 |
+| 🟡 Partial | U10 mypage mocks: 최근 본 논문 실데이터 **PR #407** + ORCID 로그인 버튼 기본 활성화 **PR #414** merged to develop; #347 remains open for residual ORCID/profile decision. | #347 · #407 · #414 |
+| 🔴 No PR | Email strategy decision: SES production access vs. Resend commitment. | #348 |
+| 🔴 No PR | Authz contract → `docsuri_shared` refactor. | #167 |
+| 🟡 Open PR | 검색 품질 개선 (charter phase 7) — **PR #416** Cross-Encoder Reranker open. Activation needs rerank region/model ARN/IAM/model access; fail-soft keeps RRF baseline until ops wiring is ready. | PR #416 · charter |
+| 🔴 No PR | Issue hygiene: close shipped US-A3~A7 stories (#187–191). | — |
+| ⏸️ Blocked | `mathieudutour/github-tag-action` node24 bump — blocked on upstream release (rest of CI on node24 since PR #361). | — |
+| 🔴 No PR | Env-dependent `test_api_create_status_and_cancel` (passes only when AWS creds absent) — pin the fake/live seam. | — |
 
 ## 5. Phase 3 — Month 2: growth scope (requires inception re-entry)
 
