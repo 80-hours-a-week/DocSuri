@@ -50,6 +50,9 @@ class DiscoverySettings:
     # provisioned). When set, the real EventBridge publisher is wired.
     search_event_bus: str | None = None
     embedding_cache_ttl_seconds: float = _DEFAULT_CACHE_TTL_SECONDS
+    # Cross-encoder rerank model ARN (Bedrock Rerank API, e.g. Cohere Rerank v3.5). Presence is
+    # the feature toggle: set → the real reranker is wired; absent → baseline RRF order (FR-3).
+    rerank_model_arn: str | None = None
 
     @property
     def search_enabled(self) -> bool:
@@ -70,4 +73,5 @@ class DiscoverySettings:
             aws_region=os.getenv("DOCSURI_AWS_REGION") or None,
             search_event_bus=os.getenv("DOCSURI_SEARCH_EVENT_BUS") or None,
             embedding_cache_ttl_seconds=float(ttl) if ttl else _DEFAULT_CACHE_TTL_SECONDS,
+            rerank_model_arn=os.getenv("DOCSURI_RERANK_MODEL_ARN") or None,
         )

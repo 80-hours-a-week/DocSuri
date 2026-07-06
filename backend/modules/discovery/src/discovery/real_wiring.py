@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from docsuri_shared.ports import CostGuardCircuitBreaker, ObservabilityHub
 
 from .adapters.bedrock_embedding import BedrockCohereQueryEmbedder
+from .adapters.bedrock_rerank import BedrockRerankAdapter
 from .adapters.event_publisher import EventBridgeEventPublisher
 from .adapters.opensearch_index import (
     OpenSearchClientFactory,
@@ -88,6 +89,16 @@ def build_real_orchestrator(
     else:
         publisher = InMemoryEventPublisher()
 
+    # Cross-encoder reranker (FR-3), optional: wired only when the model ARN is configured;
+    # absent → baseline RRF order. Its failures are fail-soft (RerankUnavailable → baseline).
+    reranker = (
+        BedrockRerankAdapter(
+            model_arn=settings.rerank_model_arn, region_name=settings.aws_region
+        )
+        if settings.rerank_model_arn
+        else None
+    )
+
     orchestrator = SearchOrchestrationService(
         validator=QueryValidator(),
         expander=QueryUnderstandingExpander(cache),
@@ -101,6 +112,7 @@ def build_real_orchestrator(
         cost_guard=cost_guard or StubCostGuard(),
         observability=observability or NoopObservabilityHub(),
         event_publisher=publisher,
+        reranker=reranker,
     )
     paper_service = PaperMetadataService(
         OpenSearchPaperLookupAdapter(client, settings.opensearch_index)
