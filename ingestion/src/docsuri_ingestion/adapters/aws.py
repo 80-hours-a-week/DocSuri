@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from docsuri_shared.dtos import DocModel
-from docsuri_shared.vector_spec import DIMENSIONS, EMBEDDING_SPEC
+from docsuri_shared.vector_spec import EMBEDDING_SPEC
 from pydantic import ValidationError
 
 from docsuri_ingestion.domain.enums import FailureReason
@@ -131,6 +131,65 @@ class S3DocModelStore:
             )
 
 
+class S3RawContentStore:
+    """Raw upstream-byte cache on S3 (B3 fast re-parse): ``{prefix}/{paperId}/v{version}/{tier}``.
+
+    Same single bucket as full-text/doc-model, separate ``raw/`` prefix. Caches the exact source
+    bytes per tier (``pdf`` / ``ar5iv`` / ``native_html``) so a full re-parse can rebuild the search
+    index from the cache instead of re-hitting arXiv's 1-req/3s limit. SSE-KMS when a key is set,
+    else SSE-S3; ``get_raw`` returns ``None`` on a cache miss (mirrors S3DocModelStore.get).
+    """
+
+    def __init__(
+        self, *, bucket: str, prefix: str = "raw", kms_key_id: str | None = None
+    ) -> None:
+        import boto3
+
+        self._client = boto3.client("s3")
+        self._bucket = bucket
+        self._prefix = prefix.strip("/")
+        self._kms_key_id = kms_key_id
+
+    def _key(self, paper_id: str, version: int, tier: str) -> str:
+        return f"{self._prefix}/{paper_id}/v{version}/{tier}"
+
+    def put_raw(
+        self,
+        paper_id: str,
+        version: int,
+        tier: str,
+        data: bytes,
+        *,
+        content_type: str = "application/octet-stream",
+    ) -> str:
+        key = self._key(paper_id, version, tier)
+        kwargs: dict[str, Any] = {
+            "Bucket": self._bucket,
+            "Key": key,
+            "Body": data,
+            "ContentType": content_type,
+            "ServerSideEncryption": "aws:kms" if self._kms_key_id else "AES256",
+            "Metadata": {"paper-id": paper_id, "version": str(version), "tier": tier},
+        }
+        if self._kms_key_id:
+            kwargs["SSEKMSKeyId"] = self._kms_key_id
+        self._client.put_object(**kwargs)
+        return f"s3://{self._bucket}/{key}"
+
+    def get_raw(self, paper_id: str, version: int, tier: str) -> bytes | None:
+        from botocore.exceptions import ClientError
+
+        try:
+            response = self._client.get_object(
+                Bucket=self._bucket, Key=self._key(paper_id, version, tier)
+            )
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") in {"NoSuchKey", "404", "NotFound"}:
+                return None
+            raise
+        return response["Body"].read()
+
+
 class S3UserDocumentSource:
     """Read producer-uploaded PDF bytes for BUILD_USER_DOC_MODEL jobs.
 
@@ -189,11 +248,20 @@ class S3UserDocumentSource:
 
 
 class BedrockCohereEmbeddingPort:
-    def __init__(self, *, model_id: str, region_name: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        model_id: str,
+        region_name: str | None = None,
+        output_dimension: int | None = None,
+    ) -> None:
         import boto3
 
         self._client = boto3.client("bedrock-runtime", region_name=region_name)
         self._model_id = model_id
+        # Defaults to the frozen spec width (1024). A re-embed to a different space (e.g. Cohere
+        # v4's 1536 default) overrides it so the request pin + length check match the new vectors.
+        self._output_dimension = output_dimension or EMBEDDING_SPEC.dimensions
 
     def embed_documents(
         self,
@@ -217,9 +285,9 @@ class BedrockCohereEmbeddingPort:
             "texts": list(texts),
             "input_type": EMBEDDING_SPEC.input_type_writer,
             "embedding_types": ["float"],
-            # Cohere Embed v4 defaults to 1536-dim; pin to the index/spec width so vectors
-            # match docsuri-corpus-v2's mapping (v3 returned EMBEDDING_SPEC.dimensions implicitly).
-            "output_dimension": EMBEDDING_SPEC.dimensions,
+            # Cohere Embed v4 defaults to 1536-dim; pin to the configured width (the frozen 1024 for
+            # the live path, or a re-embed override e.g. 1536) so vectors match the target mapping.
+            "output_dimension": self._output_dimension,
         }
         response = self._client.invoke_model(
             modelId=self._model_id,
@@ -232,9 +300,10 @@ class BedrockCohereEmbeddingPort:
         if isinstance(vectors, dict):
             vectors = vectors.get("float", [])
         for vector in vectors:
-            if len(vector) != DIMENSIONS:
+            if len(vector) != self._output_dimension:
                 raise ValidationViolationError(
-                    f"Bedrock returned vector dimension {len(vector)}, expected {DIMENSIONS}",
+                    f"Bedrock returned vector dimension {len(vector)}, "
+                    f"expected {self._output_dimension}",
                     stage="embed",
                 )
         return vectors
