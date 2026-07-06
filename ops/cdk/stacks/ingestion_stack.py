@@ -406,8 +406,11 @@ class IngestionStack(Stack):
             ],
             adjustment_type=appscaling.AdjustmentType.CHANGE_IN_CAPACITY,
         )
+        # One docmodel-builder task is the safe ceiling for arXiv-backed rebuild drains: the
+        # arXiv politeness limiter is process-local, so two tasks double the caller rate and have
+        # already pushed retryable metadata fetches into docsuri-docmodel-dlq during backlog drains.
         docmodel_scaling = self.docmodel_service.auto_scale_task_count(
-            min_capacity=0, max_capacity=2
+            min_capacity=0, max_capacity=1
         )
         docmodel_scaling.scale_on_metric(
             "DocModelDepth",
@@ -415,7 +418,6 @@ class IngestionStack(Stack):
             scaling_steps=[
                 appscaling.ScalingInterval(upper=0, change=0),
                 appscaling.ScalingInterval(lower=1, change=1),
-                appscaling.ScalingInterval(lower=10, change=2),
             ],
             adjustment_type=appscaling.AdjustmentType.CHANGE_IN_CAPACITY,
         )
