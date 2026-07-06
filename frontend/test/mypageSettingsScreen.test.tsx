@@ -112,7 +112,10 @@ describe('MyPageSettingsScreen (U10)', () => {
     );
     expect(screen.queryByTestId('mypage-notion-error')).not.toBeInTheDocument();
 
-    await userEvent.type(screen.getByTestId('mypage-notion-token'), 'ntn_mock_secret_token_1234');
+    await userEvent.type(
+      screen.getByTestId('mypage-notion-token'),
+      'not a real notion integration value',
+    );
     await userEvent.click(screen.getByTestId('mypage-notion-save'));
     expect(screen.getByTestId('mypage-notion-error')).toHaveTextContent(
       '상위 페이지 ID',

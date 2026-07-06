@@ -169,7 +169,10 @@ describe('AgentChatScreen', () => {
     expect(await screen.findByTestId('notion-parent-warning')).toHaveTextContent(
       '상위 페이지 ID',
     );
-    await user.type(await screen.findByTestId('notion-token-input'), 'ntn_mock_secret_token_1234');
+    await user.type(
+      await screen.findByTestId('notion-token-input'),
+      'not a real notion integration value',
+    );
     await user.type(screen.getByTestId('notion-parent-input'), '0'.repeat(32));
     await user.click(screen.getByTestId('notion-connect-save'));
 

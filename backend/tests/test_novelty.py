@@ -1172,7 +1172,7 @@ def test_api_notion_connection_and_approved_export_completes(monkeypatch) -> Non
 
     from backend.modules.novelty.security import decrypt_secret
 
-    raw_token = "ntn_test_secret_token_1234"
+    raw_token = "not a real notion integration value"
     monkeypatch.setenv("DOCSURI_NOTION_TOKEN_KEY", Fernet.generate_key().decode())
     repo = InMemoryNoveltyRepository()
     # 요청마다 principal이 새로 뽑히지 않도록 고정 — 연결 저장·조회가 같은 owner여야 한다
@@ -1249,7 +1249,7 @@ def test_api_notion_connection_is_owner_scoped(monkeypatch) -> None:
 
     assert client_a.put(
         "/api/novelty/notion/connection",
-        json={"token": "ntn_owner_a_secret_1234", "parentPageId": "a" * 32},
+        json={"token": "not a real owner scoped notion value", "parentPageId": "a" * 32},
     ).status_code == 200
 
     assert client_a.get("/api/novelty/notion/connection").json()["connected"] is True
