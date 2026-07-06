@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+from docsuri_shared.authz import Principal, UserRole
 from fastapi.testclient import TestClient
 from sqlalchemy.dialects import postgresql
 
 from backend.app import create_app
 from backend.config import Settings
-from backend.modules.accounts.models import Principal, UserRole
 from backend.modules.novelty.repository import NoveltyJobTable
 from backend.modules.research import controller
 from backend.modules.research.repository import InMemoryResearchRepository, ResearchJobTable

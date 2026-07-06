@@ -7,13 +7,13 @@ from urllib.parse import urlparse
 from uuid import uuid4
 
 import pytest
+from docsuri_shared.authz import Principal, UserRole
 from fastapi.testclient import TestClient
 from hypothesis import given
 from hypothesis import strategies as st
 
 from backend.app import create_app
 from backend.config import Settings
-from backend.modules.accounts.models import Principal, UserRole
 from backend.modules.novelty import controller
 from backend.modules.novelty.adapters import (
     SIMILAR_WORK_DETAIL_FIELDS,

@@ -8,11 +8,11 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from docsuri_shared.authz import Principal, UserRole
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.config import Settings
-from backend.modules.accounts.models import Principal, UserRole
 from backend.modules.citation_graph import controller
 
 
