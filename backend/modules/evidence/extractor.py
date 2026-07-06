@@ -92,7 +92,8 @@ class EvidenceExtractor:
         raw_items: list[dict] = payload.get('items', [])
 
         paper_texts = _build_paper_texts(doc_models)
-        return _filter_hallucinated(raw_items, paper_texts)
+        paper_anchor_ids = _build_paper_anchor_ids(doc_models)
+        return _filter_hallucinated(raw_items, paper_texts, paper_anchor_ids)
 
     def _invoke_json(self, system: str, user: str) -> dict:
         if not self._cb.allow_request():
@@ -190,6 +191,34 @@ def _build_paper_texts(doc_models: list[DocModelSource]) -> dict[str, str]:
     return result
 
 
+def _build_paper_anchor_ids(doc_models: list[DocModelSource]) -> dict[str, set[str]]:
+    """paper_id → 실제 Section/Block id 집합 (anchor 검증용, PR #338 리뷰 Medium #15).
+
+    anchor는 DocModel Section/Block id를 가리켜 UI의 "원문 이동" 링크가 참조한다.
+    LLM이 존재하지 않는 id(예: 's99.p1')를 지어내도 여태 그대로 통과시켜서 그 링크가
+    깨질 수 있었다."""
+    result: dict[str, set[str]] = {}
+    for source in doc_models:
+        paper_id, doc_model = source[0], source[1]
+        ids: set[str] = set()
+        for section in getattr(doc_model, 'sections', None) or []:
+            _collect_anchor_ids(section, ids)
+        result[paper_id] = ids
+    return result
+
+
+def _collect_anchor_ids(section: object, ids: set[str]) -> None:
+    section_id = getattr(section, 'id', None)
+    if section_id:
+        ids.add(section_id)
+    for block in getattr(section, 'blocks', None) or []:
+        block_id = getattr(getattr(block, 'root', block), 'id', None)
+        if block_id:
+            ids.add(block_id)
+    for nested in getattr(section, 'sections', None) or []:
+        _collect_anchor_ids(nested, ids)
+
+
 # INV-EV-3 substring 검사만으로는 'the', '0.9' 같은 1~2토큰 quote가 trivially 통과해
 # fullText에 우연히 존재하는 숫자로 날조된 statement를 그라운딩할 수 있다(PR #338 리뷰
 # Medium #14). 완전한 문장 단위는 아니지만, 짧은 조각 인용을 걸러내는 최소 방어선.
@@ -220,16 +249,18 @@ def _statement_grounded(statement: str, verified_quotes: list[str]) -> bool:
 def _filter_hallucinated(
     raw_items: list[dict],
     paper_texts: dict[str, str],
+    paper_anchor_ids: dict[str, set[str]] | None = None,
 ) -> list[EvidenceItem]:
     """INV-EV-3: quote가 원문에 없는 SourceRef 제거 후 유효한 EvidenceItem만 반환."""
+    paper_anchor_ids = paper_anchor_ids or {}
     items: list[EvidenceItem] = []
     for raw in raw_items:
         statement = raw.get('statement', '').strip()
         if not statement:
             continue
 
-        supporting = _validate_refs(raw.get('supporting', []), paper_texts)
-        conflicting = _validate_refs(raw.get('conflicting', []), paper_texts)
+        supporting = _validate_refs(raw.get('supporting', []), paper_texts, paper_anchor_ids)
+        conflicting = _validate_refs(raw.get('conflicting', []), paper_texts, paper_anchor_ids)
 
         # supporting이 하나도 없으면 해당 item 제거(날조 위험)
         if not supporting:
@@ -257,6 +288,7 @@ def _filter_hallucinated(
 def _validate_refs(
     raw_refs: list[dict],
     paper_texts: dict[str, str],
+    paper_anchor_ids: dict[str, set[str]],
 ) -> list[SourceRef]:
     valid: list[SourceRef] = []
     for ref in raw_refs:
@@ -292,11 +324,23 @@ def _validate_refs(
             )
             continue
 
+        anchor = ref.get('anchor') or None
+        if anchor and anchor not in paper_anchor_ids.get(paper_id, set()):
+            # anchor는 "원문 이동" UI가 참조하는 실제 Section/Block id다. 존재하지
+            # 않는 id를 그대로 내보내면 그 링크가 깨진다(PR #338 리뷰 Medium #15) —
+            # quote 자체는 verbatim 검증을 통과했으니 ref는 유지하되, 잘못된 anchor만
+            # 제거해 UI가 "이동 불가"로 자연히 처리하게 한다.
+            logger.warning(
+                'anchor %r not found in paper %s block ids, dropping anchor (keeping ref)',
+                anchor, paper_id,
+            )
+            anchor = None
+
         valid.append(
             SourceRef(
                 paperId=paper_id,
                 recordRef=record_ref,
-                anchor=ref.get('anchor') or None,
+                anchor=anchor,
                 quote=quote,
             )
         )

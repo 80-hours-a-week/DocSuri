@@ -37,6 +37,9 @@ export interface TransportRequest {
   /** Abort signal for the in-flight request; ApiClient wires it to the per-attempt timeout so a
    * timed-out request is actually cancelled, not just abandoned (BR-U5-10). */
   signal?: AbortSignal;
+  /** Per-request override for ApiClient's default timeout — long-running LLM pipelines
+   * (research/evidence turns) need more than the 8s default (PR #338 후속 발견). */
+  timeoutMs?: number;
 }
 
 export interface TransportResponse {

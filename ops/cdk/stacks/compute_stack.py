@@ -764,12 +764,17 @@ class ComputeStack(Stack):
             self, "ApiCdn",
             comment="docsuri-api - trusted HTTPS edge + encrypted, authenticated origin",
             default_behavior=cloudfront.BehaviorOptions(
+                # read_timeout 60s(기본 30s에서 상향, 계정 기본 할당량 최대치) — evidence 턴은
+                # OpenSearch 검색 + 다건 S3 DocModel 로드 + Bedrock 추출을 동기로 거쳐 30초를
+                # 쉽게 넘긴다(로컬 재현: 37초 완료, 30초 CloudFront가 먼저 끊음). frontend_stack.py
+                # WebCdn에 적용한 것과 동일 완화(근본 해결은 비동기 job+폴링 전환 필요).
                 origin=origins.HttpOrigin(
                     _ORIGIN_DOMAIN,
                     protocol_policy=cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
                     https_port=443,
                     origin_ssl_protocols=[cloudfront.OriginSslPolicy.TLS_V1_2],
                     custom_headers={"X-Origin-Verify": origin_verify},
+                    read_timeout=Duration.seconds(60),
                 ),
                 # HTTPS_ONLY (not REDIRECT): refuse plaintext outright rather than 301 it —
                 # a redirected POST would still have sent its body over HTTP first.

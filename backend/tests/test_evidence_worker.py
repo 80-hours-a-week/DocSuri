@@ -245,3 +245,25 @@ def test_orchestrator_failure_stores_error_result_and_raises() -> None:
 
     resolved = repo.list_turns('owner-1', session_id)[0]
     assert isinstance(resolved.result, TurnErrorResult)
+    # PR #338 리뷰 Medium #11 — 원인 불문 'llm_unavailable'로 못박던 것을 비기술 범용
+    # 코드로 정정: 여기선 RuntimeError('bedrock throttled')인데도 LLM 문제로 오도되면 안 된다.
+    assert resolved.result.error_code == 'internal_error'
+
+
+def test_soft_deleted_session_turn_is_terminated_not_left_pending() -> None:
+    """PR #338 리뷰 Medium #12 — 세션이 소프트 삭제된 뒤 도착한 job은 turn을 pending으로
+    방치하면 안 된다(GET /jobs/{id}가 영원히 pending을 반환하게 됨)."""
+    repo, session_id, turn_id = _seeded_repo()
+    repo.soft_delete_session('owner-1', session_id)
+
+    process_job(
+        repo, orchestrator=_StubOrchestrator(), owner_id='owner-1', session_id=session_id,
+        turn_id=turn_id, job_id='job-1', topic='transformer attention',
+    )
+
+    from backend.modules.evidence.models import TurnErrorResult
+
+    turns = repo._turns[session_id]  # soft-delete 후 list_turns는 세션 자체를 못 찾으므로 직접 조회
+    resolved = next(t for t in turns if t.turn_id == turn_id)
+    assert isinstance(resolved.result, TurnErrorResult)
+    assert resolved.result.error_code == 'session_unavailable'

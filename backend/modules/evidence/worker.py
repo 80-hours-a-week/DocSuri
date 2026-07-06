@@ -144,6 +144,18 @@ def process_job(
         session = repo.get_session(owner_id, session_id)
     except KeyError:
         log.warning('evidence job %s: session %s not found or wrong owner', job_id, session_id)
+        # turn을 pending으로 방치하면 GET /jobs/{job_id}가 영원히 pending을 반환한다
+        # (PR #338 리뷰 Medium #12) — 세션이 소프트 삭제됐거나 소유자가 안 맞아도
+        # turn 자체는 여전히 owner_id로 조회·갱신 가능하니 terminal로 전이시킨다.
+        try:
+            repo.update_turn_result(
+                owner_id, turn_id, TurnErrorResult(error_code='session_unavailable')
+            )
+        except KeyError:
+            log.warning(
+                'evidence job %s: turn %s also unavailable, nothing to terminate',
+                job_id, turn_id,
+            )
         return
 
     # turn 조회 — 이미 완료 상태면 스킵
@@ -192,7 +204,12 @@ def process_job(
         result = orchestrator.run(ctx, request)
     except Exception as exc:
         log.exception('evidence job %s: orchestrator failed', job_id)
-        result = TurnErrorResult(error_code='llm_unavailable')
+        # 검색/LLM 실패는 orchestrator.run() 내부에서 이미 abstain으로 잡아낸다 — 여기까지
+        # 올라오는 건 분류되지 않은 예상 밖 실패다. 그런데도 항상 'llm_unavailable'로
+        # 못박아 놓으면 원인이 LLM이 아닌 경우에도 사용자에게 오도된 코드가 노출된다
+        # (PR #338 리뷰 Medium #11). SEC-9상 원본 예외 메시지는 노출 불가하므로, 비기술
+        # 범용 코드로 정직하게 표현한다.
+        result = TurnErrorResult(error_code='internal_error')
         repo.update_turn_result(owner_id, turn_id, result)
         repo.commit()
         raise JobProcessingFailed(str(exc)) from exc
