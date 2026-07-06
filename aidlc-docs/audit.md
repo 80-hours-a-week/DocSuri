@@ -3745,3 +3745,24 @@ cc #252 — novelty 원고 PDF도 동일 경로를 탑니다.
 **Context**: Novelty-Agent degradation semantics and Bedrock structured-output reliability fix.
 
 ---
+## ORCID Framed OAuth CSP Fix Start
+**Timestamp**: 2026-07-06T07:07:39Z
+**User Input**: "Continue this session. The worktree is at ~/Projects/DocSuri/.claude/worktrees/feature+kpi-funnel-346, and the branch is feature/u10-orcid-real-347."
+**AI Response**: "Resumed the named worktree and branch after the session-limit handoff. Diagnosed the pasted CSP errors as social OAuth links navigating inside the phone-mockup iframe, so the fix is to make the login/signup social links navigate the top window and add a frontend regression."
+**Context**: Code Generation follow-up for ORCID social login CSP frame-src failure.
+
+---
+## ORCID Framed OAuth CSP Fix Completion
+**Timestamp**: 2026-07-06T07:10:00Z
+**User Input**: "Continue this session. The worktree is at ~/Projects/DocSuri/.claude/worktrees/feature+kpi-funnel-346, and the branch is feature/u10-orcid-real-347."
+**AI Response**: "Applied the ORCID/Google social OAuth iframe escape fix by adding `target=\"_top\"` to login and signup social links, and added a focused frontend regression. Verification passed: `./node_modules/.bin/vitest run test/orcidLoginGate.test.tsx`, `./node_modules/.bin/tsc --noEmit`, and `git diff --check`."
+**Context**: Code Generation follow-up completion for ORCID social login CSP frame-src failure.
+
+---
+## ORCID Framed OAuth CSP Fix Push
+**Timestamp**: 2026-07-06T07:23:15Z
+**User Input**: "push to PR"
+**AI Response**: "Preparing to commit and push the ORCID framed OAuth CSP fix to `feature/u10-orcid-real-347`."
+**Context**: Git publish request for ORCID social login CSP frame-src fix.
+
+---
