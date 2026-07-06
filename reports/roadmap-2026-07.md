@@ -6,7 +6,8 @@
 > - ✅ **env-dependent `test_api_create_status_and_cancel`** — fake/live seam 고정(`branch fix/novelty-test-env-seam`): 앱쉘이 라이브 Bedrock/HTTP 어댑터를 `app.state.novelty_adapters`에 배선하고 무큐 디스패치가 워커를 인라인 실행 → ambient AWS creds가 종료 상태를 좌우하던 문제. Noop 어댑터로 오버라이드해 환경 무관 결정적 degrade. (51 novelty tests green)
 > - ✅ **검색 품질 개선(charter phase 7)** — **PR #416 merged**(Cross-Encoder Reranker; 배포 차단 2건 크로스리전 배선+`bedrock:Rerank` IAM 해소, fail-soft RRF baseline 유지). 후속 **PR #419 open**(Cohere Embed Multilingual v3 재임베드 + region-decouple).
 > - 🟡 **#343/#344 docmodel/backfill** — **PR #420 merged to develop** (admin-merge, `685ee2a`): arXiv 콜러 단일화(`docsuri-docmodel-builder` max_capacity=1, `lower=10` 버스트 스텝 제거) + CDK 계약 테스트. 드레인 시 DLQ 유입 억제. **남은 작업은 별도 프로덕션 뮤테이션**(라이브 `docsuri-docmodel-dlq` 24건 re-enqueue/드레인 · S3 native_html 10,660/21,252) — throttle이 라이브(다음 `cdk deploy`)여야 안전하게 실행. 큐 분리(#344)는 여전히 결정 대기.
-> - 🔴 **여전히 결정/운영 대기**: #345 personalization shadow→real(지표 판정), #348 email SES vs Resend(결정), #344 doc-model 큐 분리(결정), #167 authz shared 계약(대형 리팩터), #347 잔여 ORCID/profile(결정).
+> - 🟡 **#167 authz shared 계약** — **PR #422 open**: 인가 계약(`Principal`·`Action`·`Decision`·`AccountId`·`UserRole` + stateless `AuthorizationGuard`)을 accounts(U3) 내부→`docsuri_shared.authz`로 이전. 프로덕션 17곳+테스트 8곳 import rewire, accounts는 re-export(클래스 동일성 보존 → `except DomainException` 무회귀), moved-name leak=0. backend 236 tests green·ruff clean. SSOT 2건 back-sync(unit-of-work-dependency·shared-contracts-overview). 가드 stateless라 단일 권위 U3 의미 유지.
+> - 🔴 **여전히 결정/운영 대기**: #345 personalization shadow→real(지표 판정), #348 email SES vs Resend(결정), #344 doc-model 큐 분리(결정), #347 잔여 ORCID/profile(결정).
 > **Updated**: 2026-07-06 — **Phase 2 board refresh** (GitHub live sweep):
 > - **main은 여전히 v1.9.0**. 이후 Phase 2 변경은 develop 머지/오픈 PR 상태이며 다음 main 승격 전까지 프로덕션 반영으로 간주하지 않음.
 > - ✅ **#346 KPI funnel** — PR #403 merged to develop, issue closed.
@@ -91,7 +92,7 @@ Ordered by user impact:
 | ✅ Develop merged | KPI funnel dashboard (AI 호출 > 검색 > 완독률) from existing U9 events — **PR #403** merged to develop and #346 closed; main promotion pending. | #346 · #403 |
 | 🟡 Partial | U10 mypage mocks: 최근 본 논문 실데이터 **PR #407** + ORCID 로그인 버튼 기본 활성화 **PR #414** merged to develop; #347 remains open for residual ORCID/profile decision. | #347 · #407 · #414 |
 | 🔴 No PR | Email strategy decision: SES production access vs. Resend commitment. | #348 |
-| 🔴 No PR | Authz contract → `docsuri_shared` refactor. | #167 |
+| 🟡 PR open | Authz contract → `docsuri_shared.authz` refactor — **PR #422**: Principal/Action/Decision/AccountId/UserRole + stateless guard 이전, accounts re-export(클래스 동일성 보존), 소비자 17 + 테스트 8 rewire, leak=0, backend 236 tests green. | #167 · #422 |
 | ✅ Develop merged | 검색 품질 개선 (charter phase 7) — **PR #416 merged** (Cross-Encoder Reranker; cross-region wiring + `bedrock:Rerank` IAM blockers cleared, fail-soft keeps RRF baseline). Follow-on **PR #419 open** (Cohere Embed Multilingual v3 re-embed + region-decouple). | #416 · #419 · charter |
 | ✅ Closed | Issue hygiene: shipped US-A3~A7 stories closed with evidence comments (#187–191). | #187 · #188 · #189 · #190 · #191 |
 | ⏸️ Blocked | `mathieudutour/github-tag-action` node24 bump — blocked on upstream release (rest of CI on node24 since PR #361). | — |
