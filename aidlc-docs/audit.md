@@ -3795,3 +3795,11 @@ Error: TestingLibraryElementError: Unable to find an element by: [data-testid=\"
 **Context**: Production deployment completion and post-deploy verification.
 
 ---
+
+## Cross Review Remediation
+**Timestamp**: 2026-07-06T14:47:53+09:00
+**User Input**: "Cross-Review.md 를 검토하여 코드를 수정해 주세요. 제가 원하는 flow는 초기에는 Notion 토큰&ID 입력 상자가 닫혀있고, 버튼을 누를 경우 상자가 열리고, 취소를 누를 경우 다시 돌아가도록 되어야 합니다."
+**AI Response**: "Reviewed Cross-Review.md and changed the Notion export panel to start closed, open the token/parent page form only after clicking the export button, and return to the closed button state on cancel. Updated the AgentChatScreen regression test for the opener-first flow."
+**Context**: Frontend Notion export opener-first UX review remediation.
+
+---
