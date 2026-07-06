@@ -158,6 +158,25 @@ def test_recent_papers_falls_back_to_paper_id_without_title() -> None:
     assert viewed[0][1] == "2401.00001"
 
 
+def test_recent_papers_uses_title_from_metadata() -> None:
+    repo = InMemoryPersonalizationRepository()
+    user_id = str(uuid4())
+    repo.insert_event(
+        BehaviorEvent(
+            userId=user_id,
+            eventType=BehaviorEventType.PAPER_OPENED,
+            subject=BehaviorSubject(kind="paper", paperId="1706.03762"),
+            metadata={"entrySurface": "detail", "title": "Attention Is All You Need"},
+            dedupeKey="view-1",
+        )
+    )
+
+    viewed = repo.list_recent_papers(user_id)
+
+    assert viewed[0][0] == "1706.03762"
+    assert viewed[0][1] == "Attention Is All You Need"
+
+
 def test_owner_isolation_and_deterministic_aggregation() -> None:
     user_a = str(uuid4())
     user_b = str(uuid4())

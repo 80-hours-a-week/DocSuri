@@ -38,12 +38,14 @@ export function recordSearchExecuted(query: string, resultCount: number): void {
   });
 }
 
-export function recordPaperOpened(paperId: string, version: number): void {
+export function recordPaperOpened(paperId: string, version: number, title?: string): void {
   sendBehaviorEvent({
     eventType: 'paper_opened',
     subject: { kind: 'paper', paperId },
     source: 'frontend_anchor',
-    metadata: { entrySurface: 'detail' },
+    // title (optional) surfaces real paper names in 최근 본 논문 (mypage /recently-viewed). Omitted
+    // when the detail header hasn't resolved yet — the backend then falls back to the arXiv id.
+    metadata: { entrySurface: 'detail', ...(title ? { title } : {}) },
     dedupeKey: `paper:${paperVersionKey(paperId, version)}:${dedupeBucket()}`,
   });
 }

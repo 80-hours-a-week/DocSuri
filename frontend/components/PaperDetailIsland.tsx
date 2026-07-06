@@ -68,9 +68,16 @@ export function PaperDetailIsland({ paperId, version, arxivUrl }: PaperDetailIsl
   useEffect(() => {
     const key = `${paperId}:${version}`;
     if (openedRef.current === key) return;
+    // Wait for the paper metadata to settle so 최근 본 논문 (mypage) records the real title, not the
+    // arXiv id. usePaperMeta always resolves to 'done' (failure → meta:null), so paper_opened still
+    // fires. Only attach a title that belongs to THIS paper — on detail→detail nav the previous
+    // paper's meta can read 'done' for one render. ponytail: on mismatch/failure the title is
+    // omitted and the backend falls back to the arXiv id, so a missed title degrades, never wrong.
+    if (meta.status !== 'done') return;
+    if (m && m.arxivId !== paperId) return;
     openedRef.current = key;
-    recordPaperOpened(paperId, version);
-  }, [paperId, version]);
+    recordPaperOpened(paperId, version, m?.title);
+  }, [paperId, version, meta.status, m]);
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 768px)');
