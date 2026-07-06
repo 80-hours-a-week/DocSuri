@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass, field
@@ -17,6 +18,8 @@ from backend.modules.user_docmodel import (
 
 from .models import EvidenceStatus
 from .security import sanitize_external_query
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -157,12 +160,7 @@ def _card_item(card: Any) -> dict[str, Any]:
 
 class NoopEvidenceFormationClient:
     def form(self, owner_id: str, topic: str) -> RetrievalBundle:
-        return RetrievalBundle(
-            items=[],
-            degradedReason=(
-                f"evidence formation adapter not configured for {sanitize_external_query(topic)}"
-            ),
-        )
+        return RetrievalBundle(items=[])
 
 
 class EvidenceFormationClient:
@@ -186,10 +184,9 @@ class EvidenceFormationClient:
         )
         try:
             result = _run_coro_in_thread(self._port.form_evidence(request, ctx))
-        except Exception as exc:  # noqa: BLE001 - 근거형성 장애는 잡을 저하시킬 뿐 실패시키지 않는다.
-            return RetrievalBundle(
-                degradedReason=f"evidence formation unavailable: {type(exc).__name__}"
-            )
+        except Exception:  # noqa: BLE001 - optional enrichment; corpus search is the main path.
+            log.warning("novelty evidence formation unavailable", exc_info=True)
+            return RetrievalBundle(items=[])
         return _bundle_from_evidence_result(result)
 
 
@@ -203,17 +200,16 @@ def _run_coro_in_thread(coro: Any) -> Any:
 
 
 def _bundle_from_evidence_result(result: Any) -> RetrievalBundle:
-    """D5 EvidenceResult|EvidenceAbstainResult → RetrievalBundle. abstain은 저하 신호로만."""
+    """D5 EvidenceResult|EvidenceAbstainResult → RetrievalBundle. abstain은 선택 보강 없음."""
     if str(getattr(result, "state", "") or "") == "abstain":
-        reason = str(getattr(result, "abstainReason", "") or "insufficient_evidence")
-        return RetrievalBundle(degradedReason=f"evidence formation abstained: {reason}")
+        return RetrievalBundle(items=[])
     items = [
         item
         for claim in (getattr(result, "claims", None) or [])
         if (item := _evidence_claim_item(claim))
     ]
     if not items:
-        return RetrievalBundle(degradedReason="evidence formation returned no claims")
+        return RetrievalBundle(items=[])
     return RetrievalBundle(items=items, evidenceStatus=EvidenceStatus.SUPPORTED)
 
 
@@ -594,6 +590,8 @@ class BedrockNoveltyLlmClient:
             "max_tokens": self._max_tokens,
             "system": system,
             "messages": [{"role": "user", "content": [{"type": "text", "text": user}]}],
+            "tools": [_novelty_tool()],
+            "tool_choice": {"type": "tool", "name": "emit_novelty_analysis"},
         }
         response = self._client.invoke_model_with_response_stream(
             modelId=self._model_id,
@@ -603,7 +601,14 @@ class BedrockNoveltyLlmClient:
         )
         text, usage = _bedrock_stream_read(response)
         _record_bedrock_spend(self._cost_guard, usage)
-        return _parse_json_object(text)
+        try:
+            return _parse_json_object(text)
+        except (ValueError, json.JSONDecodeError):
+            log.warning(
+                "novelty Bedrock JSON parse failed; rawPreview=%r",
+                _safe_log_preview(text),
+            )
+            raise
 
 
 def _source_ref_catalog(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -698,6 +703,88 @@ def _novelty_user_prompt(
         f"<context>{json.dumps(context, ensure_ascii=False)}</context>\n"
         f"<json_contract>{json.dumps(contract, ensure_ascii=False)}</json_contract>"
     )
+
+
+def _novelty_tool() -> dict[str, Any]:
+    text_field = {"type": "string"}
+    ref_indexes = {"type": "array", "items": {"type": "integer"}}
+    detail = {
+        "anyOf": [
+            {
+                "type": "object",
+                "properties": {"value": text_field, "sourceRefIndexes": ref_indexes},
+                "required": ["value", "sourceRefIndexes"],
+            },
+            {"type": "null"},
+        ]
+    }
+    return {
+        "name": "emit_novelty_analysis",
+        "description": "Emit grounded novelty analysis using only supplied sourceRefIndexes.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "similarWorks": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "title": text_field,
+                            "summary": text_field,
+                            "problem": detail,
+                            "method": detail,
+                            "dataset": detail,
+                            "results": detail,
+                            "limitations": detail,
+                            "overlap": detail,
+                            "sourceRefIndexes": ref_indexes,
+                        },
+                        "required": ["title", "summary", "sourceRefIndexes"],
+                    },
+                },
+                "noveltyCandidates": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "title": text_field,
+                            "rationale": text_field,
+                            "sourceRefIndexes": ref_indexes,
+                        },
+                        "required": ["title", "rationale", "sourceRefIndexes"],
+                    },
+                },
+                "experimentPlan": {
+                    "type": "object",
+                    "properties": {
+                        "researchQuestion": text_field,
+                        "noveltyAngle": text_field,
+                        "hypotheses": {"type": "array", "items": text_field},
+                        "baselines": {"type": "array", "items": text_field},
+                        "procedure": {"type": "array", "items": text_field},
+                        "datasets": {"type": "array", "items": text_field},
+                        "metrics": {"type": "array", "items": text_field},
+                        "resources": {"type": "array", "items": text_field},
+                        "risks": {"type": "array", "items": text_field},
+                        "sourceRefIndexes": ref_indexes,
+                    },
+                    "required": [
+                        "researchQuestion",
+                        "noveltyAngle",
+                        "hypotheses",
+                        "baselines",
+                        "procedure",
+                        "datasets",
+                        "metrics",
+                        "resources",
+                        "risks",
+                        "sourceRefIndexes",
+                    ],
+                },
+            },
+            "required": ["similarWorks", "noveltyCandidates", "experimentPlan"],
+        },
+    }
 
 
 def _compact_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -885,8 +972,9 @@ def _parse_json_object(text: str) -> dict[str, Any]:
 
 
 def _bedrock_stream_read(response: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-    """스트림에서 텍스트와 usage 수집 — message_start(input) + message_delta(output 누적)."""
-    chunks: list[str] = []
+    """스트림에서 tool input JSON과 usage 수집."""
+    tool_chunks: list[str] = []
+    text_chunks: list[str] = []
     usage: dict[str, Any] = {}
     for event in response.get("body", []):
         raw = event.get("chunk", {}).get("bytes")
@@ -900,9 +988,15 @@ def _bedrock_stream_read(response: dict[str, Any]) -> tuple[str, dict[str, Any]]
             usage.update(data.get("usage") or {})
         elif kind == "content_block_delta":
             delta = data.get("delta", {})
-            if delta.get("type") == "text_delta":
-                chunks.append(str(delta.get("text") or ""))
-    return "".join(chunks), usage
+            if delta.get("type") == "input_json_delta":
+                tool_chunks.append(str(delta.get("partial_json") or ""))
+            elif delta.get("type") == "text_delta":
+                text_chunks.append(str(delta.get("text") or ""))
+    return "".join(tool_chunks or text_chunks), usage
+
+
+def _safe_log_preview(text: str, limit: int = 500) -> str:
+    return re.sub(r"[\x00-\x1f\x7f]+", " ", text)[:limit]
 
 
 class S3ManuscriptSimilarityClient:

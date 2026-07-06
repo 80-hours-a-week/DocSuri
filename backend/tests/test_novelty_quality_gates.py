@@ -128,7 +128,7 @@ def test_qt10_worker_emits_per_source_degradation_metrics() -> None:
     _, owner_id, job_id = _natural_job(repo)
     observability = FakeObservability()
 
-    process_job(repo, owner_id, job_id, observability=observability)  # 전부 Noop → 소스별 저하
+    process_job(repo, owner_id, job_id, observability=observability)  # optional evidence 제외
 
     degraded_sources = {
         tags.get("source")
@@ -136,7 +136,6 @@ def test_qt10_worker_emits_per_source_degradation_metrics() -> None:
         if name == "novelty.step_degraded"
     }
     assert {
-        "U11 evidence formation",
         "U2 full search",
         "GitHub · Hugging Face · Zenodo",
         "Bedrock LLM",
