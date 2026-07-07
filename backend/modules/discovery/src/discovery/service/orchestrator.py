@@ -41,7 +41,7 @@ from ..domain.models import (
     RequestContext,
     SearchScope,
 )
-from ..domain.ranker import TOP_N, RelevanceRanker, shadow_rerank_diff
+from ..domain.ranker import TOP_N, RelevanceRanker, apply_boosts
 from ..domain.reranker import apply_rerank, rerank_text, rerank_width
 from ..domain.retriever import HybridRetriever
 from ..domain.validator import QueryValidator
@@ -178,7 +178,7 @@ class SearchOrchestrationService:
 
         candidates = self._maybe_rerank(normalized.text, candidates, degradation, scope)
         ranked = self._ranker.rank(candidates, plan, degradation, self._top_n)
-        self._emit_rerank_shadow(ctx.auth_session.user_id, ranked)
+        ranked = self._apply_search_boosts(ctx.auth_session.user_id, ranked)
         grounding_input = self._grounding_adapter.to_grounding_input(ranked, plan)
         self._observability.emit_metric(
             "discovery.search.candidates", float(len(ranked.ranked)), {"mode": degrade_mode.value}
@@ -241,20 +241,27 @@ class SearchOrchestrationService:
         except Exception:  # noqa: BLE001
             pass
 
-    def _emit_rerank_shadow(self, user_id: str, ranked: RankedResults) -> None:
-        """SHADOW ONLY (US-P4): compute the bounded personalization re-rank that WOULD happen and
-        emit it as a metric — the order returned to the user is UNCHANGED. Best-effort (BR-P13):
-        any failure (U9 down, no profile) is swallowed and search proceeds on the baseline. Go
-        live later by applying ``shadow_rerank_diff``'s reordering instead of just measuring it.
+    def _apply_search_boosts(self, user_id: str, ranked: RankedResults) -> RankedResults:
+        """US-P4 go-live: apply the bounded personalization re-rank (BR-P8, top band only) to the
+        order returned to the user, and emit its movement as a metric. Best-effort (BR-P13): any
+        failure (U9 down, no profile) is swallowed and search proceeds on the BASELINE order.
+
+        Metric names keep the ``rerank_shadow`` prefix for CloudWatch dashboard/alarm continuity
+        across the shadow→live cutover — the values now measure movement that was APPLIED, not
+        hypothetical. (ponytail: name kept for dashboard continuity; rename to ``rerank_live``
+        only if ops asks.)
         """
         try:
             boosts = self._search_boosts(user_id)
         except Exception:  # noqa: BLE001 — personalization never fails search
-            return
+            return ranked
         if not boosts:
-            return
+            return ranked
         try:
-            diff = shadow_rerank_diff(ranked, boosts)
+            boosted, diff = apply_boosts(ranked, boosts)
+        except Exception:  # noqa: BLE001 — a boost error degrades to the baseline order, never blocks
+            return ranked
+        try:
             self._observability.emit_metric(
                 "personalization.rerank_shadow", float(diff.positions_changed), {"scope": "search"}
             )
@@ -268,8 +275,9 @@ class SearchOrchestrationService:
                 float(diff.boosted_count),
                 {"scope": "search"},
             )
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 — observability is advisory, must not sink search
             pass
+        return boosted
 
     def _emit_grounding_health(self, verdict: str) -> None:
         """Emit the grounding-health signal — the 'hallucination' AI-incident class (US-R4).
