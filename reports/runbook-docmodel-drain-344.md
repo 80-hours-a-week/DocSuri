@@ -60,11 +60,19 @@ aws sqs start-message-move-task --region $REGION \
   a re-run only heals when the cache key changed — bump `PARSER_VERSION` (@N) *before* re-enqueue or
   the cache-hit + dedup skips the rebuild for free. See [[project_docmodel_reembed_gap]].
 
-## 2. Finish the raw-content backfill (VERIFIED 2026-07-07 — read before running)
+## 2. Re-parse native_html-sourced papers (TRACED 2026-07-07 — read before running)
 
-> **The earlier draft command here (`migrate.py --backfill-native-html --bounded`) was WRONG — no
-> such flag exists.** Verified against `ingestion/src/docsuri_ingestion/raw_backfill.py` +
-> `migrate.py` `_STEPS`. Corrected below.
+> **What "native_html 10,660/21,252" actually is** (traced 2026-07-07): NOT an S3 `raw/` coverage
+> gap — the live `raw/` prefix is **empty** (0 objects), and the figure is nowhere in code. It is
+> the **`source_tier` distribution**: ~10,660 of ~21,252 corpus papers were sourced from the
+> native_html rung. Those are **re-parse targets** — the doc-model builder rebuilds native_html
+> sources (`_REBUILD_SOURCE_TIERS={native_html}`, `docmodel/builder.py:42,334`) because raw TeX/pgf
+> leaks into fullText. Live corpus denominator is now **23,512** full-text papers (grew past 21,252).
+> Exact current count = OpenSearch terms-agg on `source_tier` over `docsuri-corpus` (not yet run).
+>
+> **The earlier draft command (`migrate.py --backfill-native-html --bounded`) was WRONG — no such
+> flag exists.** The goal is the B3 re-parse pipeline, not a bare raw_backfill: prime pdf bytes
+> (`raw_backfill`) **→ `reparse`**. Because `raw/` is empty, the prime is a real prerequisite.
 
 The runner is a **positional step** on the worker entrypoint, not a flag:
 
