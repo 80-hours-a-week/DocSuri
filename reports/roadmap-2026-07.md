@@ -4,9 +4,9 @@
 > **Updated**: 2026-07-07 (session sweep) — **reconcile vs live `origin/main`**:
 > - **main advanced to v1.12.0** since the notes below were written. Already ON main (not "promotion pending"): **#346 KPI funnel** (PR #403), **#347 U10 real-data** (PR #407 최근 본 논문 + PR #414 ORCID 버튼), plus #405/#415.
 > - **#422 authz merged** to develop (`15fc49fa`) — supersedes "PR #422 open" below. **env-seam test fix landed** on develop (`6207455c`, via #417 bundle) — no longer a dangling branch.
-> - **Real develop→main gap = 5 items** awaiting one v1.13 promotion+deploy: **#416** reranker, **#418** SSR-500 root-cause, **#420** docmodel throttle, **#422** authz, env-seam test.
+> - **Real develop→main gap = 6 items** awaiting one v1.13 promotion+deploy: **#416** reranker, **#418** SSR-500 root-cause, **#420** docmodel throttle, **#422** authz, env-seam test, **#427** email→SES.
 > - **4 open PRs in flight** (not yet reflected below): **#419** reembed Cohere-v3, **#423** U8 citation-graph timeout+design, **#424** U5 math render KaTeX→MathJax, **#425** doc-model read-at-arXiv-version (뷰어/citation-tree 잔여).
-> - **#348 email — ✅ 결정: SES 프로덕션 프라이머리** (2026-07-07, SES 프로덕션 액세스 승인). `compute_stack` `EMAIL_PROVIDER` `resend`→`ses`(**PR #427**); SES는 태스크 IAM 역할 인증 → API 키 만료/로테이션 리스크 제거(2026-06-25 인시던트 클래스 소멸). Resend는 휴면 폴백(env 되돌리면 무배포 페일오버). 프로덕션 반영=다음 `cdk deploy Docsuri-Compute`.
+> - **#348 email — ✅ 결정+머지: SES 프로덕션 프라이머리** (2026-07-07, SES 프로덕션 액세스 승인). `compute_stack` `EMAIL_PROVIDER` `resend`→`ses` — **PR #427 merged to develop** (`d849c7c7`, admin-merge). SES는 태스크 IAM 역할 인증 → API 키 만료/로테이션 리스크 제거(2026-06-25 인시던트 클래스 소멸). Resend는 휴면 폴백(env 되돌리면 무배포 페일오버). 프로덕션 반영=다음 `cdk deploy Docsuri-Compute`.
 > - **남은 결정/운영**: #345 perso shadow→real (v1 의도적 유예), #344 doc-model 큐 분리(결정), #347 잔여 ORCID/profile(결정), #343 DLQ drain 24건+native_html 10,660/21,252 (throttle 라이브=`cdk deploy` 후에만 안전), node24 upstream(차단).
 > **Updated**: 2026-07-07 — **Phase 2 board reconcile** (post-refresh GitHub sweep):
 > - ✅ **#341 SSR 500** — **closed** by PR #418 (SSR keep-alive를 ALB idle timeout에 맞춤 — 간헐 500의 근인). #353(logs)/#355(edge error page) 위에 근인 수정 랜딩. develop merged, main 승격 전.
@@ -98,7 +98,7 @@ Ordered by user impact:
 | 🔴 No PR | Personalization shadow→real flip after metric review; then US-P5 + keywordWeights. | #345 |
 | ✅ On main (v1.10+) | KPI funnel dashboard (AI 호출 > 검색 > 완독률) from existing U9 events — **PR #403** merged; #346 closed; **promoted to main**. | #346 · #403 |
 | 🟡 On main, residual decision | U10 mypage mocks: 최근 본 논문 실데이터 **PR #407** + ORCID 로그인 버튼 기본 활성화 **PR #414** **on main (v1.10+)**; #347 remains open only for residual ORCID/profile decision. | #347 · #407 · #414 |
-| ✅ Decided (PR #427) | Email → **SES production-primary** (AWS prod access granted 2026-07-07). `EMAIL_PROVIDER=ses`; SES auth via task IAM role (no API key to expire → retires 2026-06-25 incident class); Resend kept as dormant deploy-free fallback. Live on next `cdk deploy Docsuri-Compute`. | #348 · #427 |
+| ✅ Merged to develop (PR #427) | Email → **SES production-primary** (AWS prod access granted 2026-07-07). `EMAIL_PROVIDER=ses`; SES auth via task IAM role (no API key to expire → retires 2026-06-25 incident class); Resend kept as dormant deploy-free fallback. **PR #427 merged** (`d849c7c7`); live on next `cdk deploy Docsuri-Compute`. | #348 · #427 |
 | 🟡 PR open | Authz contract → `docsuri_shared.authz` refactor — **PR #422**: Principal/Action/Decision/AccountId/UserRole + stateless guard 이전, accounts re-export(클래스 동일성 보존), 소비자 17 + 테스트 8 rewire, leak=0, backend 236 tests green. | #167 · #422 |
 | ✅ Develop merged | 검색 품질 개선 (charter phase 7) — **PR #416 merged** (Cross-Encoder Reranker; cross-region wiring + `bedrock:Rerank` IAM blockers cleared, fail-soft keeps RRF baseline). Follow-on **PR #419 open** (Cohere Embed Multilingual v3 re-embed + region-decouple). | #416 · #419 · charter |
 | ✅ Closed | Issue hygiene: shipped US-A3~A7 stories closed with evidence comments (#187–191). | #187 · #188 · #189 · #190 · #191 |
