@@ -187,7 +187,28 @@ def backfill_external(settings: IngestionSettings | None = None) -> int:
     return 0
 
 
+def audit(settings: IngestionSettings | None = None) -> int:
+    """Report the corpus source-tier distribution from the canonical dedup ledger (read-only).
+    Answers "how many papers still need re-parse": any ``winning_source_tier`` WITHOUT a
+    ``_GROBID`` suffix has not been structurally re-parsed yet. Run as a one-off ECS task like the
+    other steps: ``python -m docsuri_ingestion.worker audit``."""
+    from .adapters.postgres import PostgresControlPlaneStore
+
+    store = PostgresControlPlaneStore(os.environ["DOCSURI_CONTROL_PLANE_DSN"])
+    try:
+        rows = store.source_tier_counts()
+    finally:
+        store.close()
+    total = sum(n for _, n in rows)
+    not_reparsed = sum(n for tier, n in rows if not tier.endswith("_GROBID"))
+    for tier, n in rows:
+        log.info("source_tier %-28s %6d", tier, n)
+    log.info("audit: %d papers; %d not yet _GROBID re-parsed", total, not_reparsed)
+    return 0
+
+
 _STEPS = {
+    "audit": audit,
     "provision": provision,
     "backfill": backfill,
     "backfill_external": backfill_external,

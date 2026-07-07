@@ -113,6 +113,16 @@ class PostgresControlPlaneStore:
             conn.commit()
         return Watermark(name=name, updated_at=_ensure_utc(row[0]))
 
+    def source_tier_counts(self) -> list[tuple[str, int]]:
+        """(winning_source_tier, paper_count) over the canonical dedup ledger, most common first.
+        Read-only audit of how the corpus is sourced (ARXIV_HTML / ARXIV_PDF / *_GROBID); a tier
+        without the ``_GROBID`` suffix has not been re-parsed (see reparse.py / migrate.audit)."""
+        with self._connect() as conn:
+            return conn.execute(
+                "SELECT winning_source_tier, count(*) "
+                "FROM canonical_dedup_state GROUP BY 1 ORDER BY 2 DESC"
+            ).fetchall()
+
     def evaluate_dedup(self, paper_id: str, version: int, fingerprint: str) -> DedupResult:
         state = self._get_dedup_state(paper_id)
         if state is None:
