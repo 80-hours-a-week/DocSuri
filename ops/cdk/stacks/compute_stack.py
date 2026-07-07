@@ -405,7 +405,7 @@ class ComputeStack(Stack):
         # public_hosted_zone(zone) auto-writes the DKIM CNAMEs into Route53 → no mailbox needed.
         # SES production access GRANTED (2026-07-07) → arbitrary signup delivery works; the account
         # is out of the sandbox. EMAIL_PROVIDER="ses" above makes SES production-primary (#348). The
-        # bounce/complaint config set below is the automated handling the prod-access review required.
+        # bounce/complaint config set below is the automated handling the prod-access review needs.
 
         # Bounce/complaint handling. The config set (1) auto-adds hard-bounced + complained
         # addresses to the account suppression list so we never re-send to them, and (2) publishes
