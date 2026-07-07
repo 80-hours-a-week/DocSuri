@@ -56,8 +56,10 @@ from constructs import Construct
 # go through the global cross-region inference profile. The adapter pins output_dimension to the
 # 1024-dim spec (embed-v4 defaults to 1536). v2 dual-write targets the same profile so the
 # backfilled docsuri-corpus-v2 is a clean, uniform v4 rebuild.
-_BEDROCK_FOUNDATION_MODEL = "cohere.embed-v4:0"
-_BEDROCK_MODEL_ID = "global.cohere.embed-v4:0"  # inference profile id (used for InvokeModel)
+# v3 cutover (2026-07): harvester embeds new papers with Cohere Embed Multilingual v3 (on-demand
+# foundation-model, NOT an inference profile) into docsuri-corpus-c3ml, matching the reader.
+_BEDROCK_FOUNDATION_MODEL = "cohere.embed-multilingual-v3"
+_BEDROCK_MODEL_ID = "cohere.embed-multilingual-v3"  # on-demand FM id (used for InvokeModel)
 
 # Existing control-plane RDS (created by Docsuri-Compute) referenced by concrete id rather than
 # a CFN cross-stack import. Importing compute's L2 construct would force a compute redeploy, which
@@ -280,12 +282,14 @@ class IngestionStack(Stack):
             environment={
                 "DOCSURI_ENV": "production",
                 "DOCSURI_AWS_REGION": self.region,
+                # v3 not in apne2 → harvester embeds cross-region (OpenSearch region unchanged).
+                "DOCSURI_EMBED_REGION": "ap-northeast-1",
                 "DOCSURI_S3_BUCKET": self.bucket.bucket_name,
                 "DOCSURI_BEDROCK_MODEL_ID": _BEDROCK_MODEL_ID,
                 "DOCSURI_OPENSEARCH_ENDPOINT": f"https://{opensearch_domain.domain_endpoint}",
                 # Write through the stable alias so future alias swaps (for fast re-embed rebuilds)
                 # do not leave new papers landing in the retired backing index.
-                "DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus",
+                "DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus-c3ml",
                 "DOCSURI_OPENSEARCH_ALIAS": "docsuri-corpus",
                 # SS/OpenAlex re-enabled after fixing the SS bulk-search 400 (commit c7bd065d)
                 # and adding per-source isolation to on_schedule_tick — a bad source now logs +
@@ -350,10 +354,12 @@ class IngestionStack(Stack):
             environment={
                 "DOCSURI_ENV": "production",
                 "DOCSURI_AWS_REGION": self.region,
+                # v3 not in apne2 → harvester embeds cross-region (OpenSearch region unchanged).
+                "DOCSURI_EMBED_REGION": "ap-northeast-1",
                 "DOCSURI_S3_BUCKET": self.bucket.bucket_name,
                 "DOCSURI_BEDROCK_MODEL_ID": _BEDROCK_MODEL_ID,
                 "DOCSURI_OPENSEARCH_ENDPOINT": f"https://{opensearch_domain.domain_endpoint}",
-                "DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus",
+                "DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus-c3ml",
                 "DOCSURI_OPENSEARCH_ALIAS": "docsuri-corpus",
                 "DOCSURI_CORPUS_SOURCES": "ARXIV",
                 "DOCSURI_CONTROL_PLANE_DSN": control_plane_dsn,
@@ -463,10 +469,12 @@ class IngestionStack(Stack):
             environment={
                 "DOCSURI_ENV": "production",
                 "DOCSURI_AWS_REGION": self.region,
+                # v3 not in apne2 → harvester embeds cross-region (OpenSearch region unchanged).
+                "DOCSURI_EMBED_REGION": "ap-northeast-1",
                 "DOCSURI_S3_BUCKET": self.bucket.bucket_name,
                 "DOCSURI_BEDROCK_MODEL_ID": _BEDROCK_MODEL_ID,
                 "DOCSURI_OPENSEARCH_ENDPOINT": f"https://{opensearch_domain.domain_endpoint}",
-                "DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus",
+                "DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus-c3ml",
                 "DOCSURI_OPENSEARCH_ALIAS": "docsuri-corpus",
                 # ARXIV only. The user-PDF build never harvests SS/OpenAlex, so no SS API key is
                 # needed even though GROBID is present — with grobid_url set, an SS/OPENALEX in the
