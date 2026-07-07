@@ -287,10 +287,13 @@ def reembed_verify(settings: IngestionSettings | None = None) -> int:
     dst_count = int(client.count(index=dst)["count"])
     missing = src_count - dst_count
     log.info(
-        "re-embed verify: source %s=%d, target %s=%d, missing=%d", src, src_count, dst, dst_count, missing
+        "re-embed verify: source %s=%d, target %s=%d, missing=%d",
+        src, src_count, dst, dst_count, missing,
     )
     if missing > 0:
-        raise SystemExit(f"re-embed target {dst} short {missing} docs vs source {src} — gap remains")
+        raise SystemExit(
+            f"re-embed target {dst} short {missing} docs vs source {src} — gap remains"
+        )
     return 0
 
 
