@@ -1,6 +1,10 @@
 # DocSuri Production Roadmap — 2026-07
 
-> **Date**: 2026-07-03 · **Baseline**: develop (2026-07-07) · **main at v1.12.0** (`e7390b44`; v1.9.0→v1.12.0 promotions #405 reembed fast-rebuild+bulk-PDF re-parse, #415 novelty-agent). develop 21 commits ahead.
+> **Date**: 2026-07-03 · **Baseline**: **main at v1.13.0** (`d8a052fc`) — Phase 2 hardening board **shipped to prod**.
+> **Updated**: 2026-07-07 (v1.13 deployed) — **Phase 2 substantially DONE**. Shipped in the v1.13 promotion: #341 SSR-500, #416 reranker, #420/#343 docmodel throttle, #422/#167 authz, #427/#348 email→SES (now **LIVE**), env-seam test — on top of the earlier #342/#346/#347-real-data. Zero open PRs. **Remaining Phase 2**:
+> - 🟡 **#344 backfill/doc-model ops** — throttle now live → the DLQ drain (24) + native_html backfill (10,660/21,252) + autoscale restore are **unblocked** prod-ops. Runbook: `reports/runbook-docmodel-drain-344.md`. Queue-separation still a decision.
+> - 🔴 **#345** personalization shadow→real (metric-review decision; v1 의도적 유예) · 🟡 **#347** U10 잔여 ORCID/profile (priority:could 결정) · ⏸️ node24 upstream (blocked).
+> - **Verify**: #348 SES cutover live — confirm a real signup delivers mail out of the sandbox.
 > **Updated**: 2026-07-07 (session sweep) — **reconcile vs live `origin/main`**:
 > - **main advanced to v1.12.0** since the notes below were written. Already ON main (not "promotion pending"): **#346 KPI funnel** (PR #403), **#347 U10 real-data** (PR #407 최근 본 논문 + PR #414 ORCID 버튼), plus #405/#415.
 > - **#422 authz merged** to develop (`15fc49fa`) — supersedes "PR #422 open" below. **env-seam test fix landed** on develop (`6207455c`, via #417 bundle) — no longer a dangling branch.
@@ -91,16 +95,16 @@ Ordered by user impact:
 
 | Status | Item | Tracking |
 |---|---|---|
-| ✅ Develop merged | Intermittent SSR 500 on paper pages — **PR #353** enables ALB/CloudFront access logs (step ①); raw-500 exposure handled at the edge by **PR #355** branded CloudFront error page (step ②); root-cause fix **PR #418** aligns SSR keep-alive with the ALB idle timeout (step ③, #341 closed). develop merged, main promotion pending. | #341 · #353 · #355 · #418 |
+| ✅ Shipped (v1.13) | Intermittent SSR 500 on paper pages — **PR #353** ALB/CloudFront access logs (①); **PR #355** branded edge error page (②); root-cause fix **PR #418** aligns SSR keep-alive with the ALB idle timeout (③, #341 closed). **On main, deployed in v1.13.** | #341 · #353 · #355 · #418 |
 | ✅ Done | 각주 트리 DOI node expansion 500 — **PR #357**: S2 200-with-bad-body was fail-open (parse escaped the `httpx`-only guard → app 500); now fail-closed to Unavailable at both the provider parse and tree assembly (BR-CG12). Regression tests exercise the real provider path the old suite bypassed via FixtureProvider. | #342 · #357 |
-| 🟡 Develop merged | Docmodel backlog self-heal — **PR #420 merged** throttles the arXiv caller to one task (`max_capacity=1`, `lower=10` burst step removed) so drains stop feeding the DLQ. Remaining: the re-enqueue/DLQ drain itself is a separate prod mutation (live: DLQ 24 msgs · S3 native_html 10,660/21,252), safe only once the throttle is live via `cdk deploy`. | #343 · #420 |
-| 🟡 Develop merged | Finish pre-2026 backfill drain → restore ingestion autoscale — **PR #420** landed the prerequisite throttle; queue-separation decision (#344) still open. | #344 · #420 |
+| 🟡 Throttle shipped (v1.13); drain pending | Docmodel backlog self-heal — **PR #420** (throttle: `max_capacity=1`, burst step removed) **now live in prod**, so drains no longer feed the DLQ. Remaining prod-op: re-enqueue/DLQ drain (was 24 msgs · native_html 10,660/21,252) — **now unblocked**. See `reports/runbook-docmodel-drain-344.md`. | #343 · #420 |
+| 🟡 Unblocked (v1.13) | Finish pre-2026 backfill drain → restore ingestion autoscale — throttle live; drain + autoscale-restore are runnable prod-ops (runbook above). Queue-separation (#344) still a decision. | #344 · #420 |
 | 🔴 No PR | Personalization shadow→real flip after metric review; then US-P5 + keywordWeights. | #345 |
 | ✅ On main (v1.10+) | KPI funnel dashboard (AI 호출 > 검색 > 완독률) from existing U9 events — **PR #403** merged; #346 closed; **promoted to main**. | #346 · #403 |
 | 🟡 On main, residual decision | U10 mypage mocks: 최근 본 논문 실데이터 **PR #407** + ORCID 로그인 버튼 기본 활성화 **PR #414** **on main (v1.10+)**; #347 remains open only for residual ORCID/profile decision. | #347 · #407 · #414 |
-| ✅ Merged to develop (PR #427) | Email → **SES production-primary** (AWS prod access granted 2026-07-07). `EMAIL_PROVIDER=ses`; SES auth via task IAM role (no API key to expire → retires 2026-06-25 incident class); Resend kept as dormant deploy-free fallback. **PR #427 merged** (`d849c7c7`); live on next `cdk deploy Docsuri-Compute`. | #348 · #427 |
-| 🟡 PR open | Authz contract → `docsuri_shared.authz` refactor — **PR #422**: Principal/Action/Decision/AccountId/UserRole + stateless guard 이전, accounts re-export(클래스 동일성 보존), 소비자 17 + 테스트 8 rewire, leak=0, backend 236 tests green. | #167 · #422 |
-| ✅ Develop merged | 검색 품질 개선 (charter phase 7) — **PR #416 merged** (Cross-Encoder Reranker; cross-region wiring + `bedrock:Rerank` IAM blockers cleared, fail-soft keeps RRF baseline). Follow-on **PR #419 open** (Cohere Embed Multilingual v3 re-embed + region-decouple). | #416 · #419 · charter |
+| ✅ Shipped LIVE (v1.13) | Email → **SES production-primary** (AWS prod access granted 2026-07-07). `EMAIL_PROVIDER=ses`; SES auth via task IAM role (no API key to expire → retires 2026-06-25 incident class); Resend dormant fallback. **PR #427 deployed in v1.13** — verify a real signup delivers out of the sandbox. | #348 · #427 |
+| ✅ Shipped (v1.13); #167 closed | Authz contract → `docsuri_shared.authz` refactor — **PR #422** (Principal/Action/Decision/AccountId/UserRole + stateless guard 이전; accounts re-export 보존; 소비자 17 + 테스트 8 rewire; leak=0). On main, #167 closed as shipped. | #167 · #422 |
+| ✅ Shipped (v1.13) | 검색 품질 개선 (charter phase 7) — **PR #416** Cross-Encoder Reranker (cross-region wiring + `bedrock:Rerank` IAM cleared; fail-soft keeps RRF baseline). **On main, deployed in v1.13.** Follow-on **PR #419** (Cohere Embed Multilingual v3 re-embed) since merged. | #416 · #419 · charter |
 | ✅ Closed | Issue hygiene: shipped US-A3~A7 stories closed with evidence comments (#187–191). | #187 · #188 · #189 · #190 · #191 |
 | ⏸️ Blocked | `mathieudutour/github-tag-action` node24 bump — blocked on upstream release (rest of CI on node24 since PR #361). | — |
 | ✅ Done | Env-dependent `test_api_create_status_and_cancel` — fake/live seam pinned: the app-shell wired live Bedrock/HTTP adapters into `app.state` and the no-queue dispatch ran the worker inline, so ambient AWS creds decided the terminal state. Overridden with Noop adapters for a deterministic degrade (51 novelty tests green). | `fix/novelty-test-env-seam` |
