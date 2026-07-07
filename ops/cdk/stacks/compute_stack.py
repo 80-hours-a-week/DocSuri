@@ -649,8 +649,8 @@ class ComputeStack(Stack):
             iam.PolicyStatement(
                 actions=["bedrock:InvokeModel"],
                 resources=[
-                    # v3 cutover (2026-07): reader now embeds queries with Cohere Embed Multilingual
-                    # v3 (on-demand foundation-model, cross-region ap-northeast-1 — v3 not in apne2).
+                    # v3 cutover (2026-07): reader embeds queries with Cohere Embed
+                    # Multilingual v3 (on-demand FM, cross-region — v3 not in apne2).
                     "arn:aws:bedrock:*::foundation-model/cohere.embed-multilingual-v3",
                     # v4 kept for rollback safety (revert DOCSURI_BEDROCK_MODEL_ID → v4).
                     # Invoked via the global inference profile (bare model id isn't on-demand
