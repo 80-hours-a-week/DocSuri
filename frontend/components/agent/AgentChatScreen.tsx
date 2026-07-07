@@ -31,6 +31,7 @@ import {
 } from '@/lib/agentChat/evidenceResult';
 import {
   SIMILAR_WORK_COLUMNS,
+  confidenceLabel,
   detailCell,
   itemsOf,
   listField,
@@ -679,8 +680,8 @@ function EvidenceRefList({ refs }: { refs: EvidenceSourceRef[] }) {
 }
 
 // 첫 사용자가 각 섹션이 "무엇을·왜" 보여주는지 바로 알 수 있도록 kind별 한 줄 설명.
-// evidence(U11 근거형성 결과 병합본)는 별도 UI 섹션으로 노출하지 않아 이 맵에는 없다.
 const NOVELTY_ARTIFACT_HINT: Record<string, string> = {
+  evidence: '검색된 논문을 질의 의도에 맞춰 정렬하고 관련도/근거 강도 점수를 붙였어요',
   similar_works: '이미 나와 있는 비슷한 연구들을 찾아 정리했어요',
   external_findings: 'GitHub·데이터셋에서 관련 구현체·자료를 찾았어요',
   novelty_candidates: '위 근거를 바탕으로 제안하는 차별화 실험 아이디어예요',
@@ -765,6 +766,7 @@ function SimilarWorksTable({ items }: { items: NoveltyPayloadItem[] }) {
                 <td>
                   <EvidenceStatusBadge status={item.evidenceStatus} />
                   <NoveltySourceRefLinks refs={sourceRefsOf(item.sourceRefs)} />
+                  <NoveltyEvidenceMeta item={item} />
                 </td>
               </tr>
             ))}
@@ -789,6 +791,7 @@ function NoveltyItemList({ items }: { items: NoveltyPayloadItem[] }) {
           </div>
           {item.summary || item.rationale ? <p>{item.summary ?? item.rationale}</p> : null}
           <NoveltySourceRefLinks refs={sourceRefsOf(item.sourceRefs)} />
+          <NoveltyEvidenceMeta item={item} />
         </li>
       ))}
     </ul>
@@ -823,6 +826,7 @@ function RiskSignalList({ items }: { items: NoveltyPayloadItem[] }) {
               ) : null}
             </div>
             {item.summary ? <p>{item.summary}</p> : null}
+            <NoveltyEvidenceMeta item={item} />
           </li>
         ))}
       </ul>
@@ -877,6 +881,18 @@ function EvidenceStatusBadge({ status }: { status?: string }) {
     <span className={supported ? styles.noveltyBadgeSupported : styles.noveltyBadgeInsufficient}>
       {supported ? '근거 있음' : '근거 부족'}
     </span>
+  );
+}
+
+function NoveltyEvidenceMeta({ item }: { item: NoveltyPayloadItem }) {
+  const confidence = confidenceLabel(item.confidence);
+  if (!item.evidenceNote && !confidence && !item.queryUsed) return null;
+  return (
+    <div className={styles.noveltyEvidenceMeta}>
+      {item.evidenceNote ? <span>{item.evidenceNote}</span> : null}
+      {confidence ? <strong>관련도/근거 강도 {confidence}</strong> : null}
+      {item.queryUsed ? <small>query: {item.queryUsed}</small> : null}
+    </div>
   );
 }
 
