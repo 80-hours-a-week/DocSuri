@@ -29,6 +29,7 @@ from .reembed import (
     reembed_cutover,
     reembed_finalize,
     reembed_provision,
+    reembed_verify,
 )
 from .reparse import reparse
 from .settings import IngestionSettings
@@ -196,6 +197,7 @@ _STEPS = {
     "reembed_copy": reembed_copy,
     "reembed": reembed,
     "reembed_finalize": reembed_finalize,
+    "reembed_verify": reembed_verify,
     "reembed_cutover": reembed_cutover,
     # B3 full re-parse: raw_backfill (prime cache from bulk PDF) -> reembed_provision -> reparse
     # (cache-only -> offline index) -> reembed_finalize -> reembed_cutover.

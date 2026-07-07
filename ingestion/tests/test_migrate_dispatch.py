@@ -19,6 +19,7 @@ def test_steps_are_exactly_the_known_one_off_phases():
         "reembed_copy",
         "reembed",
         "reembed_finalize",
+        "reembed_verify",
         "reembed_cutover",
         "raw_backfill",
         "reparse",
