@@ -1,7 +1,7 @@
 'use client';
 
 // DocModelViewer (자체 리치뷰, D4/Q5=C, BR-SF-11) — renders the structured doc-model:
-// nested sections + TOC, KaTeX formulas, structured tables (DATA, not crops — D8), and
+// nested sections + TOC, MathJax formulas, structured tables (DATA, not crops — D8), and
 // webp figures joined to the /assets signed urls by assetId (SEC-9 — the doc-model is
 // url-free). OA-license-gated: license_unavailable → arXiv link-out. External text is
 // escaped by React (BR-SF-9). Replaces the legacy plain-text full-text viewer.
@@ -316,8 +316,9 @@ function BlockZoomOverlay({
       setScale(Math.min(availW / w, availH / h, _ZOOM_MAX_SCALE));
     };
     measure();
-    // The content's natural size settles after the first paint — a KaTeX formula reflows once
-    // its web fonts load, and a figure resizes when its <img> loads — and the viewport can
+    // The content's natural size settles after the first paint — a formula reflows when the
+    // lazy MathJax engine loads and replaces its placeholder, a figure resizes when its <img>
+    // loads — and the viewport can
     // change (orientation / resize). A ResizeObserver on both re-measures on any such change.
     // The scale is a transform (visual only), so it never changes either measured box.
     const ro = new ResizeObserver(measure);

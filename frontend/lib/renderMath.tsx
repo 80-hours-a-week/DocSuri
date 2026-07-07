@@ -1,125 +1,209 @@
 'use client';
 
-// renderMath (D4 — doc-model rich view). Renders LaTeX with KaTeX. The doc-model carries
-// formulas as LaTeX (display blocks) and inline math embedded as \( ... \) inside text.
-// XSS: KaTeX escapes its input and emits trusted markup; `throwOnError: false` degrades a
-// malformed expression to its (escaped) source instead of throwing. Surrounding prose is
-// rendered as React text nodes (escaped), never as HTML.
+// renderMath (D4 — doc-model rich view). Renders LaTeX with MathJax (SVG output). The doc-model
+// carries formulas as LaTeX (display blocks) and inline math embedded as \( ... \) inside text.
 //
-// The KaTeX stylesheet lives here, not in each consumer — any view that renders math (the
-// doc-model viewer, the paper-detail abstract) gets it by importing this module, so math is
-// never shown with the unstyled fallback.
-import 'katex/dist/katex.min.css';
-import { Fragment } from 'react';
-import katex from 'katex';
+// Why MathJax over KaTeX: papers pull in the long tail of TeX packages (physics, upgreek, bm, …)
+// via their e-print preamble; KaTeX implements only a core subset, so an unhandled command collapses
+// the whole formula to a placeholder. MathJax ships those packages, so far fewer formulas break.
+//
+// Cost: MathJax is ~9x KaTeX's size, so it is **lazy-loaded** — the ~600KB chunk is fetched only
+// when a math-bearing view first mounts (code-split via dynamic import), never in the initial bundle.
+// Until it resolves, each math span shows a neutral skeleton; when the engine is ready every span
+// re-renders (subscribed via useSyncExternalStore).
+//
+// Output is SVG (glyph paths inlined) — self-contained, so no external web-font stylesheet is needed
+// (CSP-safe) and the markup can be injected via dangerouslySetInnerHTML. Surrounding prose is rendered
+// as React text nodes (escaped), never as HTML.
+import './renderMath.css';
+import { Fragment, useSyncExternalStore } from 'react';
 
-// A KaTeX macro map (`\name` -> expansion) from the doc-model's e-print preamble
-// (`meta.macros`), so author-defined commands resolve instead of rendering as red
-// unsupported-command errors.
+// A macro map (`\name` -> expansion) extracted by ingestion from the doc-model's e-print preamble
+// (`meta.macros`), so author-defined commands resolve. Kept in KaTeX/preamble shape (keys carry the
+// leading backslash, values may use `#1`) — the storage contract is unchanged; we convert to
+// MathJax's macro form (`{ name: [tmpl, argc] }`) at render time (see toMathjaxMacros).
 export type MathMacros = Record<string, string>;
 
-// Always-on fallback macros, merged UNDER any per-paper `meta.macros` (author defs win).
-// Two classes of recurring breakage they fix:
-//   1. Common blackboard-bold sets papers usually `\newcommand` but that can be missing from
-//      the e-print preamble (a `.sty` LaTeXML did not bundle) — KaTeX has no default for these.
-//   2. Non-math layout/formatting macros that ride into the alttext source (and into abstracts,
-//      which carry no `meta.macros`) — defined as no-ops so KaTeX does not red-flag them.
-// Author macros override these via the merge order, so a paper that redefines `\R` still wins.
-const DEFAULT_MACROS: MathMacros = {
-  '\\R': '\\mathbb{R}',
-  '\\N': '\\mathbb{N}',
-  '\\Z': '\\mathbb{Z}',
-  '\\Q': '\\mathbb{Q}',
-  '\\C': '\\mathbb{C}',
-  // Layout/spacing no-ops (carry no math meaning).
-  '\\centering': '',
-  '\\raggedright': '',
-  '\\raggedleft': '',
-  '\\noindent': '',
-  '\\par': '',
-  '\\hfill': '',
-  '\\vfill': '',
-  '\\medskip': '',
-  '\\smallskip': '',
-  '\\bigskip': '',
-  '\\newline': '',
-  '\\protect': '',
-  '\\xspace': '',
-  // `physics` package (very common on arXiv) commands KaTeX has no default for, so an unhandled one
-  // collapses the WHOLE formula to a placeholder. Each expansion below was verified to render (and
-  // to be semantically faithful) against KaTeX; none override a KaTeX builtin (notably `\div` = ÷ is
-  // left untouched — physics's divergence uses the distinct `\divergence`). The two *structural*
-  // families — `\matrixquantity`/`\derivative` and their variants — can't be plain macros (delimiter
-  // detection / variable arity); they are rewritten by `preprocessPhysics` below.
-  //
-  // Auto-sized bracket commands: the alttext keeps the literal delimiters, so expanding the command
-  // to NOTHING leaves e.g. `(x)` — renders correctly, only losing the auto-sizing.
-  '\\quantity': '',
-  '\\qty': '',
-  // Operators / functions.
-  '\\tr': '\\operatorname{tr}',
-  '\\trace': '\\operatorname{tr}',
-  '\\Tr': '\\operatorname{Tr}',
-  '\\rank': '\\operatorname{rank}',
-  '\\Res': '\\operatorname{Res}',
-  '\\erf': '\\operatorname{erf}',
-  // Vector calculus (`\div` intentionally omitted — it is KaTeX's ÷).
-  '\\grad': '\\nabla',
-  '\\gradient': '\\nabla',
-  '\\curl': '\\nabla\\times',
-  '\\divergence': '\\nabla\\cdot',
-  '\\laplacian': '\\nabla^2',
-  // Differential `\dd` in integrals/derivatives.
-  '\\dd': '\\mathrm{d}',
-  // Vector decorations: bold / arrow / unit-hat.
-  '\\vb': '\\mathbf',
-  '\\va': '\\vec',
-  '\\vu': '\\hat',
-  // Absolute value / norm (brace-argument forms).
-  '\\abs': '\\left\\lvert #1 \\right\\rvert',
-  '\\absolutevalue': '\\left\\lvert #1 \\right\\rvert',
-  '\\norm': '\\left\\lVert #1 \\right\\rVert',
-  // Commutator / anticommutator / Poisson bracket.
-  '\\comm': '\\left[#1,#2\\right]',
-  '\\acomm': '\\left\\{#1,#2\\right\\}',
-  '\\anticommutator': '\\left\\{#1,#2\\right\\}',
-  '\\pb': '\\left\\{#1,#2\\right\\}',
-  '\\poissonbracket': '\\left\\{#1,#2\\right\\}',
-  // Order / big-O.
-  '\\order': '\\mathcal{O}\\!\\left(#1\\right)',
-  '\\bigO': '\\mathcal{O}\\!\\left(#1\\right)',
-  '\\Order': '\\mathcal{O}\\!\\left(#1\\right)',
-  // LaTeXML artifact: it renames `\left`/`\right` to `\originalleft`/`\originalright` in some
-  // alttext, which KaTeX then rejects — map them straight back.
-  '\\originalleft': '\\left',
-  '\\originalright': '\\right',
-  '\\leavevmode': '',
-  // Blackboard-bold variants from `dsfont`/`bbm` (indicator function `\mathds{1}`, `\mathbbm{1}`);
-  // KaTeX has no default, so fold them into its `\mathbb` (renders digits + letters).
-  '\\mathds': '\\mathbb',
-  '\\mathbbm': '\\mathbb',
-  // Small-caps / nice-fraction text packages KaTeX lacks — degrade to plain text / a normal fraction
-  // (faithful in content, not in the exact glyph styling).
-  '\\textsc': '\\text{#1}',
-  '\\nicefrac': '\\frac{#1}{#2}',
-  // A few more recurring alttext leaks: physics `\differential` (like `\dd`), a `\boldmath` switch
-  // (no-op in math), and the `\varmathbb` blackboard alias.
-  '\\differential': '\\mathrm{d}',
-  '\\boldmath': '',
-  '\\varmathbb': '\\mathbb',
+// Always-on fallback macros (MathJax form), merged UNDER any per-paper author macros (author wins).
+// Most of KaTeX's old fallback set is now redundant — MathJax's `physics`/`upgreek`/`mathtools`/`ams`
+// packages resolve `\quantity`·`\upbeta`·`\tr`·… natively. What remains are (1) commands MathJax has
+// no default for and (2) non-math layout tokens that ride into alttext/abstracts (defined as no-ops
+// so an unhandled one does not collapse the whole formula).
+// NOTE: keys are in MathJax's macro form — the command name WITHOUT its leading backslash (author
+// macros from meta.macros are normalized to this shape in toMathjaxMacros).
+const DEFAULT_MACROS: Record<string, string | [string, number]> = {
+  // `bm` package bold — MathJax has `\boldsymbol` but not `\bm`.
+  bm: ['\\boldsymbol{#1}', 1],
+  // End-of-proof symbol that occasionally leaks into a trailing math span.
+  qed: '\\square',
+  // Blackboard-bold sets papers usually `\newcommand` but that can be missing from the e-print
+  // preamble (a `.sty` LaTeXML did not bundle). Author macros override these via the merge order.
+  R: '\\mathbb{R}',
+  N: '\\mathbb{N}',
+  Z: '\\mathbb{Z}',
+  Q: '\\mathbb{Q}',
+  C: '\\mathbb{C}',
+  // Blackboard-bold from `dsfont`/`bbm` (indicator `\mathds{1}`, `\mathbbm{1}`) — fold into `\mathbb`.
+  mathds: '\\mathbb',
+  mathbbm: '\\mathbb',
+  // LaTeXML renames `\left`/`\right` to `\originalleft`/`\originalright` in some alttext — map back.
+  originalleft: '\\left',
+  originalright: '\\right',
+  // Small-caps / nice-fraction text packages — degrade to plain text / a normal fraction.
+  textsc: ['\\text{#1}', 1],
+  nicefrac: ['\\frac{#1}{#2}', 2],
+  // Layout/spacing no-ops (carry no math meaning) that can ride into abstracts (which have no macros).
+  centering: '',
+  raggedright: '',
+  raggedleft: '',
+  noindent: '',
+  par: '',
+  hfill: '',
+  vfill: '',
+  medskip: '',
+  smallskip: '',
+  bigskip: '',
+  newline: '',
+  protect: '',
+  xspace: '',
+  leavevmode: '',
+  boldmath: '',
 };
 
-// Unsupported-but-harmless tokens degrade to their source in this muted tone (not alarming
-// red). Surrounding valid math still renders normally; only the unresolved span is tinted.
-const ERROR_COLOR = '#6b7280';
+// Convert an author MathMacros map (KaTeX/preamble shape) to MathJax's macro form: strip the leading
+// backslash from the key, and when the value uses `#n` arguments pass `[template, argCount]` (MathJax
+// requires the arity explicitly, unlike KaTeX which infers it).
+function toMathjaxMacros(macros?: MathMacros): Record<string, string | [string, number]> {
+  const out: Record<string, string | [string, number]> = { ...DEFAULT_MACROS };
+  if (macros) {
+    for (const [key, value] of Object.entries(macros)) {
+      const name = key.replace(/^\\/, '');
+      let maxArg = 0;
+      for (const m of value.matchAll(/#(\d)/g)) maxArg = Math.max(maxArg, Number(m[1]));
+      out[name] = maxArg > 0 ? [value, maxArg] : value;
+    }
+  }
+  return out;
+}
 
-// Fail-soft fallback: some author LaTeX carries a construct KaTeX rejects with a *fatal* parse
-// error (a braced ``\big{(}`` delimiter, an unknown macro, a stray ``&`` …). With
-// `throwOnError:false` KaTeX renders the WHOLE expression as its raw source — a wall of
-// backslashes that reads as broken. Rather than show that, we catch the throw and emit a compact,
-// intentional-looking placeholder that carries the source in its tooltip (hover/long-press to
-// inspect). Ingestion strips the known offenders, but the input is open-ended, so this guarantees
-// no formula ever renders as backslash soup regardless of what slips through.
+// ---------------------------------------------------------------------------
+// Lazy MathJax engine. Loaded once per session on first use; a tiny external store lets every mounted
+// math span re-render when it becomes ready (useSyncExternalStore).
+
+type Engine = {
+  outerHTML: (node: unknown) => string;
+  makeDoc: (macros: Record<string, string | [string, number]>) => {
+    convert: (latex: string, opts: { display: boolean }) => unknown;
+  };
+};
+
+let engine: Engine | null = null;
+let loadPromise: Promise<void> | null = null;
+let loadFailed = false;
+const listeners = new Set<() => void>();
+
+function subscribe(cb: () => void): () => void {
+  listeners.add(cb);
+  return () => {
+    listeners.delete(cb);
+  };
+}
+
+// Three states so a span can distinguish "still loading" from "load failed" — a failed chunk must
+// degrade to the source fallback, never hang on the skeleton forever (frontend 무한 로딩 금지).
+type EngineStatus = 'loading' | 'ready' | 'error';
+function getSnapshot(): EngineStatus {
+  if (engine) return 'ready';
+  if (loadFailed) return 'error';
+  return 'loading';
+}
+function getServerSnapshot(): EngineStatus {
+  return 'loading'; // SSR renders the placeholder; the engine is a browser-only, on-demand chunk.
+}
+
+// The TeX packages we register — the standard set MINUS `mhchem` (chemistry), `bussproofs` (proof
+// trees) and `html` (raw-HTML injection, an XSS surface). Verified to render 100% of a math-heavy
+// arXiv paper's formulas; excluding those keeps the on-demand chunk smaller and the surface safer.
+const PACKAGES = [
+  'base', 'ams', 'amscd', 'boldsymbol', 'braket', 'cancel', 'cases', 'centernot', 'color',
+  'configmacros', 'enclose', 'extpfeil', 'gensymb', 'mathtools', 'newcommand', 'physics',
+  'textcomp', 'textmacros', 'unicode', 'upgreek',
+];
+
+/** Load the MathJax engine (idempotent). Exposed so a consumer can warm the chunk ahead of paint,
+ * and so tests can await readiness before asserting rendered output. On failure it clears its cached
+ * promise so a later mount can retry, flips the error state (spans fall back to the source), and
+ * rethrows so an awaiting caller (e.g. a test) sees it. */
+export function preloadMathEngine(): Promise<void> {
+  if (engine) return Promise.resolve();
+  if (loadPromise) return loadPromise;
+  loadFailed = false;
+  loadPromise = (async () => {
+    const [{ mathjax }, { TeX }, { SVG }, { liteAdaptor }, { RegisterHTMLHandler }] =
+      await Promise.all([
+        import('mathjax-full/js/mathjax.js'),
+        import('mathjax-full/js/input/tex.js'),
+        import('mathjax-full/js/output/svg.js'),
+        import('mathjax-full/js/adaptors/liteAdaptor.js'),
+        import('mathjax-full/js/handlers/html.js'),
+      ]);
+    // Registering each package's Configuration (side-effect import) is what makes its name usable in
+    // `PACKAGES`. `physics` is not part of AllPackages, so it MUST be registered here alongside the rest.
+    await Promise.all([
+      import('mathjax-full/js/input/tex/base/BaseConfiguration.js'),
+      import('mathjax-full/js/input/tex/ams/AmsConfiguration.js'),
+      import('mathjax-full/js/input/tex/amscd/AmsCdConfiguration.js'),
+      import('mathjax-full/js/input/tex/boldsymbol/BoldsymbolConfiguration.js'),
+      import('mathjax-full/js/input/tex/braket/BraketConfiguration.js'),
+      import('mathjax-full/js/input/tex/cancel/CancelConfiguration.js'),
+      import('mathjax-full/js/input/tex/cases/CasesConfiguration.js'),
+      import('mathjax-full/js/input/tex/centernot/CenternotConfiguration.js'),
+      import('mathjax-full/js/input/tex/color/ColorConfiguration.js'),
+      import('mathjax-full/js/input/tex/configmacros/ConfigMacrosConfiguration.js'),
+      import('mathjax-full/js/input/tex/enclose/EncloseConfiguration.js'),
+      import('mathjax-full/js/input/tex/extpfeil/ExtpfeilConfiguration.js'),
+      import('mathjax-full/js/input/tex/gensymb/GensymbConfiguration.js'),
+      import('mathjax-full/js/input/tex/mathtools/MathtoolsConfiguration.js'),
+      import('mathjax-full/js/input/tex/newcommand/NewcommandConfiguration.js'),
+      import('mathjax-full/js/input/tex/physics/PhysicsConfiguration.js'),
+      import('mathjax-full/js/input/tex/textcomp/TextcompConfiguration.js'),
+      import('mathjax-full/js/input/tex/textmacros/TextMacrosConfiguration.js'),
+      import('mathjax-full/js/input/tex/unicode/UnicodeConfiguration.js'),
+      import('mathjax-full/js/input/tex/upgreek/UpgreekConfiguration.js'),
+    ]);
+    const adaptor = liteAdaptor();
+    RegisterHTMLHandler(adaptor);
+    engine = {
+      outerHTML: (node) => adaptor.outerHTML(node as never),
+      makeDoc: (macros) => {
+        // formatError THROWS so an undefined command surfaces as a caught exception (→ fallback chip),
+        // instead of MathJax's default inline `<merror>` red box which would read as broken.
+        const tex = new TeX({ packages: PACKAGES, macros, formatError: (_jax: unknown, err: Error) => {
+          throw err;
+        } });
+        const svg = new SVG({ fontCache: 'none' }); // self-contained per-formula SVG (CSP-safe)
+        return mathjax.document('', { InputJax: tex, OutputJax: svg }) as never;
+      },
+    };
+    listeners.forEach((cb) => cb());
+  })().catch((err) => {
+    // Chunk load / init failed (stale hashes after a deploy, offline, …). Flip to the error state so
+    // mounted spans degrade to the source fallback instead of an infinite skeleton, and null the
+    // cached promise so a future mount (e.g. a later navigation) can retry rather than being stuck.
+    loadFailed = true;
+    loadPromise = null;
+    listeners.forEach((cb) => cb());
+    throw err;
+  });
+  return loadPromise;
+}
+
+// ---------------------------------------------------------------------------
+// Fail-soft fallback: author LaTeX can carry a construct MathJax still rejects (an unknown macro, a
+// stray delimiter, …). With formatError throwing, we catch it and emit a compact, intentional-looking
+// placeholder carrying the source in its tooltip (hover/long-press to inspect) — never a wall of
+// backslashes. Ingestion strips the known offenders, but the input is open-ended, so this guarantees
+// no formula ever renders as broken source regardless of what slips through.
 function escapeHtmlAttr(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -142,52 +226,14 @@ function fallbackHtml(latex: string, displayMode: boolean): string {
   );
 }
 
-// Memoize rendered LaTeX — katex.renderToString is a synchronous parse and the same
-// expression re-renders on every parent re-render (e.g. when figure assets resolve, or a
-// results table with many math cells re-renders). Keyed by (displayMode, latex); the input
-// space is bounded by the paper's distinct expressions.
-//
-// The cache is per macro map: a given expression renders differently under different macros,
-// and KaTeX *mutates* the `macros` object it is given (it writes `\gdef`-defined globals and
-// caches expansions there).
-//
-// Per distinct `meta.macros` object we keep one mutable working copy (KaTeX may write to it,
-// leaving the immutable doc-model object untouched) plus its own render cache, keyed off the
-// object identity via a WeakMap. Mutation persisting across a paper's own expressions is correct
-// — `\gdef` is document-global, and these all belong to one paper.
-//
-// Calls WITHOUT macros (every abstract, plus formulas with no preamble) must NOT share one
-// mutable working object: they come from different papers, so a `\gdef` in one render would leak
-// into every later default render. We therefore hand KaTeX a FRESH `DEFAULT_MACROS` copy per
-// default-path call (isolating the mutation) while still sharing one render cache — the cache is
-// keyed by the expression string, so identical expressions are never re-rendered.
-const _defaultCache = new Map<string, string>();
-const _byMacros = new WeakMap<MathMacros, { working: MathMacros; cache: Map<string, string> }>();
-
-function entryFor(macros?: MathMacros): { working: MathMacros; cache: Map<string, string> } {
-  if (!macros) return { working: { ...DEFAULT_MACROS }, cache: _defaultCache };
-  let entry = _byMacros.get(macros);
-  if (!entry) {
-    // Author macros win over the fallbacks (merge order).
-    entry = { working: { ...DEFAULT_MACROS, ...macros }, cache: new Map() };
-    _byMacros.set(macros, entry);
-  }
-  return entry;
-}
-
 // ---------------------------------------------------------------------------
-// physics-package STRUCTURAL macros. Unlike `\quantity`/`\tr` (pure macros, above), these take a
-// delimiter-detected group (`\matrixquantity[…]` picks its matrix delimiters from the following
-// bracket) or a variable number of arguments (`\derivative` has an optional order plus one OR two
-// operands) — neither is expressible as a KaTeX macro. Left unhandled, KaTeX collapses the whole
-// formula to a placeholder. A small brace/bracket-depth-aware scanner rewrites them to KaTeX-native
-// `\begin{…matrix}` / `\frac` BEFORE rendering. Read-time, so it fixes already-stored doc-models
-// with no re-ingest. Anything it does not recognise is left verbatim (KaTeX then decides).
+// preprocessLatex — small read-time normalizations for constructs MathJax has no equivalent for or
+// that are not math at all. (The physics `\matrixquantity`/`\derivative` rewriters KaTeX needed are
+// gone: MathJax's `physics` package handles them natively.)
 
 // From an opening delimiter at `s[i]` (`(`, `[`, or `{`), return the substring up to its matching
 // close and the index just past it — tracking nesting of the SAME delimiter and skipping over `{…}`
-// groups and backslash-escaped chars, so a nested `[…]` (e.g. `[C]^{-1}` inside a matrix) or a `]`
-// inside a brace group does not close it early. Null if unbalanced.
+// groups and backslash-escaped chars. Null if unbalanced.
 function readDelimGroup(s: string, i: number): { inner: string; end: number } | null {
   const open = s[i];
   const close = open === '(' ? ')' : open === '[' ? ']' : open === '{' ? '}' : '';
@@ -196,7 +242,7 @@ function readDelimGroup(s: string, i: number): { inner: string; end: number } | 
     let depth = 0;
     for (let j = i; j < s.length; j += 1) {
       const c = s[j];
-      if (c === '\\') { j += 1; continue; } // escaped char (\{ \} \\) — never a delimiter
+      if (c === '\\') { j += 1; continue; }
       if (c === '{') depth += 1;
       else if (c === '}') { depth -= 1; if (depth === 0) return { inner: s.slice(i + 1, j), end: j + 1 }; }
     }
@@ -222,79 +268,9 @@ function skipSpace(s: string, i: number): number {
   return i;
 }
 
-// The physics matrix delimiter selects the KaTeX matrix environment (its visible fences).
-const MATRIX_ENV: Record<string, string> = { '(': 'pmatrix', '[': 'bmatrix', '{': 'matrix' };
-
-// `\matrixquantity[a & b \\ c & d]` → `\begin{bmatrix} a & b \\ c & d \end{bmatrix}` (delimiter →
-// environment via MATRIX_ENV). `\smatrixquantity`/`\smqty` (the "small" variant) are folded in here
-// — rendered at full size, which is faithful in content if not in scale. Recurses into the body so a
-// block matrix (nested matrixquantity) is rewritten too. A form with no following delimiter is left
-// verbatim. The scan regex is declared per call (not hoisted) because the recursion would otherwise
-// clobber a shared `lastIndex`.
-function rewriteMatrixQuantity(s: string): string {
-  const re = /\\(?:matrixquantity|smatrixquantity|mqty|smqty)\b\s*/g;
-  let out = '';
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(s))) {
-    const dpos = skipSpace(s, m.index + m[0].length);
-    const g = readDelimGroup(s, dpos);
-    if (!g) continue; // no delimiter group → not the expected form; leave the token as-is
-    const env = MATRIX_ENV[s[dpos]] ?? 'matrix';
-    out += s.slice(last, m.index) + `\\begin{${env}}` + rewriteMatrixQuantity(g.inner) + `\\end{${env}}`;
-    last = g.end;
-    re.lastIndex = g.end;
-  }
-  return out + s.slice(last);
-}
-
-// `\derivative[n]{f}{x}` → `\frac{\mathrm{d}^{n} f}{\mathrm{d} x^{n}}` (order optional); the
-// two-operand *operator* form `\derivative[n]{x}` → `\frac{\mathrm{d}^{n}}{\mathrm{d} x^{n}}`. The
-// order is kept as written (this paper uses fractional/symbolic orders like `\alpha`, `-\alpha`).
-// `\pdv`/`\partialderivative` are the same shape with `\partial` instead of `\mathrm{d}` (its command
-// name is captured to pick the differential symbol). A form with no `{…}` operand is left verbatim.
-function rewriteDerivative(s: string): string {
-  const re = /\\(derivative|dv|partialderivative|pdv)\b\s*/g;
-  let out = '';
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(s))) {
-    const d = m[1] === 'pdv' || m[1] === 'partialderivative' ? '\\partial' : '\\mathrm{d}';
-    let i = skipSpace(s, m.index + m[0].length);
-    let order: string | null = null;
-    if (s[i] === '[') {
-      const g = readDelimGroup(s, i);
-      if (g) { order = g.inner; i = g.end; }
-    }
-    i = skipSpace(s, i);
-    if (s[i] !== '{') continue; // no operand → not the expected form; leave verbatim
-    const a = readDelimGroup(s, i);
-    if (!a) continue;
-    i = a.end;
-    const j = skipSpace(s, i);
-    let b: string | null = null;
-    if (s[j] === '{') {
-      const g = readDelimGroup(s, j);
-      if (g) { b = g.inner; i = g.end; }
-    }
-    const ord = order ? `^{${order}}` : '';
-    const repl =
-      b !== null
-        ? `\\frac{${d}${ord} ${a.inner}}{${d} ${b}${ord}}`
-        : `\\frac{${d}${ord}}{${d} ${a.inner}${ord}}`;
-    out += s.slice(last, m.index) + repl;
-    last = i;
-    re.lastIndex = i;
-  }
-  return out + s.slice(last);
-}
-
-// LaTeXML sometimes leaks a reference/citation command into a formula's alttext — a trailing
-// `\cite[citep]{…}` inside a `\text{…}`, or a LaTeXML-internal `\lx@cref{creftype~refnum}{key}`
-// cleveref (which takes TWO arguments). KaTeX has no such command, so the ONE stray token throws and
-// collapses the WHOLE equation to the placeholder (observed on ~0.05% of formulas). These carry no
-// math meaning, so strip the command plus its optional `[…]` and ALL of its balanced `{…}` arguments.
-// Read-time, so it heals already-stored doc-models with no re-ingest.
+// LaTeXML sometimes leaks a reference/citation command into a formula's alttext (a `\cite`/`\ref`, or
+// a LaTeXML-internal `\lx@cref` cleveref taking TWO args). These carry no math meaning and would throw,
+// so strip the command plus its optional `[…]` and ALL of its balanced `{…}` arguments.
 const LEAKED_REF_RE = /\\(?:cite[a-z]*|ref|eqref|autoref|label|footnote|lx@[a-zA-Z@]+)\b/g;
 function stripLeakedRefs(latex: string): string {
   let out = '';
@@ -305,14 +281,13 @@ function stripLeakedRefs(latex: string): string {
     out += latex.slice(last, m.index);
     let i = skipSpace(latex, m.index + m[0].length);
     if (latex[i] === '[') {
-      const g = readDelimGroup(latex, i); // optional [key] (e.g. \cite[citep]{…})
+      const g = readDelimGroup(latex, i);
       if (g) i = g.end;
     }
-    // Consume every consecutive brace argument: `\cite`/`\ref`/`\label` take one, `\lx@cref` two.
     for (;;) {
       const j = skipSpace(latex, i);
       if (latex[j] !== '{') break;
-      const g = readDelimGroup(latex, j); // balanced {…} (may nest)
+      const g = readDelimGroup(latex, j);
       if (!g) break;
       i = g.end;
     }
@@ -322,16 +297,15 @@ function stripLeakedRefs(latex: string): string {
   return out + latex.slice(last);
 }
 
-// `\scalebox{factor}{content}` / `\resizebox{w}{h}{content}` carry display-only sizing KaTeX has no
-// equivalent for. Keep the content group (the last argument) and drop the size args so the math
-// still renders (only the scaling is lost). A form without the expected arg count is left verbatim.
+// `\scalebox{factor}{content}` / `\resizebox{w}{h}{content}` carry display-only sizing MathJax has no
+// equivalent for. Keep the content group (the last argument), drop the size args.
 function rewriteScalebox(s: string): string {
   const re = /\\(scalebox|resizebox)\b\s*/g;
   let out = '';
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(s))) {
-    const argc = m[1] === 'resizebox' ? 3 : 2; // resizebox{w}{h}{content}, scalebox{factor}{content}
+    const argc = m[1] === 'resizebox' ? 3 : 2;
     let i = m.index + m[0].length;
     const groups: { inner: string; end: number }[] = [];
     for (let k = 0; k < argc; k += 1) {
@@ -342,7 +316,7 @@ function rewriteScalebox(s: string): string {
       groups.push(g);
       i = g.end;
     }
-    if (groups.length !== argc) continue; // not the expected shape → leave the token verbatim
+    if (groups.length !== argc) continue;
     out += s.slice(last, m.index) + `{${groups[argc - 1].inner}}`;
     last = i;
     re.lastIndex = i;
@@ -351,48 +325,104 @@ function rewriteScalebox(s: string): string {
 }
 
 function preprocessLatex(latex: string): string {
-  // Drop leaked citation/ref commands first (a `\cite` inside a `\text{}` would otherwise make the
-  // whole formula throw); unwrap `\scalebox`/`\resizebox` to their content; normalize the `split`
-  // environment (KaTeX has no `split`) to the equivalent `aligned`. Then matrices before derivatives:
-  // a `\derivative` may sit inside a `\matrixquantity` cell, and rewriting the matrix first flattens
-  // it into the string the derivative pass then scans.
-  const s = rewriteScalebox(stripLeakedRefs(latex))
-    .replace(/\\begin\{split\}/g, '\\begin{aligned}')
-    .replace(/\\end\{split\}/g, '\\end{aligned}');
-  return rewriteDerivative(rewriteMatrixQuantity(s));
+  // Drop leaked citation/ref commands (a `\cite` inside a `\text{}` would otherwise throw), unwrap
+  // `\scalebox`/`\resizebox` to their content, and restore `\div` to the DIVISION sign. The `physics`
+  // package (loaded for its `\quantity`/`\derivative`/… support) redefines `\div` as the *divergence*
+  // operator (∇·), which would silently mis-render the far more common `a \div b` division; rewriting
+  // `\div` (not `\divergence`/`\divideontimes`) back to `÷` keeps standard LaTeX semantics.
+  return rewriteScalebox(stripLeakedRefs(latex)).replace(/\\div(?![a-zA-Z])/g, '\\mathbin{÷}');
 }
 
+// ---------------------------------------------------------------------------
+// Render + memoize. katex.renderToString was synchronous; MathJax's document.convert is too (after the
+// engine loads), so the same string cache applies. Keyed by (displayMode, latex) per macro map; the
+// input space is bounded by a paper's distinct expressions.
+type MacroEntry = { doc: ReturnType<Engine['makeDoc']> | null; mj: Record<string, string | [string, number]>; cache: Map<string, string> };
+
+const _defaultEntry: MacroEntry = { doc: null, mj: DEFAULT_MACROS, cache: new Map() };
+const _byMacros = new WeakMap<MathMacros, MacroEntry>();
+
+// Per-entry render-cache cap. The macro-less default cache is shared across every paper's abstracts/
+// summaries in a session, so an uncapped Map would grow without bound; evict oldest-first (Map keeps
+// insertion order) past the cap. A paper has at most a few hundred distinct expressions.
+const MAX_CACHE = 800;
+function cacheSet(cache: Map<string, string>, key: string, value: string): void {
+  if (cache.size >= MAX_CACHE) {
+    const oldest = cache.keys().next().value;
+    if (oldest !== undefined) cache.delete(oldest);
+  }
+  cache.set(key, value);
+}
+
+function entryFor(macros?: MathMacros): MacroEntry {
+  if (!macros) return _defaultEntry;
+  let entry = _byMacros.get(macros);
+  if (!entry) {
+    entry = { doc: null, mj: toMathjaxMacros(macros), cache: new Map() };
+    _byMacros.set(macros, entry);
+  }
+  return entry;
+}
+
+// A macro-DEFINING command persists in MathJax's TeX jax across convert() calls on the same document.
+// Only such an expression needs an isolated throwaway document (see below); everything else can reuse.
+const DEFINES_RE = /\\(?:x?def|gdef|edef|let|(?:re|provide)?newcommand|DeclareMathOperator)\b/;
+
+// Precondition: the engine is loaded (only called from a Math span that has observed readiness).
 function toHtml(latex: string, displayMode: boolean, macros?: MathMacros): string {
-  const { working, cache } = entryFor(macros);
+  const eng = engine!;
+  const entry = entryFor(macros);
   const cacheKey = `${displayMode ? 'd' : 'i'}:${latex}`;
-  const hit = cache.get(cacheKey);
+  const hit = entry.cache.get(cacheKey);
   if (hit !== undefined) return hit;
-  // throwOnError:true so a parse error is caught here (→ compact placeholder). KaTeX parse errors
-  // are all-or-nothing — with throwOnError:false it would render the WHOLE expression as raw
-  // backslash source, so catching the throw and substituting the placeholder is a strict
-  // improvement (same formulas affected, no source wall). errorColor still tints any non-fatal
-  // strict-mode leniencies KaTeX resolves without throwing.
   let html: string;
   try {
-    html = katex.renderToString(preprocessLatex(latex), {
-      displayMode,
-      throwOnError: true,
-      errorColor: ERROR_COLOR,
-      strict: false,
-      output: 'html',
-      macros: working,
-    });
+    // Author-macro entries belong to ONE paper: reuse one document (a paper's own defs applying to its
+    // own formulas is correct). The macro-less DEFAULT entry is shared across DIFFERENT papers'
+    // abstracts, so a stray `\def` must NOT leak between them — but a `\def` in an abstract is almost
+    // never present, so only isolate (throwaway document) the expressions that actually define a macro;
+    // all others reuse the entry's document, avoiding a fresh TeX+SVG build per formula. Kept inside the
+    // try so a bad macro set degrades to the placeholder rather than crashing the render tree.
+    const needsIsolation = !macros && DEFINES_RE.test(latex);
+    const doc = needsIsolation ? eng.makeDoc(entry.mj) : (entry.doc ??= eng.makeDoc(entry.mj));
+    const node = doc.convert(preprocessLatex(latex), { display: displayMode });
+    html = eng.outerHTML(node);
   } catch {
     // Tooltip carries the ORIGINAL source (pre-rewrite), so a hover shows what the author wrote.
     html = fallbackHtml(latex, displayMode);
   }
-  cache.set(cacheKey, html);
+  cacheSet(entry.cache, cacheKey, html);
   return html;
+}
+
+// A single math span. Subscribes to engine readiness; shows a neutral skeleton until the MathJax chunk
+// has loaded, then re-renders to the (cached) SVG. If the chunk fails to load it degrades to the source
+// fallback chip (never an infinite skeleton). Kicks off the load on first mount (browser only).
+// (Named MathSpan, not Math — the latter would shadow the global `Math` at module scope.)
+function MathSpan({ latex, display, macros }: { latex: string; display: boolean; macros?: MathMacros }) {
+  const status = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  if (status === 'ready') {
+    return <span dangerouslySetInnerHTML={{ __html: toHtml(latex, display, macros) }} />;
+  }
+  if (status === 'error') {
+    // Chunk load failed — show the source in the fallback chip rather than hang on the skeleton.
+    return <span dangerouslySetInnerHTML={{ __html: fallbackHtml(latex, display) }} />;
+  }
+  // loading: kick off the (idempotent) load; swallow rejection here (the error state, set inside
+  // preloadMathEngine, drives the fallback above — this only avoids an unhandled-rejection warning).
+  if (typeof window !== 'undefined') void preloadMathEngine().catch(() => {});
+  return (
+    <span
+      className={display ? 'mathLoading mathLoadingDisplay' : 'mathLoading'}
+      role="img"
+      aria-label="수식 로딩 중"
+    />
+  );
 }
 
 /** A display (block-level) equation. */
 export function MathDisplay({ latex, macros }: { latex: string; macros?: MathMacros }) {
-  return <span dangerouslySetInnerHTML={{ __html: toHtml(latex, true, macros) }} />;
+  return <MathSpan latex={latex} display macros={macros} />;
 }
 
 type MathToken = { start: number; end: number; latex: string; display: boolean };
@@ -443,7 +473,7 @@ function findNextMath(text: string, from: number): MathToken | null {
 }
 
 /** Render text that may contain inline/display math (`$…$`, `$$…$$`, `\(…\)`, `\[…\]`) into
- * React nodes. Prose segments stay React-escaped; only the math segments become KaTeX markup. */
+ * React nodes. Prose segments stay React-escaped; only the math segments become KaTeX/MathJax markup. */
 export function renderInlineMath(text: string, macros?: MathMacros): React.ReactNode {
   if (!text.includes('$') && !text.includes('\\(') && !text.includes('\\[')) return text;
   const nodes: React.ReactNode[] = [];
@@ -455,10 +485,7 @@ export function renderInlineMath(text: string, macros?: MathMacros): React.React
     if (token.start > last)
       nodes.push(<Fragment key={key++}>{text.slice(last, token.start)}</Fragment>);
     nodes.push(
-      <span
-        key={key++}
-        dangerouslySetInnerHTML={{ __html: toHtml(token.latex, token.display, macros) }}
-      />,
+      <MathSpan key={key++} latex={token.latex} display={token.display} macros={macros} />,
     );
     last = token.end;
   }
@@ -473,10 +500,7 @@ const BOLD = /\*\*([\s\S]+?)\*\*/g;
 
 /** Normalize the literal `\n`/`\t` escape artifacts that the backend's JSON re-escaping leaves in
  * math-heavy fields, back into a real newline / space — but NOT when the backslash starts a LaTeX
- * command (`\nabla`, `\theta`, `\times`), so math survives. Shared by both summary renderers so an
- * inline field (tldr, contributions, reproducibility) restores its line breaks the same way the
- * block renderer does — without this, a legitimately-escaped `\n` shows as a literal in the inline
- * fields. `.body`'s `white-space: pre-wrap` then renders the real newline as a break. */
+ * command (`\nabla`, `\theta`, `\times`), so math survives. */
 function normalizeEscapeArtifacts(text: string): string {
   return text.replace(/\\n(?![a-zA-Z])/g, '\n').replace(/\\t(?![a-zA-Z])/g, ' ');
 }
