@@ -94,9 +94,19 @@ aws ecs run-task --cluster docsuri --launch-type FARGATE --region $REGION \
   whole throttle exists to protect. Watch it during step 1–2; if it climbs, pause the move task
   (`aws sqs cancel-message-move-task`).
 
-## Still a decision, not covered here — #344 queue separation
+## #344 queue separation — ALREADY IMPLEMENTED (decision resolved)
 
-Whether reader-triggered doc-model builds get a **permanently separate queue** from bulk
-backfill (vs. relying on the throttle + priority drain) is an open design call. The throttle is a
-sufficient stopgap; a dedicated queue is the durable fix if backfills recur. Decide before the
-next large pre-2026 history backfill.
+Verified in `ops/cdk/stacks/ingestion_stack.py` (deployed): reader-triggered doc-model builds are
+already on a **dedicated priority queue with a dedicated worker**, isolated from bulk backfill:
+
+| Work | Queue | Worker (`QUEUE_MODE`) | Notes |
+|---|---|---|---|
+| Bulk corpus / backfill | `docsuri-ingestion-queue` | `docsuri-ingestion` (`bulk`, max 1) | GROBID; drains docmodel queue *first* for redundancy |
+| Reader doc-model (viewer/tree) | **`docsuri-docmodel-queue`** (priority) | `docsuri-docmodel-builder` (`docmodel`, max 1) | lean cpu512/mem1024, **consumes ONLY this queue**, no GROBID (`ingestion_stack.py:344-385`) |
+| User PDF | `docsuri-userdoc-queue` | `docsuri-userdoc-builder` (GROBID, max 2) | |
+
+So a large backfill in `docsuri-ingestion-queue` cannot starve reader builds — they land in the
+separate `docsuri-docmodel-queue` served by its own worker. **No further separation work is
+needed.** `max_capacity=1` stays because arXiv's ~1-req/3s politeness limiter is process-local
+(two tasks double the caller rate → 503/429 → DLQ), NOT because of queue contention
+(`ingestion_stack.py:390-417`). The only remaining #344 work is the operational drain above.
