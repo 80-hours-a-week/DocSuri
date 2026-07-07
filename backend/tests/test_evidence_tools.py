@@ -14,7 +14,11 @@ from __future__ import annotations
 import pytest
 from discovery.ports.search_ports import IndexUnavailable
 
-from backend.modules.evidence.tools import EvidencePaperSearchTool, PaperSearchUnavailable
+from backend.modules.evidence.tools import (
+    EvidenceDocModelTool,
+    EvidencePaperSearchTool,
+    PaperSearchUnavailable,
+)
 
 
 class _FailingVectorStore:
@@ -57,3 +61,39 @@ def test_index_unavailable_never_escapes_as_itself() -> None:
         pytest.fail('IndexUnavailable leaked raw — tools.py의 except가 매칭에 실패함')
     except PaperSearchUnavailable:
         pass
+
+
+# --- EvidenceDocModelTool: arXiv 버전 배선 회귀 ---------------------------------------------
+#
+# 배경: evidence orchestrator는 versioned arxivId만 들고 get_doc_model(paper_id)를 버전 없이
+# 호출했고, 예전 기본값 version=1 탓에 개정판(v2+) 논문은 S3에 doc-model(v{N}.json)이 있어도
+# 항상 v1을 읽어 perpetual miss → grounded 근거 0 → "문서 카드만 나오고 설명이 없음"
+# (프로덕션 novelty 워커에서 재현·확인). tool이 paper_id의 arXiv 버전을 reader에 그대로
+# 넘기는지 검증한다.
+
+
+class _RecordingDocModelReader:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, int]] = []
+
+    def get_doc_model(self, paper_id: str, version: int):
+        self.calls.append((paper_id, version))
+        return None  # miss는 무관 — 넘어간 version만 검증
+
+
+def test_doc_model_tool_uses_arxiv_version_from_paper_id() -> None:
+    reader = _RecordingDocModelReader()
+    EvidenceDocModelTool(doc_model_reader=reader).get_doc_model('2309.15039v4')  # 개정판
+    assert reader.calls == [('2309.15039v4', 4)]  # v1 아님 → 실제 v4를 읽어야 함
+
+
+def test_doc_model_tool_bare_id_defaults_to_v1() -> None:
+    reader = _RecordingDocModelReader()
+    EvidenceDocModelTool(doc_model_reader=reader).get_doc_model('2309.15039')
+    assert reader.calls == [('2309.15039', 1)]  # 버전 없는 id → v1 유지
+
+
+def test_doc_model_tool_explicit_version_wins() -> None:
+    reader = _RecordingDocModelReader()
+    EvidenceDocModelTool(doc_model_reader=reader).get_doc_model('2309.15039v4', 2)
+    assert reader.calls == [('2309.15039v4', 2)]  # 명시 버전이 우선

@@ -242,3 +242,30 @@ def test_reader_strips_version_suffix_from_paper_id() -> None:
     doc = reader.get_doc_model("2304.10557v1", 1)
     assert doc is not None
     assert s3.calls == ["doc-model/2304.10557/v1.json"]
+
+
+# --- ?version fallback: revised papers must not silently read v1 ------------------------------
+
+
+def test_version_falls_back_to_arxiv_revision_when_query_param_absent() -> None:
+    # FE sends ?version (lib/arxivVersion.ts); a client that omits it must still read the paper's
+    # ACTUAL revision from the path id's suffix, not a hardcoded v1 (else v2+ papers perpetually
+    # miss → "building"/source_unavailable).
+    orch = _FakeOrchestrator(DocModelLookup(doc=_doc_model()))
+    endpoint = _endpoint(orch, en=True)
+    endpoint(_FakeRequest({"user_id": "u1"}, {}), "2309.15039v4")  # no ?version, versioned id
+    assert orch.calls == [("2309.15039v4", 4)]  # v4 recovered from the id, not 1
+
+
+def test_bare_id_without_version_param_defaults_to_v1() -> None:
+    orch = _FakeOrchestrator(DocModelLookup(doc=_doc_model()))
+    endpoint = _endpoint(orch, en=True)
+    endpoint(_FakeRequest({"user_id": "u1"}, {}), "2401.00001")  # bare id, no ?version
+    assert orch.calls == [("2401.00001", 1)]  # no revision info → v1 (unchanged)
+
+
+def test_explicit_version_query_param_still_wins() -> None:
+    orch = _FakeOrchestrator(DocModelLookup(doc=_doc_model()))
+    endpoint = _endpoint(orch, en=True)
+    endpoint(_FakeRequest({"user_id": "u1"}, {"version": "2"}), "2309.15039v4")  # explicit wins
+    assert orch.calls == [("2309.15039v4", 2)]
