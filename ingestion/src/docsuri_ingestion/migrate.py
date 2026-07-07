@@ -187,7 +187,28 @@ def backfill_external(settings: IngestionSettings | None = None) -> int:
     return 0
 
 
+def audit(settings: IngestionSettings | None = None) -> int:
+    """Report the corpus source-tier distribution from the canonical dedup ledger (read-only).
+    ``winning_source_tier`` is the source that won dedup per paper — ARXIV_HTML / ARXIV_PDF for
+    arXiv, or ``<source>_GROBID`` when a non-arXiv source (SS/OpenAlex) won. A one-command sanity
+    check on how the corpus is sourced. Run as a one-off ECS task like the other steps:
+    ``python -m docsuri_ingestion.worker audit``."""
+    from .adapters.postgres import PostgresControlPlaneStore
+
+    store = PostgresControlPlaneStore(os.environ["DOCSURI_CONTROL_PLANE_DSN"])
+    try:
+        rows = store.source_tier_counts()
+    finally:
+        store.close()
+    total = sum(n for _, n in rows)
+    for tier, n in rows:
+        log.info("source_tier %-28s %6d", tier, n)
+    log.info("audit: %d papers across %d source tiers", total, len(rows))
+    return 0
+
+
 _STEPS = {
+    "audit": audit,
     "provision": provision,
     "backfill": backfill,
     "backfill_external": backfill_external,
