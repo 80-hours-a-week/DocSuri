@@ -9,6 +9,7 @@ from discovery.ports.search_ports import (
 )
 from docsuri_shared._generated.dtos.evidence_schema import EvidenceScope
 from docsuri_shared.dtos import DocModel
+from summarization.adapters._paper_ref import paper_version
 
 from .models import PaperSearchResult
 
@@ -159,9 +160,13 @@ class EvidenceDocModelTool:
         # S3DocModelReader 또는 동일 인터페이스 구현체
         self._reader = doc_model_reader
 
-    def get_doc_model(self, paper_id: str, version: int = 1) -> DocModel | None:
+    def get_doc_model(self, paper_id: str, version: int | None = None) -> DocModel | None:
+        # Evidence carries only the versioned arxivId; recover the arXiv version so a revised
+        # paper (v2+) reads its real doc-model instead of a perpetual v1 miss (→ no grounded
+        # evidence). An explicit version still wins for callers that pass one.
+        ver = version if version is not None else paper_version(paper_id)
         try:
-            return self._reader.get_doc_model(paper_id, version)
+            return self._reader.get_doc_model(paper_id, ver)
         except Exception:
-            logger.warning('docmodel read failed for %s v%s', paper_id, version, exc_info=True)
+            logger.warning('docmodel read failed for %s v%s', paper_id, ver, exc_info=True)
             return None
