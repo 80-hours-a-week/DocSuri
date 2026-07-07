@@ -225,10 +225,14 @@ class ComputeStack(Stack):
             "DOCSURI_GATEWAY_RATE_LIMIT_MAX_REQUESTS": "3000",
             "DOCSURI_GATEWAY_RATE_LIMIT_WINDOW_SECONDS": "60",
             "SES_SENDER_EMAIL": "no-reply@docsuri.org",  # via the SES domain identity below
-            # Email provider toggle. "resend" → ResendEmailClient (no SES sandbox review gate;
-            # delivers to any recipient once docsuri.org is DNS-verified in Resend). Requires the
-            # RESEND_API_KEY secret below. If the key is missing the app falls back to SES.
-            "EMAIL_PROVIDER": "resend",
+            # Email provider toggle (#348 decision, 2026-07-07): SES is production-primary now that
+            # AWS granted production access. SES authenticates via the task IAM role (ses:SendEmail
+            # below) — no API key to expire/rotate, which retires the 2026-06-25 incident class
+            # (invalid RESEND_API_KEY → all signup mail failed). Resend stays wired as a dormant
+            # manual fallback: flip this back to "resend" (key still in the secret below) for a
+            # deploy-free failover if SES ever degrades. get_email_client() falls back to SES if
+            # "resend" is set without a key.
+            "EMAIL_PROVIDER": "ses",
             # Public apex used to build clickable verification links in emails. Behind
             # CloudFront/BFF/ALB the request host is internal, so the link must use this
             # public URL pointing at the frontend verify page (controller._verification_link_base
@@ -399,9 +403,9 @@ class ComputeStack(Stack):
 
         # --- SES: verify the docsuri.org domain so the app can send no-reply@docsuri.org ---
         # public_hosted_zone(zone) auto-writes the DKIM CNAMEs into Route53 → no mailbox needed.
-        # NOTE: the account is still in the SES sandbox (delivers only to verified recipients);
-        # arbitrary signup delivery needs production access (separate AWS request — strengthened by
-        # the bounce/complaint handling below).
+        # SES production access GRANTED (2026-07-07) → arbitrary signup delivery works; the account
+        # is out of the sandbox. EMAIL_PROVIDER="ses" above makes SES production-primary (#348). The
+        # bounce/complaint config set below is the automated handling the prod-access review required.
 
         # Bounce/complaint handling. The config set (1) auto-adds hard-bounced + complained
         # addresses to the account suppression list so we never re-send to them, and (2) publishes
