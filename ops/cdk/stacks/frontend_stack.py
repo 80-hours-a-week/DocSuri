@@ -76,6 +76,8 @@ _VIEWER_CERT_ARN = "arn:aws:acm:us-east-1:028317349537:certificate/8973dd50-5acb
 # com.amazonaws.global.cloudfront.origin-facing in ap-northeast-2.
 _CLOUDFRONT_PREFIX_LIST = "pl-22a6434b"
 _LIBRARY_ENTRY_PATH = "/library/saved"
+_ALB_IDLE_TIMEOUT_SECONDS = 60
+_NEXT_KEEP_ALIVE_TIMEOUT_MS = (_ALB_IDLE_TIMEOUT_SECONDS + 5) * 1000
 
 # Branded static error page (#341) — served from S3 at the edge when the origin returns a 5xx,
 # so users never see a raw ALB/gateway error. Self-contained: inline CSS, no external refs
@@ -173,6 +175,11 @@ class FrontendStack(Stack):
             "NODE_ENV": "production",
             "DOCSURI_GATEWAY_URL": gateway_url,
             "DOCSURI_LIBRARY_ENTRY_PATH": _LIBRARY_ENTRY_PATH,
+            # Issue #341 root cause: a logged paper-page 502 had ALB target_status_code "-",
+            # with the same target serving adjacent 200s. Next standalone supports this
+            # env var; keep the Node backend socket alive longer than the ALB idle window
+            # so ALB does not reuse a connection the SSR server has already closed.
+            "KEEP_ALIVE_TIMEOUT": str(_NEXT_KEEP_ALIVE_TIMEOUT_MS),
         }
 
         # --- ALB + Fargate (HTTPS :443 with ACM cert + Route53 alias app-origin.docsuri.org) ---
@@ -197,6 +204,9 @@ class FrontendStack(Stack):
             open_listener=False,
             circuit_breaker=ecs.DeploymentCircuitBreaker(rollback=True),
             health_check_grace_period=Duration.seconds(60),
+        )
+        self.service.load_balancer.set_attribute(
+            "idle_timeout.timeout_seconds", str(_ALB_IDLE_TIMEOUT_SECONDS)
         )
         # The Next.js `/` route is statically prerendered (no backend dependency), so it is a
         # safe ALB liveness probe; a 3xx redirect from it is still "healthy" to the ALB.

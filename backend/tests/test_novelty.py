@@ -7,13 +7,13 @@ from urllib.parse import urlparse
 from uuid import uuid4
 
 import pytest
+from docsuri_shared.authz import Principal, UserRole
 from fastapi.testclient import TestClient
 from hypothesis import given
 from hypothesis import strategies as st
 
 from backend.app import create_app
 from backend.config import Settings
-from backend.modules.accounts.models import Principal, UserRole
 from backend.modules.novelty import controller
 from backend.modules.novelty.adapters import (
     SIMILAR_WORK_DETAIL_FIELDS,
@@ -23,6 +23,7 @@ from backend.modules.novelty.adapters import (
     NotionApiExportClient,
     NoveltyAdapters,
     NoveltyLlmDraft,
+    NoveltySearchPlan,
     RetrievalBundle,
     S3ManuscriptSimilarityClient,
     U2FullSearchCorpusRetrievalClient,
@@ -281,6 +282,7 @@ def test_similarity_adapter_reads_text_manuscript_and_queries_corpus() -> None:
 
     assert result.evidenceStatus is EvidenceStatus.SUPPORTED
     assert any(item["riskType"] == "sentence_similarity" for item in result.items)
+    assert "가 'Privacy Preserving RAG'와 유사합니다" in result.items[-1]["summary"]
     parsed_url = urlparse(result.items[-1]["sourceRefs"][0]["url"])
     assert parsed_url.scheme == "https"
     assert parsed_url.hostname == "arxiv.org"
@@ -555,7 +557,42 @@ def test_bedrock_llm_adapter_maps_source_ref_indexes_only() -> None:
     assert "Novelty score" not in draft.experimentPlan["metrics"]
 
 
-def test_build_llm_adapter_uses_long_stream_read_timeout(monkeypatch) -> None:
+def test_bedrock_llm_adapter_builds_query_expansion_plan() -> None:
+    class FakeBedrock:
+        def invoke_model_with_response_stream(self, **kwargs):
+            body = json.loads(kwargs["body"].decode("utf-8"))
+            assert body["tool_choice"] == {"type": "tool", "name": "emit_novelty_search_plan"}
+            assert body["max_tokens"] == 4096
+            assert body["tools"][0]["input_schema"]["properties"]["subqueries"]["maxItems"] == 6
+            payload = {
+                "englishQuery": "BERT-based Korean NLP research ideas",
+                "keywords": ["BERT", "Korean NLP", "KLUE"],
+                "subqueries": ["KoBERT KLUE benchmark novelty", "Korean BERT dataset bias"],
+                "intent": {
+                    "goal": "recommend novel paper ideas",
+                    "domain": "Korean NLP",
+                    "method": "BERT",
+                    "constraints": ["public benchmark datasets"],
+                },
+                "rankingSignals": ["KLUE", "KoBERT", "benchmark dataset"],
+            }
+            return {"body": [_tool_stream_chunk(json.dumps(payload))]}
+
+    plan = BedrockNoveltyLlmClient(model_id="m", client=FakeBedrock()).plan_search(
+        "BERT 알고리즘 아이디어 추천"
+    )
+
+    assert plan.englishQuery == "BERT-based Korean NLP research ideas"
+    assert plan.keywords == ["BERT", "Korean NLP", "KLUE"]
+    assert plan.subqueries[:2] == [
+        "BERT-based Korean NLP research ideas",
+        "KoBERT KLUE benchmark novelty",
+    ]
+    assert plan.intent["domain"] == "Korean NLP"
+    assert "benchmark dataset" in plan.rankingSignals
+
+
+def test_build_llm_adapter_uses_configurable_stream_limits(monkeypatch) -> None:
     import boto3
 
     captured = {}
@@ -569,12 +606,18 @@ def test_build_llm_adapter_uses_long_stream_read_timeout(monkeypatch) -> None:
     monkeypatch.setattr(boto3, "client", fake_client)
     monkeypatch.delenv("AWS_REGION", raising=False)
     monkeypatch.setenv("AWS_DEFAULT_REGION", "ap-northeast-2")
+    monkeypatch.setenv("DOCSURI_NOVELTY_BEDROCK_READ_TIMEOUT_SECONDS", "720")
+    monkeypatch.setenv("DOCSURI_NOVELTY_LLM_MAX_TOKENS", "9000")
+    monkeypatch.setenv("DOCSURI_NOVELTY_QUERY_PLAN_MAX_TOKENS", "3000")
 
-    build_llm_adapter()
+    adapter = build_llm_adapter()
 
     assert captured["service_name"] == "bedrock-runtime"
     assert captured["region_name"] == "ap-northeast-2"
-    assert captured["config"].read_timeout == 300.0
+    assert captured["config"].read_timeout == 720.0
+    assert isinstance(adapter, BedrockNoveltyLlmClient)
+    assert adapter._max_tokens == 9000
+    assert adapter._search_plan_max_tokens == 3000
 
 
 def test_bedrock_llm_adapter_maps_similar_work_detail_columns() -> None:
@@ -829,15 +872,21 @@ def test_worker_emits_step_detail_payloads() -> None:
         payloads.setdefault(event.state, []).append(event.payload)
 
     # US-NV7(#257) — 검색 단계는 시작(도구+쿼리)·완료(count) 이벤트, LLM 단계는 결과 수 동봉
-    # US-NV1(#251) — 자연어 잡은 근거형성(시작+결과) 이벤트가 U2 검색보다 먼저 온다
+    # US-NV1(#251) — query plan 진행 표시 뒤 자연어 근거형성이 U2 검색보다 먼저 온다
     corpus_events = payloads[JobState.RETRIEVING_CORPUS]
     assert corpus_events[0] == {
+        "source": "Bedrock LLM",
+        "query": "privacy preserving RAG",
+    }
+    assert corpus_events[1]["source"] == "Bedrock LLM"
+    assert corpus_events[1]["queries"] == ["privacy preserving RAG"]
+    assert corpus_events[2] == {
         "source": "U11 evidence formation",
         "query": "privacy preserving RAG",
     }
-    assert corpus_events[1]["source"] == "U11 evidence formation"
-    assert "reason" not in corpus_events[1]  # Noop evidence는 optional enrichment라 조용히 비운다
-    assert corpus_events[2] == {"source": "U2 full search", "query": "privacy preserving RAG"}
+    assert corpus_events[3]["source"] == "U11 evidence formation"
+    assert "reason" not in corpus_events[3]  # Noop evidence는 optional enrichment라 조용히 비운다
+    assert corpus_events[4] == {"source": "U2 full search", "query": "privacy preserving RAG"}
     assert corpus_events[-1]["count"] == 2
     external_events = payloads[JobState.SEARCHING_EXTERNAL]
     assert external_events[0]["query"] == "privacy preserving RAG"
@@ -845,6 +894,211 @@ def test_worker_emits_step_detail_payloads() -> None:
     assert "reason" in external_events[-1]  # Noop external은 저하 사유를 실어 보낸다
     assert payloads[JobState.SUMMARIZING_PRIOR_WORK][0]["count"] == 0
     assert payloads[JobState.PLANNING_EXPERIMENT][0]["outputSummary"] == "privacy preserving RAG"
+
+
+def test_worker_query_planner_failure_degrades_not_fails() -> None:
+    source_ref = {
+        "type": "url",
+        "identifier": "2401.00003",
+        "title": "Grounded retrieval",
+        "url": "https://arxiv.org/abs/2401.00003",
+    }
+    calls: list[str] = []
+
+    class BrokenPlannerLlm:
+        def plan_search(self, topic: str) -> NoveltySearchPlan:
+            del topic
+            raise TimeoutError("planner slow")
+
+        def draft(self, *, topic, corpus, external) -> NoveltyLlmDraft:
+            del external
+            ref = corpus.items[0]["sourceRefs"][0]
+            return NoveltyLlmDraft(
+                similarWorks={
+                    "items": [{"title": "Similar", "sourceRefs": [ref]}],
+                    "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                    "sourceRefs": [ref],
+                },
+                noveltyCandidates={
+                    "items": [{"title": "Novel", "sourceRefs": [ref]}],
+                    "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                    "sourceRefs": [ref],
+                },
+                experimentPlan={
+                    "researchQuestion": topic,
+                    "noveltyAngle": "Use fallback query results.",
+                    "hypotheses": ["Fallback search keeps the job useful."],
+                    "baselines": ["Original topic search"],
+                    "procedure": ["Run retrieval with the original topic."],
+                    "datasets": ["Retrieved corpus"],
+                    "metrics": ["evidence coverage"],
+                    "resources": ["Corpus evidence"],
+                    "risks": ["query rewrite timeout"],
+                    "sourceRefs": [ref],
+                    "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                },
+            )
+
+    class OneItemCorpus:
+        def full_search(self, owner_id: str, query: str) -> RetrievalBundle:
+            del owner_id
+            calls.append(query)
+            return RetrievalBundle(
+                items=[{"title": "Grounded retrieval", "sourceRefs": [source_ref]}],
+                evidenceStatus=EvidenceStatus.SUPPORTED,
+            )
+
+    class CleanExternal:
+        def search(self, query: str) -> RetrievalBundle:
+            del query
+            return RetrievalBundle(items=[])
+
+    repo = InMemoryNoveltyRepository()
+    _, owner_id, job_id = _service_job(repo)
+
+    process_job(
+        repo,
+        owner_id,
+        job_id,
+        adapters=NoveltyAdapters(
+            corpus=OneItemCorpus(),
+            external=CleanExternal(),
+            llm=BrokenPlannerLlm(),
+        ),
+    )
+
+    result = NoveltyService(repo).result(owner_id, job_id)
+    assert result.job.state is JobState.DEGRADED
+    assert calls == ["privacy preserving RAG"]
+    assert "LLM query planning unavailable: TimeoutError" in repo.list_events(
+        owner_id, job_id
+    )[-1].model_dump_json()
+
+
+def test_worker_uses_expanded_queries_and_reranks_evidence_items() -> None:
+    source_ref = {
+        "type": "url",
+        "identifier": "2401.00003",
+        "title": "Korean BERT Benchmark",
+        "url": "https://arxiv.org/abs/2401.00003",
+    }
+    calls: list[str] = []
+
+    class PlanningLlm:
+        def plan_search(self, topic: str) -> NoveltySearchPlan:
+            return NoveltySearchPlan(
+                englishQuery="BERT Korean NLP benchmark ideas",
+                keywords=["BERT", "Korean NLP", "benchmark"],
+                subqueries=["KoBERT KLUE public dataset", "BERT Korean intent ranking"],
+                intent={"domain": "Korean NLP", "method": "BERT"},
+                rankingSignals=["KLUE", "public dataset"],
+            )
+
+        def draft(self, *, topic, corpus, external) -> NoveltyLlmDraft:
+            ref = corpus.items[0]["sourceRefs"][0]
+            return NoveltyLlmDraft(
+                similarWorks={
+                    "items": [
+                        {
+                            "title": corpus.items[0]["title"],
+                            "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                            "sourceRefs": [ref],
+                        }
+                    ],
+                    "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                    "sourceRefs": [ref],
+                },
+                noveltyCandidates={
+                    "items": [
+                        {
+                            "title": "KLUE 기반 오류 유형 차별화",
+                            "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                            "sourceRefs": [ref],
+                        }
+                    ],
+                    "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                    "sourceRefs": [ref],
+                },
+                experimentPlan={
+                    "researchQuestion": topic,
+                    "noveltyAngle": "Korean benchmark intent differences.",
+                    "hypotheses": ["Intent-aware reranking improves novelty."],
+                    "baselines": ["Korean BERT Benchmark"],
+                    "procedure": ["Compare against BERT baseline."],
+                    "datasets": ["KLUE"],
+                    "metrics": ["baseline delta"],
+                    "resources": ["public benchmark"],
+                    "risks": ["dataset mismatch"],
+                    "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                    "sourceRefs": [ref],
+                },
+            )
+
+    class RecordingCorpus:
+        def full_search(self, owner_id: str, query: str) -> RetrievalBundle:
+            calls.append(query)
+            if "KLUE" in query:
+                return RetrievalBundle(
+                    items=[
+                        {
+                            "title": "Korean BERT Benchmark",
+                            "summary": "KLUE public dataset benchmark for Korean NLP BERT models.",
+                            "sourceRefs": [source_ref],
+                        }
+                    ],
+                    evidenceStatus=EvidenceStatus.SUPPORTED,
+                )
+            return RetrievalBundle(
+                items=[
+                    {
+                        "title": "Generic transformer study",
+                        "summary": "General transformer analysis.",
+                        "sourceRefs": [
+                            {
+                                **source_ref,
+                                "identifier": "2401.00004",
+                                "title": "Generic transformer study",
+                                "url": "https://arxiv.org/abs/2401.00004",
+                            }
+                        ],
+                    }
+                ],
+                evidenceStatus=EvidenceStatus.SUPPORTED,
+            )
+
+    class CleanExternal:
+        def search(self, query: str) -> RetrievalBundle:
+            return RetrievalBundle(items=[])
+
+    repo = InMemoryNoveltyRepository()
+    _, owner_id, job_id = _service_job(repo)
+
+    process_job(
+        repo,
+        owner_id,
+        job_id,
+        adapters=NoveltyAdapters(
+            corpus=RecordingCorpus(),
+            external=CleanExternal(),
+            llm=PlanningLlm(),
+        ),
+    )
+
+    assert calls[:3] == [
+        "BERT Korean NLP benchmark ideas",
+        "KoBERT KLUE public dataset",
+        "BERT Korean intent ranking",
+    ]
+    evidence = next(
+        artifact
+        for artifact in NoveltyService(repo).result(owner_id, job_id).artifacts
+        if artifact.kind is ArtifactKind.EVIDENCE
+    )
+    top = evidence.payload["items"][0]
+    assert top["title"] == "Korean BERT Benchmark"
+    assert top["confidence"] > evidence.payload["items"][1]["confidence"]
+    assert "관련 내용이 확인됩니다" in top["evidenceNote"]
+    assert top["queryUsed"] == "KoBERT KLUE public dataset"
 
 
 def test_worker_manuscript_path_records_similarity_risk_degradation() -> None:
@@ -979,9 +1233,47 @@ def test_worker_natural_language_forms_evidence_first_and_merges_bundle() -> Non
                 evidenceStatus=EvidenceStatus.SUPPORTED,
             )
 
+    class RewritingLlm:
+        def plan_search(self, topic: str) -> NoveltySearchPlan:
+            return NoveltySearchPlan(
+                englishQuery="rewritten query for corpus search",
+                keywords=["rewritten"],
+                subqueries=["expanded evidence search"],
+                intent={"goal": topic},
+                rankingSignals=["rewritten"],
+            )
+
+        def draft(self, *, topic, corpus, external) -> NoveltyLlmDraft:
+            ref = corpus.items[0]["sourceRefs"][0]
+            return NoveltyLlmDraft(
+                similarWorks={
+                    "items": [{"title": "Similar", "sourceRefs": [ref]}],
+                    "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                    "sourceRefs": [ref],
+                },
+                noveltyCandidates={
+                    "items": [{"title": "Novel", "sourceRefs": [ref]}],
+                    "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                    "sourceRefs": [ref],
+                },
+                experimentPlan={
+                    "researchQuestion": topic,
+                    "noveltyAngle": "Compare original and expanded evidence.",
+                    "hypotheses": ["Expanded search preserves evidence ordering."],
+                    "baselines": ["Original query retrieval"],
+                    "procedure": ["Compare merged evidence bundles."],
+                    "datasets": ["Retrieved corpus"],
+                    "metrics": ["evidence coverage"],
+                    "resources": ["Corpus evidence"],
+                    "risks": ["query drift"],
+                    "sourceRefs": [ref],
+                    "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                },
+            )
+
     class RecordingCorpus:
         def full_search(self, owner_id: str, query: str) -> RetrievalBundle:
-            calls.append("corpus")
+            calls.append(f"corpus:{query}")
             return RetrievalBundle(
                 items=[{"title": "Corpus paper", "sourceRefs": [paper_ref]}],
                 evidenceStatus=EvidenceStatus.SUPPORTED,
@@ -994,11 +1286,18 @@ def test_worker_natural_language_forms_evidence_first_and_merges_bundle() -> Non
         repo,
         owner_id,
         job_id,
-        adapters=NoveltyAdapters(corpus=RecordingCorpus(), evidence=RecordingEvidence()),
+        adapters=NoveltyAdapters(
+            corpus=RecordingCorpus(),
+            evidence=RecordingEvidence(),
+            llm=RewritingLlm(),
+        ),
     )
 
-    # US-NV1(#251) AC1 — form_evidence가 U2 검색보다 먼저 호출된다
-    assert calls == ["evidence:privacy preserving RAG", "corpus"]
+    # US-NV1(#251) AC1 — form_evidence가 원문 질의로 U2 검색보다 먼저 호출된다
+    assert calls[:2] == [
+        "evidence:privacy preserving RAG",
+        "corpus:rewritten query for corpus search",
+    ]
     result = NoveltyService(repo).result(owner_id, job_id)
     evidence_artifact = next(
         artifact for artifact in result.artifacts if artifact.kind is ArtifactKind.EVIDENCE
@@ -1472,6 +1771,11 @@ def test_api_create_status_and_cancel(monkeypatch) -> None:
     principal = _principal()
     repo = InMemoryNoveltyRepository()
     client = _client(monkeypatch, principal, repo)
+    # Pin the fake/live seam: the app-shell wires live Bedrock/HTTP adapters into
+    # app.state, and the no-queue dispatch path runs the worker inline — so ambient
+    # AWS creds would otherwise decide the terminal state. Noop adapters degrade
+    # deterministically regardless of environment.
+    client.app.state.novelty_adapters = NoveltyAdapters()
 
     created = client.post(
         "/api/novelty/jobs",

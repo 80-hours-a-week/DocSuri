@@ -430,7 +430,7 @@ export class ApiClient {
     private readonly transport: Transport,
     options: ApiClientOptions = {},
   ) {
-    this.timeoutMs = options.timeoutMs ?? 8000;
+    this.timeoutMs = options.timeoutMs ?? 10000;
     this.retryBackoffMs = options.retryBackoffMs ?? 200;
   }
 
