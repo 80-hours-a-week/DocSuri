@@ -52,7 +52,9 @@ const DEFAULT_MACROS: Record<string, string | [string, number]> = {
   // Small-caps / nice-fraction text packages — degrade to plain text / a normal fraction.
   textsc: ['\\text{#1}', 1],
   nicefrac: ['\\frac{#1}{#2}', 2],
-  // Layout/spacing no-ops (carry no math meaning) that can ride into abstracts (which have no macros).
+  // Layout/spacing no-ops (carry no math meaning) that can ride into alttext/abstracts. The line-break
+  // penalties (`\nobreak`·`\nolinebreak`·`\allowbreak`·`\linebreak`) leak from `\leavevmode\nobreak\ `
+  // spacing that LaTeXML keeps in the alttext; MathJax has no default, so one collapses the formula.
   centering: '',
   raggedright: '',
   raggedleft: '',
@@ -68,6 +70,10 @@ const DEFAULT_MACROS: Record<string, string | [string, number]> = {
   xspace: '',
   leavevmode: '',
   boldmath: '',
+  nobreak: '',
+  nolinebreak: '',
+  allowbreak: '',
+  linebreak: '',
 };
 
 // Convert an author MathMacros map (KaTeX/preamble shape) to MathJax's macro form: strip the leading

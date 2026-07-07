@@ -79,6 +79,7 @@ describe('fail-soft fallback (no raw backslash source on a parse error)', () => 
     ['\\nicefrac', String.raw`\nicefrac{1}{2}`],
     ['\\scalebox (drop scale, keep body)', String.raw`\scalebox{0.8}{\sum_{i} x_i}`],
     ['split environment', String.raw`\begin{split}a&=b\\&=c\end{split}`],
+    ['\\nobreak spacing leak', String.raw`a=b\leavevmode\nobreak\ \text{where}\nobreak\ c`],
   ])('renders unsupported-package alttext leaks (%s) instead of collapsing', (_label, latex) => {
     const c = html(<MathDisplay latex={latex} />);
     expect(c.querySelector(MJX)).not.toBeNull();
