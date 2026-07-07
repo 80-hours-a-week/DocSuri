@@ -125,8 +125,8 @@ class SemanticScholarProvider:
 
     async def references(self, paper_id: str, limit: int) -> tuple[str, list[dict[str, Any]]]:
         headers = {"x-api-key": self._api_key} if self._api_key else {}
-        timeout = float(os.getenv("CITATION_GRAPH_PROVIDER_TIMEOUT_SECONDS", "3"))
-        retry_timeout = float(os.getenv("CITATION_GRAPH_PROVIDER_RETRY_TIMEOUT_SECONDS", "5"))
+        timeout = float(os.getenv("CITATION_GRAPH_PROVIDER_TIMEOUT_SECONDS", "5"))
+        retry_timeout = float(os.getenv("CITATION_GRAPH_PROVIDER_RETRY_TIMEOUT_SECONDS", "10"))
         retries = int(os.getenv("CITATION_GRAPH_PROVIDER_RETRIES", "1"))
         encoded_paper_id = quote(_semantic_scholar_paper_id(paper_id), safe="")
         url = f"https://api.semanticscholar.org/graph/v1/paper/{encoded_paper_id}/references"

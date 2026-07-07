@@ -159,6 +159,16 @@ class NoveltyStack(Stack):
                 resources=[f"{artifact_bucket_arn}/doc-model/*"],
             )
         )
+        # ListBucket 없이 GetObject만 있으면 아직 안 만들어진 doc-model 키가 404가 아니라
+        # 403(AccessDenied)으로 반환되어 S3DocModelReader의 _MISS_CODES(404/NoSuchKey)에 안 걸리고
+        # re-raise → evidence 파이프라인이 트레이스백 폭풍(프로덕션 novelty 워커 152건/10분 관측).
+        # evidence_stack / compute_stack는 이미 동일 이유로 이 권한을 부여 중.
+        task_def.add_to_task_role_policy(
+            iam.PolicyStatement(
+                actions=["s3:ListBucket"],
+                resources=[artifact_bucket_arn],
+            )
+        )
         task_def.add_to_task_role_policy(
             iam.PolicyStatement(
                 actions=["sqs:SendMessage"],
