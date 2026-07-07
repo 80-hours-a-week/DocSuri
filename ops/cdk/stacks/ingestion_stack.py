@@ -289,7 +289,7 @@ class IngestionStack(Stack):
                 "DOCSURI_OPENSEARCH_ENDPOINT": f"https://{opensearch_domain.domain_endpoint}",
                 # Write through the stable alias so future alias swaps (for fast re-embed rebuilds)
                 # do not leave new papers landing in the retired backing index.
-                "DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus-c3ml",
+                "DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus",
                 "DOCSURI_OPENSEARCH_ALIAS": "docsuri-corpus",
                 # SS/OpenAlex re-enabled after fixing the SS bulk-search 400 (commit c7bd065d)
                 # and adding per-source isolation to on_schedule_tick — a bad source now logs +
@@ -359,7 +359,7 @@ class IngestionStack(Stack):
                 "DOCSURI_S3_BUCKET": self.bucket.bucket_name,
                 "DOCSURI_BEDROCK_MODEL_ID": _BEDROCK_MODEL_ID,
                 "DOCSURI_OPENSEARCH_ENDPOINT": f"https://{opensearch_domain.domain_endpoint}",
-                "DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus-c3ml",
+                "DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus",
                 "DOCSURI_OPENSEARCH_ALIAS": "docsuri-corpus",
                 "DOCSURI_CORPUS_SOURCES": "ARXIV",
                 "DOCSURI_CONTROL_PLANE_DSN": control_plane_dsn,
@@ -474,7 +474,7 @@ class IngestionStack(Stack):
                 "DOCSURI_S3_BUCKET": self.bucket.bucket_name,
                 "DOCSURI_BEDROCK_MODEL_ID": _BEDROCK_MODEL_ID,
                 "DOCSURI_OPENSEARCH_ENDPOINT": f"https://{opensearch_domain.domain_endpoint}",
-                "DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus-c3ml",
+                "DOCSURI_OPENSEARCH_INDEX": "docsuri-corpus",
                 "DOCSURI_OPENSEARCH_ALIAS": "docsuri-corpus",
                 # ARXIV only. The user-PDF build never harvests SS/OpenAlex, so no SS API key is
                 # needed even though GROBID is present — with grobid_url set, an SS/OPENALEX in the
