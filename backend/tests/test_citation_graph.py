@@ -353,7 +353,7 @@ async def test_semantic_scholar_provider_uses_longer_retry_timeout(monkeypatch) 
 
     status, items = await controller.SemanticScholarProvider().references("1706.03762", 1)
 
-    assert captured_timeouts == [3.0, 5.0]
+    assert captured_timeouts == [5.0, 10.0]
     assert status == "unavailable"
     assert items == []
 

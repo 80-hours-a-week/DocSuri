@@ -305,6 +305,8 @@ class ComputeStack(Stack):
             # and returns `pending`; without this the MAP_REDUCE band abstains (input_too_long).
             "DOCSURI_MAP_REDUCE_ENABLED": "true",
             "CITATION_GRAPH_ENABLED": "true",
+            "CITATION_GRAPH_PROVIDER_TIMEOUT_SECONDS": "5",
+            "CITATION_GRAPH_PROVIDER_RETRY_TIMEOUT_SECONDS": "10",
             "PERSONALIZATION_ENABLED": "true",
             # Research is intentionally enabled in prod; keep this aligned with the live flag.
             "RESEARCH_AGENT_ENABLED": "true",
