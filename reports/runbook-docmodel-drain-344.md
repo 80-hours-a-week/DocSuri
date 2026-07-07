@@ -60,24 +60,39 @@ aws sqs start-message-move-task --region $REGION \
   a re-run only heals when the cache key changed — bump `PARSER_VERSION` (@N) *before* re-enqueue or
   the cache-hit + dedup skips the rebuild for free. See [[project_docmodel_reembed_gap]].
 
-## 2. Finish the native_html backfill
+## 2. Finish the raw-content backfill (VERIFIED 2026-07-07 — read before running)
 
-Re-enqueue only the **missing** papers (don't re-index the whole corpus — arXiv re-index is NOT
-needed, [[project_external_backfill]]). The canonical runner is `migrate.py` (the worker
-entrypoint), not the removed `ops/.../backfill_v4.py`.
+> **The earlier draft command here (`migrate.py --backfill-native-html --bounded`) was WRONG — no
+> such flag exists.** Verified against `ingestion/src/docsuri_ingestion/raw_backfill.py` +
+> `migrate.py` `_STEPS`. Corrected below.
+
+The runner is a **positional step** on the worker entrypoint, not a flag:
 
 ```bash
-# Bounded re-enqueue of papers lacking native_html. Run as an ECS run-task on the ingestion
-# task-def (in-VPC — the worker self-migrates; do NOT run from a laptop against private RDS/OS).
+# In-VPC ECS run-task on the ingestion task-def. Shard by submission month to bound each task.
 aws ecs run-task --cluster docsuri --launch-type FARGATE --region $REGION \
   --task-definition docsuri-ingestion \
-  --overrides '{"containerOverrides":[{"name":"worker","command":["python","migrate.py","--backfill-native-html","--bounded"]}]}' \
-  --network-configuration '<same subnets/SG as the service>'
+  --overrides '{"containerOverrides":[{"name":"worker",
+     "command":["python","-m","docsuri_ingestion.worker","raw_backfill"],
+     "environment":[{"name":"DOCSURI_RAW_BACKFILL_MONTHS","value":"2501,2502"},
+                    {"name":"DOCSURI_BACKFILL_START","value":"2025-01-01"},
+                    {"name":"DOCSURI_BACKFILL_END","value":"2025-03-01"}]}]}' \
+  --network-configuration '<same subnets/SG as the docsuri-ingestion service>'
 ```
 
-> Confirm the exact `migrate.py` flag against the current worker entrypoint before running —
-> flag names drift. If there is no bounded native_html mode, gate on `DOCSURI_BACKFILL_START`
-> for a one-shot window rather than an unbounded sweep.
+**Caveats that make this NOT a fire-and-forget:**
+- **Requester-pays**: `raw_backfill` streams arXiv's `s3://arxiv/pdf/` bulk tarballs with
+  `RequestPayer=requester` — **we pay** the transfer for every month tar scanned. Shard tightly.
+- **Idempotent but NOT incremental** (`raw_backfill.py:97`): a re-run re-downloads and re-caches
+  the whole target window — it does **not** skip already-cached papers. "Resume" = run only the
+  **missing month shards** via `DOCSURI_RAW_BACKFILL_MONTHS`, or you re-pay for work already done.
+- **Tier mismatch to confirm first**: this step caches the **`pdf`** tier
+  (`raw_backfill.py:88`). The "native_html 10,660/21,252" figure is a *different* tier's coverage.
+  **Before running, confirm what that number measures and which step actually fills it** — it may
+  be `backfill` (v4 embed) or `reparse`, not `raw_backfill`. Don't run a multi-thousand-paper,
+  requester-pays sweep against an unverified target.
+- Lower k-NN 503 risk than the embedding backfill (writes S3, not OpenSearch), but the
+  `harvest_seed` OAI-PMH call is still arXiv-rate-limited — keep it to one task.
 
 ## 3. Restore steady state (only after the drain settles)
 
