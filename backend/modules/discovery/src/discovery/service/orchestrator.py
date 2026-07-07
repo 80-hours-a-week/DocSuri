@@ -118,6 +118,7 @@ class SearchOrchestrationService:
         reranker: RerankAdapter | None = None,
         top_n: int = TOP_N,
         search_boosts: Callable[[str], dict[str, float]] | None = None,
+        rerank_live: bool = False,
     ) -> None:
         self._validator = validator
         self._expander = expander
@@ -133,8 +134,13 @@ class SearchOrchestrationService:
         self._reranker = reranker
         self._top_n = top_n
         # US-P4 personalization boosts, best-effort. Default no-op; wiring patches in the real
-        # provider (a per-request call into U9's read port). SHADOW: measured, not applied.
+        # provider (a per-request call into U9's read port).
         self._search_boosts = search_boosts or (lambda _user_id: {})
+        # US-P4 go-live gate (#345). False = SHADOW (compute + emit the would-be re-rank, return
+        # the baseline order); True = LIVE (return the reordered order). Set from
+        # SEARCH_RERANK_LIVE at wiring so ops can flip live after reviewing shadow metrics — no
+        # redeploy, and the metrics carry real data either way.
+        self._rerank_live = rerank_live
 
     def plan_and_retrieve(self, request: SearchRequest, ctx: RequestContext) -> SearchOutcome:
         validation = self._validator.validate(request.query)
@@ -242,14 +248,15 @@ class SearchOrchestrationService:
             pass
 
     def _apply_search_boosts(self, user_id: str, ranked: RankedResults) -> RankedResults:
-        """US-P4 go-live: apply the bounded personalization re-rank (BR-P8, top band only) to the
-        order returned to the user, and emit its movement as a metric. Best-effort (BR-P13): any
-        failure (U9 down, no profile) is swallowed and search proceeds on the BASELINE order.
+        """US-P4 (#345): compute the bounded personalization re-rank (BR-P8, top band only) and
+        emit its movement as a metric — ALWAYS. Return the reordered order only when the go-live
+        gate (``_rerank_live`` ← SEARCH_RERANK_LIVE) is on; otherwise return the BASELINE order
+        (SHADOW: measured, not applied). This lets ops review real shadow numbers, then flip live
+        by toggling the flag — no redeploy. Best-effort (BR-P13): any failure (U9 down, no
+        profile, boost/metric error) is swallowed and search proceeds on the baseline order.
 
-        Metric names keep the ``rerank_shadow`` prefix for CloudWatch dashboard/alarm continuity
-        across the shadow→live cutover — the values now measure movement that was APPLIED, not
-        hypothetical. (ponytail: name kept for dashboard continuity; rename to ``rerank_live``
-        only if ops asks.)
+        Metric names keep the ``rerank_shadow`` prefix for CloudWatch dashboard/alarm continuity.
+        (ponytail: name kept for dashboard continuity; rename to ``rerank_live`` only if ops asks.)
         """
         try:
             boosts = self._search_boosts(user_id)
@@ -277,7 +284,8 @@ class SearchOrchestrationService:
             )
         except Exception:  # noqa: BLE001 — observability is advisory, must not sink search
             pass
-        return boosted
+        # Go-live gate: apply the reorder only when live; shadow measures without changing order.
+        return boosted if self._rerank_live else ranked
 
     def _emit_grounding_health(self, verdict: str) -> None:
         """Emit the grounding-health signal — the 'hallucination' AI-incident class (US-R4).
