@@ -1,6 +1,12 @@
 # DocSuri Production Roadmap — 2026-07
 
-> **Date**: 2026-07-03 · **Baseline**: develop (2026-07-07) · **main at v1.9.0** (2026-07-06 promotion `07991f2`→PR #398, full deploy 완료)
+> **Date**: 2026-07-03 · **Baseline**: develop (2026-07-07) · **main at v1.12.0** (`e7390b44`; v1.9.0→v1.12.0 promotions #405 reembed fast-rebuild+bulk-PDF re-parse, #415 novelty-agent). develop 21 commits ahead.
+> **Updated**: 2026-07-07 (session sweep) — **reconcile vs live `origin/main`**:
+> - **main advanced to v1.12.0** since the notes below were written. Already ON main (not "promotion pending"): **#346 KPI funnel** (PR #403), **#347 U10 real-data** (PR #407 최근 본 논문 + PR #414 ORCID 버튼), plus #405/#415.
+> - **#422 authz merged** to develop (`15fc49fa`) — supersedes "PR #422 open" below. **env-seam test fix landed** on develop (`6207455c`, via #417 bundle) — no longer a dangling branch.
+> - **Real develop→main gap = 5 items** awaiting one v1.13 promotion+deploy: **#416** reranker, **#418** SSR-500 root-cause, **#420** docmodel throttle, **#422** authz, env-seam test.
+> - **4 open PRs in flight** (not yet reflected below): **#419** reembed Cohere-v3, **#423** U8 citation-graph timeout+design, **#424** U5 math render KaTeX→MathJax, **#425** doc-model read-at-arXiv-version (뷰어/citation-tree 잔여).
+> - **Decisions/ops still gating full Phase-2 close**: #348 email (memory: **Resend 확정 2026-06-23** — issue open은 close 대기), #345 perso shadow→real (v1 의도적 유예), #344 doc-model 큐 분리(결정), #347 잔여 ORCID/profile(결정), #343 DLQ drain 24건+native_html 10,660/21,252 (throttle 라이브=`cdk deploy` 후에만 안전), node24 upstream(차단).
 > **Updated**: 2026-07-07 — **Phase 2 board reconcile** (post-refresh GitHub sweep):
 > - ✅ **#341 SSR 500** — **closed** by PR #418 (SSR keep-alive를 ALB idle timeout에 맞춤 — 간헐 500의 근인). #353(logs)/#355(edge error page) 위에 근인 수정 랜딩. develop merged, main 승격 전.
 > - ✅ **env-dependent `test_api_create_status_and_cancel`** — fake/live seam 고정(`branch fix/novelty-test-env-seam`): 앱쉘이 라이브 Bedrock/HTTP 어댑터를 `app.state.novelty_adapters`에 배선하고 무큐 디스패치가 워커를 인라인 실행 → ambient AWS creds가 종료 상태를 좌우하던 문제. Noop 어댑터로 오버라이드해 환경 무관 결정적 degrade. (51 novelty tests green)
@@ -89,8 +95,8 @@ Ordered by user impact:
 | 🟡 Develop merged | Docmodel backlog self-heal — **PR #420 merged** throttles the arXiv caller to one task (`max_capacity=1`, `lower=10` burst step removed) so drains stop feeding the DLQ. Remaining: the re-enqueue/DLQ drain itself is a separate prod mutation (live: DLQ 24 msgs · S3 native_html 10,660/21,252), safe only once the throttle is live via `cdk deploy`. | #343 · #420 |
 | 🟡 Develop merged | Finish pre-2026 backfill drain → restore ingestion autoscale — **PR #420** landed the prerequisite throttle; queue-separation decision (#344) still open. | #344 · #420 |
 | 🔴 No PR | Personalization shadow→real flip after metric review; then US-P5 + keywordWeights. | #345 |
-| ✅ Develop merged | KPI funnel dashboard (AI 호출 > 검색 > 완독률) from existing U9 events — **PR #403** merged to develop and #346 closed; main promotion pending. | #346 · #403 |
-| 🟡 Partial | U10 mypage mocks: 최근 본 논문 실데이터 **PR #407** + ORCID 로그인 버튼 기본 활성화 **PR #414** merged to develop; #347 remains open for residual ORCID/profile decision. | #347 · #407 · #414 |
+| ✅ On main (v1.10+) | KPI funnel dashboard (AI 호출 > 검색 > 완독률) from existing U9 events — **PR #403** merged; #346 closed; **promoted to main**. | #346 · #403 |
+| 🟡 On main, residual decision | U10 mypage mocks: 최근 본 논문 실데이터 **PR #407** + ORCID 로그인 버튼 기본 활성화 **PR #414** **on main (v1.10+)**; #347 remains open only for residual ORCID/profile decision. | #347 · #407 · #414 |
 | 🔴 No PR | Email strategy decision: SES production access vs. Resend commitment. | #348 |
 | 🟡 PR open | Authz contract → `docsuri_shared.authz` refactor — **PR #422**: Principal/Action/Decision/AccountId/UserRole + stateless guard 이전, accounts re-export(클래스 동일성 보존), 소비자 17 + 테스트 8 rewire, leak=0, backend 236 tests green. | #167 · #422 |
 | ✅ Develop merged | 검색 품질 개선 (charter phase 7) — **PR #416 merged** (Cross-Encoder Reranker; cross-region wiring + `bedrock:Rerank` IAM blockers cleared, fail-soft keeps RRF baseline). Follow-on **PR #419 open** (Cohere Embed Multilingual v3 re-embed + region-decouple). | #416 · #419 · charter |
