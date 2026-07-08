@@ -68,7 +68,17 @@ aws sqs start-message-move-task --region $REGION \
 > native_html rung. Those are **re-parse targets** — the doc-model builder rebuilds native_html
 > sources (`_REBUILD_SOURCE_TIERS={native_html}`, `docmodel/builder.py:42,334`) because raw TeX/pgf
 > leaks into fullText. Live corpus denominator is now **23,512** full-text papers (grew past 21,252).
-> Exact current count = OpenSearch terms-agg on `source_tier` over `docsuri-corpus` (not yet run).
+> Exact current count: run the **`migrate.py audit` step** (#344) — a read-only report of the
+> `source_tier` distribution from the canonical Postgres dedup ledger. Any `winning_source_tier`
+> WITHOUT a `_GROBID` suffix is an un-re-parsed target; the step prints the total and the
+> not-yet-re-parsed count. This is the pre-drain target confirmation this section demands:
+> ```bash
+> aws ecs run-task --cluster docsuri --launch-type FARGATE --region $REGION \
+>   --task-definition docsuri-ingestion \
+>   --overrides '{"containerOverrides":[{"name":"worker","command":["python","-m","docsuri_ingestion.worker","audit"]}]}' \
+>   --network-configuration '<same subnets/SG as the docsuri-ingestion service>'
+> # then read the "audit: N papers; M not yet _GROBID re-parsed" line from the task logs
+> ```
 >
 > **The earlier draft command (`migrate.py --backfill-native-html --bounded`) was WRONG — no such
 > flag exists.** The goal is the B3 re-parse pipeline, not a bare raw_backfill: prime pdf bytes
@@ -96,9 +106,10 @@ aws ecs run-task --cluster docsuri --launch-type FARGATE --region $REGION \
   **missing month shards** via `DOCSURI_RAW_BACKFILL_MONTHS`, or you re-pay for work already done.
 - **Tier mismatch to confirm first**: this step caches the **`pdf`** tier
   (`raw_backfill.py:88`). The "native_html 10,660/21,252" figure is a *different* tier's coverage.
-  **Before running, confirm what that number measures and which step actually fills it** — it may
-  be `backfill` (v4 embed) or `reparse`, not `raw_backfill`. Don't run a multi-thousand-paper,
-  requester-pays sweep against an unverified target.
+  **Before running, confirm the target with the `migrate.py audit` step above** (source_tier
+  distribution + not-yet-`_GROBID` count) and which step actually fills it — it may be `backfill`
+  (v4 embed) or `reparse`, not `raw_backfill`. Don't run a multi-thousand-paper, requester-pays
+  sweep against an unverified target.
 - Lower k-NN 503 risk than the embedding backfill (writes S3, not OpenSearch), but the
   `harvest_seed` OAI-PMH call is still arXiv-rate-limited — keep it to one task.
 
