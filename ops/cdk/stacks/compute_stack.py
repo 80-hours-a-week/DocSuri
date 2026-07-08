@@ -236,7 +236,7 @@ class ComputeStack(Stack):
             # US-P4 go-live (#345, shipped 2026-07-08): personalization search boost is LIVE.
             # Read once at app startup (wiring._mount_discovery → orchestrator._rerank_live).
             # Default "true" so every pipeline deploy keeps it live (durable — avoids the shadow
-            # revert-on-release trap). Rollback WITHOUT a code change: `-c search_rerank_live=false`.
+            # revert-on-release trap). Rollback (no code change): `-c search_rerank_live=false`.
             # BR-P8 bounds the effect (≤3-position nudge in the top band, tail untouched); fail-open
             # on any boost error (BR-P13). Shadow review (synthetic + algorithm) cleared the flip.
             "SEARCH_RERANK_LIVE": str(self.node.try_get_context("search_rerank_live") or "true"),
