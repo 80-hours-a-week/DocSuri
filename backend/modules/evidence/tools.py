@@ -11,7 +11,7 @@ from docsuri_shared._generated.dtos.evidence_schema import EvidenceScope
 from docsuri_shared.dtos import DocModel
 from summarization.adapters._paper_ref import paper_version
 
-from .models import PaperSearchResult
+from .models import LiteralMatch, LiteralSearchResult, PaperSearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,13 @@ class LexicalIndexPort(Protocol):
         fields: tuple[str, ...] = ('title', 'abstract', 'lexicalTerms'),
     ) -> list[ScoredRecord]: ...
 
+    def phrase_search(
+        self,
+        phrase: str,
+        top_k: int,
+        paper_ids: list[str] | None = None,
+    ) -> list[ScoredRecord]: ...
+
 
 @runtime_checkable
 class PaperLookupPort(Protocol):
@@ -49,6 +56,11 @@ class PaperLookupPort(Protocol):
 
 _SEARCH_TOP_K = 50
 _FULL_FIELDS = ('title', 'abstract', 'lexicalTerms')
+# 청크 단위 히트를 넉넉히 훑어야 서로 다른 논문의 문단을 놓치지 않는다(한 논문이 여러
+# 청크에 걸쳐 있을 수 있음, ingestion Chunker: max_chunks_per_paper=128).
+_LITERAL_SEARCH_TOP_K = 200
+_LITERAL_MAX_PAPERS = 20
+_QUOTE_CONTEXT_CHARS = 240
 
 
 class EvidencePaperSearchTool:
@@ -152,6 +164,40 @@ class EvidencePaperSearchTool:
         candidate_set = retriever.retrieve(plan, _DegSignal())
         return [(c.record, c.retrieval_score) for c in candidate_set.candidates[:_SEARCH_TOP_K]]
 
+    # -- 정확 문구 검색 (LLM 우회 경로) -----------------------------------------------
+
+    def literal_search(
+        self,
+        phrase: str,
+        paper_ids: list[str] | None = None,
+    ) -> LiteralSearchResult:
+        """``phrase``가 원문에 그대로 있는 위치만 반환한다 — HybridRetriever(의미 검색)를
+        타지 않고 OpenSearch match_phrase 결과를 직접 IndexRecord에서 읽는다. 그 자체로
+        원문 발췌이므로 LLM 추출·환각 검증이 필요 없다."""
+        try:
+            hits = self._lexical_index.phrase_search(
+                phrase, top_k=_LITERAL_SEARCH_TOP_K, paper_ids=paper_ids
+            )
+        except IndexUnavailable as exc:
+            raise PaperSearchUnavailable('phrase search index unavailable') from exc
+
+        matches: list[LiteralMatch] = []
+        seen_papers: set[str] = set()
+        for record, _score in hits:
+            paper_id = _get_paper_id(record)
+            if not paper_id:
+                continue
+            quote = _sentence_around(_searchable_text(record), phrase)
+            if not quote:
+                continue
+            matches.append(
+                LiteralMatch(paper_id=paper_id, anchor=_first_block_id(record), quote=quote)
+            )
+            seen_papers.add(paper_id)
+            if len(seen_papers) >= _LITERAL_MAX_PAPERS:
+                break
+        return LiteralSearchResult(phrase=phrase, matches=tuple(matches))
+
 
 class EvidenceDocModelTool:
     """paperId + version 기반 S3 DocModel 읽기 — EvidenceDocModelTool(§3.4)."""
@@ -170,3 +216,47 @@ class EvidenceDocModelTool:
         except Exception:
             logger.warning('docmodel read failed for %s v%s', paper_id, ver, exc_info=True)
             return None
+
+
+def _get_paper_id(record: object) -> str | None:
+    """IndexRecord 또는 ScoredRecord에서 arxivId 추출 (INV-EV-5: 점수 미노출)."""
+    for attr in ('arxivId', 'paper_id', 'paperId', 'id'):
+        val = getattr(record, attr, None)
+        if val:
+            return str(val)
+    return None
+
+
+def _searchable_text(record: object) -> str:
+    """phrase 검색 대상 텍스트 — 초록 청크는 lexicalTerms가 비어있으므로(ingestion
+    Chunker) abstract 필드로 보완한다."""
+    lexical = getattr(record, 'lexicalTerms', '') or ''
+    abstract = getattr(record, 'abstract', '') or ''
+    return f'{abstract} {lexical}'.strip()
+
+
+def _first_block_id(record: object) -> str | None:
+    """청크의 blockRefs 중 첫 번째 block id — DocModel 문단 단위 위치(anchor)."""
+    for ref in getattr(record, 'blockRefs', None) or []:
+        block_id = ref.get('blockId') if isinstance(ref, dict) else getattr(ref, 'blockId', None)
+        if block_id:
+            return str(block_id)
+    return None
+
+
+def _sentence_around(text: str, phrase: str) -> str | None:
+    """phrase를 포함하는 문장(정확히 못 찾으면 앞뒤 문맥)만 잘라 반환 — 청크 전체(최대
+    2400자)를 quote로 그대로 내보내지 않기 위함."""
+    idx = text.lower().find(phrase.lower())
+    if idx == -1:
+        return None
+    start = max(0, idx - _QUOTE_CONTEXT_CHARS // 2)
+    end = min(len(text), idx + len(phrase) + _QUOTE_CONTEXT_CHARS // 2)
+    # 문장 경계(마침표) 쪽으로 살짝 당겨 자연스러운 인용이 되게 한다.
+    prior_period = text.rfind('. ', start, idx)
+    if prior_period != -1:
+        start = prior_period + 2
+    next_period = text.find('. ', idx + len(phrase), end)
+    if next_period != -1:
+        end = next_period + 1
+    return text[start:end].strip()

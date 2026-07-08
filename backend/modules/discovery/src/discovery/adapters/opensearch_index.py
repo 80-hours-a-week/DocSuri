@@ -289,3 +289,25 @@ class OpenSearchLexicalIndexAdapter:
             self._client, self._index, body, message="OpenSearch BM25 query failed"
         )
         return _to_scored(hits)
+
+    def phrase_search(
+        self,
+        phrase: str,
+        top_k: int,
+        paper_ids: Sequence[str] | None = None,
+    ) -> list[ScoredRecord]:
+        """정확 문구 매칭 — ``lexicalTerms``(청크 원문, 초록 포함)에 대해 연속된 어구가
+        그대로 있는 청크만 반환한다(``multi_match``의 OR 매칭과 달리 순서·인접성을 요구).
+        ``paper_ids``가 주어지면 그 논문들로만 제한한다(꼬리질문 좁히기, BR-EV-2 mixed/explicit
+        재사용과 동일한 목적)."""
+        must: list[dict] = [{"match_phrase": {"lexicalTerms": phrase}}]
+        if paper_ids:
+            must.append({"terms": {"paperId": list(paper_ids)}})
+        body = {
+            "size": top_k,
+            "query": {"bool": {"must": must}},
+        }
+        hits = _search_hits(
+            self._client, self._index, body, message="OpenSearch phrase query failed"
+        )
+        return _to_scored(hits)

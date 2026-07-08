@@ -81,12 +81,18 @@ class ResearchService:
         user_docmodel: Any = None,
     ) -> ResearchChatMessage:
         self._repo.get_job(owner_id, job_id)
+        history = self._repo.list_messages(owner_id, job_id)
         # 멀티턴 맥락(PR #338 리뷰 Blocking #2/FR-37): 현재 메시지 추가 전 이전 사용자 질문들.
         prior_topics = tuple(
-            m.content
-            for m in self._repo.list_messages(owner_id, job_id)
-            if m.role == ChatRole.USER and m.content
+            m.content for m in history if m.role == ChatRole.USER and m.content
         )
+        # 꼬리질문 좁히기용 — 가장 최근에 성공한(resolvedPaperIds가 있는) assistant 메시지의
+        # 논문 집합. "그 중에서" 류 후속 질문일 때만 orchestrator가 이 집합으로 재검색한다.
+        prior_paper_ids: tuple[str, ...] = ()
+        for m in reversed(history):
+            if m.role == ChatRole.ASSISTANT and m.resolvedPaperIds:
+                prior_paper_ids = tuple(m.resolvedPaperIds)
+                break
         user_msg = self._repo.add_message(
             ResearchChatMessage(
                 jobId=job_id,
@@ -112,6 +118,7 @@ class ResearchService:
             dto.content,
             prior_topics,
             attachment_inputs,
+            prior_paper_ids,
         )
         content = _format_turn_result(result)
         assistant_msg = self._repo.add_message(
@@ -121,6 +128,7 @@ class ResearchService:
                 role=ChatRole.ASSISTANT,
                 content=content,
                 attachments=[],
+                resolvedPaperIds=list(_resolved_paper_ids(result)),
             )
         )
         # US-EV4(#268) 2차 — 본문 없이 도착한 첨부(PDF 등)는 비기술 문구로 별도 안내.
@@ -152,6 +160,7 @@ async def _run_evidence(
     topic: str,
     prior_topics: tuple[str, ...] = (),
     attachment_inputs: tuple[Any, ...] = (),
+    prior_paper_ids: tuple[str, ...] = (),
 ) -> Any:
     from docsuri_shared._generated.dtos.evidence_schema import EvidenceRequest, EvidenceScope
     from pydantic import ValidationError
@@ -175,8 +184,17 @@ async def _run_evidence(
         budget_signal={'state': 'ok'},
         prior_topics=prior_topics,
         attachment_docs=attachment_inputs,
+        prior_paper_ids=prior_paper_ids,
     )
     return await asyncio.to_thread(orchestrator.run, ctx, request)
+
+
+def _resolved_paper_ids(result: Any) -> tuple[str, ...]:
+    from backend.modules.evidence.models import TurnSuccessResult
+
+    if isinstance(result, TurnSuccessResult):
+        return result.resolved_paper_ids
+    return ()
 
 
 def _format_turn_result(result: Any) -> str:
