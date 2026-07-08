@@ -189,6 +189,41 @@ def test_anchor_enum_only_target_does_not_over_resolve() -> None:
     assert any(v.kind == "anchor_missing" for v in verdict.violations)
 
 
+def test_anchor_empty_structure_keeps_chips_verbatim() -> None:
+    # #352 edge 1: a pure-abstract / heading-less .txt source has no sections/captions/tables, so
+    # the structural index is empty. Chips are kept verbatim rather than all dropped as
+    # anchor_missing (the numeric HARD gate stays independent, so nothing fabricated leaks).
+    from summarization.domain.models import RefinedSource
+
+    refined = RefinedSource(body="abstract-only body with no headings")
+    draft = _draft_with_anchor(
+        Anchor("method", AnchorTarget.SECTION, span="", label="초록 인용", target_hint="abstract")
+    )
+    verdict = GroundingValidator().validate(GroundingInput(draft=draft, refined=refined))
+    assert verdict.ok
+    assert verdict.kept_anchors == draft.anchors  # kept unchanged, label not rewritten
+    assert not any(v.kind == "anchor_missing" for v in verdict.violations)
+
+
+def test_anchor_longest_contiguous_match_wins() -> None:
+    # #352 edge 2: when a short generic section title ("Method") and a longer specific one
+    # ("Method and Results") both match the anchor as a token run, the LONGEST wins — the old
+    # first-match rule would mislabel the chip to "Method".
+    from summarization.domain.models import RefinedSource, Section
+
+    refined = RefinedSource(
+        body="b",
+        sections=(Section("Method", 0, 1), Section("Method and Results", 0, 1)),
+    )
+    draft = _draft_with_anchor(
+        Anchor("method", AnchorTarget.SECTION, span="",
+               label="Method and Results section", target_hint="section")
+    )
+    verdict = GroundingValidator().validate(GroundingInput(draft=draft, refined=refined))
+    assert len(verdict.kept_anchors) == 1
+    assert verdict.kept_anchors[0].label == "Method and Results"
+
+
 def test_numeric_minority_mismatch_tolerated() -> None:
     # A few stray figures (1 of 4 absent = 25% ≤ 50%) shouldn't abstain an otherwise-grounded draft.
     from summarization.domain.models import RefinedSource

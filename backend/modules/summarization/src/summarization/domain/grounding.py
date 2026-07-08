@@ -100,10 +100,16 @@ def _resolve_location(anchor: Anchor, index: list[tuple[str, list[str]]]) -> str
     for canonical, key in index:
         if key == hint or key == lbl:
             return canonical
+    # Contiguous fallback: pick the LONGEST (most specific) matching key, not the first (#352).
+    # A short generic title (e.g. "Method") that happens to be a sub-run of the anchor's label
+    # must not win over a longer, more specific title that also matches. Index order
+    # (most-specific-first) breaks length ties — only a strictly longer key replaces the best.
+    best_canonical: str | None = None
+    best_len = 0
     for canonical, key in index:
-        if _contiguous(key, hint) or _contiguous(key, lbl):
-            return canonical
-    return None
+        if len(key) > best_len and (_contiguous(key, hint) or _contiguous(key, lbl)):
+            best_canonical, best_len = canonical, len(key)
+    return best_canonical
 
 
 # Numeric grounding is fraction-based: abstain only when MORE than this share of a draft's result
@@ -195,12 +201,20 @@ class GroundingValidator:
         # against real structure instead of verbatim-matching prose (Step 35 / BR-S7).
         index = _structural_index(refined)
         kept: list[Anchor] = []
-        for a in draft.anchors:
-            canonical = _resolve_location(a, index)
-            if canonical is not None:
-                kept.append(replace(a, label=canonical))
-            else:
-                soft.append(Violation("anchor_missing", a.field_name))
+        if not index:
+            # No doc-model structure to resolve against — pure-abstract fallback or a heading-less
+            # legacy .txt whose refiner produced no sections/captions/tables. Keep the anchor chips
+            # verbatim instead of dropping every one as anchor_missing (#352): the old verbatim
+            # path surfaced abstract-cited anchors, and the numeric HARD gate is independent, so
+            # unresolved pointers still cannot leak a fabricated figure.
+            kept = list(draft.anchors)
+        else:
+            for a in draft.anchors:
+                canonical = _resolve_location(a, index)
+                if canonical is not None:
+                    kept.append(replace(a, label=canonical))
+                else:
+                    soft.append(Violation("anchor_missing", a.field_name))
 
         # (2) numeric match — result figures must appear in the source — HARD, but FRACTION-based:
         # a few stray numbers (a mis-transcribed table cell, a rounded value) shouldn't abstain an
