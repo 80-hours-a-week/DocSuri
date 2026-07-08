@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import datetime
 
 from .models import (
@@ -38,15 +39,38 @@ _FUNNEL_METRIC: dict[BehaviorEventType, str] = {
 }
 
 
+# Event types where ProfileAggregator credits a single paper's category to categoryWeights
+# (the input to the US-P4 search boost). SEARCH_EXECUTED is excluded — its category signal is
+# metadata.topCategories over the RESULT SET, which the /events path (a single queryHash) can't
+# resolve. paper_opened/library_added/summary_translation_requested each name one paperId.
+_CATEGORY_EVENTS: frozenset[BehaviorEventType] = frozenset(
+    {
+        BehaviorEventType.PAPER_OPENED,
+        BehaviorEventType.LIBRARY_ADDED,
+        BehaviorEventType.SUMMARY_TRANSLATION_REQUESTED,
+    }
+)
+
+
 class BehaviorEventRecorder:
-    def __init__(self, repo: PersonalizationRepository, observability=None) -> None:
+    def __init__(
+        self,
+        repo: PersonalizationRepository,
+        observability=None,
+        category_resolver: Callable[[str], str | None] | None = None,
+    ) -> None:
         self._repo = repo
         self._observability = observability
+        # paperId → primary arXiv category (U2 index lookup), injected at the controller. None
+        # (standalone/tests/index down) → events store uncategorized, exactly as before. # ponytail:
+        # no cache — event volume is tiny and /events is fire-and-forget; add lru_cache if it grows.
+        self._category_resolver = category_resolver
 
     def record(self, user_id: str, dto: BehaviorEventCreate) -> EventRecordResult:
         try:
             if not self._repo.get_settings(user_id).enabled:
                 return EventRecordResult(recorded=False, reason="disabled")
+            dto = self._with_category(dto)
             inserted = self._repo.insert_event(
                 BehaviorEvent(userId=user_id, **dto.model_dump())
             )
@@ -59,6 +83,28 @@ class BehaviorEventRecorder:
         except Exception:
             _emit_metric(self._observability, "personalization.record_failure")
             return EventRecordResult(recorded=False, reason="degraded")
+
+    def _with_category(self, dto: BehaviorEventCreate) -> BehaviorEventCreate:
+        """Attach the paper's category to a paper-scoped event so ProfileAggregator can build
+        categoryWeights (US-P4 search boost). Best-effort and idempotent: no resolver, a
+        non-paper event, an already-categorized subject, a missing paperId, or a lookup
+        miss/failure all return ``dto`` unchanged — recording never depends on enrichment
+        (BR-P13)."""
+        resolver = self._category_resolver
+        if resolver is None or dto.eventType not in _CATEGORY_EVENTS:
+            return dto
+        subject = dto.subject
+        if subject.category or not subject.paperId:
+            return dto
+        try:
+            category = resolver(subject.paperId)
+        except Exception:  # noqa: BLE001 — enrichment must never fail event recording
+            return dto
+        if not category:
+            return dto
+        return dto.model_copy(
+            update={"subject": subject.model_copy(update={"category": category})}
+        )
 
 
 class ProfileAggregator:
@@ -161,12 +207,19 @@ class PersonalizationReadPort:
         return self._decision(user_id, include_search=True)
 
     def cached_search_boosts(self, user_id: str) -> dict[str, float]:
-        """Search hot path: read an existing profile only; never aggregate raw events inline."""
+        """Search hot path: the user's bounded category boosts, or {} when personalization is off
+        or there is nothing to learn from. Builds-and-persists the profile on a miss, so the FIRST
+        search per user aggregates raw events once and every later search takes the fast
+        get_profile path. Fail-open (BR-P13): any store/aggregation failure degrades to {}.
+        # ponytail: the built profile is frozen (same as the decision path) — a scheduled refresh
+        # job is the upgrade path if boosts must track evolving interest without a profile reset.
+        """
         try:
             settings = self._repo.get_settings_if_exists(user_id)
             if settings is not None and not settings.enabled:
                 return {}
-            profile = self._repo.get_profile(user_id)
+            reset_at = settings.profileResetAt if settings is not None else None
+            profile = self._load_or_build_profile(user_id, reset_at)
             return _to_search_boosts(profile.categoryWeights) if profile else {}
         except Exception:
             _emit_metric(self._observability, "personalization.degraded_decision")
@@ -180,17 +233,9 @@ class PersonalizationReadPort:
             settings = self._repo.get_settings(user_id)
             if not settings.enabled:
                 return PersonalizationDecision(enabled=False, reason="disabled")
-            profile = self._repo.get_profile(user_id)
+            profile = self._load_or_build_profile(user_id, settings.profileResetAt)
             if profile is None:
-                events = self._repo.list_events(user_id)
-                if settings.profileResetAt is not None:
-                    events = [
-                        event for event in events if event.occurredAt > settings.profileResetAt
-                    ]
-                profile = self._aggregator.aggregate(user_id, events)
-                if profile is None:
-                    return PersonalizationDecision(enabled=False, reason="no_profile")
-                self._repo.save_profile(profile)
+                return PersonalizationDecision(enabled=False, reason="no_profile")
             return PersonalizationDecision(
                 enabled=True,
                 searchBoosts=_to_search_boosts(profile.categoryWeights) if include_search else {},
@@ -201,6 +246,24 @@ class PersonalizationReadPort:
         except Exception:
             _emit_metric(self._observability, "personalization.degraded_decision")
             return PersonalizationDecision(enabled=False, reason="degraded")
+
+    def _load_or_build_profile(
+        self, user_id: str, profile_reset_at: datetime | None
+    ) -> UserInterestProfile | None:
+        """Return the persisted profile, or aggregate raw events into one and persist it (lazy
+        build). Events at/before ``profile_reset_at`` are excluded (BR-P11 reset). Returns None
+        when there are no events to aggregate. Shared by the search hot path and the decision
+        endpoints so both build the profile identically (BR-P7 deterministic aggregation)."""
+        profile = self._repo.get_profile(user_id)
+        if profile is not None:
+            return profile
+        events = self._repo.list_events(user_id)
+        if profile_reset_at is not None:
+            events = [event for event in events if event.occurredAt > profile_reset_at]
+        profile = self._aggregator.aggregate(user_id, events)
+        if profile is not None:
+            self._repo.save_profile(profile)
+        return profile
 
 
 class PersonalizationSettingsService:

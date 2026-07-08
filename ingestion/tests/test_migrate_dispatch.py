@@ -11,6 +11,7 @@ from docsuri_ingestion.migrate import _STEPS, run_step
 
 def test_steps_are_exactly_the_known_one_off_phases():
     assert set(_STEPS) == {
+        "audit",
         "provision",
         "backfill",
         "backfill_external",
