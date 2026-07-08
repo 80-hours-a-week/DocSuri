@@ -23,8 +23,8 @@ export default function PrivacyPage() {
       <h1 className={styles.title}>개인정보처리방침</h1>
       <p className={styles.updated}>시행일: 2026년 7월 8일 · 최종 개정일: 2026년 7월 8일</p>
       <p className={styles.draftNote}>
-        ※ 초안입니다. 아래 <span className={styles.todo}>[[…]]</span> 항목(수탁사 리전·보유기간·
-        국외 이전 문구)은 법무 검토 후 확정해야 합니다.
+        ※ 초안입니다. 아래 <span className={styles.todo}>[[…]]</span> 항목(수탁사 리전·국외 이전
+        문구)은 법무 검토 후 확정해야 합니다.
       </p>
 
       <p className={styles.body}>
@@ -61,13 +61,12 @@ export default function PrivacyPage() {
 
       <h2 className={styles.h2}>3. 보유 및 이용 기간</h2>
       <p className={styles.body}>
-        회원 탈퇴 시 계정을 비활성화(소프트 삭제)한 뒤{' '}
-        <span className={styles.todo}>[[유예 기간: 30일]]</span> 경과 후 파기합니다. 다만 관련
-        법령에 따라 보존이 필요한 정보는 해당 기간 동안 보관하며, 백업 보관 기간은{' '}
-        <span className={styles.todo}>
-          [[보관 정책 확정: 30일 유예 vs 5년 백업 상충 해소 필요]]
-        </span>
-        .
+        회원 탈퇴 시 계정을 비활성화(소프트 삭제)하여 30일간 보관하며, 이 기간 내에는 재로그인으로
+        복구할 수 있습니다. 30일이 지나면 계정 정보와 서비스 이용 기록(라이브러리·검색 이력·이용
+        이벤트 등)을 지체 없이 일괄 파기하며, 별도의 백업 사본을 보관하지 않습니다.
+      </p>
+      <p className={styles.body}>
+        서비스 이용 중 수집한 개인화용 행동 이벤트는 최근 90일분만 보관하고 이후 자동 삭제합니다.
       </p>
 
       <h2 className={styles.h2}>4. 개인정보의 제3자 제공</h2>
@@ -119,9 +118,7 @@ export default function PrivacyPage() {
       <h2 className={styles.h2}>10. 개인정보 보호책임자</h2>
       <ul className={styles.list}>
         <li>성명: 조준희 (개인정보 보호책임자)</li>
-        <li>
-          연락처(이메일): corpseonthemission@icloud.com
-        </li>
+        <li>연락처(이메일): corpseonthemission@icloud.com</li>
       </ul>
 
       <h2 className={styles.h2}>11. 고지의 의무</h2>
