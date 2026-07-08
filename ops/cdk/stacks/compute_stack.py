@@ -323,6 +323,12 @@ class ComputeStack(Stack):
             "CITATION_GRAPH_PROVIDER_TIMEOUT_SECONDS": "5",
             "CITATION_GRAPH_PROVIDER_RETRY_TIMEOUT_SECONDS": "10",
             "PERSONALIZATION_ENABLED": "true",
+            # US-P4 search-boost go-live (#345): apply the bounded personalization re-rank to the
+            # user-facing order, not just shadow-measure it. Already set true on the live task def;
+            # pinned here so a `cdk deploy` can't silently revert live search to SHADOW (the code
+            # default is "false"). Movement is bounded by BR-P8 (≤0.1 boost, top-30% band, tail
+            # fixed) and is a no-op until US-P3 profiles produce category boosts.
+            "SEARCH_RERANK_LIVE": "true",
             # Research is intentionally enabled in prod; keep this aligned with the live flag.
             "RESEARCH_AGENT_ENABLED": "true",
             "NOVELTY_AGENT_ENABLED": "true",
