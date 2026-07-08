@@ -38,8 +38,8 @@ queryable for "what is true **now**."
 
 | Fact | `aidlc-docs` said | Live code says | Verdict |
 |---|---|---|---|
-| Email provider | `EMAIL_PROVIDER=resend`, "SES 폐기" — `technical-environment.md:102` | default `"ses"` — `backend/modules/accounts/integrations/email.py:458`, `ops/cdk/stacks/compute_stack.py:235` | **docs were wrong** |
-| Embedding (reader) | v4 `embed-multilingual-v4.0`, alias `docsuri-corpus`/`-v2` — `technical-environment.md:131`, `construction/v4-migration/*` | `cohere.embed-multilingual-v3` → alias `docsuri-corpus-c3ml` — `ops/cdk/stacks/compute_stack.py:261-262` | **docs were wrong** |
+| Email provider | `EMAIL_PROVIDER=resend`, "SES 폐기" — `technical-environment.md:102` | default `"ses"` — `email.py` (`getenv("EMAIL_PROVIDER","ses")`), `compute_stack.py` (`"EMAIL_PROVIDER":"ses"`) | **docs were wrong** |
+| Embedding (reader) | v4 `embed-multilingual-v4.0`, alias `docsuri-corpus`/`-v2` — `technical-environment.md:131`, `construction/v4-migration/*` | `cohere.embed-multilingual-v3` → alias `docsuri-corpus-c3ml` — `ops/cdk/stacks/compute_stack.py` (`DOCSURI_BEDROCK_MODEL_ID` / `DOCSURI_OPENSEARCH_INDEX`, ~L254 on develop) | **docs were wrong** |
 
 **Bonus finding (not fixed — see below):** the live code is *itself* internally
 inconsistent, because a re-embed migration is in flight:
