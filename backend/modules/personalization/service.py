@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import os
 from collections import defaultdict
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 from .models import (
     BehaviorEvent,
@@ -192,16 +193,41 @@ def _to_search_boosts(weights: dict[str, float]) -> dict[str, float]:
     return boosts
 
 
+# US-P3 profile refresh (US-P4 boost freshness): a persisted profile is otherwise frozen — new
+# category-enriched events never change it, so search boosts go stale and the #345 cold-start locks
+# in the empty profile built on a user's first post-go-live search. Refresh LAZILY on read: rebuild
+# from current events once the profile is older than this TTL, on the next search that user makes.
+# No scheduler/worker — active searchers (the only ones whose boost is consumed) self-heal on their
+# own cadence; a user who never searches keeps a stale profile, which is harmless. Tune via env
+# PERSONALIZATION_PROFILE_TTL_SECONDS (0 = rebuild every read).
+# ponytail: TTL-on-read, not a batch job. Add a job only if profiles must refresh WITHOUT a search
+# — they don't (no search → no boost read). Bump to a job if a non-search consumer ever appears.
+_DEFAULT_PROFILE_TTL = timedelta(hours=24)
+
+
+def _profile_ttl_from_env() -> timedelta:
+    raw = os.getenv("PERSONALIZATION_PROFILE_TTL_SECONDS")
+    if raw is None:
+        return _DEFAULT_PROFILE_TTL
+    try:
+        seconds = int(raw)
+    except ValueError:
+        return _DEFAULT_PROFILE_TTL
+    return timedelta(seconds=max(0, seconds))
+
+
 class PersonalizationReadPort:
     def __init__(
         self,
         repo: PersonalizationRepository,
         aggregator: ProfileAggregator | None = None,
         observability=None,
+        profile_ttl: timedelta | None = None,
     ) -> None:
         self._repo = repo
         self._aggregator = aggregator or ProfileAggregator()
         self._observability = observability
+        self._profile_ttl = profile_ttl if profile_ttl is not None else _profile_ttl_from_env()
 
     def search_decision(self, user_id: str) -> PersonalizationDecision:
         return self._decision(user_id, include_search=True)
@@ -250,20 +276,33 @@ class PersonalizationReadPort:
     def _load_or_build_profile(
         self, user_id: str, profile_reset_at: datetime | None
     ) -> UserInterestProfile | None:
-        """Return the persisted profile, or aggregate raw events into one and persist it (lazy
-        build). Events at/before ``profile_reset_at`` are excluded (BR-P11 reset). Returns None
-        when there are no events to aggregate. Shared by the search hot path and the decision
+        """Return the persisted profile, or aggregate raw events into one and persist it. Rebuilds
+        when the persisted profile is missing OR older than the refresh TTL (``_is_stale``), so
+        newly category-enriched events flow into the search boost instead of a frozen snapshot
+        (US-P3). Events at/before ``profile_reset_at`` are excluded (BR-P11 reset). Returns None
+        when there is nothing to aggregate. Shared by the search hot path and the decision
         endpoints so both build the profile identically (BR-P7 deterministic aggregation)."""
         profile = self._repo.get_profile(user_id)
-        if profile is not None:
+        if profile is not None and not self._is_stale(profile):
             return profile
         events = self._repo.list_events(user_id)
         if profile_reset_at is not None:
             events = [event for event in events if event.occurredAt > profile_reset_at]
-        profile = self._aggregator.aggregate(user_id, events)
-        if profile is not None:
-            self._repo.save_profile(profile)
-        return profile
+        rebuilt = self._aggregator.aggregate(user_id, events)
+        if rebuilt is not None:
+            self._repo.save_profile(rebuilt)  # aggregate() bumps updatedAt → resets the TTL clock
+            return rebuilt
+        return profile  # nothing to aggregate → keep the existing profile (may be None)
+
+    def _is_stale(self, profile: UserInterestProfile) -> bool:
+        # ponytail: concurrent stale searches may both rebuild+save — harmless, save_profile
+        # upserts and same events → same result.
+        if self._profile_ttl <= timedelta(0):
+            return True  # TTL 0 → always rebuild
+        updated = profile.updatedAt
+        if updated.tzinfo is None:  # robust to a naive round-trip; treat as UTC
+            updated = updated.replace(tzinfo=UTC)
+        return utc_now() - updated >= self._profile_ttl
 
 
 class PersonalizationSettingsService:
