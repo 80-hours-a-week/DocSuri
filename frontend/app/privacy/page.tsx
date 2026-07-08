@@ -21,17 +21,15 @@ export default function PrivacyPage() {
     <div className={styles.screen}>
       <AppHeader backHref="/" />
       <h1 className={styles.title}>개인정보처리방침</h1>
-      <p className={styles.updated}>
-        시행일: 2026년 7월 8일 · 최종 개정일: 2026년 7월 8일
-      </p>
+      <p className={styles.updated}>시행일: 2026년 7월 8일 · 최종 개정일: 2026년 7월 8일</p>
       <p className={styles.draftNote}>
-        ※ 초안입니다. 아래 <span className={styles.todo}>[[…]]</span> 항목(문의 이메일·수탁사 리전·
-        보유기간·국외 이전 문구)은 법무 검토 후 확정해야 합니다.
+        ※ 초안입니다. 아래 <span className={styles.todo}>[[…]]</span> 항목(수탁사 리전·보유기간·
+        국외 이전 문구)은 법무 검토 후 확정해야 합니다.
       </p>
 
       <p className={styles.body}>
-        DocSuri(이하 “회사”)은 「개인정보 보호법」
-        등 관련 법령을 준수하며, DocSuri(이하 “서비스”) 이용자의 개인정보를 다음과 같이 처리합니다.
+        DocSuri(이하 “회사”)은 「개인정보 보호법」 등 관련 법령을 준수하며, DocSuri(이하 “서비스”)
+        이용자의 개인정보를 다음과 같이 처리합니다.
       </p>
 
       <h2 className={styles.h2}>1. 수집하는 개인정보 항목</h2>
@@ -120,11 +118,9 @@ export default function PrivacyPage() {
 
       <h2 className={styles.h2}>10. 개인정보 보호책임자</h2>
       <ul className={styles.list}>
+        <li>성명: 조준희 (개인정보 보호책임자)</li>
         <li>
-          성명: 조준희 (개인정보 보호책임자)
-        </li>
-        <li>
-          연락처(이메일): <span className={styles.todo}>[[문의 이메일]]</span>
+          연락처(이메일): corpseonthemission@icloud.com
         </li>
       </ul>
 

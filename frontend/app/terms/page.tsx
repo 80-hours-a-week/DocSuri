@@ -17,19 +17,16 @@ export default function TermsPage() {
     <div className={styles.screen}>
       <AppHeader backHref="/" />
       <h1 className={styles.title}>서비스 이용약관</h1>
-      <p className={styles.updated}>
-        시행일: 2026년 7월 8일
-      </p>
+      <p className={styles.updated}>시행일: 2026년 7월 8일</p>
       <p className={styles.draftNote}>
-        ※ 초안입니다. <span className={styles.todo}>[[…]]</span> 항목(관할 법원·문의처)은 법무
-        검토 후 확정해야 합니다.
+        ※ 초안입니다. <span className={styles.todo}>[[…]]</span> 항목(관할 법원)은 법무 검토 후
+        확정해야 합니다.
       </p>
 
       <h2 className={styles.h2}>제1조 (목적)</h2>
       <p className={styles.body}>
-        본 약관은 DocSuri(이하 “회사”)이 제공하는
-        DocSuri(이하 “서비스”)의 이용 조건 및 절차, 회사와 이용자의 권리·의무를 정함을 목적으로
-        합니다.
+        본 약관은 DocSuri(이하 “회사”)이 제공하는 DocSuri(이하 “서비스”)의 이용 조건 및 절차, 회사와
+        이용자의 권리·의무를 정함을 목적으로 합니다.
       </p>
 
       <h2 className={styles.h2}>제2조 (정의)</h2>
@@ -94,14 +91,13 @@ export default function TermsPage() {
 
       <h2 className={styles.h2}>제11조 (준거법 및 관할)</h2>
       <p className={styles.body}>
-        본 약관은 대한민국 법에 따라 규율되며,
-        서비스와 관련한 분쟁은 <span className={styles.todo}>[[관할 법원]]</span>을 관할 법원으로
-        합니다.
+        본 약관은 대한민국 법에 따라 규율되며, 서비스와 관련한 분쟁은{' '}
+        <span className={styles.todo}>[[관할 법원]]</span>을 관할 법원으로 합니다.
       </p>
 
       <h2 className={styles.h2}>제12조 (문의)</h2>
       <p className={styles.body}>
-        서비스 이용 관련 문의: <span className={styles.todo}>[[문의 이메일]]</span>
+        서비스 이용 관련 문의: corpseonthemission@icloud.com
       </p>
     </div>
   );
