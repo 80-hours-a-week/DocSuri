@@ -4,8 +4,8 @@ import { AppHeader } from '@/components/AppHeader';
 
 // 서비스 이용약관 (Terms of Service) — static server route at /terms.
 // Linked from the landing footer and offered on the OAuth consent screen.
-// ponytail: static JSX; the [[…]] spans are operator facts (법인명·관할·연락처)
-// legal must confirm before this is treated as final.
+// ponytail: static JSX. Operator facts (법인명·관할·연락처) are filled;
+// legal should still confirm before this is treated as final.
 
 export const metadata: Metadata = {
   title: '서비스 이용약관 — DocSuri',
@@ -18,10 +18,6 @@ export default function TermsPage() {
       <AppHeader backHref="/" />
       <h1 className={styles.title}>서비스 이용약관</h1>
       <p className={styles.updated}>시행일: 2026년 7월 8일</p>
-      <p className={styles.draftNote}>
-        ※ 초안입니다. <span className={styles.todo}>[[…]]</span> 항목(관할 법원)은 법무 검토 후
-        확정해야 합니다.
-      </p>
 
       <h2 className={styles.h2}>제1조 (목적)</h2>
       <p className={styles.body}>
@@ -91,14 +87,12 @@ export default function TermsPage() {
 
       <h2 className={styles.h2}>제11조 (준거법 및 관할)</h2>
       <p className={styles.body}>
-        본 약관은 대한민국 법에 따라 규율되며, 서비스와 관련한 분쟁은{' '}
-        <span className={styles.todo}>[[관할 법원]]</span>을 관할 법원으로 합니다.
+        본 약관은 대한민국 법에 따라 규율되며, 서비스와 관련하여 발생한 분쟁에 대해서는 「민사소송법」이
+        정한 관할 법원에 소를 제기합니다.
       </p>
 
       <h2 className={styles.h2}>제12조 (문의)</h2>
-      <p className={styles.body}>
-        서비스 이용 관련 문의: corpseonthemission@icloud.com
-      </p>
+      <p className={styles.body}>서비스 이용 관련 문의: corpseonthemission@icloud.com</p>
     </div>
   );
 }
