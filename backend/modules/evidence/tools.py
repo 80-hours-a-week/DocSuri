@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Protocol, runtime_checkable
 
 from discovery.ports.search_ports import (
@@ -9,7 +10,7 @@ from discovery.ports.search_ports import (
 )
 from docsuri_shared._generated.dtos.evidence_schema import EvidenceScope
 from docsuri_shared.dtos import DocModel
-from summarization.adapters._paper_ref import paper_version
+from summarization.adapters._paper_ref import bare_paper_id, paper_version
 
 from .models import LiteralMatch, LiteralSearchResult, PaperSearchResult
 
@@ -174,9 +175,13 @@ class EvidencePaperSearchTool:
         """``phrase``가 원문에 그대로 있는 위치만 반환한다 — HybridRetriever(의미 검색)를
         타지 않고 OpenSearch match_phrase 결과를 직접 IndexRecord에서 읽는다. 그 자체로
         원문 발췌이므로 LLM 추출·환각 검증이 필요 없다."""
+        # 색인의 paperId는 버전 없는(bare) id인데 evidence가 이어붙이는 꼬리질문 id는
+        # 버전 붙은 arxivId다(위 get_doc_model 주석 참고). 버전을 떼고 넘겨야 terms 필터가
+        # 매칭된다 — 안 그러면 "그 중에서…" 좁히기가 항상 0건(perpetual miss)이 된다.
+        bare_ids = [bare_paper_id(p) for p in paper_ids] if paper_ids else None
         try:
             hits = self._lexical_index.phrase_search(
-                phrase, top_k=_LITERAL_SEARCH_TOP_K, paper_ids=paper_ids
+                phrase, top_k=_LITERAL_SEARCH_TOP_K, paper_ids=bare_ids
             )
         except IndexUnavailable as exc:
             raise PaperSearchUnavailable('phrase search index unavailable') from exc
@@ -246,7 +251,12 @@ def _first_block_id(record: object) -> str | None:
 
 def _sentence_around(text: str, phrase: str) -> str | None:
     """phrase를 포함하는 문장(정확히 못 찾으면 앞뒤 문맥)만 잘라 반환 — 청크 전체(최대
-    2400자)를 quote로 그대로 내보내지 않기 위함."""
+    2400자)를 quote로 그대로 내보내지 않기 위함. 청크 원문의 개행·연속 공백은 단일 공백으로
+    정규화한 뒤 찾는다(문장이 줄바꿈을 걸쳐 있어도 매칭; 인용문도 그 정규화형으로 나가지만
+    어순·표현은 원문 그대로라 grounding 불변). match_phrase(분석기)만 매칭하고 원문
+    substring이 아닌 경우(어간·문장부호 차이 등)는 여기서 None을 반환해 의도적으로 버린다 —
+    '정확 문구'를 약속한 경로이므로 verbatim이 아니면 인용하지 않는다."""
+    text = re.sub(r'\s+', ' ', text)
     idx = text.lower().find(phrase.lower())
     if idx == -1:
         return None
