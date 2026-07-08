@@ -626,8 +626,12 @@ function EvidenceResultView({ result }: { result: EvidenceResultPayload }) {
   return (
     <div className={styles.evidenceClaims}>
       <p className={styles.evidenceIntro}>
-        아래 카드는 실제 논문 원문에서 확인된 내용만 정리한 근거입니다. 논문마다 다른 이야기를 하는
-        부분은 카드 안에 <strong>상충하는 근거</strong>로 따로 표시됩니다.
+        {result.answer ?? (
+          <>
+            아래 카드는 실제 논문 원문에서 확인된 내용만 정리한 근거입니다. 논문마다 다른 이야기를
+            하는 부분은 카드 안에 <strong>상충하는 근거</strong>로 따로 표시됩니다.
+          </>
+        )}
       </p>
       {result.claims.map((claim, idx) => (
         <article key={idx} className={styles.evidenceClaim}>
