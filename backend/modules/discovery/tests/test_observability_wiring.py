@@ -99,6 +99,24 @@ def test_rerank_live_flag_gates_applied_order() -> None:
     assert [c.record.paperId for c in live_out.ranked] == ["B", "A"]  # boosted → reordered
 
 
+def test_apply_boosts_failure_emits_signal_and_keeps_baseline(monkeypatch) -> None:
+    # apply_boosts is pure compute — a raise there is a code bug, not "no boosts". It must degrade
+    # to the baseline order AND leave a distinct metric, else the feature silently dies into quiet
+    # movement metrics (the exact no-op class #345 fixed). Guarded: the metric never sinks search.
+    from discovery.service import orchestrator as orch
+
+    hub = RecordingHub()
+    bundle = build_mock_orchestrator(observability=hub)
+    bundle.orchestrator._search_boosts = lambda _uid: {"cs.AI": 0.1}
+    monkeypatch.setattr(orch, "apply_boosts", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError))
+    ranked = _ranked_two_flippable()
+
+    out = bundle.orchestrator._apply_search_boosts("u1", ranked)
+
+    assert [c.record.paperId for c in out.ranked] == ["A", "B"]  # baseline, search never blocked
+    assert "personalization.rerank_shadow.apply_failed" in {m[0] for m in hub.metrics}
+
+
 def test_injected_hub_receives_grounding_health_metric() -> None:
     """US-R4 grounding-health signal (hallucination incident class), emitted on finalize.
 

@@ -267,6 +267,15 @@ class SearchOrchestrationService:
         try:
             boosted, diff = apply_boosts(ranked, boosts)
         except Exception:  # noqa: BLE001 — a boost error degrades to the baseline order, never blocks
+            # apply_boosts is pure in-process compute: a raise here is a code bug, not "no boosts
+            # to apply". Emit a distinct signal so the feature can't silently die into quiet
+            # movement metrics (the no-op class #345 fixed). Guarded: metrics never sink search.
+            try:
+                self._observability.emit_metric(
+                    "personalization.rerank_shadow.apply_failed", 1.0, {"scope": "search"}
+                )
+            except Exception:  # noqa: BLE001 — observability is advisory, must not sink search
+                pass
             return ranked
         try:
             self._observability.emit_metric(
