@@ -139,6 +139,103 @@ def test_funnel_metric_emitted_once_and_only_for_funnel_events() -> None:
     assert obs.metrics == ["personalization.funnel.read_completed"]
 
 
+def test_record_event_enriches_missing_category_from_resolver() -> None:
+    # US-P4: a paper-scoped event arriving WITHOUT a category is enriched via the injected
+    # paperId→category resolver, so ProfileAggregator can build categoryWeights (→ search boost).
+    repo = InMemoryPersonalizationRepository()
+    recorder = BehaviorEventRecorder(
+        repo, category_resolver=lambda pid: "cs.LG" if pid == "p1" else None
+    )
+    user_id = str(uuid4())
+    dto = BehaviorEventCreate(
+        eventType="paper_opened",
+        subject={"kind": "paper", "paperId": "p1"},  # no category from the client
+        metadata={"entrySurface": "detail"},
+        dedupeKey="paper:p1:1",
+    )
+
+    recorder.record(user_id, dto)
+
+    stored = repo.list_events(user_id)
+    assert len(stored) == 1
+    assert stored[0].subject.category == "cs.LG"
+
+
+def test_category_enrichment_is_fail_open_and_scoped() -> None:
+    # Best-effort (BR-P13): a resolver that raises, a resolver miss, and a non-paper event
+    # (search_executed) all leave subject.category untouched — recording never depends on it.
+    repo = InMemoryPersonalizationRepository()
+    user_id = str(uuid4())
+
+    def _boom(_pid: str) -> str | None:
+        raise RuntimeError("index down")
+
+    BehaviorEventRecorder(repo, category_resolver=_boom).record(
+        user_id,
+        BehaviorEventCreate(
+            eventType="paper_opened",
+            subject={"kind": "paper", "paperId": "p1"},
+            metadata={"entrySurface": "detail"},
+            dedupeKey="paper:p1:1",
+        ),
+    )
+    BehaviorEventRecorder(repo, category_resolver=lambda _pid: None).record(
+        user_id,
+        BehaviorEventCreate(
+            eventType="library_added",
+            subject={"kind": "paper", "paperId": "p2"},
+            metadata={"savedSource": "library"},
+            dedupeKey="lib:p2:1",
+        ),
+    )
+    # search_executed is out of scope: its category signal is topCategories over the result set,
+    # which the single-queryHash /events path cannot resolve.
+    BehaviorEventRecorder(repo, category_resolver=lambda _pid: "cs.LG").record(
+        user_id,
+        BehaviorEventCreate(
+            eventType="search_executed",
+            subject={"kind": "search", "queryHash": "abc"},
+            metadata={"resultCount": 3},
+            dedupeKey="search:abc:1",
+        ),
+    )
+
+    stored = {e.dedupeKey: e for e in repo.list_events(user_id)}
+    assert stored["paper:p1:1"].subject.category is None  # resolver raised → unchanged
+    assert stored["lib:p2:1"].subject.category is None  # resolver returned None → unchanged
+    assert stored["search:abc:1"].subject.category is None  # not a paper-scoped event
+
+
+def test_cached_search_boosts_builds_and_persists_profile_on_miss() -> None:
+    # Gap B: with no persisted profile, the search hot path aggregates the user's category-enriched
+    # events once, persists, and returns bounded boosts — so #345's live re-rank actually fires.
+    repo = InMemoryPersonalizationRepository()
+    user_id = str(uuid4())
+    BehaviorEventRecorder(repo, category_resolver=lambda _pid: "cs.AI").record(
+        user_id,
+        BehaviorEventCreate(
+            eventType="library_added",
+            subject={"kind": "paper", "paperId": "p1"},
+            metadata={"savedSource": "library"},
+            dedupeKey="lib:p1:1",
+        ),
+    )
+    assert repo.get_profile(user_id) is None  # nothing persisted yet
+
+    boosts = PersonalizationReadPort(repo).cached_search_boosts(user_id)
+
+    assert boosts.get("cs.AI", 0.0) > 0.0  # boost now fires
+    assert repo.get_profile(user_id) is not None  # persisted → later searches take the fast path
+
+
+def test_cached_search_boosts_empty_without_events() -> None:
+    # No events → aggregate returns None → no boosts (fail-open, no profile persisted).
+    repo = InMemoryPersonalizationRepository()
+    user_id = str(uuid4())
+    assert PersonalizationReadPort(repo).cached_search_boosts(user_id) == {}
+    assert repo.get_profile(user_id) is None
+
+
 def test_recent_papers_falls_back_to_paper_id_without_title() -> None:
     repo = InMemoryPersonalizationRepository()
     user_id = str(uuid4())
@@ -271,16 +368,21 @@ def test_search_boosts_always_respect_brp8_bounds(weights: dict[str, float]) -> 
     assert sum(abs(b) for b in boosts.values()) <= 0.2 + 1e-9
 
 
-def test_cached_search_boosts_does_not_aggregate_events_inline() -> None:
+def test_cached_search_boosts_and_decision_build_the_same_profile() -> None:
+    # Gap B (US-P4): the search hot path now builds-and-persists the profile itself on a miss
+    # (was: returned {} until a prior /decision call aggregated one). It shares the same lazy
+    # aggregation as search_decision, so the two agree — and the FIRST search already boosts.
     repo = InMemoryPersonalizationRepository()
     user_id = str(uuid4())
     repo.insert_event(_event(user_id, "d1"))
 
-    assert PersonalizationReadPort(repo).cached_search_boosts(user_id) == {}
-    assert repo.get_profile(user_id) is None
+    boosts = PersonalizationReadPort(repo).cached_search_boosts(user_id)
+    assert boosts["cs.AI"] == 0.1
+    assert repo.get_profile(user_id) is not None  # built + persisted on the hot path
 
-    assert PersonalizationReadPort(repo).search_decision(user_id).reason == "profile_available"
-    assert PersonalizationReadPort(repo).cached_search_boosts(user_id)["cs.AI"] == 0.1
+    decision = PersonalizationReadPort(repo).search_decision(user_id)
+    assert decision.reason == "profile_available"
+    assert decision.searchBoosts == boosts
 
 
 def test_api_settings_disable_recording(monkeypatch) -> None:
