@@ -233,7 +233,89 @@ def test_cached_search_boosts_empty_without_events() -> None:
     repo = InMemoryPersonalizationRepository()
     user_id = str(uuid4())
     assert PersonalizationReadPort(repo).cached_search_boosts(user_id) == {}
-    assert repo.get_profile(user_id) is None
+
+
+def _record_library_add(repo, user_id: str, paper_id: str, category: str, dedupe: str) -> None:
+    BehaviorEventRecorder(repo, category_resolver=lambda _pid: category).record(
+        user_id,
+        BehaviorEventCreate(
+            eventType="library_added",
+            subject={"kind": "paper", "paperId": paper_id},
+            metadata={"savedSource": "library"},
+            dedupeKey=dedupe,
+        ),
+    )
+
+
+def test_profile_refreshes_when_stale() -> None:
+    # US-P3 refresh: a stale profile is rebuilt on read, so a NEW categorized event's category
+    # flows into the boost instead of staying frozen. ttl=0 forces "always stale".
+    repo = InMemoryPersonalizationRepository()
+    user_id = str(uuid4())
+    _record_library_add(repo, user_id, "p1", "cs.AI", "a:1")
+    port = PersonalizationReadPort(repo, profile_ttl=timedelta(0))
+    assert port.cached_search_boosts(user_id).get("cs.AI", 0.0) > 0.0  # first build
+
+    _record_library_add(repo, user_id, "p2", "cs.LG", "b:1")  # new interest after the build
+    assert port.cached_search_boosts(user_id).get("cs.LG", 0.0) > 0.0  # rebuild picked it up
+
+
+def test_profile_frozen_within_ttl() -> None:
+    # Within the TTL the persisted profile is reused — no rebuild, so a new event does NOT yet
+    # change the boost (the fast path the TTL protects).
+    repo = InMemoryPersonalizationRepository()
+    user_id = str(uuid4())
+    _record_library_add(repo, user_id, "p1", "cs.AI", "a:1")
+    port = PersonalizationReadPort(repo, profile_ttl=timedelta(hours=24))
+    assert "cs.AI" in port.cached_search_boosts(user_id)
+
+    _record_library_add(repo, user_id, "p2", "cs.LG", "b:1")
+    assert "cs.LG" not in port.cached_search_boosts(user_id)  # cached, not rebuilt
+
+
+def _record_uncategorized(repo, user_id: str, paper_id: str, dedupe: str) -> None:
+    # No resolver → the event is stored WITHOUT a category (the pre-enrichment historical state).
+    BehaviorEventRecorder(repo).record(
+        user_id,
+        BehaviorEventCreate(
+            eventType="library_added",
+            subject={"kind": "paper", "paperId": paper_id},
+            metadata={"savedSource": "library"},
+            dedupeKey=dedupe,
+        ),
+    )
+
+
+def test_backfill_heals_categories_and_is_idempotent() -> None:
+    from backend.modules.personalization.backfill import backfill_categories
+
+    repo = InMemoryPersonalizationRepository()
+    user_id = str(uuid4())
+    _record_uncategorized(repo, user_id, "2401.1", "l:1")
+    # historical event carries no category → boost is empty even with rebuild forced
+    empty = PersonalizationReadPort(repo, profile_ttl=timedelta(0)).cached_search_boosts(user_id)
+    assert empty == {}
+
+    report = backfill_categories(repo, resolver=lambda _pid: "cs.AI")
+    assert (report.scanned, report.updated, report.unresolved) == (1, 1, 0)
+    # healed event now credits categoryWeights (ttl=0 forces a rebuild off the healed event)
+    boosts = PersonalizationReadPort(repo, profile_ttl=timedelta(0)).cached_search_boosts(user_id)
+    assert boosts.get("cs.AI", 0.0) > 0.0
+    # idempotent: the categorized event is no longer scanned
+    assert backfill_categories(repo, resolver=lambda _pid: "cs.AI").scanned == 0
+
+
+def test_backfill_dry_run_and_unresolved_are_safe() -> None:
+    from backend.modules.personalization.backfill import backfill_categories
+
+    repo = InMemoryPersonalizationRepository()
+    user_id = str(uuid4())
+    _record_uncategorized(repo, user_id, "2401.2", "l:1")
+
+    assert backfill_categories(repo, resolver=lambda _pid: "cs.LG", dry_run=True).updated == 1
+    # dry run wrote nothing → still uncategorized, still scannable
+    unresolved = backfill_categories(repo, resolver=lambda _pid: None)
+    assert (unresolved.scanned, unresolved.updated, unresolved.unresolved) == (1, 0, 1)
 
 
 def test_recent_papers_falls_back_to_paper_id_without_title() -> None:
