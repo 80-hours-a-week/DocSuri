@@ -216,6 +216,18 @@ class GroundingValidator:
                 else:
                     soft.append(Violation("anchor_missing", a.field_name))
 
+        # De-duplicate: multiple draft anchors in one field routinely resolve to the SAME
+        # canonical location (several claims all cite "Introduction"), which would render as
+        # identical repeated "출처" chips. Collapse to one per (field, label), first-seen order.
+        seen_chips: set[tuple[str, str]] = set()
+        deduped: list[Anchor] = []
+        for a in kept:
+            key = (a.field_name, a.label)
+            if key not in seen_chips:
+                seen_chips.add(key)
+                deduped.append(a)
+        kept = deduped
+
         # (2) numeric match — result figures must appear in the source — HARD, but FRACTION-based:
         # a few stray numbers (a mis-transcribed table cell, a rounded value) shouldn't abstain an
         # otherwise-grounded summary, while a draft whose figures are MOSTLY fabricated still must.
