@@ -28,7 +28,17 @@ function AnchorChips({
   anchors: AnchorVM[];
   onAnchor?: (a: AnchorVM) => void;
 }) {
-  const forField = anchors.filter((a) => a.field === field);
+  // Collapse duplicate chips: several claims in one field routinely cite the SAME source, which the
+  // backend canonicalizes to one label (e.g. "Introduction") — rendering identical repeated "출처:"
+  // chips. Keep one chip per label (same label = same text + same jump target). Also heals summaries
+  // cached before the backend de-dup shipped (stored anchors are immutable in S3).
+  const seen = new Set<string>();
+  const forField: AnchorVM[] = [];
+  for (const a of anchors) {
+    if (a.field !== field || seen.has(a.label)) continue;
+    seen.add(a.label);
+    forField.push(a);
+  }
   if (forField.length === 0) return null;
   return (
     <div className={styles.anchors}>
