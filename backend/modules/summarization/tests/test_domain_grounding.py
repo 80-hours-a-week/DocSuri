@@ -147,6 +147,29 @@ def test_anchor_resolves_by_label_location_field() -> None:
     assert verdict.kept_anchors[0].label == "Eliminating Free Riding"
 
 
+def test_anchor_duplicate_chips_collapsed() -> None:
+    # Several claims in one field routinely cite the SAME section; after canonicalization they'd
+    # render as identical repeated "출처: Introduction" chips. One chip per (field, label) survives.
+    from summarization.domain.models import RefinedSource, Section
+
+    refined = RefinedSource(body="b", sections=(Section("Introduction", 0, 1),))
+    draft = SummaryDraft(
+        tldr="t", contributions=("c",), method="m", results="r", limitations="l",
+        reproducibility={"code": "", "data": ""},
+        anchors=(
+            Anchor("method", AnchorTarget.SECTION, span="a", label="Introduction",
+                   target_hint="section"),
+            Anchor("method", AnchorTarget.SECTION, span="b", label="Introduction",
+                   target_hint="section"),
+            Anchor("method", AnchorTarget.SECTION, span="c", label="Introduction",
+                   target_hint="section"),
+        ),
+    )
+    verdict = GroundingValidator().validate(GroundingInput(draft=draft, refined=refined))
+    assert len(verdict.kept_anchors) == 1
+    assert verdict.kept_anchors[0].label == "Introduction"
+
+
 def test_anchor_figure_number_no_prefix_collision() -> None:
     # "Figure 1" must NOT resolve to "Figure 10" — token match ('1' ≠ '10'), not raw substring.
     from summarization.domain.models import RefinedSource
