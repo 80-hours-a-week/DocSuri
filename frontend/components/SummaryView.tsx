@@ -56,7 +56,9 @@ export function SummaryView({ summary, onAnchor }: SummaryViewProps) {
       <section className={styles.field}>
         <h4 className={styles.label}>한 줄 요약</h4>
         <p className={styles.body}>{renderInlineRich(summary.tldr)}</p>
-        <AnchorChips field="tldr" anchors={anchors} onAnchor={onAnchor} />
+        {/* No source chip: the one-line summary is a whole-paper gist, so its grounding is the
+            abstract — which the reader deliberately hides from the full-text body (s0 filter, its
+            own 초록 surface), leaving the chip with nowhere to jump. */}
       </section>
 
       <section className={styles.field}>
