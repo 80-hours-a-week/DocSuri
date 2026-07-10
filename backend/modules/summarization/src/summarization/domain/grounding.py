@@ -115,7 +115,16 @@ def _resolve_location(anchor: Anchor, index: list[tuple[str, list[str]]]) -> str
 # Numeric grounding is fraction-based: abstain only when MORE than this share of a draft's result
 # figures are absent from the source. Tolerates a few mis-transcribed/rounded values while still
 # blocking drafts whose numbers are mostly fabricated (anti-hallucination, INV-4).
-_NUMERIC_MISMATCH_THRESHOLD = 0.5
+#
+# RECALIBRATED 0.5 → 0.4 (US-S6, 2026-07-10) from the QT-1 eval corpora (seed + numeric spectrum
+# + real-figure held-out set, 32 labeled cases): the pre-Phase-3 synthetic estimate 0.5 let every
+# exactly-half-ungrounded draft PASS (0.50 is not > 0.50 — 3 false-passes: probe_half_ungrounded_
+# numbers, num_ungrounded_2of4, roberta_probe_2of4). The zero-error plateau (false_pass = 0 AND
+# false_abstain = 0 across all 32 cases) is [0.40, 0.50); 0.4 is its STRICT edge — the largest
+# faithful ungrounded share in the corpora is 2/5 (resnet_probe_2of5), which still passes via the
+# strict `>`. Changes here must only go stricter (lower), never looser (C-2: no fabricated
+# content); `tests/test_grounding_eval.py` / `tests/test_real_corpus.py` pin both edges.
+_NUMERIC_MISMATCH_THRESHOLD = 0.4
 
 
 def _to_float(token: str) -> float | None:

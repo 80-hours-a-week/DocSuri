@@ -237,18 +237,36 @@ class PersonalizationReadPort:
         or there is nothing to learn from. Builds-and-persists the profile on a miss, so the FIRST
         search per user aggregates raw events once and every later search takes the fast
         get_profile path. Fail-open (BR-P13): any store/aggregation failure degrades to {}.
+
+        QT-7 observability: every call emits exactly one applied/fallback counter —
+        ``personalization.applied`` when non-empty boosts are served to the search path, else
+        ``personalization.fallback`` with a ``reason`` dimension (disabled/no_profile/degraded)
+        — so ops can watch the personalized-vs-baseline split without a log dive.
         # ponytail: the built profile is frozen (same as the decision path) — a scheduled refresh
         # job is the upgrade path if boosts must track evolving interest without a profile reset.
         """
         try:
             settings = self._repo.get_settings_if_exists(user_id)
             if settings is not None and not settings.enabled:
+                _emit_metric(
+                    self._observability, "personalization.fallback", tags={"reason": "disabled"}
+                )
                 return {}
             reset_at = settings.profileResetAt if settings is not None else None
             profile = self._load_or_build_profile(user_id, reset_at)
-            return _to_search_boosts(profile.categoryWeights) if profile else {}
+            boosts = _to_search_boosts(profile.categoryWeights) if profile else {}
+            if boosts:
+                _emit_metric(self._observability, "personalization.applied")
+            else:
+                _emit_metric(
+                    self._observability, "personalization.fallback", tags={"reason": "no_profile"}
+                )
+            return boosts
         except Exception:
             _emit_metric(self._observability, "personalization.degraded_decision")
+            _emit_metric(
+                self._observability, "personalization.fallback", tags={"reason": "degraded"}
+            )
             return {}
 
     def summary_defaults(self, user_id: str) -> PersonalizationDecision:
@@ -288,10 +306,18 @@ class PersonalizationReadPort:
         events = self._repo.list_events(user_id)
         if profile_reset_at is not None:
             events = [event for event in events if event.occurredAt > profile_reset_at]
-        rebuilt = self._aggregator.aggregate(user_id, events)
-        if rebuilt is not None:
-            self._repo.save_profile(rebuilt)  # aggregate() bumps updatedAt → resets the TTL clock
-            return rebuilt
+        try:
+            rebuilt = self._aggregator.aggregate(user_id, events)
+            if rebuilt is not None:
+                # aggregate() bumps updatedAt → resets the TTL clock
+                self._repo.save_profile(rebuilt)
+                return rebuilt
+        except Exception:
+            # QT-7 observability: count aggregation-pipeline failures distinctly from store
+            # failures, then re-raise into the callers' fail-open catch (degraded decision /
+            # empty boosts) — behavior unchanged, just no longer invisible.
+            _emit_metric(self._observability, "personalization.profile_aggregation_failure")
+            raise
         return profile  # nothing to aggregate → keep the existing profile (may be None)
 
     def _is_stale(self, profile: UserInterestProfile) -> bool:
