@@ -76,13 +76,35 @@ function isNoveltyEventStream(method: TransportMethod, path: string[]): boolean 
   );
 }
 
+// US-EV2/NFR-P6 — 동기 evidence 턴의 SSE 표면(POST + Accept: text/event-stream).
+// research(에이전트 채팅의 evidence 모드)와 U11 canonical 엔드포인트 둘 다 지원한다.
+// 게이트웨이 미구성(mock) 시에는 일반 proxy로 흘려 JSON 폴백이 그대로 동작한다.
+function isAgentTurnStream(req: NextRequest, method: TransportMethod, path: string[]): boolean {
+  if (method !== 'POST') return false;
+  if (!req.headers.get('accept')?.includes('text/event-stream')) return false;
+  const upstream = `/${path.join('/')}`;
+  return (
+    upstream === '/api/evidence/turns' ||
+    upstream === '/api/research/jobs' ||
+    (path.length === 5 &&
+      path[0] === 'api' &&
+      path[1] === 'research' &&
+      path[2] === 'jobs' &&
+      path[4] === 'messages')
+  );
+}
+
 function isPdfBody(req: NextRequest): boolean {
   return (
     req.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() === 'application/pdf'
   );
 }
 
-async function proxyEventStream(req: NextRequest, upstreamPath: string): Promise<NextResponse> {
+async function proxyEventStream(
+  req: NextRequest,
+  upstreamPath: string,
+  options?: { method?: 'GET' | 'POST'; body?: string; timeoutMs?: number },
+): Promise<NextResponse> {
   const baseUrl = process.env.DOCSURI_GATEWAY_URL;
   if (!baseUrl) {
     if (process.env.NODE_ENV === 'production' && process.env.DOCSURI_BFF_ALLOW_MOCK !== '1') {
@@ -100,16 +122,20 @@ async function proxyEventStream(req: NextRequest, upstreamPath: string): Promise
     });
   }
 
+  const method = options?.method ?? 'GET';
   const headers = new Headers({ accept: 'text/event-stream' });
+  if (options?.body !== undefined) headers.set('content-type', 'application/json');
   const cookie = req.headers.get('cookie');
   if (cookie) headers.set('cookie', cookie);
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), SSE_PROXY_TIMEOUT_MS);
+  // 타이머는 헤더 도착까지만 유효하다(finally에서 해제) — 본문 스트리밍은 끊지 않는다.
+  const timer = setTimeout(() => controller.abort(), options?.timeoutMs ?? SSE_PROXY_TIMEOUT_MS);
   try {
     const res = await fetch(`${baseUrl}${upstreamPath}`, {
-      method: 'GET',
+      method,
       headers,
+      body: options?.body,
       cache: 'no-store',
       signal: controller.signal,
     });
@@ -143,6 +169,16 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
 
   if (isNoveltyEventStream(method, path)) {
     return proxyEventStream(req, upstreamPath);
+  }
+
+  // 동기 evidence 턴 SSE(US-EV2) — novelty와 같은 스트리밍 홉으로 흘린다. 게이트웨이
+  // 미구성(mock) 시엔 일반 proxy로 폴스루해 FE가 JSON 응답으로 폴백한다(fail-soft).
+  if (isAgentTurnStream(req, method, path) && process.env.DOCSURI_GATEWAY_URL) {
+    return proxyEventStream(req, upstreamPath, {
+      method: 'POST',
+      body: await req.text(),
+      timeoutMs: EVIDENCE_GATEWAY_TIMEOUT_MS,
+    });
   }
 
   let body: unknown;
