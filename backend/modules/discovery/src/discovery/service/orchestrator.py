@@ -226,7 +226,9 @@ class SearchOrchestrationService:
     def finalize(self, pending: GroundingPending, decision) -> SearchResponse:
         """Map verdict → assemble → publish. ``decision`` came from the gateway's enforce."""
         result = self._grounding_adapter.map_decision(decision, pending.ranked)
-        response = self._assembler.assemble(result, pending.degrade_mode)
+        response = self._assembler.assemble(
+            result, pending.degrade_mode, personalized=pending.ranked.personalized
+        )
         self._emit_grounding_health(getattr(decision, "verdict", "unknown"))
         self._publish(pending.user_id, pending.request_id, pending.query, result_count(response))
         return response
@@ -347,7 +349,14 @@ class SearchOrchestrationService:
         except Exception:  # noqa: BLE001 — observability is advisory, must not sink search
             pass
         # Go-live gate: apply the reorder only when live; shadow measures without changing order.
-        return boosted if self._rerank_live else ranked
+        if not self._rerank_live:
+            return ranked
+        if diff.boosted_count > 0:
+            # US-P4 (#155): mark the order as actually personalized so the response can carry
+            # the optional meta.personalized flag (U5 '내 관심 주제 반영' indicator). Only set
+            # when a boost really matched — live-but-untouched pages stay baseline (flag absent).
+            return replace(boosted, personalized=True)
+        return boosted
 
     def _emit_grounding_health(self, verdict: str) -> None:
         """Emit the grounding-health signal — the 'hallucination' AI-incident class (US-R4).
