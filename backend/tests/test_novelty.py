@@ -398,6 +398,124 @@ def test_similarity_adapter_rejects_cross_job_object_key() -> None:
     assert result.degradedReason == "manuscript objectKey is outside job prefix"
 
 
+def test_nv5_similarity_signal_is_review_signal_not_plagiarism_verdict() -> None:
+    """US-NV5(#255) AC1 — 문장 유사도 경고는 법적 표절 판정이 아닌 검토 신호다.
+
+    검토 신호 프레이밍(제목 '문장 유사성:' + '…유사합니다' 요약 + 근거 sourceRefs)을
+    고정하고, 판정형 필드·표절 판정 문구가 응답에 노출되지 않음을 기준 수준에서 검증한다.
+    """
+
+    class FakeS3:
+        def get_object(self, **kwargs):
+            return {
+                "Body": BytesIO(
+                    b"This manuscript presents a privacy preserving retrieval augmented "
+                    b"generation evaluation protocol across domain specific scientific "
+                    b"workflows with repeated evidence checking. "
+                )
+            }
+
+    class FakeCorpus:
+        def full_search(self, owner_id: str, query: str) -> RetrievalBundle:
+            return RetrievalBundle(
+                items=[
+                    {
+                        "title": "Privacy Preserving RAG",
+                        "sourceRefs": [
+                            {
+                                "type": "url",
+                                "identifier": "2401.00001",
+                                "url": "https://arxiv.org/abs/2401.00001",
+                            }
+                        ],
+                    }
+                ],
+                evidenceStatus=EvidenceStatus.SUPPORTED,
+            )
+
+    result = S3ManuscriptSimilarityClient(
+        bucket="papers",
+        prefix="novelty/",
+        client=FakeS3(),
+        corpus=FakeCorpus(),
+    ).check(
+        "u1",
+        {"objectKey": "novelty/u1/job/draft.txt", "contentType": "text/plain", "jobId": "job"},
+    )
+
+    similarity_items = [
+        item for item in result.items if item["riskType"] == "sentence_similarity"
+    ]
+    assert similarity_items
+    verdict_keys = {"verdict", "plagiarism", "isPlagiarism", "plagiarismScore", "legalVerdict"}
+    for item in similarity_items:
+        # 검토 신호 프레이밍: 유사성 서술 + 검토용 근거 출처.
+        assert item["title"].startswith("문장 유사성: ")
+        assert "유사합니다" in item["summary"]
+        assert item["sourceRefs"]
+        # 판정 프레이밍 금지: 판정형 필드도, 표절 판정 문구도 없다.
+        assert not verdict_keys & set(item)
+        text_blob = " ".join(str(value) for value in item.values())
+        assert "표절" not in text_blob
+        assert "plagiar" not in text_blob.lower()
+
+
+def test_nv5_ai_style_signal_has_no_verdict_or_authorship_probability() -> None:
+    """US-NV5(#255) AC2 — AI 어투 신호는 확정 판정·AI 작성 확률 없이 문체 위험 신호로만
+    표시한다. ABSTAINED(기권) 프레이밍과 확률/판정류 필드 부재를 기준 수준에서 고정한다.
+    (false positive 고지문은 FE RiskSignalList가 무조건 렌더 — agentChatScreen.test.tsx.)
+    """
+
+    class FakeS3:
+        def get_object(self, **kwargs):
+            sentence = (
+                "We delve into a robust framework that aims to underscore the pivotal "
+                "role of comprehensive analysis across the evolving landscape of "
+                "retrieval systems. "
+            )
+            return {"Body": BytesIO((sentence * 4).encode("utf-8"))}
+
+    class EmptyCorpus:
+        def full_search(self, owner_id: str, query: str) -> RetrievalBundle:
+            return RetrievalBundle(items=[], evidenceStatus=EvidenceStatus.ABSTAINED)
+
+    result = S3ManuscriptSimilarityClient(
+        bucket="papers",
+        prefix="novelty/",
+        client=FakeS3(),
+        corpus=EmptyCorpus(),
+    ).check(
+        "u1",
+        {"objectKey": "novelty/u1/job/draft.txt", "contentType": "text/plain", "jobId": "job"},
+    )
+
+    ai_style_items = [item for item in result.items if item["riskType"] == "ai_style"]
+    assert len(ai_style_items) == 1
+    item = ai_style_items[0]
+    # 문체 위험 신호: 감지 marker 목록을 싣고, 출처 없는 휴리스틱임을 드러낸다.
+    assert item["title"] == "AI-style phrasing risk"
+    assert item["markers"] and "delve" in item["markers"]
+    assert item["sourceRefs"] == []
+    # 확정 판정 금지: SUPPORTED 판정으로 승격하지 않고 기권으로 남는다.
+    assert item["evidenceStatus"] == EvidenceStatus.ABSTAINED.value
+    # AI 작성 확률·판정 필드 부재 — 확률/점수/판정류 키를 노출하지 않는다.
+    probability_keys = {
+        "probability",
+        "aiProbability",
+        "aiAuthorshipProbability",
+        "authorshipProbability",
+        "confidence",
+        "score",
+        "verdict",
+        "isAiGenerated",
+        "aiGenerated",
+    }
+    assert not probability_keys & set(item)
+    # corpus 매칭이 없으면 유사성 항목을 날조하지 않고, 번들 전체도 기권으로 남는다.
+    assert result.items == ai_style_items
+    assert result.evidenceStatus is EvidenceStatus.ABSTAINED
+
+
 def test_external_adapter_queries_public_api_sources() -> None:
     class Response:
         status_code = 200
@@ -1119,6 +1237,138 @@ def test_worker_manuscript_path_records_similarity_risk_degradation() -> None:
     result = service.result(owner_id, created.jobId)
     assert result.job.state is JobState.DEGRADED
     assert ArtifactKind.RISK_SIGNALS in {artifact.kind for artifact in result.artifacts}
+
+
+def test_nv5_high_risk_signals_do_not_block_idea_and_plan_generation() -> None:
+    """US-NV5(#255) AC3 — 위험 신호가 높아도 novelty 분석을 차단하지 않는다.
+
+    유사도 SUPPORTED 다건 + AI 어투 신호를 함께 주입해도 실험 아이디어 추천
+    (FORMING_IDEAS → novelty_candidates)과 실험 계획 생성(PLANNING_EXPERIMENT →
+    experiment_plan)이 그대로 진행·산출되고 잡은 완주한다.
+    """
+    source_ref = {
+        "type": "url",
+        "identifier": "2401.00001",
+        "url": "https://arxiv.org/abs/2401.00001",
+    }
+
+    class HighRiskSimilarity:
+        def check(self, owner_id: str, manuscript_ref: dict) -> RetrievalBundle:
+            items: list[dict] = [
+                {
+                    "title": f"문장 유사성: Prior work {idx}",
+                    "riskType": "sentence_similarity",
+                    "summary": f"작성 문장 {idx}가 'Prior work {idx}'와 유사합니다.",
+                    "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                    "sourceRefs": [source_ref],
+                }
+                for idx in range(5)
+            ]
+            items.append(
+                {
+                    "title": "AI-style phrasing risk",
+                    "riskType": "ai_style",
+                    "markers": ["delve", "robust framework"],
+                    "evidenceStatus": EvidenceStatus.ABSTAINED.value,
+                    "sourceRefs": [],
+                }
+            )
+            return RetrievalBundle(items=items, evidenceStatus=EvidenceStatus.SUPPORTED)
+
+    class CleanCorpus:
+        def full_search(self, owner_id: str, query: str) -> RetrievalBundle:
+            return RetrievalBundle(items=[{"title": query, "sourceRefs": [source_ref]}])
+
+    class CleanExternal:
+        def search(self, query: str) -> RetrievalBundle:
+            return RetrievalBundle(items=[{"title": query, "sourceRefs": [source_ref]}])
+
+    class CleanLlm:
+        def draft(self, *, topic, corpus, external) -> NoveltyLlmDraft:
+            return NoveltyLlmDraft(
+                similarWorks={
+                    "items": [
+                        {
+                            "title": "Prior work",
+                            "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                            "sourceRefs": [source_ref],
+                        }
+                    ],
+                    "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                    "sourceRefs": [source_ref],
+                },
+                noveltyCandidates={
+                    "items": [
+                        {
+                            "title": "Novel candidate",
+                            "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                            "sourceRefs": [source_ref],
+                        }
+                    ],
+                    "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                    "sourceRefs": [source_ref],
+                },
+                experimentPlan={
+                    "researchQuestion": topic,
+                    "noveltyAngle": "Evaluate against grounded prior work.",
+                    "hypotheses": ["Grounded difference improves novelty."],
+                    "baselines": ["Prior work"],
+                    "procedure": ["Run baseline comparison."],
+                    "datasets": ["RAG Evaluation Dataset"],
+                    "metrics": ["baseline delta"],
+                    "resources": ["Evaluation script"],
+                    "risks": ["dataset mismatch"],
+                    "evidenceStatus": EvidenceStatus.SUPPORTED.value,
+                    "sourceRefs": [source_ref],
+                },
+            )
+
+    repo = InMemoryNoveltyRepository()
+    service = NoveltyService(repo)
+    owner_id = str(uuid4())
+    created = service.create_job(
+        owner_id,
+        NoveltyJobRequest(
+            inputType="manuscript",
+            topic="novelty agent draft",
+            manuscript={"fileName": "draft.md", "contentType": "text/markdown"},
+        ),
+    )
+
+    process_job(
+        repo,
+        owner_id,
+        created.jobId,
+        adapters=NoveltyAdapters(
+            corpus=CleanCorpus(),
+            external=CleanExternal(),
+            llm=CleanLlm(),
+            similarity=HighRiskSimilarity(),
+        ),
+    )
+
+    result = service.result(owner_id, created.jobId)
+    # 위험 신호가 많아도 잡은 차단되지 않고 완주한다(모든 어댑터 정상 → 저하도 아님).
+    assert result.job.state is JobState.COMPLETED
+    artifacts = {artifact.kind: artifact for artifact in result.artifacts}
+    assert {
+        ArtifactKind.RISK_SIGNALS,
+        ArtifactKind.NOVELTY_CANDIDATES,
+        ArtifactKind.EXPERIMENT_PLAN,
+    } <= set(artifacts)
+    # 위험 신호는 신호대로 저장되고,
+    risk_items = artifacts[ArtifactKind.RISK_SIGNALS].payload["items"]
+    assert {item["riskType"] for item in risk_items} == {"sentence_similarity", "ai_style"}
+    # 아이디어 추천·실험 계획은 실제 내용을 담고 산출됐다.
+    assert artifacts[ArtifactKind.NOVELTY_CANDIDATES].payload["items"]
+    assert artifacts[ArtifactKind.EXPERIMENT_PLAN].payload["researchQuestion"]
+    # 유사도 검사 이후 단계(FORMING_IDEAS·PLANNING_EXPERIMENT)를 실제로 통과했다.
+    states = {event.state for event in repo.list_events(owner_id, created.jobId)}
+    assert {
+        JobState.CHECKING_SIMILARITY,
+        JobState.FORMING_IDEAS,
+        JobState.PLANNING_EXPERIMENT,
+    } <= states
 
 
 def _pdf_manuscript_job(service: NoveltyService, owner_id: str):

@@ -6,10 +6,12 @@
 //                  저하/degraded   -> degraded
 //                  오류/error      -> 500 (server error)
 //                  네트워크/fail   -> thrown (network failure)
+//                  맞춤/personal   -> personalized page (meta.personalized=true, US-P4)
 //   otherwise                      -> result page
 import type { Transport, TransportRequest, TransportResponse } from './transport';
 import {
   pageResponse,
+  personalizedPageResponse,
   emptyResponse,
   abstainResponse,
   degradedResponse,
@@ -144,6 +146,8 @@ export class MockTransport implements Transport {
       if (matches(query, '기권', 'abstain')) return { status: 200, body: abstainResponse };
       if (matches(query, '저하', 'degraded')) return { status: 200, body: degradedResponse };
       if (matches(query, '유효', 'invalid')) return { status: 400, body: validationErrorResponse };
+      if (matches(query, '맞춤', 'personal'))
+        return { status: 200, body: personalizedPageResponse };
       return { status: 200, body: pageResponse };
     }
 

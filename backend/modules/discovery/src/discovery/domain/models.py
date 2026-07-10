@@ -141,10 +141,17 @@ class CandidateSet:
 
 @dataclass(frozen=True, slots=True)
 class RankedResults:
-    """RelevanceRanker output: baseline score-desc, top-N (BR-5; PBT-03)."""
+    """RelevanceRanker output: baseline score-desc, top-N (BR-5; PBT-03).
+
+    ``personalized`` (US-P4 #155): True only when the LIVE personalization re-rank actually
+    boosted this order (set by the orchestrator's boost stage, never by the ranker/apply_boosts).
+    Surfaces as the optional ``ResultMeta.personalized`` response flag so U5 can show the
+    '내 관심 주제 반영' indicator. Default False = baseline order (fail-soft).
+    """
 
     ranked: tuple[Candidate, ...]
     ranking_mode: str = "baseline"
+    personalized: bool = False
 
 
 @dataclass(frozen=True, slots=True)
