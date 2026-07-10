@@ -104,13 +104,15 @@ export function TranslationView({
   const standardMappings = standardGlossary.filter((g) => g.translated);
   // Key on BOTH the English term_from and its Korean rendering: the model can echo a mapping's
   // Korean (어텐션) into keptTerms, which must be absorbed by 표준 (backend already strips these;
-  // this is defense-in-depth so no standard rendering ever renders as a 원어 유지 chip).
+  // this is defense-in-depth so no standard rendering ever renders as a 원어 유지 chip). NFC-
+  // normalize both sides so composed/decomposed Hangul compare equal.
+  const norm = (s: string) => s.normalize('NFC').toLowerCase();
   const standardTerms = new Set(
     standardGlossary.flatMap((g) =>
-      [g.term, g.translated].filter(Boolean).map((s) => (s as string).toLowerCase()),
+      [g.term, g.translated].filter(Boolean).map((s) => norm(s as string)),
     ),
   );
-  const nonStandardKept = translation.keptTerms.filter((t) => !standardTerms.has(t.toLowerCase()));
+  const nonStandardKept = translation.keptTerms.filter((t) => !standardTerms.has(norm(t)));
   const hasStandard = standardKeepAsIs.length > 0 || standardMappings.length > 0;
   const hasGlossary = showGlossary && (hasStandard || nonStandardKept.length > 0);
 

@@ -13,6 +13,7 @@ across users (NFR-C1) and a term edit reflects by re-rendering, not by re-genera
 from __future__ import annotations
 
 import copy
+import unicodedata
 
 from .glossary import GlossaryResolver, is_glossary_worthy, term_in_text
 from .masking import MaskEntry, build_mask_table, contains_token, render_tokens
@@ -25,6 +26,13 @@ from .models import (
     TranslationDraft,
 )
 from .structured_translator import iter_text_fields, project_full_text
+
+
+def _norm_term(s: str) -> str:
+    """Canonical key for term comparison: NFC-normalize (so composed/decomposed Hangul match),
+    strip, casefold to lower. Keeps the keptTerms/standard-rendering comparison robust to a model
+    that emits decomposed Hangul (e.g. ``어텐션`` as jamo)."""
+    return unicodedata.normalize("NFC", s).strip().lower()
 
 
 class ResultAssembler:
@@ -120,16 +128,24 @@ class ResultAssembler:
         # keptTerms: the model's free-form English-kept terms → the 원어 유지 용어 group. Drop:
         #  · math notation (Greek vars, W_q, mathbb{E}…) via is_glossary_worthy;
         #  · placeholder tokens the model echoed back as "kept" (⟦N⟧) via contains_token;
-        #  · ANY standard-term rendering. The seed glossary rides into the translate prompt as
-        #    variant guidance, so the model also echoes the seed renderings — the mapping Korean
-        #    (어텐션·임베딩·잠재 공간), the keep-as-is English (Transformer…), or a user override —
-        #    into keptTerms. Those belong to the 표준 용어 group only, so they must never surface
-        #    as 원어 유지 chips (the FE dedup keys on term_from, so it can't catch the Korean side).
-        standard_renderings: set[str] = set()
+        #  · standard-term renderings the model echoes from the prompt's variant guidance — these
+        #    belong to the 표준 용어 group only (the FE dedup keys on term_from, so it can't catch
+        #    the Korean side). Two sources, NFC-normalized for comparison (the model may emit
+        #    decomposed Hangul): (a) renderings of standard terms PRESENT in this paper (the ``std``
+        #    chips), so a non-standard kept term merely coinciding with an ABSENT seed rendering
+        #    (a person "Adam" vs the Adam optimizer) is NOT wrongly removed; (b) ALL mapping
+        #    renderings (attention→어텐션…) globally — the model echoes the mapping Korean even for
+        #    un-masked variant forms (plurals), and those never collide with a non-standard term.
+        strip_set: set[str] = set()
+        for chip in std:
+            strip_set.add(_norm_term(chip["term"]))
+            if chip.get("translated"):
+                strip_set.add(_norm_term(chip["translated"]))
         for entry in table.entries:
-            standard_renderings.add(entry.term_from.lower())
-            standard_renderings.add(entry.seed_render.lower())
-            standard_renderings.add(_effective(entry).lower())
+            if entry.kind == "mapping":
+                strip_set.add(_norm_term(entry.term_from))
+                strip_set.add(_norm_term(entry.seed_render))
+                strip_set.add(_norm_term(_effective(entry)))
         kept = tr.get("keptTerms")
         if isinstance(kept, list):
             tr["keptTerms"] = [
@@ -138,6 +154,6 @@ class ResultAssembler:
                 if isinstance(t, str)
                 and is_glossary_worthy(t)
                 and not contains_token(t)
-                and t.strip().lower() not in standard_renderings
+                and _norm_term(t) not in strip_set
             ]
         return out

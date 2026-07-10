@@ -264,12 +264,33 @@ def test_render_strips_standard_renderings_from_kept_terms() -> None:
     # The seed glossary rides into the translate prompt as variant guidance, so the model echoes
     # seed renderings into keptTerms — mapping Korean (어텐션·임베딩·잠재 공간), keep-as-is English
     # (Transformer), or a user override (주목). None of these may surface as 원어 유지 chips; only
-    # genuinely non-standard kept terms survive (BR-S4).
-    para = f"모델은 {_tok('attention')}를 쓴다."
+    # genuinely non-standard kept terms survive (BR-S4). attention + Transformer are both present.
+    para = f"모델은 {_tok('attention')}와 {_tok('Transformer')}를 쓴다."
     glossary = Glossary(user_overrides=(TermMapping("attention", "주목", prompt_enforced=True),))
     kept = ("어텐션", "임베딩", "잠재 공간", "Transformer", "주목", "SAM")
     tr = _rendered(para, glossary, kept=kept)
     assert tr["keptTerms"] == ["SAM"]  # every standard rendering dropped, real term kept
+
+
+def test_render_keeps_kept_term_colliding_with_absent_seed() -> None:
+    # A non-standard kept term coinciding with an ABSENT seed rendering ("Adam" the person vs the
+    # Adam optimizer, which is not in this paper) must NOT be stripped — keep-as-is stripping is
+    # scoped to terms present in the paper. Mapping Korean is still stripped globally.
+    para = f"모델은 {_tok('attention')}를 쓴다."  # attention present; Adam absent
+    tr = _rendered(para, Glossary(), kept=("Adam", "SAM", "어텐션"))
+    assert tr["keptTerms"] == ["Adam", "SAM"]  # collision preserved; mapping Korean stripped
+
+
+def test_render_strips_decomposed_hangul_rendering() -> None:
+    # NFC guard: the model may emit decomposed (NFD) Hangul; the standard-rendering strip must still
+    # match it (else the seed Korean leaks back into 원어 유지 — the exact fixed bug).
+    import unicodedata
+
+    para = f"모델은 {_tok('attention')}를 쓴다."
+    nfd = unicodedata.normalize("NFD", "어텐션")
+    assert nfd != "어텐션"  # sanity: actually decomposed
+    tr = _rendered(para, Glossary(), kept=(nfd, "SAM"))
+    assert tr["keptTerms"] == ["SAM"]
 
 
 def test_render_does_not_mutate_base() -> None:
