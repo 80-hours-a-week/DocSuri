@@ -79,6 +79,7 @@ class ResearchService:
         dto: ResearchMessageCreateRequest,
         orchestrator: Any = None,
         user_docmodel: Any = None,
+        on_progress: Any = None,
     ) -> ResearchChatMessage:
         self._repo.get_job(owner_id, job_id)
         history = self._repo.list_messages(owner_id, job_id)
@@ -119,6 +120,7 @@ class ResearchService:
             prior_topics,
             attachment_inputs,
             prior_paper_ids,
+            on_progress,
         )
         content = _format_turn_result(result)
         assistant_msg = self._repo.add_message(
@@ -161,6 +163,7 @@ async def _run_evidence(
     prior_topics: tuple[str, ...] = (),
     attachment_inputs: tuple[Any, ...] = (),
     prior_paper_ids: tuple[str, ...] = (),
+    on_progress: Any = None,
 ) -> Any:
     from docsuri_shared._generated.dtos.evidence_schema import EvidenceRequest, EvidenceScope
     from pydantic import ValidationError
@@ -186,7 +189,10 @@ async def _run_evidence(
         attachment_docs=attachment_inputs,
         prior_paper_ids=prior_paper_ids,
     )
-    return await asyncio.to_thread(orchestrator.run, ctx, request)
+    if on_progress is None:
+        # 2-인자 호출 유지 — on_progress를 모르는 기존 테스트 스텁/구버전 orchestrator 호환.
+        return await asyncio.to_thread(orchestrator.run, ctx, request)
+    return await asyncio.to_thread(orchestrator.run, ctx, request, on_progress)
 
 
 def _resolved_paper_ids(result: Any) -> tuple[str, ...]:
