@@ -17,6 +17,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
+from time import perf_counter
 
 from docsuri_shared.dtos import (
     DegradedResultDTO,
@@ -119,6 +120,7 @@ class SearchOrchestrationService:
         top_n: int = TOP_N,
         search_boosts: Callable[[str], dict[str, float]] | None = None,
         rerank_live: bool = False,
+        no_match_knn_floor: float = 0.0,
     ) -> None:
         self._validator = validator
         self._expander = expander
@@ -141,6 +143,13 @@ class SearchOrchestrationService:
         # SEARCH_RERANK_LIVE at wiring so ops can flip live after reviewing shadow metrics — no
         # redeploy, and the metrics carry real data either way.
         self._rerank_live = rerank_live
+        # US-D6 no-match relevance floor on the best RAW k-NN score. k-NN returns nearest
+        # neighbors for ANY query, so without an absolute floor the "관련 논문 없음" empty page
+        # is unreachable for out-of-corpus queries (QA 2026-07-10 F2). 0.0 = off (default);
+        # ops sets DISCOVERY_NO_MATCH_KNN_FLOOR after calibrating against the
+        # discovery.search.best_knn_score metric distribution — an uncalibrated guess would
+        # false-abstain real queries, which is worse than the current false-match behavior.
+        self._no_match_knn_floor = no_match_knn_floor
 
     def plan_and_retrieve(self, request: SearchRequest, ctx: RequestContext) -> SearchOutcome:
         validation = self._validator.validate(request.query)
@@ -154,6 +163,7 @@ class SearchOrchestrationService:
         budget = self._cost_guard.get_budget_state()  # U6 single authority (read-only)
         degrade_mode, degradation = _derive_degradation(budget)
 
+        t_stage = perf_counter()
         try:
             plan = self._expander.expand(normalized, degradation, scope)
         except EmbeddingUnavailable:
@@ -165,24 +175,37 @@ class SearchOrchestrationService:
             degrade_mode = DegradeMode.LEXICAL_ONLY
             degradation = DegradationSignal(llm_enabled=False, rerank_enabled=False)
             plan = self._expander.expand(normalized, degradation, scope)
+        self._emit_stage_ms("expand", t_stage, scope)
 
+        t_stage = perf_counter()
         try:
             candidates = self._retriever.retrieve(plan, degradation)
         except IndexUnavailable as exc:
             # No fallback for the index → fail-closed (INV-3/SEC-15).
             raise SearchUnavailable("search index unavailable") from exc
+        self._emit_stage_ms("retrieve", t_stage, scope)
+        if candidates.best_knn_score is not None:
+            # The floor's calibration feed (US-D6): per-query best raw k-NN score. Ops reads
+            # this distribution in CloudWatch to pick DISCOVERY_NO_MATCH_KNN_FLOOR.
+            self._emit_guarded(
+                "discovery.search.best_knn_score", candidates.best_knn_score, {"scope": scope.value}
+            )
 
-        if not candidates.candidates:
-            # No-match: nothing retrieved to ground against. This is an explicit empty page
-            # (resultCount=0), NOT a grounding abstain (BR-9 / U5 B3-a: 기권 ≠ 빈 결과). It does
-            # not emit grounding-health — that metric tracks real enforce verdicts only, so a
-            # zero-result query no longer inflates the hallucination/abstain rate. Zero-result
-            # visibility comes from the SearchExecuted event (resultCount=0) below. (US-R4)
+        if not candidates.candidates or self._below_no_match_floor(candidates):
+            # No-match: nothing retrieved to ground against — or nothing above the semantic
+            # relevance floor (US-D6: near-noise neighbors are not "관련 논문"). This is an
+            # explicit empty page (resultCount=0), NOT a grounding abstain (BR-9 / U5 B3-a:
+            # 기권 ≠ 빈 결과). It does not emit grounding-health — that metric tracks real
+            # enforce verdicts only, so a zero-result query no longer inflates the
+            # hallucination/abstain rate. Zero-result visibility comes from the SearchExecuted
+            # event (resultCount=0) below. (US-R4)
             response = self._assembler.assemble(NoMatchResult(), degrade_mode)
             self._publish(ctx.auth_session.user_id, ctx.request_id, request.query, 0)
             return SearchOutcome(response=response)
 
+        t_stage = perf_counter()
         candidates = self._maybe_rerank(normalized.text, candidates, degradation, scope)
+        self._emit_stage_ms("rerank", t_stage, scope)
         ranked = self._ranker.rank(candidates, plan, degradation, self._top_n)
         ranked = self._apply_search_boosts(ctx.auth_session.user_id, ranked)
         grounding_input = self._grounding_adapter.to_grounding_input(ranked, plan)
@@ -236,6 +259,36 @@ class SearchOrchestrationService:
             return candidates
         self._emit_rerank_metric(1.0, "applied", scope)
         return replace(candidates, candidates=reranked)
+
+    def _below_no_match_floor(self, candidates: CandidateSet) -> bool:
+        """US-D6 semantic relevance floor. True only when the floor is enabled (> 0), k-NN ran
+        (``best_knn_score`` present — lexical-only degrade is never floor-gated: BM25 hits are
+        term matches, not near-noise neighbors), and the query's BEST raw k-NN score is below
+        it. Floor breaches are counted so ops can watch the abstain rate after enabling."""
+        floor = self._no_match_knn_floor
+        if floor <= 0.0 or candidates.best_knn_score is None:
+            return False
+        if candidates.best_knn_score >= floor:
+            return False
+        self._emit_guarded("discovery.search.no_match_floor", 1.0, {})
+        return True
+
+    def _emit_stage_ms(self, stage: str, started: float, scope: SearchScope) -> None:
+        """Per-stage latency (QA 2026-07-10 F1): the cold-path seconds hide in expand (Bedrock
+        embed), retrieve (OpenSearch cold k-NN graph load), or rerank — CloudWatch needs the
+        split to tune the right budget."""
+        self._emit_guarded(
+            "discovery.search.stage_ms",
+            (perf_counter() - started) * 1000.0,
+            {"stage": stage, "scope": scope.value},
+        )
+
+    def _emit_guarded(self, name: str, value: float, dims: dict[str, str]) -> None:
+        """Advisory metric emit — observability MUST NOT raise into the search path."""
+        try:
+            self._observability.emit_metric(name, value, dims)
+        except Exception:  # noqa: BLE001
+            pass
 
     def _emit_rerank_metric(self, value: float, status: str, scope: SearchScope) -> None:
         """Guarded rerank metric — observability is advisory and MUST NOT raise, otherwise a

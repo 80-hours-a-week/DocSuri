@@ -17,6 +17,14 @@ from docsuri_shared.vector_spec import DIMENSIONS, INPUT_TYPE_READER
 
 from ..ports.search_ports import EmbeddingUnavailable
 
+# A healthy single-query embed is subsecond; 4s is already pathological. Failing fast matters
+# more than waiting: timeout → EmbeddingUnavailable → the orchestrator's tested lexical-only
+# fallback, keeping the whole search inside the BFF's 30s search hop (QA 2026-07-10 F1 — the
+# old 10s read could eat the entire former hop budget). Module-level so the latency-budget
+# contract test (test_latency_budget.py) can assert the cold-path sum.
+_CONNECT_TIMEOUT_S = 3.0
+_READ_TIMEOUT_S = 4.0
+
 
 class BedrockCohereQueryEmbedder:
     """Query embedding via Bedrock (Cohere Embed Multilingual v4, reader=search_query)."""
@@ -33,8 +41,8 @@ class BedrockCohereQueryEmbedder:
             from botocore.config import Config
 
             config = Config(
-                connect_timeout=5.0,
-                read_timeout=10.0,
+                connect_timeout=_CONNECT_TIMEOUT_S,
+                read_timeout=_READ_TIMEOUT_S,
                 retries={"max_attempts": 1},
             )
             client = boto3.client("bedrock-runtime", region_name=region_name, config=config)

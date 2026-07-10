@@ -91,6 +91,11 @@ const AGENT_ID_SEP = ':';
 // 8초 기본 타임아웃(withTimeout)을 항상 초과한다 — 백엔드는 계속 처리해 응답이 저장되지만
 // 클라이언트만 network 에러로 끊겨 사용자에게 실패로 보이는 문제(PR #338 후속 발견).
 const EVIDENCE_TURN_TIMEOUT_MS = 90_000;
+// 검색 콜드 패스(첫 질의: embed + k-NN 그래프 첫 로드 + rerank)는 정상 완료가 9~12초 —
+// 기본 10초에서 브라우저가 완료 직전에 끊어 BFF의 30초 검색 홉(SEARCH_GATEWAY_TIMEOUT_MS)을
+// 무의미하게 만든다. 두 레이어를 함께 올린다(QA 2026-07-10 F1). 워밍된 검색은 <1초라 P50
+// 체감은 그대로.
+const SEARCH_TIMEOUT_MS = 30_000;
 
 type BackendResearchJob = {
   jobId: string;
@@ -446,6 +451,7 @@ export class ApiClient {
       path: '/api/search',
       body,
       idempotent: false,
+      timeoutMs: SEARCH_TIMEOUT_MS,
     });
     if (res.status === 200 || res.status === 400) {
       return classifySearchResponse(res.body);
