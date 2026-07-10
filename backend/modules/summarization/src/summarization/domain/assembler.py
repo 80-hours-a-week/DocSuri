@@ -117,14 +117,27 @@ class ResultAssembler:
                 std.append(chip)
         tr["standardGlossary"] = std
 
-        # keptTerms: the model's free-form English-kept terms. Drop math notation (Greek vars,
-        # W_q, mathbb{E}…) AND any placeholder token the model echoed back as "kept" (⟦N⟧) — those
-        # are internal artifacts, not user-facing terms, and must never reach the 원어 유지 chips.
+        # keptTerms: the model's free-form English-kept terms → the 원어 유지 용어 group. Drop:
+        #  · math notation (Greek vars, W_q, mathbb{E}…) via is_glossary_worthy;
+        #  · placeholder tokens the model echoed back as "kept" (⟦N⟧) via contains_token;
+        #  · ANY standard-term rendering. The seed glossary rides into the translate prompt as
+        #    variant guidance, so the model also echoes the seed renderings — the mapping Korean
+        #    (어텐션·임베딩·잠재 공간), the keep-as-is English (Transformer…), or a user override —
+        #    into keptTerms. Those belong to the 표준 용어 group only, so they must never surface
+        #    as 원어 유지 chips (the FE dedup keys on term_from, so it can't catch the Korean side).
+        standard_renderings: set[str] = set()
+        for entry in table.entries:
+            standard_renderings.add(entry.term_from.lower())
+            standard_renderings.add(entry.seed_render.lower())
+            standard_renderings.add(_effective(entry).lower())
         kept = tr.get("keptTerms")
         if isinstance(kept, list):
             tr["keptTerms"] = [
                 t
                 for t in kept
-                if isinstance(t, str) and is_glossary_worthy(t) and not contains_token(t)
+                if isinstance(t, str)
+                and is_glossary_worthy(t)
+                and not contains_token(t)
+                and t.strip().lower() not in standard_renderings
             ]
         return out

@@ -102,7 +102,14 @@ export function TranslationView({
   const standardGlossary = translation.standardGlossary ?? [];
   const standardKeepAsIs = standardGlossary.filter((g) => !g.translated);
   const standardMappings = standardGlossary.filter((g) => g.translated);
-  const standardTerms = new Set(standardGlossary.map((g) => g.term.toLowerCase()));
+  // Key on BOTH the English term_from and its Korean rendering: the model can echo a mapping's
+  // Korean (어텐션) into keptTerms, which must be absorbed by 표준 (backend already strips these;
+  // this is defense-in-depth so no standard rendering ever renders as a 원어 유지 chip).
+  const standardTerms = new Set(
+    standardGlossary.flatMap((g) =>
+      [g.term, g.translated].filter(Boolean).map((s) => (s as string).toLowerCase()),
+    ),
+  );
   const nonStandardKept = translation.keptTerms.filter((t) => !standardTerms.has(t.toLowerCase()));
   const hasStandard = standardKeepAsIs.length > 0 || standardMappings.length > 0;
   const hasGlossary = showGlossary && (hasStandard || nonStandardKept.length > 0);

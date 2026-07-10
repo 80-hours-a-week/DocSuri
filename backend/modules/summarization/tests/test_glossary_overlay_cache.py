@@ -213,7 +213,9 @@ def test_render_standard_glossary_only_lists_present_tokens() -> None:
     para = f"모델은 {_tok('VAE')} 와 {_tok('GNN')} 을 쓴다."
     tr = _rendered(para, Glossary(), kept=("VAE", "GNN", "CrysBFN"))
     assert {g["term"] for g in tr["standardGlossary"]} == {"VAE", "GNN"}
-    assert tr["keptTerms"] == ["VAE", "GNN", "CrysBFN"]
+    # VAE/GNN are standard keep-as-is → 표준 only, so stripped from keptTerms; only the genuinely
+    # non-standard term survives in 원어 유지.
+    assert tr["keptTerms"] == ["CrysBFN"]
 
 
 def test_render_applies_weak_terms_and_reprojects_fulltext() -> None:
@@ -256,6 +258,18 @@ def test_render_strips_echoed_tokens_from_kept_terms() -> None:
     tr = _rendered(para, Glossary(), kept=(_tok("attention"), _tok("Transformer"), "SAM"))
     assert tr["keptTerms"] == ["SAM"]  # tokens dropped, real term kept
     assert not any("⟦" in t for t in tr["keptTerms"])
+
+
+def test_render_strips_standard_renderings_from_kept_terms() -> None:
+    # The seed glossary rides into the translate prompt as variant guidance, so the model echoes
+    # seed renderings into keptTerms — mapping Korean (어텐션·임베딩·잠재 공간), keep-as-is English
+    # (Transformer), or a user override (주목). None of these may surface as 원어 유지 chips; only
+    # genuinely non-standard kept terms survive (BR-S4).
+    para = f"모델은 {_tok('attention')}를 쓴다."
+    glossary = Glossary(user_overrides=(TermMapping("attention", "주목", prompt_enforced=True),))
+    kept = ("어텐션", "임베딩", "잠재 공간", "Transformer", "주목", "SAM")
+    tr = _rendered(para, glossary, kept=kept)
+    assert tr["keptTerms"] == ["SAM"]  # every standard rendering dropped, real term kept
 
 
 def test_render_does_not_mutate_base() -> None:
