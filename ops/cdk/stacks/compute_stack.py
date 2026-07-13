@@ -374,7 +374,7 @@ class ComputeStack(Stack):
         google_oidc_secret = secretsmanager.Secret.from_secret_complete_arn(
             self,
             "GoogleOidcClientSecret",
-            "arn:aws:secretsmanager:ap-northeast-2:028317349537:secret:docsuri/google-oidc-client-secret-lihORg",  # noqa: E501
+            "arn:aws:secretsmanager:ap-northeast-2:559352512800:secret:docsuri/google-oidc-client-secret-pCFDM1",  # noqa: E501
         )
         container_secrets["GOOGLE_OIDC_CLIENT_SECRET"] = ecs.Secret.from_secrets_manager(
             google_oidc_secret
