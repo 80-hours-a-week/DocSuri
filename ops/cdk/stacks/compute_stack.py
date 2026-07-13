@@ -398,7 +398,7 @@ class ComputeStack(Stack):
         notion_token_key_secret = secretsmanager.Secret.from_secret_complete_arn(
             self,
             "NotionTokenKeySecret",
-            "arn:aws:secretsmanager:ap-northeast-2:028317349537:secret:docsuri/notion-token-key-8HoGdS",  # noqa: E501
+            "arn:aws:secretsmanager:ap-northeast-2:559352512800:secret:docsuri/notion-token-key-09zmIj",  # noqa: E501
         )
         container_secrets["DOCSURI_NOTION_TOKEN_KEY"] = ecs.Secret.from_secrets_manager(
             notion_token_key_secret
